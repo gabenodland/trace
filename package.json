@@ -1,0 +1,37 @@
+{
+  "name": "trace-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:web",
+    "dev:mobile": "cd apps/mobile && npm run dev",
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:all": "concurrently \"npm run dev:mobile\" \"npm run dev:web\"",
+    "build:shared": "cd packages/core && npm run build",
+    "build:web": "cd apps/web && npm run build",
+    "type-check": "npm run type-check:mobile && npm run type-check:web",
+    "type-check:mobile": "cd apps/mobile && npm run type-check",
+    "type-check:web": "cd apps/web && npm run type-check",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "test": "cd packages/core && npm test"
+  },
+  "devDependencies": {
+    "@vitest/ui": "^3.2.4",
+    "concurrently": "^8.2.2",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  }
+}
