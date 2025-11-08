@@ -1,0 +1,3 @@
+be able to quickly log a location with no other data
+
+ability to share my trace with a public 

@@ -81,3 +81,9 @@ public
 # Temporary files
 tmp/
 temp/
+
+# Supabase
+supabase/.temp/
+supabase/.branches/
+supabase/logs/
+supabase/.gitignore

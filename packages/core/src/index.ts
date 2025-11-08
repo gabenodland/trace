@@ -6,3 +6,6 @@ export * from "./modules/auth";
 
 // Shared utilities
 export * from "./shared/types";
+export * from "./shared/database.types";
+export * from "./shared/constants";
+export { supabase, initializeSupabase } from "./shared/supabase";

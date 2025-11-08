@@ -1,131 +1,118 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Session, User } from "./AuthTypes";
+import type { QueryClient } from "@tanstack/react-query";
 import {
-  login,
-  signUp,
-  logout,
-  getCurrentUser,
-  refreshSession,
-  resetPassword,
-  updatePassword
+  signInWithEmail as signInWithEmailApi,
+  signUpWithEmail as signUpWithEmailApi,
+  signInWithGoogle as signInWithGoogleApi,
+  signOut as signOutApi,
+  getSession,
+  onAuthStateChange,
 } from "./authApi";
-import type { LoginCredentials, SignupData, AuthSession } from "./AuthTypes";
-import type { User } from "../../shared/types";
-
-// Query keys
-const QUERY_KEYS = {
-  currentUser: ["auth", "currentUser"],
-  session: ["auth", "session"],
-};
+import * as authHelpers from "./authHelpers";
 
 /**
- * Hook to get the current user
+ * Unified hook for auth - exposes auth state, mutations, and helpers
+ * This is the PRIMARY hook to use in components
+ * @param queryClient - Optional QueryClient for cache management
+ * @returns Object with auth state, mutations, and helpers
+ *
+ * @example
+ * const { user, isAuthenticated, authMutations, authHelpers } = useAuthState(queryClient);
+ *
+ * // Use state
+ * if (isAuthenticated) { ... }
+ *
+ * // Use mutations
+ * authMutations.signInWithEmail(email, password)
+ * authMutations.signOut()
+ *
+ * // Use helpers
+ * const isValid = authHelpers.validateEmail(email)
  */
-function useCurrentUserQuery() {
-  return useQuery({
-    queryKey: QUERY_KEYS.currentUser,
-    queryFn: getCurrentUser,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
+export function useAuthState(queryClient?: QueryClient) {
+  const [session, setSessionState] = useState<Session | null>(null);
+  const [user, setUserState] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-/**
- * Hook to handle user login
- */
-function useLoginMutation() {
-  const queryClient = useQueryClient();
+  useEffect(() => {
+    // Get initial session
+    getSession()
+      .then(async (session) => {
+        setSessionState(session);
+        setUserState(session?.user ?? null);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
 
-  return useMutation({
-    mutationFn: login,
-    onSuccess: (session: AuthSession) => {
-      // Update the current user in the cache
-      queryClient.setQueryData(QUERY_KEYS.currentUser, session.user);
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
+    // Listen to auth state changes
+    const {
+      data: { subscription },
+    } = onAuthStateChange((_event, session) => {
+      setSessionState(session);
+      setUserState(session?.user ?? null);
+
+      if (!session) {
+        // User signed out - clear all cached data
+        setLoading(false);
+        if (queryClient) {
+          queryClient.clear();
+          console.log("[Auth] User signed out - cleared query cache");
+        }
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [queryClient]);
+
+  // Mutation functions wrapped for easier use
+  const authMutations = {
+    signInWithEmail: async (email: string, password: string) => {
+      return await signInWithEmailApi({ email, password });
     },
-  });
-}
-
-/**
- * Hook to handle user signup
- */
-function useSignupMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: signUp,
-    onSuccess: (session: AuthSession) => {
-      // Update the current user in the cache
-      queryClient.setQueryData(QUERY_KEYS.currentUser, session.user);
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.currentUser });
+    signUpWithEmail: async (email: string, password: string) => {
+      return await signUpWithEmailApi({ email, password });
     },
-  });
-}
-
-/**
- * Hook to handle user logout
- */
-function useLogoutMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: logout,
-    onSuccess: () => {
-      // Clear all auth-related queries
-      queryClient.setQueryData(QUERY_KEYS.currentUser, null);
-      queryClient.invalidateQueries({ queryKey: ["auth"] });
-      // Optionally clear all queries
-      queryClient.clear();
+    signInWithGoogle: async (redirectTo?: string) => {
+      return await signInWithGoogleApi(redirectTo);
     },
-  });
-}
-
-/**
- * Hook to handle password reset
- */
-function useResetPasswordMutation() {
-  return useMutation({
-    mutationFn: resetPassword,
-  });
-}
-
-/**
- * Hook to handle password update
- */
-function useUpdatePasswordMutation() {
-  return useMutation({
-    mutationFn: updatePassword,
-  });
-}
-
-/**
- * Main auth hook - THE SINGLE SOURCE OF TRUTH for authentication
- */
-export function useAuth() {
-  const userQuery = useCurrentUserQuery();
-  const loginMutation = useLoginMutation();
-  const signupMutation = useSignupMutation();
-  const logoutMutation = useLogoutMutation();
-  const resetPasswordMutation = useResetPasswordMutation();
-  const updatePasswordMutation = useUpdatePasswordMutation();
+    signOut: async () => {
+      await signOutApi();
+      // Clear all cached queries to prevent data leakage between users
+      if (queryClient) {
+        queryClient.clear();
+        console.log("[Auth] Cleared query cache on sign out");
+      }
+    },
+  };
 
   return {
-    // Data
-    user: userQuery.data || null,
-    isAuthenticated: !!userQuery.data,
-    isLoading: userQuery.isLoading,
-    error: userQuery.error,
+    // State
+    session,
+    user,
+    isLoading: loading,
+    loading, // Backward compatibility
+    isAuthenticated: !!user,
 
     // Mutations
-    authMutations: {
-      login: loginMutation.mutateAsync,
-      signup: signupMutation.mutateAsync,
-      logout: logoutMutation.mutateAsync,
-      resetPassword: resetPasswordMutation.mutateAsync,
-      updatePassword: updatePasswordMutation.mutateAsync,
-    },
+    authMutations,
 
-    // Loading states for mutations
-    isLoginLoading: loginMutation.isPending,
-    isSignupLoading: signupMutation.isPending,
-    isLogoutLoading: logoutMutation.isPending,
+    // Backward compatibility - expose mutations at top level
+    signInWithEmail: authMutations.signInWithEmail,
+    signUpWithEmail: authMutations.signUpWithEmail,
+    signOut: authMutations.signOut,
+
+    // Helpers - all pure validation functions
+    authHelpers,
+
+    // For platform-specific OAuth implementations
+    setSession: setSessionState,
+    setUser: setUserState,
   };
 }
+
+export type AuthState = ReturnType<typeof useAuthState>;

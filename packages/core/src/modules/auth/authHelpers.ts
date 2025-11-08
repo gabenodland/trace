@@ -1,97 +1,104 @@
 /**
- * Pure utility functions for auth-related operations
- * No side effects, no API calls - just data transformation and validation
+ * Auth Helpers - Business logic and validation for authentication
  */
 
-import type { User } from "../../shared/types";
+import { ValidationResult } from "../../shared/types";
+
+// Auth validation constants
+export const AUTH_VALIDATION = {
+  MIN_PASSWORD_LENGTH: 6,
+  EMAIL_REGEX: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+} as const;
 
 /**
  * Validate email format
  */
-export function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+export function validateEmail(email: string): ValidationResult {
+  if (!email) {
+    return { isValid: false, error: "Email is required" };
+  }
+
+  if (!AUTH_VALIDATION.EMAIL_REGEX.test(email)) {
+    return { isValid: false, error: "Please enter a valid email address" };
+  }
+
+  return { isValid: true };
 }
 
 /**
- * Validate password strength
+ * Validate password requirements
  */
-export function validatePassword(password: string): {
-  isValid: boolean;
-  errors: string[];
-} {
-  const errors: string[] = [];
-
-  if (password.length < 8) {
-    errors.push("Password must be at least 8 characters long");
-  }
-  if (!/[A-Z]/.test(password)) {
-    errors.push("Password must contain at least one uppercase letter");
-  }
-  if (!/[a-z]/.test(password)) {
-    errors.push("Password must contain at least one lowercase letter");
-  }
-  if (!/[0-9]/.test(password)) {
-    errors.push("Password must contain at least one number");
+export function validatePassword(password: string): ValidationResult {
+  if (!password) {
+    return { isValid: false, error: "Password is required" };
   }
 
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
+  if (password.length < AUTH_VALIDATION.MIN_PASSWORD_LENGTH) {
+    return {
+      isValid: false,
+      error: `Password must be at least ${AUTH_VALIDATION.MIN_PASSWORD_LENGTH} characters`,
+    };
+  }
+
+  return { isValid: true };
 }
 
 /**
- * Get user display name (prioritize full name, then username, then email)
+ * Validate password confirmation
  */
-export function getUserDisplayName(user: User | null): string {
-  if (!user) return "Guest";
-  return user.full_name || user.username || user.email;
-}
-
-/**
- * Get user initials for avatar
- */
-export function getUserInitials(user: User | null): string {
-  if (!user) return "?";
-
-  const displayName = getUserDisplayName(user);
-  const parts = displayName.split(" ").filter(Boolean);
-
-  if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+export function validatePasswordConfirmation(
+  password: string,
+  confirmPassword: string
+): ValidationResult {
+  if (!confirmPassword) {
+    return { isValid: false, error: "Please confirm your password" };
   }
 
-  return displayName.substring(0, 2).toUpperCase();
-}
-
-/**
- * Check if a session is expired
- */
-export function isSessionExpired(expiresAt?: number): boolean {
-  if (!expiresAt) return false;
-  return Date.now() >= expiresAt * 1000;
-}
-
-/**
- * Format auth error messages for display
- */
-export function formatAuthError(error: any): string {
-  if (typeof error === "string") return error;
-
-  // Handle Supabase auth errors
-  if (error?.message) {
-    switch (error.message) {
-      case "Invalid login credentials":
-        return "Invalid email or password";
-      case "User already registered":
-        return "An account with this email already exists";
-      case "Email not confirmed":
-        return "Please check your email to verify your account";
-      default:
-        return error.message;
-    }
+  if (password !== confirmPassword) {
+    return { isValid: false, error: "Passwords do not match" };
   }
 
-  return "An unexpected error occurred. Please try again.";
+  return { isValid: true };
+}
+
+/**
+ * Validate login form
+ */
+export function validateLoginForm(email: string, password: string): ValidationResult {
+  const emailValidation = validateEmail(email);
+  if (!emailValidation.isValid) {
+    return emailValidation;
+  }
+
+  if (!password) {
+    return { isValid: false, error: "Password is required" };
+  }
+
+  return { isValid: true };
+}
+
+/**
+ * Validate signup form
+ */
+export function validateSignupForm(
+  email: string,
+  password: string,
+  confirmPassword: string
+): ValidationResult {
+  const emailValidation = validateEmail(email);
+  if (!emailValidation.isValid) {
+    return emailValidation;
+  }
+
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.isValid) {
+    return passwordValidation;
+  }
+
+  const confirmValidation = validatePasswordConfirmation(password, confirmPassword);
+  if (!confirmValidation.isValid) {
+    return confirmValidation;
+  }
+
+  return { isValid: true };
 }
