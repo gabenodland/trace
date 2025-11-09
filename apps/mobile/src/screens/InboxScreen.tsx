@@ -9,7 +9,7 @@ export function InboxScreen() {
   const { navigate } = useNavigation();
 
   const handleEntryPress = (entryId: string) => {
-    navigate("entryEdit", { entryId });
+    navigate("capture", { entryId });
   };
 
   return (

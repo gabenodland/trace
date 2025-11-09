@@ -1,10 +1,14 @@
 import { View, StyleSheet } from "react-native";
 import { CaptureForm } from "../modules/entries/components/CaptureForm";
 
-export function CaptureScreen() {
+interface CaptureScreenProps {
+  entryId?: string | null;
+}
+
+export function CaptureScreen({ entryId }: CaptureScreenProps = {}) {
   return (
     <View style={styles.container}>
-      <CaptureForm />
+      <CaptureForm entryId={entryId} />
     </View>
   );
 }

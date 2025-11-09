@@ -8,7 +8,7 @@ interface EntryListItemProps {
 
 export function EntryListItem({ entry, onPress }: EntryListItemProps) {
   const preview = getPreviewText(entry.content, 100);
-  const dateStr = formatEntryDate(entry.created_at);
+  const dateStr = formatEntryDate(entry.updated_at);
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.7}>

@@ -7,7 +7,7 @@ export function InboxPage() {
   const { entries, isLoading } = useEntries({ category_id: null });
 
   const handleEntryClick = (entryId: string) => {
-    navigate(`/entry/${entryId}`);
+    navigate(`/capture?id=${entryId}`);
   };
 
   return (

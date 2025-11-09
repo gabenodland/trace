@@ -13,7 +13,6 @@ import { InboxScreen } from "./src/screens/InboxScreen";
 import { CategoriesScreen } from "./src/screens/CategoriesScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { TasksScreen } from "./src/screens/TasksScreen";
-import { EntryEditScreen } from "./src/screens/EntryEditScreen";
 
 // Create a query client
 const queryClient = new QueryClient({
@@ -61,6 +60,7 @@ function AuthGate() {
 
   // Handle FAB add action
   const handleAddPress = () => {
+    setNavParams({}); // Clear any existing params
     setActiveTab("capture");
   };
 
@@ -68,11 +68,9 @@ function AuthGate() {
   const renderScreen = () => {
     switch (activeTab) {
       case "capture":
-        return <CaptureScreen />;
+        return <CaptureScreen entryId={navParams.entryId} />;
       case "inbox":
         return <InboxScreen />;
-      case "entryEdit":
-        return <EntryEditScreen entryId={navParams.entryId} />;
       case "categories":
         return <CategoriesScreen />;
       case "calendar":
@@ -96,8 +94,8 @@ function AuthGate() {
         {/* Active Screen */}
         {renderScreen()}
 
-        {/* Floating Action Button - Only show when NOT in capture or edit mode */}
-        {activeTab !== "capture" && activeTab !== "entryEdit" && (
+        {/* Floating Action Button - Only show when NOT in capture or categories mode */}
+        {activeTab !== "capture" && activeTab !== "categories" && (
           <FloatingActionButton
             mode="add"
             onAdd={handleAddPress}
@@ -141,7 +139,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 200,
     elevation: 200,
-    paddingTop: Platform.OS === "ios" ? 60 : (StatusBar.currentHeight || 0) + 8,
+    paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 1,
     paddingRight: 12,
   },
   loadingText: {

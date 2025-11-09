@@ -4,6 +4,7 @@ import {
   RichText,
   useEditorBridge,
   TenTapStartKit,
+  CoreBridge,
 } from "@10play/tentap-editor";
 
 interface RichTextEditorProps {
@@ -20,12 +21,37 @@ export const RichTextEditor = forwardRef(({
   const isLocalChange = useRef(false);
   const lastContent = useRef(value);
 
+  const customCSS = `
+    * {
+      line-height: 1.4 !important;
+    }
+    p {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    p + p {
+      margin-top: 4px !important;
+    }
+    ul, ol {
+      padding-left: 24px !important;
+      margin-top: 4px !important;
+      margin-bottom: 4px !important;
+    }
+    ul ul, ol ul, ul ol, ol ol {
+      padding-left: 20px !important;
+    }
+    .ProseMirror {
+      -webkit-text-size-adjust: 100%;
+    }
+  `;
+
   const editor = useEditorBridge({
     autofocus: true,
     avoidIosKeyboard: true,
     initialContent: value,
     bridgeExtensions: [
       ...TenTapStartKit,
+      CoreBridge.configureCSS(customCSS),
     ],
   });
 

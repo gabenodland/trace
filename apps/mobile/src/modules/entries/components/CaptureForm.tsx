@@ -1,26 +1,43 @@
 import { useState, useRef, useEffect } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView, Keyboard, StatusBar } from "react-native";
 import * as Location from "expo-location";
-import { useEntries, extractTagsAndMentions, getWordCount, getCharacterCount } from "@trace/core";
+import { useEntries, useEntry, useCategories, extractTagsAndMentions, getWordCount, getCharacterCount } from "@trace/core";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
+import { CategoryPicker } from "../../categories/components/CategoryPicker";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 
-export function CaptureForm() {
+interface CaptureFormProps {
+  entryId?: string | null;
+}
+
+export function CaptureForm({ entryId }: CaptureFormProps = {}) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [captureLocation, setCaptureLocation] = useState(true);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categoryName, setCategoryName] = useState<string | null>(null);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [locationData, setLocationData] = useState<{
     lat: number | null;
     lng: number | null;
     accuracy: number | null;
   }>({ lat: null, lng: null, accuracy: null });
+  const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const editorRef = useRef<any>(null);
+  const titleInputRef = useRef<TextInput>(null);
 
   const { entryMutations } = useEntries();
+  const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
+  const { categories } = useCategories();
   const { navigate } = useNavigation();
+
+  const isEditing = !!entryId;
+
+  // Determine if title should be collapsed
+  const shouldCollapse = !title.trim() && content.trim().length > 0 && !isTitleExpanded;
 
   const currentDate = new Date().toLocaleDateString('en-US', {
     month: 'short',
@@ -29,8 +46,45 @@ export function CaptureForm() {
     minute: '2-digit'
   });
 
-  // Fetch GPS location in background when location is enabled
+  // Auto-collapse title when user starts typing in body without a title
   useEffect(() => {
+    if (!title.trim() && content.trim().length > 0) {
+      setIsTitleExpanded(false);
+    } else if (title.trim()) {
+      setIsTitleExpanded(true);
+    }
+  }, [title, content]);
+
+  // Load entry data when editing
+  useEffect(() => {
+    if (entry && isEditing) {
+      setTitle(entry.title || "");
+      setContent(entry.content);
+      setCategoryId(entry.category_id || null);
+
+      // Load location data if available
+      if (entry.location_lat && entry.location_lng) {
+        setLocationData({
+          lat: entry.location_lat,
+          lng: entry.location_lng,
+          accuracy: entry.location_accuracy,
+        });
+        setCaptureLocation(true);
+      }
+
+      // Look up category name from categories list
+      if (entry.category_id && categories.length > 0) {
+        const category = categories.find(c => c.category_id === entry.category_id);
+        setCategoryName(category?.name || null);
+      } else {
+        setCategoryName(null);
+      }
+    }
+  }, [entry, isEditing, categories]);
+
+  // Fetch GPS location in background when location is enabled (only for new entries)
+  useEffect(() => {
+    if (isEditing) return; // Don't fetch location when editing
     if (!captureLocation) {
       setLocationData({ lat: null, lng: null, accuracy: null });
       return;
@@ -95,6 +149,7 @@ export function CaptureForm() {
     setIsSubmitting(true);
 
     console.log("=== SAVE BUTTON PRESSED ===");
+    console.log("isEditing:", isEditing);
     console.log("Raw content:", content);
     console.log("Content length:", content.length);
 
@@ -115,34 +170,96 @@ export function CaptureForm() {
     try {
       const { tags, mentions } = extractTagsAndMentions(content);
 
-      console.log("Creating entry...");
-      await entryMutations.createEntry({
-        title: title.trim() || null,
-        content,
-        tags,
-        mentions,
-        location_lat: locationData.lat,
-        location_lng: locationData.lng,
-        location_accuracy: locationData.accuracy,
-        category_id: null,
-      });
+      if (isEditing) {
+        // Update existing entry
+        console.log("Updating entry...");
+        await singleEntryMutations.updateEntry({
+          title: title.trim() || null,
+          content,
+          tags,
+          mentions,
+          category_id: categoryId,
+        });
+        console.log("Entry updated successfully");
+      } else {
+        // Create new entry
+        console.log("Creating entry...");
+        await entryMutations.createEntry({
+          title: title.trim() || null,
+          content,
+          tags,
+          mentions,
+          location_lat: locationData.lat,
+          location_lng: locationData.lng,
+          location_accuracy: locationData.accuracy,
+          category_id: categoryId,
+        });
+        console.log("Entry created successfully");
 
-      console.log("Entry created successfully");
-
-      // Clear form
-      setTitle("");
-      setContent("");
-      setLocationData({ lat: null, lng: null, accuracy: null });
+        // Clear form only when creating
+        setTitle("");
+        setContent("");
+        setCategoryId(null);
+        setCategoryName(null);
+        setLocationData({ lat: null, lng: null, accuracy: null });
+      }
 
       // Navigate to inbox
       navigate("inbox");
     } catch (error) {
-      console.error("Failed to create entry:", error);
+      console.error(`Failed to ${isEditing ? 'update' : 'create'} entry:`, error);
       Alert.alert("Error", `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Delete handler (only for editing)
+  const handleDelete = () => {
+    if (!isEditing) return;
+
+    Alert.alert(
+      "Delete Entry",
+      "Are you sure you want to delete this entry?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await singleEntryMutations.deleteEntry();
+              navigate("inbox");
+            } catch (error) {
+              console.error("Failed to delete entry:", error);
+              Alert.alert("Error", `Failed to delete: ${error instanceof Error ? error.message : "Unknown error"}`);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Show loading when editing and entry is loading
+  if (isEditing && isLoadingEntry) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // Show error if editing and entry not found
+  if (isEditing && !entry) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Text style={styles.errorText}>Entry not found</Text>
+        <TouchableOpacity onPress={() => navigate("inbox")} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Back to Inbox</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -163,31 +280,50 @@ export function CaptureForm() {
             </Text>
           </TouchableOpacity>
 
-          {/* Category Button - placeholder */}
-          <TouchableOpacity style={styles.topToolbarButton}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          {/* Category Button */}
+          <TouchableOpacity
+            style={[styles.topToolbarButton, categoryId && styles.topToolbarButtonActive]}
+            onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={categoryId ? "#2563eb" : "#6b7280"} strokeWidth={2}>
               <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-            <Text style={styles.topToolbarButtonText}>Category</Text>
+            <Text style={[styles.topToolbarButtonText, categoryId && styles.topToolbarButtonTextActive]}>
+              {categoryName || "Inbox"}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Content Area */}
       <View style={styles.contentContainer}>
-        {/* Title Input */}
-        <View style={styles.titleContainer}>
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Title"
-            placeholderTextColor="#9ca3af"
-            style={styles.titleInput}
-            editable={!isSubmitting}
-            returnKeyType="next"
-            blurOnSubmit={false}
-          />
-        </View>
+        {/* Title Input - Collapsible */}
+        {shouldCollapse ? (
+          <TouchableOpacity
+            style={styles.titleCollapsed}
+            onPress={() => {
+              setIsTitleExpanded(true);
+              setTimeout(() => titleInputRef.current?.focus(), 100);
+            }}
+          >
+            <View style={styles.titleCollapsedLine} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.titleContainer}>
+            <TextInput
+              ref={titleInputRef}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Title"
+              placeholderTextColor="#9ca3af"
+              style={styles.titleInput}
+              editable={!isSubmitting}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onFocus={() => setIsTitleExpanded(true)}
+            />
+          </View>
+        )}
 
         {/* Editor */}
         <View style={styles.editorContainer}>
@@ -271,6 +407,19 @@ export function CaptureForm() {
         </View>
 
         <View style={styles.toolbarRight}>
+          {/* Delete Button (only when editing) */}
+          {isEditing && (
+            <TouchableOpacity
+              onPress={handleDelete}
+              disabled={isSubmitting}
+              style={[styles.deleteButton, isSubmitting && styles.buttonDisabled]}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
+                <Path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+          )}
+
           {/* Cancel Button (Red X) */}
           <TouchableOpacity
             onPress={() => navigate("inbox")}
@@ -293,6 +442,27 @@ export function CaptureForm() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Category Picker Dropdown */}
+      {showCategoryPicker && (
+        <>
+          {/* Backdrop overlay */}
+          <TouchableOpacity
+            style={styles.backdrop}
+            activeOpacity={1}
+            onPress={() => setShowCategoryPicker(false)}
+          />
+          <CategoryPicker
+            visible={showCategoryPicker}
+            onClose={() => setShowCategoryPicker(false)}
+            onSelect={(id, name) => {
+              setCategoryId(id);
+              setCategoryName(name);
+            }}
+            selectedCategoryId={categoryId}
+          />
+        </>
+      )}
     </View>
   );
 }
@@ -301,6 +471,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#ffffff",
+  },
+  loadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#6b7280",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#ef4444",
+    marginBottom: 16,
+  },
+  backButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: "#3b82f6",
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
   },
   topToolbar: {
     position: "absolute",
@@ -311,7 +505,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === "ios" ? 60 : (StatusBar.currentHeight || 0) + 16,
+    paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 1,
     paddingBottom: 12,
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
@@ -346,7 +540,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    paddingTop: Platform.OS === "ios" ? 120 : (StatusBar.currentHeight || 0) + 76,
+    paddingTop: Platform.OS === "ios" ? 105 : (StatusBar.currentHeight || 0) + 61,
   },
   titleContainer: {
     paddingHorizontal: 24,
@@ -354,6 +548,16 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
+  },
+  titleCollapsed: {
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
+  titleCollapsedLine: {
+    height: 0.5,
+    backgroundColor: "#d1d5db",
   },
   titleInput: {
     fontSize: 32,
@@ -409,6 +613,15 @@ const styles = StyleSheet.create({
   toolbarButtonActive: {
     backgroundColor: "#dbeafe",
   },
+  deleteButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f97316",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
   cancelButton: {
     width: 40,
     height: 40,
@@ -417,6 +630,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   saveButton: {
     width: 44,
@@ -429,5 +645,14 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     opacity: 0.5,
+  },
+  backdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    zIndex: 999,
   },
 });

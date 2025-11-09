@@ -24,3 +24,41 @@ body {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* Custom editor styles */
+.ProseMirror,
+.prose,
+.prose-lg {
+  line-height: 1.4 !important;
+}
+
+.ProseMirror p,
+.prose p,
+.prose-lg p {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.ProseMirror p + p,
+.prose p + p,
+.prose-lg p + p {
+  margin-top: 0.25rem !important;
+}
+
+.ProseMirror ul,
+.ProseMirror ol,
+.prose ul,
+.prose ol,
+.prose-lg ul,
+.prose-lg ol {
+  padding-left: 1.5rem !important;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.ProseMirror ul ul,
+.ProseMirror ol ul,
+.ProseMirror ul ol,
+.ProseMirror ol ol {
+  padding-left: 1.25rem !important;
+}

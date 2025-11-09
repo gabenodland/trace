@@ -1,18 +1,29 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { useEntries, extractTagsAndMentions, getWordCount, getCharacterCount } from "@trace/core";
+import { useEntries, useEntry, useCategories, extractTagsAndMentions, getWordCount, getCharacterCount } from "@trace/core";
+import { CategoryPicker } from "../../categories/components/CategoryPicker";
 
 export function CaptureForm() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const entryId = searchParams.get('id');
+
   const [title, setTitle] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [captureLocation, setCaptureLocation] = useState(true);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categoryName, setCategoryName] = useState<string | null>(null);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const isLocalChange = useRef(false);
 
   const { entryMutations } = useEntries();
+  const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId);
+  const { categories } = useCategories();
+
+  const isEditing = !!entryId;
 
   const currentDate = new Date().toLocaleDateString('en-US', {
     month: 'short',
@@ -42,9 +53,32 @@ export function CaptureForm() {
     editorProps: {
       attributes: {
         class: "prose prose-lg max-w-none focus:outline-none min-h-[60vh] px-6 py-4",
+        spellcheck: "true",
       },
     },
   });
+
+  // Load entry data when editing
+  useEffect(() => {
+    if (entry && isEditing && editor) {
+      setTitle(entry.title || "");
+      editor.commands.setContent(entry.content);
+      setCategoryId(entry.category_id || null);
+
+      // Look up category name from categories list
+      if (entry.category_id && categories.length > 0) {
+        const category = categories.find(c => c.category_id === entry.category_id);
+        setCategoryName(category?.name || null);
+      } else {
+        setCategoryName(null);
+      }
+
+      // Set location if available
+      if (entry.location_lat && entry.location_lng) {
+        setCaptureLocation(true);
+      }
+    }
+  }, [entry, isEditing, editor, categories]);
 
   const handleSave = async () => {
     if (!editor) {
@@ -55,11 +89,12 @@ export function CaptureForm() {
     const content = editor.getHTML();
     const textContent = editor.getText().trim();
 
-    console.log("Saving entry...", { content, textContent });
+    console.log("Saving entry...", { content, textContent, isEditing });
 
     // Check if there's actual text content (not just empty HTML)
     if (!textContent || textContent.length === 0) {
       console.log("No content to save");
+      alert("Please add some content before saving");
       return;
     }
 
@@ -68,59 +103,120 @@ export function CaptureForm() {
     try {
       const { tags, mentions } = extractTagsAndMentions(content);
 
-      // Get GPS coordinates if available and enabled
-      let latitude: number | null = null;
-      let longitude: number | null = null;
-      let accuracy: number | null = null;
+      if (isEditing) {
+        // Update existing entry
+        console.log("Updating entry...");
+        await singleEntryMutations.updateEntry({
+          title: title.trim() || null,
+          content,
+          tags,
+          mentions,
+          category_id: categoryId,
+        });
+        console.log("Entry updated successfully");
+      } else {
+        // Create new entry
+        // Get GPS coordinates if available and enabled
+        let latitude: number | null = null;
+        let longitude: number | null = null;
+        let accuracy: number | null = null;
 
-      if (captureLocation && navigator.geolocation) {
-        try {
-          const position = await new Promise<GeolocationPosition>(
-            (resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(resolve, reject, {
-                timeout: 2000,
-                maximumAge: 60000,
-              });
-            }
-          );
-          latitude = position.coords.latitude;
-          longitude = position.coords.longitude;
-          accuracy = position.coords.accuracy;
-        } catch (geoError) {
-          console.log("Location not available:", geoError);
+        if (captureLocation && navigator.geolocation) {
+          try {
+            const position = await new Promise<GeolocationPosition>(
+              (resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                  timeout: 2000,
+                  maximumAge: 60000,
+                });
+              }
+            );
+            latitude = position.coords.latitude;
+            longitude = position.coords.longitude;
+            accuracy = position.coords.accuracy;
+          } catch (geoError) {
+            console.log("Location not available:", geoError);
+          }
         }
+
+        console.log("Creating entry...");
+        await entryMutations.createEntry({
+          title: title.trim() || null,
+          content,
+          tags,
+          mentions,
+          location_lat: latitude,
+          location_lng: longitude,
+          location_accuracy: accuracy,
+          category_id: categoryId,
+        });
+        console.log("Entry created successfully");
+
+        // Clear form only when creating
+        setTitle("");
+        editor.commands.setContent("");
+        setCategoryId(null);
+        setCategoryName(null);
       }
-
-      console.log("Creating entry...");
-      await entryMutations.createEntry({
-        title: title.trim() || null,
-        content,
-        tags,
-        mentions,
-        location_lat: latitude,
-        location_lng: longitude,
-        location_accuracy: accuracy,
-        category_id: null,
-      });
-
-      console.log("Entry created successfully");
-
-      // Clear form
-      setTitle("");
-      editor.commands.setContent("");
 
       // Navigate to inbox
       navigate("/inbox");
     } catch (error) {
-      console.error("Failed to create entry:", error);
+      console.error(`Failed to ${isEditing ? 'update' : 'create'} entry:`, error);
       alert(`Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Delete handler (only for editing)
+  const handleDelete = async () => {
+    if (!isEditing) return;
+
+    if (!window.confirm("Are you sure you want to delete this entry?")) {
+      return;
+    }
+
+    try {
+      await singleEntryMutations.deleteEntry();
+      navigate("/inbox");
+    } catch (error) {
+      console.error("Failed to delete entry:", error);
+      alert(`Failed to delete: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
   const canIndent = editor?.can().sinkListItem("listItem") ?? false;
   const isInList = editor?.isActive("bulletList") || editor?.isActive("orderedList");
+
+  // Show loading when editing and entry is loading
+  if (isEditing && isLoadingEntry) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading entry...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if editing and entry not found
+  if (isEditing && !entry) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-white">
+        <div className="text-center">
+          <p className="text-red-600 text-lg mb-4">Entry not found</p>
+          <button
+            onClick={() => navigate("/inbox")}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Back to Inbox
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-white">
@@ -161,15 +257,32 @@ export function CaptureForm() {
             </svg>
           </button>
 
-          {/* Category Button - placeholder */}
-          <button
-            className="p-2 rounded text-gray-400 hover:bg-gray-50 transition-colors"
-            title="Add category"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
-            </svg>
-          </button>
+          {/* Category Button - with relative positioning for dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowCategoryPicker(!showCategoryPicker)}
+              className={`flex items-center gap-2 px-3 py-2 rounded transition-colors ${
+                categoryId ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-50"
+              }`}
+              title={categoryName || "Inbox"}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
+              </svg>
+              <span className="text-sm font-medium">{categoryName || "Inbox"}</span>
+            </button>
+
+            {/* Category Picker Dropdown */}
+            <CategoryPicker
+              visible={showCategoryPicker}
+              onClose={() => setShowCategoryPicker(false)}
+              onSelect={(id, name) => {
+                setCategoryId(id);
+                setCategoryName(name);
+              }}
+              selectedCategoryId={categoryId}
+            />
+          </div>
         </div>
       </div>
 
@@ -266,17 +379,33 @@ export function CaptureForm() {
           {getWordCount(editor?.getHTML() || "")} {getWordCount(editor?.getHTML() || "") === 1 ? "word" : "words"} • {getCharacterCount(editor?.getHTML() || "")} {getCharacterCount(editor?.getHTML() || "") === 1 ? "character" : "characters"}
         </div>
 
-        {/* Save Button */}
-        <button
-          onClick={handleSave}
-          disabled={isSubmitting}
-          className="p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          title="Save (Ctrl+Enter)"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Delete Button (only when editing) */}
+          {isEditing && (
+            <button
+              onClick={handleDelete}
+              disabled={isSubmitting}
+              className="p-2 rounded-full bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+              title="Delete Entry"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
+
+          {/* Save Button */}
+          <button
+            onClick={handleSave}
+            disabled={isSubmitting}
+            className="p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            title="Save (Ctrl+Enter)"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
