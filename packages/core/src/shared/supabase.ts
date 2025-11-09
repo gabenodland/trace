@@ -1,5 +1,6 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
+import config from "../../config.json";
 
 // Dynamic AsyncStorage loading for React Native
 function getAsyncStorage() {
@@ -18,42 +19,32 @@ function getAsyncStorage() {
 
 const AsyncStorage = getAsyncStorage();
 
-// Supabase configuration
-// Apps (web/mobile) should provide these via environment variables
-let supabaseUrl: string;
-let supabaseAnonKey: string;
-
-try {
-  // Try to load from config.json (fallback for development)
-  const config = require("../../config.json");
-  supabaseUrl = config.supabase.url;
-  supabaseAnonKey = config.supabase.anonKey;
-} catch (e) {
-  // Config.json not found - environment variables must be provided by app
-  supabaseUrl = "";
-  supabaseAnonKey = "";
-}
-
-// Allow apps to override with their own config
-export function initializeSupabase(url?: string, anonKey?: string) {
-  const finalUrl = url || supabaseUrl;
-  const finalKey = anonKey || supabaseAnonKey;
-
-  if (!finalUrl || !finalKey) {
-    throw new Error(
-      "Supabase configuration missing. Provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables or create packages/core/config.json"
-    );
-  }
-
-  return createClient<Database>(finalUrl, finalKey, {
+// Configuration from package-level config.json - easy to find and modify
+export const supabase = createClient<Database>(
+  config.supabase.url,
+  config.supabase.anonKey,
+  {
     auth: {
       ...(AsyncStorage ? { storage: AsyncStorage } : {}),
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: true,
+      detectSessionInUrl: true, // Required for OAuth redirects on web
     },
-  });
-}
+  }
+);
 
-// Default client instance
-export const supabase: SupabaseClient<Database> = initializeSupabase();
+// For backwards compatibility - allow apps to override
+export function initializeSupabase(url?: string, anonKey?: string) {
+  return createClient<Database>(
+    url || config.supabase.url,
+    anonKey || config.supabase.anonKey,
+    {
+      auth: {
+        ...(AsyncStorage ? { storage: AsyncStorage } : {}),
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
+    }
+  );
+}

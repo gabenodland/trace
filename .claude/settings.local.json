@@ -44,7 +44,10 @@
       "Bash(adb devices:*)",
       "Bash(adb shell am start:*)",
       "Bash(adb shell:*)",
-      "Bash(\"C:\\Users\\gaben\\AppData\\Local\\Android\\Sdk\\emulator\\emulator.exe\" -list-avds)"
+      "Bash(\"C:\\Users\\gaben\\AppData\\Local\\Android\\Sdk\\emulator\\emulator.exe\" -list-avds)",
+      "Bash(npm run dev:web:*)",
+      "Bash(timeout:*)",
+      "Bash(npm run type-check:web:*)"
     ],
     "deny": [],
     "ask": []
