@@ -1,14 +1,15 @@
-import { View, StyleSheet, Alert } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { useEntries } from "@trace/core";
+import { useNavigation } from "../shared/contexts/NavigationContext";
 import { ScreenHeader } from "../components/navigation/ScreenHeader";
 import { EntryList } from "../modules/entries/components/EntryList";
 
 export function InboxScreen() {
   const { entries, isLoading } = useEntries({ category_id: null });
+  const { navigate } = useNavigation();
 
   const handleEntryPress = (entryId: string) => {
-    // TODO: Navigate to entry edit screen when navigation is set up
-    Alert.alert("Entry", `Entry ID: ${entryId}\n\nFull navigation coming soon!`);
+    navigate("entryEdit", { entryId });
   };
 
   return (

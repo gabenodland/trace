@@ -8,7 +8,7 @@ interface ScreenHeaderProps {
   showProfile?: boolean;
 }
 
-export function ScreenHeader({ title, badge, showProfile = true }: ScreenHeaderProps) {
+export function ScreenHeader({ title, badge, showProfile = false }: ScreenHeaderProps) {
   const { user, signOut } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
 

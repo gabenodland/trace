@@ -1,4 +1,5 @@
 import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
+import Svg, { Path } from "react-native-svg";
 
 export interface TabItem {
   id: string;
@@ -14,9 +15,13 @@ interface TabBarProps {
 }
 
 export function TabBar({ tabs, activeTab, onTabPress }: TabBarProps) {
+  // Filter out capture tab from regular tabs
+  const regularTabs = tabs.filter(tab => tab.id !== "capture");
+
   return (
     <View style={styles.container}>
-      {tabs.map((tab) => {
+      {/* Regular tabs */}
+      {regularTabs.map((tab) => {
         const isActive = activeTab === tab.id;
         return (
           <TouchableOpacity
@@ -43,6 +48,19 @@ export function TabBar({ tabs, activeTab, onTabPress }: TabBarProps) {
           </TouchableOpacity>
         );
       })}
+
+      {/* Floating Action Button (Capture) - Right aligned */}
+      <View style={styles.fabContainer}>
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => onTabPress("capture")}
+          activeOpacity={0.8}
+        >
+          <Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
+            <Path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -66,6 +84,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 8,
+  },
+  fabContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: -30,
+  },
+  fab: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#2563eb",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
   },
   iconContainer: {
     position: "relative",

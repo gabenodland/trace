@@ -1,7 +1,7 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 interface RichTextEditorProps {
   value: string;
@@ -16,6 +16,8 @@ export function RichTextEditor({
   placeholder = "Start typing...",
   autoFocus = false,
 }: RichTextEditorProps) {
+  const isLocalChange = useRef(false);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -34,6 +36,7 @@ export function RichTextEditor({
     ],
     content: value,
     onUpdate: ({ editor }) => {
+      isLocalChange.current = true;
       onChange(editor.getHTML());
     },
     autofocus: autoFocus,
@@ -45,11 +48,12 @@ export function RichTextEditor({
     },
   });
 
-  // Update editor content when value prop changes externally
+  // Update editor content when value prop changes externally (not from typing)
   useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
-      editor.commands.setContent(value);
+    if (editor && !isLocalChange.current && value !== editor.getHTML()) {
+      editor.commands.setContent(value, false);
     }
+    isLocalChange.current = false;
   }, [editor, value]);
 
   if (!editor) {
