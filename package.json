@@ -33,5 +33,9 @@
   "overrides": {
     "react": "19.1.0",
     "react-dom": "19.1.0"
+  },
+  "dependencies": {
+    "@tiptap/react": "^3.10.4",
+    "@tiptap/starter-kit": "^3.10.4"
   }
 }

@@ -4,6 +4,7 @@ import { LoginPage } from "./modules/auth/pages/LoginPage";
 import { Layout } from "./components/layout/Layout";
 import { CapturePage } from "./pages/CapturePage";
 import { InboxPage } from "./pages/InboxPage";
+import { EntryEditPage } from "./pages/EntryEditPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { TasksPage } from "./pages/TasksPage";
@@ -31,6 +32,7 @@ function ProtectedRoutes() {
         <Route index element={<Navigate to="/capture" replace />} />
         <Route path="capture" element={<CapturePage />} />
         <Route path="inbox" element={<InboxPage />} />
+        <Route path="entry/:id" element={<EntryEditPage />} />
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="tasks" element={<TasksPage />} />

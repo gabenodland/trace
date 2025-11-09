@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.trace.app"
+      "bundleIdentifier": "com.trace.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Trace uses your location to add context to your captured entries."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,13 +27,23 @@
       },
       "package": "com.trace.app",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Trace to use your location to add context to your captured entries."
+        }
+      ]
     ]
   }
 }

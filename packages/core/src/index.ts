@@ -3,6 +3,8 @@
 
 // Modules
 export * from "./modules/auth";
+export * from "./modules/categories";
+export * from "./modules/entries";
 
 // Shared utilities
 export * from "./shared/types";
