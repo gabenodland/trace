@@ -1,10 +1,30 @@
-import { useNavigate } from "react-router-dom";
-import { useEntries } from "@trace/core";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEntries, useCategories } from "@trace/core";
 import { EntryList } from "../modules/entries/components/EntryList";
 
 export function InboxPage() {
   const navigate = useNavigate();
-  const { entries, isLoading } = useEntries({ category_id: null });
+  const [searchParams] = useSearchParams();
+  const categoryParam = searchParams.get("category");
+  const { categories } = useCategories();
+
+  // Determine filter based on URL parameter
+  // - No param = Inbox (category_id: null)
+  // - "all" = All entries (no category filter)
+  // - specific ID = entries from that category
+  let categoryFilter: { category_id?: string | null } = {};
+
+  if (categoryParam === "all") {
+    // Don't set category_id - will fetch all entries
+  } else if (categoryParam) {
+    // Specific category ID
+    categoryFilter = { category_id: categoryParam };
+  } else {
+    // Default: Inbox (uncategorized entries)
+    categoryFilter = { category_id: null };
+  }
+
+  const { entries, isLoading } = useEntries(categoryFilter);
 
   const handleEntryClick = (entryId: string) => {
     navigate(`/capture?id=${entryId}`);
@@ -14,8 +34,7 @@ export function InboxPage() {
     <div className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Inbox</h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-600">
             {entries.length} {entries.length === 1 ? "entry" : "entries"}
           </p>
         </div>

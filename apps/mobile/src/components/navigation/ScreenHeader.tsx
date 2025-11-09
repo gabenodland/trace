@@ -1,16 +1,21 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TouchableWithoutFeedback } from "react-native";
 import { useAuth } from "../../shared/contexts/AuthContext";
 import { useState } from "react";
+import Svg, { Path } from "react-native-svg";
 
 interface ScreenHeaderProps {
   title: string;
   badge?: number;
   showProfile?: boolean;
+  onTitlePress?: () => void;
+  showDropdownArrow?: boolean;
 }
 
-export function ScreenHeader({ title, badge, showProfile = false }: ScreenHeaderProps) {
+export function ScreenHeader({ title, badge, showProfile = false, onTitlePress, showDropdownArrow = false }: ScreenHeaderProps) {
   const { user, signOut } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
+
+  console.log("ScreenHeader - title:", title, "showDropdownArrow:", showDropdownArrow, "onTitlePress:", !!onTitlePress);
 
   const getInitials = (email: string) => {
     return email.charAt(0).toUpperCase();
@@ -25,16 +30,31 @@ export function ScreenHeader({ title, badge, showProfile = false }: ScreenHeader
     await signOut();
   };
 
+  const TitleContent = (
+    <View style={styles.titleContainer}>
+      <Text style={styles.title}>{title}</Text>
+      {showDropdownArrow && (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth={2} style={styles.arrow}>
+          <Path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )}
+      {badge !== undefined && badge > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text>
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <View style={styles.header}>
-      <View style={styles.titleContainer}>
-        <Text style={styles.title}>{title}</Text>
-        {badge !== undefined && badge > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text>
-          </View>
-        )}
-      </View>
+      {onTitlePress ? (
+        <TouchableOpacity onPress={onTitlePress} style={styles.titleTouchable}>
+          {TitleContent}
+        </TouchableOpacity>
+      ) : (
+        TitleContent
+      )}
 
       {showProfile && user?.email && (
         <>
@@ -85,21 +105,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
+    minHeight: 120,
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+  titleTouchable: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
   titleContainer: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
   },
   title: {
     fontSize: 32,
     fontWeight: "700",
     color: "#1a1a1a",
+  },
+  arrow: {
+    marginLeft: 8,
+    marginTop: 4,
   },
   badge: {
     backgroundColor: "#ef4444",

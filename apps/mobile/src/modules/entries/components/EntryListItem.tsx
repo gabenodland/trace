@@ -1,5 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { Entry, getPreviewText, formatEntryDate } from "@trace/core";
+import type { Entry } from "@trace/core";
+import { getPreviewText, formatEntryDate } from "@trace/core";
 
 interface EntryListItemProps {
   entry: Entry;

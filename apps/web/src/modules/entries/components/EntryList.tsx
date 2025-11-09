@@ -1,4 +1,4 @@
-import { Entry } from "@trace/core";
+import type { Entry } from "@trace/core";
 import { EntryListItem } from "./EntryListItem";
 
 interface EntryListProps {

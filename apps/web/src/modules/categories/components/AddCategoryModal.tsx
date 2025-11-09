@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CategoryWithPath } from "@trace/core";
+import type { CategoryWithPath } from "@trace/core";
 
 interface AddCategoryModalProps {
   isOpen: boolean;

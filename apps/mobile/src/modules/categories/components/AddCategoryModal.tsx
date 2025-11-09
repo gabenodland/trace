@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from "react-native";
-import { CategoryWithPath } from "@trace/core";
+import type { CategoryWithPath } from "@trace/core";
 import Svg, { Path } from "react-native-svg";
 
 interface AddCategoryModalProps {

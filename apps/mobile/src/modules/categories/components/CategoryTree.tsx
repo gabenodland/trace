@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { CategoryTree as CategoryTreeType } from "@trace/core";
+import type { CategoryTree as CategoryTreeType } from "@trace/core";
 import Svg, { Path } from "react-native-svg";
 
 interface CategoryTreeProps {

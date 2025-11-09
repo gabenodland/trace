@@ -1,4 +1,4 @@
-import { CategoryTree as CategoryTreeType } from "@trace/core";
+import type { CategoryTree as CategoryTreeType } from "@trace/core";
 
 interface CategoryTreeProps {
   tree: CategoryTreeType[];
