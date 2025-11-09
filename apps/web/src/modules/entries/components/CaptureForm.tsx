@@ -253,7 +253,14 @@ export function CaptureForm() {
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
-              <circle cx={12} cy={10} r={3} strokeWidth={2} />
+              <circle
+                cx={12}
+                cy={10}
+                r={3}
+                strokeWidth={2}
+                fill={captureLocation ? "currentColor" : "none"}
+                className={captureLocation ? "animate-pulse" : ""}
+              />
             </svg>
           </button>
 

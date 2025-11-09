@@ -16,7 +16,7 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [captureLocation, setCaptureLocation] = useState(true);
+  const [captureLocation, setCaptureLocation] = useState(!isEditing); // Default ON for new entries, OFF for editing
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState<string | null>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -26,8 +26,10 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
     accuracy: number | null;
   }>({ lat: null, lng: null, accuracy: null });
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
+  const [locationIconBlink, setLocationIconBlink] = useState(true);
   const editorRef = useRef<any>(null);
   const titleInputRef = useRef<TextInput>(null);
+  const isInitialLoad = useRef(true); // Track if this is first load
 
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
@@ -46,6 +48,19 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
     minute: '2-digit'
   });
 
+  // Blinking animation for location loading
+  useEffect(() => {
+    if (captureLocation && !locationData.lat && !locationData.lng) {
+      // Start blinking by toggling state
+      const interval = setInterval(() => {
+        setLocationIconBlink(prev => !prev);
+      }, 600);
+      return () => clearInterval(interval);
+    } else {
+      setLocationIconBlink(true);
+    }
+  }, [captureLocation, locationData.lat, locationData.lng]);
+
   // Auto-collapse title when user starts typing in body without a title
   useEffect(() => {
     if (!title.trim() && content.trim().length > 0) {
@@ -62,7 +77,7 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
       setContent(entry.content);
       setCategoryId(entry.category_id || null);
 
-      // Load location data if available
+      // Load location data if available, keep toggle state reflecting what's saved
       if (entry.location_lat && entry.location_lng) {
         setLocationData({
           lat: entry.location_lat,
@@ -70,6 +85,10 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
           accuracy: entry.location_accuracy,
         });
         setCaptureLocation(true);
+      } else {
+        // No location saved - keep toggle off and clear location data
+        setLocationData({ lat: null, lng: null, accuracy: null });
+        setCaptureLocation(false);
       }
 
       // Look up category name from categories list
@@ -79,46 +98,92 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
       } else {
         setCategoryName(null);
       }
+
+      // Mark that initial load is complete
+      isInitialLoad.current = false;
     }
   }, [entry, isEditing, categories]);
 
-  // Fetch GPS location in background when location is enabled (only for new entries)
+  // Fetch GPS location in background when location is enabled
   useEffect(() => {
-    if (isEditing) return; // Don't fetch location when editing
     if (!captureLocation) {
       setLocationData({ lat: null, lng: null, accuracy: null });
       return;
     }
 
+    // Skip fetching during initial load of edit screen
+    if (isEditing && isInitialLoad.current) {
+      return;
+    }
+
+    // Skip fetching if we already have location data loaded
+    if (locationData.lat && locationData.lng) {
+      return;
+    }
+
+    let timeoutId: NodeJS.Timeout;
+    let isCancelled = false;
+    let hasLocation = false;
+
     const fetchLocation = async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === "granted") {
+        if (status === "granted" && !isCancelled) {
+          // Set timeout to give up after 15 seconds
+          timeoutId = setTimeout(() => {
+            if (!isCancelled && !hasLocation) {
+              console.log("Location fetch timeout - giving up");
+              setCaptureLocation(false);
+              Alert.alert(
+                "Location Unavailable",
+                "Could not get your location. Please check that GPS is enabled.",
+                [{ text: "OK" }]
+              );
+            }
+          }, 15000);
+
           // Try to get last known position first (instant)
           let location = await Location.getLastKnownPositionAsync();
 
           // If no cached location, get current position with low accuracy (faster)
-          if (!location) {
+          if (!location && !isCancelled) {
             location = await Location.getCurrentPositionAsync({
               accuracy: Location.Accuracy.Low,
             });
           }
 
-          if (location) {
+          if (location && !isCancelled) {
+            hasLocation = true;
             setLocationData({
               lat: location.coords.latitude,
               lng: location.coords.longitude,
               accuracy: location.coords.accuracy,
             });
+            clearTimeout(timeoutId);
           }
         }
       } catch (geoError) {
         console.log("Location not available:", geoError);
+        if (!isCancelled) {
+          setCaptureLocation(false);
+          Alert.alert(
+            "Location Error",
+            "Could not access your location. Please check that GPS is enabled and permissions are granted.",
+            [{ text: "OK" }]
+          );
+        }
       }
     };
 
     fetchLocation();
-  }, [captureLocation]);
+
+    return () => {
+      isCancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [captureLocation, isEditing]);
 
   // Keyboard listeners
   useEffect(() => {
@@ -273,7 +338,16 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
           >
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={captureLocation ? "#2563eb" : "#6b7280"} strokeWidth={2}>
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-              <Circle cx={12} cy={10} r={3} />
+              <Circle
+                cx={12}
+                cy={10}
+                r={3}
+                fill={
+                  locationData.lat && locationData.lng
+                    ? (captureLocation ? "#2563eb" : "#6b7280")  // Has location: solid
+                    : (captureLocation && locationIconBlink ? "#2563eb" : "none")  // Loading: blinking
+                }
+              />
             </Svg>
             <Text style={[styles.topToolbarButtonText, captureLocation && styles.topToolbarButtonTextActive]}>
               Location
