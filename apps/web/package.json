@@ -11,11 +11,17 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@trace/core": "^1.0.0",
     "@tanstack/react-query": "^5.62.0",
+    "@trace/core": "^1.0.0",
+    "autoprefixer": "^10.4.21",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "postcss": "^8.5.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.1.1"
+    "react-router-dom": "^7.9.5",
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss": "^3.4.18"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

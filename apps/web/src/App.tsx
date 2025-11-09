@@ -1,46 +1,51 @@
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthState } from "@trace/core";
 import { LoginPage } from "./modules/auth/pages/LoginPage";
-import { HomePage } from "./modules/auth/pages/HomePage";
+import { Layout } from "./components/layout/Layout";
+import { CapturePage } from "./pages/CapturePage";
+import { InboxPage } from "./pages/InboxPage";
+import { CategoriesPage } from "./pages/CategoriesPage";
+import { CalendarPage } from "./pages/CalendarPage";
+import { TasksPage } from "./pages/TasksPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
-function App() {
+function ProtectedRoutes() {
   const { isAuthenticated, isLoading } = useAuthState();
 
-  // Show loading state while checking authentication
   if (isLoading) {
     return (
-      <div style={styles.loading}>
-        <div style={styles.spinner}></div>
-        <p style={styles.loadingText}>Loading...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <div className="w-12 h-12 border-4 border-gray-200 border-t-primary-500 rounded-full animate-spin"></div>
+        <p className="mt-4 text-gray-600">Loading...</p>
       </div>
     );
   }
 
-  // Show LoginPage if not authenticated, HomePage if authenticated
-  return isAuthenticated ? <HomePage /> : <LoginPage />;
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<Navigate to="/capture" replace />} />
+        <Route path="capture" element={<CapturePage />} />
+        <Route path="inbox" element={<InboxPage />} />
+        <Route path="categories" element={<CategoriesPage />} />
+        <Route path="calendar" element={<CalendarPage />} />
+        <Route path="tasks" element={<TasksPage />} />
+        <Route path="settings" element={<SettingsPage />} />
+      </Route>
+    </Routes>
+  );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  loading: {
-    minHeight: "100vh",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f5f5f5",
-  },
-  spinner: {
-    width: "40px",
-    height: "40px",
-    border: "4px solid #f3f3f3",
-    borderTop: "4px solid #4285f4",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-  },
-  loadingText: {
-    marginTop: "16px",
-    color: "#666",
-    fontSize: "16px",
-  },
-};
+function App() {
+  return (
+    <BrowserRouter>
+      <ProtectedRoutes />
+    </BrowserRouter>
+  );
+}
 
 export default App;

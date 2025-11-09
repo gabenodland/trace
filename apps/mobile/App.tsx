@@ -5,6 +5,12 @@ import { StyleSheet, Text, View, ActivityIndicator } from "react-native";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
+import { TabBar, TabItem } from "./src/components/navigation/TabBar";
+import { CaptureScreen } from "./src/screens/CaptureScreen";
+import { InboxScreen } from "./src/screens/InboxScreen";
+import { CategoriesScreen } from "./src/screens/CategoriesScreen";
+import { CalendarScreen } from "./src/screens/CalendarScreen";
+import { TasksScreen } from "./src/screens/TasksScreen";
 
 // Create a query client
 const queryClient = new QueryClient({
@@ -16,12 +22,22 @@ const queryClient = new QueryClient({
   },
 });
 
+// Tab configuration
+const tabs: TabItem[] = [
+  { id: "capture", label: "Capture", icon: "✏️" },
+  { id: "inbox", label: "Inbox", icon: "📥", badge: 0 },
+  { id: "categories", label: "Categories", icon: "📁" },
+  { id: "calendar", label: "Calendar", icon: "📅" },
+  { id: "tasks", label: "Tasks", icon: "✓", badge: 0 },
+];
+
 /**
  * AuthGate - Shows login/signup when not authenticated, main app when authenticated
  */
 function AuthGate() {
   const { isAuthenticated, isLoading, user } = useAuth();
   const [showSignUp, setShowSignUp] = useState(false);
+  const [activeTab, setActiveTab] = useState("capture");
 
   // Show loading spinner while checking auth state
   if (isLoading) {
@@ -42,12 +58,29 @@ function AuthGate() {
     return <LoginScreen onSwitchToSignUp={() => setShowSignUp(true)} />;
   }
 
-  // User is authenticated - show main app
+  // Render the active screen
+  const renderScreen = () => {
+    switch (activeTab) {
+      case "capture":
+        return <CaptureScreen />;
+      case "inbox":
+        return <InboxScreen />;
+      case "categories":
+        return <CategoriesScreen />;
+      case "calendar":
+        return <CalendarScreen />;
+      case "tasks":
+        return <TasksScreen />;
+      default:
+        return <CaptureScreen />;
+    }
+  };
+
+  // User is authenticated - show main app with tab navigation
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome to Trace!</Text>
-      <Text style={styles.subtitle}>Logged in as: {user?.email}</Text>
-      <Text style={styles.info}>Main app coming soon...</Text>
+    <View style={styles.appContainer}>
+      {renderScreen()}
+      <TabBar tabs={tabs} activeTab={activeTab} onTabPress={setActiveTab} />
       <StatusBar style="dark" />
     </View>
   );
@@ -74,20 +107,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 20,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    marginBottom: 8,
-    color: "#1a1a1a",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 20,
-  },
-  info: {
-    fontSize: 14,
-    color: "#999",
+  appContainer: {
+    flex: 1,
+    backgroundColor: "#f9fafb",
   },
   loadingText: {
     marginTop: 16,
