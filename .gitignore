@@ -87,5 +87,12 @@ supabase/.temp/
 supabase/.branches/
 supabase/logs/
 supabase/.gitignore
+
+# Claude settings
 .claude/settings.local.json
+
+# Secrets and sensitive files
+secrets.txt
+login.txt
+*.md.local
 
