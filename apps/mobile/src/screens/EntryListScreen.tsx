@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import { useAuthState } from "@trace/core";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
@@ -10,13 +10,31 @@ import { EntryList } from "../modules/entries/components/EntryList";
 import { EntryNavigator } from "../components/navigation/EntryNavigator";
 import Svg, { Path } from "react-native-svg";
 
-export function EntryListScreen() {
+interface EntryListScreenProps {
+  returnCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
+  returnCategoryName?: string;
+  onCategoryChange?: (category: { id: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people"; name: string }) => void;
+}
+
+export function EntryListScreen({ returnCategoryId, returnCategoryName, onCategoryChange }: EntryListScreenProps = {}) {
   const { navigate } = useNavigation();
   const { categories } = useCategories();
   const { user, signOut } = useAuthState();
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people">(null);
   const [selectedCategoryName, setSelectedCategoryName] = useState<string>("Inbox");
+
+  // Update category when returning from entry screen
+  useEffect(() => {
+    if (returnCategoryId !== undefined && returnCategoryName !== undefined) {
+      setSelectedCategoryId(returnCategoryId);
+      setSelectedCategoryName(returnCategoryName);
+      // Notify parent of category change
+      if (onCategoryChange) {
+        onCategoryChange({ id: returnCategoryId, name: returnCategoryName });
+      }
+    }
+  }, [returnCategoryId, returnCategoryName, onCategoryChange]);
 
   const menuItems = [
     {
@@ -111,6 +129,10 @@ export function EntryListScreen() {
   const handleCategorySelect = (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people", categoryName: string) => {
     setSelectedCategoryId(categoryId);
     setSelectedCategoryName(categoryName);
+    // Notify parent of category change
+    if (onCategoryChange) {
+      onCategoryChange({ id: categoryId, name: categoryName });
+    }
   };
 
   return (

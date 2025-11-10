@@ -36,6 +36,11 @@ function AuthGate() {
   const [activeTab, setActiveTab] = useState("inbox");
   const [navParams, setNavParams] = useState<Record<string, any>>({});
   const [dbInitialized, setDbInitialized] = useState(false);
+  // Track current list category for passing to new entries
+  const [currentListCategory, setCurrentListCategory] = useState<{
+    id: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
+    name: string;
+  }>({ id: null, name: "Inbox" });
 
   // Initialize database and sync when authenticated
   useEffect(() => {
@@ -97,7 +102,11 @@ function AuthGate() {
 
   // Handle FAB add action
   const handleAddPress = () => {
-    setNavParams({}); // Clear any existing params
+    // Pass current list category to new entry
+    setNavParams({
+      initialCategoryId: currentListCategory.id,
+      initialCategoryName: currentListCategory.name,
+    });
     setActiveTab("capture");
   };
 
@@ -105,9 +114,21 @@ function AuthGate() {
   const renderScreen = () => {
     switch (activeTab) {
       case "capture":
-        return <EntryScreen entryId={navParams.entryId} />;
+        return (
+          <EntryScreen
+            entryId={navParams.entryId}
+            initialCategoryId={navParams.initialCategoryId}
+            initialCategoryName={navParams.initialCategoryName}
+          />
+        );
       case "inbox":
-        return <EntryListScreen />;
+        return (
+          <EntryListScreen
+            returnCategoryId={navParams.returnCategoryId}
+            returnCategoryName={navParams.returnCategoryName}
+            onCategoryChange={setCurrentListCategory}
+          />
+        );
       case "categories":
         return <CategoriesScreen />;
       case "calendar":
@@ -117,7 +138,13 @@ function AuthGate() {
       case "debug":
         return <DebugScreen />;
       default:
-        return <EntryListScreen />;
+        return (
+          <EntryListScreen
+            returnCategoryId={navParams.returnCategoryId}
+            returnCategoryName={navParams.returnCategoryName}
+            onCategoryChange={setCurrentListCategory}
+          />
+        );
     }
   };
 

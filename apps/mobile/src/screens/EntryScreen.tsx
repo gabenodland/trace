@@ -3,12 +3,18 @@ import { CaptureForm } from "../modules/entries/components/CaptureForm";
 
 interface EntryScreenProps {
   entryId?: string | null;
+  initialCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
+  initialCategoryName?: string;
 }
 
-export function EntryScreen({ entryId }: EntryScreenProps = {}) {
+export function EntryScreen({ entryId, initialCategoryId, initialCategoryName }: EntryScreenProps = {}) {
   return (
     <View style={styles.container}>
-      <CaptureForm entryId={entryId} />
+      <CaptureForm
+        entryId={entryId}
+        initialCategoryId={initialCategoryId}
+        initialCategoryName={initialCategoryName}
+      />
     </View>
   );
 }

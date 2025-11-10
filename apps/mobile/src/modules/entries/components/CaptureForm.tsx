@@ -14,9 +14,11 @@ import Svg, { Path, Circle, Line } from "react-native-svg";
 
 interface CaptureFormProps {
   entryId?: string | null;
+  initialCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
+  initialCategoryName?: string;
 }
 
-export function CaptureForm({ entryId }: CaptureFormProps = {}) {
+export function CaptureForm({ entryId, initialCategoryId, initialCategoryName }: CaptureFormProps = {}) {
   // Determine if we're editing an existing entry or creating a new one
   const isEditing = !!entryId;
 
@@ -25,9 +27,28 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [captureLocation, setCaptureLocation] = useState(!isEditing); // Default ON for new entries, OFF for editing
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [categoryName, setCategoryName] = useState<string | null>(null);
+
+  // Initialize category from props for new entries, or null for editing (will be loaded from entry)
+  const getInitialCategoryId = (): string | null => {
+    if (isEditing) return null; // Will be loaded from entry
+    // For new entries, use initialCategoryId if it's a real category (not a filter like "all", "tasks", etc.)
+    if (!initialCategoryId || typeof initialCategoryId !== 'string' ||
+        initialCategoryId === "all" || initialCategoryId === "tasks" ||
+        initialCategoryId === "events" || initialCategoryId === "categories" ||
+        initialCategoryId === "tags" || initialCategoryId === "people") {
+      return null; // Default to Inbox for filters
+    }
+    return initialCategoryId;
+  };
+
+  const [categoryId, setCategoryId] = useState<string | null>(getInitialCategoryId());
+  const [categoryName, setCategoryName] = useState<string | null>(
+    !isEditing && initialCategoryName && getInitialCategoryId() !== null ? initialCategoryName : null
+  );
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  // Store original category for cancel navigation (for edited entries)
+  const [originalCategoryId, setOriginalCategoryId] = useState<string | null>(null);
+  const [originalCategoryName, setOriginalCategoryName] = useState<string | null>(null);
   const [locationData, setLocationData] = useState<{
     lat: number | null;
     lng: number | null;
@@ -142,8 +163,14 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
       if (entry.category_id && categories.length > 0) {
         const category = categories.find(c => c.category_id === entry.category_id);
         setCategoryName(category?.name || null);
+        // Store original category for cancel navigation
+        setOriginalCategoryId(entry.category_id);
+        setOriginalCategoryName(category?.name || null);
       } else {
         setCategoryName(null);
+        // Store original category (Inbox) for cancel navigation
+        setOriginalCategoryId(null);
+        setOriginalCategoryName(null);
       }
 
       // Mark that initial load is complete
@@ -309,8 +336,21 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
         setLocationData({ lat: null, lng: null, accuracy: null });
       }
 
-      // Navigate to inbox
-      navigate("inbox");
+      // Navigate back to inbox with the category that was set
+      // This ensures the list shows the category where the entry was saved
+      // If category is a filter (all, tasks, etc.), default to Inbox
+      let returnCategoryId: string | null = categoryId || null;
+      let returnCategoryName: string = categoryName || "Inbox";
+
+      // Edge case: If returning to a filter view, switch to Inbox instead
+      if (returnCategoryId === "all" || returnCategoryId === "tasks" ||
+          returnCategoryId === "events" || returnCategoryId === "categories" ||
+          returnCategoryId === "tags" || returnCategoryId === "people") {
+        returnCategoryId = null;
+        returnCategoryName = "Inbox";
+      }
+
+      navigate("inbox", { returnCategoryId, returnCategoryName });
     } catch (error) {
       console.error(`Failed to ${isEditing ? 'update' : 'create'} entry:`, error);
       Alert.alert("Error", `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -550,7 +590,31 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
 
           {/* Cancel Button (Red X) */}
           <TouchableOpacity
-            onPress={() => navigate("inbox")}
+            onPress={() => {
+              // Navigate back to the appropriate category
+              let returnCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
+              let returnCategoryName: string;
+
+              if (isEditing) {
+                // For editing: return to entry's original category
+                returnCategoryId = originalCategoryId;
+                returnCategoryName = originalCategoryName || "Inbox";
+              } else {
+                // For new entries: return to the list category we came from
+                returnCategoryId = initialCategoryId || null;
+                returnCategoryName = initialCategoryName || "Inbox";
+              }
+
+              // Edge case: If returning to a filter view, switch to Inbox instead
+              if (returnCategoryId === "all" || returnCategoryId === "tasks" ||
+                  returnCategoryId === "events" || returnCategoryId === "categories" ||
+                  returnCategoryId === "tags" || returnCategoryId === "people") {
+                returnCategoryId = null;
+                returnCategoryName = "Inbox";
+              }
+
+              navigate("inbox", { returnCategoryId, returnCategoryName });
+            }}
             style={styles.cancelButton}
           >
             <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
