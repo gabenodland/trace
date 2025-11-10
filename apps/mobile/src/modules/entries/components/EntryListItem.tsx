@@ -5,9 +5,11 @@ import { getPreviewText, formatEntryDate } from "@trace/core";
 interface EntryListItemProps {
   entry: Entry;
   onPress: () => void;
+  onTagPress?: (tag: string) => void;
+  onMentionPress?: (mention: string) => void;
 }
 
-export function EntryListItem({ entry, onPress }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress }: EntryListItemProps) {
   const preview = getPreviewText(entry.content, 100);
   const dateStr = formatEntryDate(entry.updated_at);
 
@@ -35,12 +37,42 @@ export function EntryListItem({ entry, onPress }: EntryListItemProps) {
         {entry.tags && entry.tags.length > 0 && (
           <View style={styles.tags}>
             {entry.tags.slice(0, 3).map((tag) => (
-              <View key={tag} style={styles.tag}>
+              <TouchableOpacity
+                key={tag}
+                style={styles.tag}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onTagPress?.(tag);
+                }}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.tagText}>#{tag}</Text>
-              </View>
+              </TouchableOpacity>
             ))}
             {entry.tags.length > 3 && (
               <Text style={styles.moreText}>+{entry.tags.length - 3}</Text>
+            )}
+          </View>
+        )}
+
+        {/* Mentions */}
+        {entry.mentions && entry.mentions.length > 0 && (
+          <View style={styles.mentions}>
+            {entry.mentions.slice(0, 3).map((mention) => (
+              <TouchableOpacity
+                key={mention}
+                style={styles.mention}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onMentionPress?.(mention);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.mentionText}>@{mention}</Text>
+              </TouchableOpacity>
+            ))}
+            {entry.mentions.length > 3 && (
+              <Text style={styles.moreText}>+{entry.mentions.length - 3}</Text>
             )}
           </View>
         )}
@@ -104,6 +136,22 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: 11,
     color: "#1d4ed8",
+    fontWeight: "500",
+  },
+  mentions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  mention: {
+    backgroundColor: "#ede9fe",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  mentionText: {
+    fontSize: 11,
+    color: "#7c3aed",
     fontWeight: "500",
   },
   moreText: {

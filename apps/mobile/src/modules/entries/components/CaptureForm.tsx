@@ -36,7 +36,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     if (!initialCategoryId || typeof initialCategoryId !== 'string' ||
         initialCategoryId === "all" || initialCategoryId === "tasks" ||
         initialCategoryId === "events" || initialCategoryId === "categories" ||
-        initialCategoryId === "tags" || initialCategoryId === "people") {
+        initialCategoryId === "tags" || initialCategoryId === "people" ||
+        initialCategoryId.startsWith("tag:") || initialCategoryId.startsWith("mention:")) {
       return null; // Default to Inbox for filters
     }
     return initialCategoryId;
@@ -346,7 +347,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       // Edge case: If returning to a filter view, switch to Inbox instead
       if (returnCategoryId === "all" || returnCategoryId === "tasks" ||
           returnCategoryId === "events" || returnCategoryId === "categories" ||
-          returnCategoryId === "tags" || returnCategoryId === "people") {
+          returnCategoryId === "tags" || returnCategoryId === "people" ||
+          (typeof returnCategoryId === 'string' && (returnCategoryId.startsWith("tag:") || returnCategoryId.startsWith("mention:")))) {
         returnCategoryId = null;
         returnCategoryName = "Inbox";
       }
@@ -592,7 +594,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           {/* Cancel Button (Red X) */}
           <TouchableOpacity
             onPress={() => {
-              // Navigate back to the appropriate category
+              // Navigate back to the appropriate category (or filter view like tag:xxx, mention:xxx)
               let returnCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
               let returnCategoryName: string;
 
@@ -601,17 +603,9 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
                 returnCategoryId = originalCategoryId;
                 returnCategoryName = originalCategoryName || "Inbox";
               } else {
-                // For new entries: return to the list category we came from
+                // For new entries: return to the list category/filter we came from
                 returnCategoryId = initialCategoryId || null;
                 returnCategoryName = initialCategoryName || "Inbox";
-              }
-
-              // Edge case: If returning to a filter view, switch to Inbox instead
-              if (returnCategoryId === "all" || returnCategoryId === "tasks" ||
-                  returnCategoryId === "events" || returnCategoryId === "categories" ||
-                  returnCategoryId === "tags" || returnCategoryId === "people") {
-                returnCategoryId = null;
-                returnCategoryName = "Inbox";
               }
 
               navigate("inbox", { returnCategoryId, returnCategoryName });

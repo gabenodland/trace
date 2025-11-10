@@ -6,9 +6,11 @@ interface EntryListProps {
   entries: Entry[];
   isLoading: boolean;
   onEntryPress: (entryId: string) => void;
+  onTagPress?: (tag: string) => void;
+  onMentionPress?: (mention: string) => void;
 }
 
-export function EntryList({ entries, isLoading, onEntryPress }: EntryListProps) {
+export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress }: EntryListProps) {
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
@@ -36,6 +38,8 @@ export function EntryList({ entries, isLoading, onEntryPress }: EntryListProps) 
         <EntryListItem
           entry={item}
           onPress={() => onEntryPress(item.entry_id)}
+          onTagPress={onTagPress}
+          onMentionPress={onMentionPress}
         />
       )}
       contentContainerStyle={styles.listContent}

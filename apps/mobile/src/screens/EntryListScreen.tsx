@@ -134,6 +134,28 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName, onCatego
     navigate("capture", { entryId });
   };
 
+  const handleTagPress = (tag: string) => {
+    const tagId = `tag:${tag}`;
+    const tagName = `#${tag}`;
+    setSelectedCategoryId(tagId);
+    setSelectedCategoryName(tagName);
+    // Notify parent of category change
+    if (onCategoryChange) {
+      onCategoryChange({ id: tagId, name: tagName });
+    }
+  };
+
+  const handleMentionPress = (mention: string) => {
+    const mentionId = `mention:${mention}`;
+    const mentionName = `@${mention}`;
+    setSelectedCategoryId(mentionId);
+    setSelectedCategoryName(mentionName);
+    // Notify parent of category change
+    if (onCategoryChange) {
+      onCategoryChange({ id: mentionId, name: mentionName });
+    }
+  };
+
   const handleCategorySelect = (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people", categoryName: string) => {
     setSelectedCategoryId(categoryId);
     setSelectedCategoryName(categoryName);
@@ -158,6 +180,8 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName, onCatego
         entries={entries}
         isLoading={isLoading}
         onEntryPress={handleEntryPress}
+        onTagPress={handleTagPress}
+        onMentionPress={handleMentionPress}
       />
 
       {/* Category Navigator Dropdown */}

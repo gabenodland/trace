@@ -102,21 +102,19 @@ function AuthGate() {
 
   // Handle FAB add action
   const handleAddPress = () => {
-    let initialCategoryId = currentListCategory.id;
-    let initialCategoryName = currentListCategory.name;
+    const initialCategoryId = currentListCategory.id;
+    const initialCategoryName = currentListCategory.name;
     let initialContent: string | undefined = undefined;
 
-    // If viewing a tag or mention, set category to Inbox and pre-populate content
+    // If viewing a tag or mention, pre-populate content with that tag/mention
+    // Keep the categoryId as-is for navigation (cancel will return to tag view)
+    // CaptureForm will handle filtering out tag:xxx/mention:xxx when saving the entry
     if (typeof currentListCategory.id === 'string') {
       if (currentListCategory.id.startsWith('tag:')) {
         const tag = currentListCategory.id.substring(4);
-        initialCategoryId = null;
-        initialCategoryName = "Inbox";
         initialContent = `#${tag} `;
       } else if (currentListCategory.id.startsWith('mention:')) {
         const mention = currentListCategory.id.substring(8);
-        initialCategoryId = null;
-        initialCategoryName = "Inbox";
         initialContent = `@${mention} `;
       }
     }
