@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { useCategories } from "@trace/core";
 import Svg, { Path } from "react-native-svg";
+import { CategoryTree } from "./CategoryTree";
 
 interface CategoryPickerProps {
   visible: boolean;
@@ -11,7 +12,7 @@ interface CategoryPickerProps {
 }
 
 export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId }: CategoryPickerProps) {
-  const { categories, isLoading } = useCategories();
+  const { categories, categoryTree, isLoading } = useCategories();
   const [searchQuery, setSearchQuery] = useState("");
 
   // Filter categories based on search query
@@ -35,15 +36,6 @@ export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId 
 
   return (
     <View style={styles.dropdownContainer}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
-          </View>
-
           {/* Search Input */}
           <View style={styles.searchContainer}>
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2} style={styles.searchIcon}>
@@ -69,9 +61,9 @@ export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId 
 
           {/* Content */}
           <ScrollView style={styles.content}>
-            {/* Inbox Option (No Category) - Always visible */}
-            {searchQuery === "" && (
+            {searchQuery === "" ? (
               <>
+                {/* Inbox Option (No Category) - First item, aligned with categories */}
                 <TouchableOpacity
                   style={[
                     styles.categoryItem,
@@ -80,67 +72,75 @@ export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId 
                   onPress={() => handleSelect(null)}
                 >
                   <View style={styles.categoryContent}>
+                    {/* Spacer for alignment with collapsible items */}
+                    <View style={styles.chevronContainer} />
                     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === null ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-                      <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" strokeLinecap="round" strokeLinejoin="round" />
-                      <Path d="M9 22V12h6v10" strokeLinecap="round" strokeLinejoin="round" />
+                      <Path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
                     <Text style={[styles.categoryName, selectedCategoryId === null && styles.categoryNameSelected]}>
-                      Inbox (No Category)
+                      Inbox
                     </Text>
                   </View>
-                  {selectedCategoryId === null && (
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth={2.5}>
-                      <Path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                  )}
                 </TouchableOpacity>
 
-                <View style={styles.divider} />
-              </>
-            )}
+                {/* Category Tree - Collapsible, fully expanded by default */}
+                {!isLoading && categoryTree.length > 0 && (
+                  <CategoryTree
+                    tree={categoryTree}
+                    onCategoryPress={(categoryId) => {
+                      const category = categories.find((c) => c.category_id === categoryId);
+                      handleSelect(categoryId);
+                    }}
+                    selectedId={selectedCategoryId}
+                  />
+                )}
 
-            {/* Categories - Flat List */}
-            {isLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#3b82f6" />
-                <Text style={styles.loadingText}>Loading categories...</Text>
-              </View>
-            ) : filteredCategories.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>
-                  {searchQuery ? "No categories found" : "No categories yet"}
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  {searchQuery ? "Try a different search" : "Create a category first"}
-                </Text>
-              </View>
-            ) : (
-              filteredCategories.map((category) => (
-                <TouchableOpacity
-                  key={category.category_id}
-                  style={[
-                    styles.categoryItem,
-                    selectedCategoryId === category.category_id && styles.categoryItemSelected,
-                  ]}
-                  onPress={() => handleSelect(category.category_id)}
-                >
-                  <View style={styles.categoryContent}>
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === category.category_id ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-                      <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                    <View style={styles.categoryTextContainer}>
-                      <Text style={[styles.categoryPath, selectedCategoryId === category.category_id && styles.categoryPathSelected]}>
-                        {category.display_path}
-                      </Text>
-                    </View>
+                {isLoading && (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color="#3b82f6" />
+                    <Text style={styles.loadingText}>Loading categories...</Text>
                   </View>
-                  {selectedCategoryId === category.category_id && (
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth={2.5}>
-                      <Path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                  )}
-                </TouchableOpacity>
-              ))
+                )}
+
+                {!isLoading && categoryTree.length === 0 && (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No categories yet</Text>
+                    <Text style={styles.emptySubtext}>Create a category first</Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Filtered Categories when searching */}
+                {filteredCategories.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No categories found</Text>
+                    <Text style={styles.emptySubtext}>Try a different search</Text>
+                  </View>
+                ) : (
+                  filteredCategories.map((category) => (
+                    <TouchableOpacity
+                      key={category.category_id}
+                      style={[
+                        styles.categoryItem,
+                        selectedCategoryId === category.category_id && styles.categoryItemSelected,
+                      ]}
+                      onPress={() => handleSelect(category.category_id)}
+                    >
+                      <View style={styles.categoryContent}>
+                        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === category.category_id ? "#2563eb" : "#6b7280"} strokeWidth={2}>
+                          <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                        <View style={styles.categoryTextContainer}>
+                          <Text style={[styles.categoryPath, selectedCategoryId === category.category_id && styles.categoryPathSelected]}>
+                            {category.display_path}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </>
             )}
           </ScrollView>
     </View>
@@ -150,7 +150,7 @@ export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId 
 const styles = StyleSheet.create({
   dropdownContainer: {
     position: "absolute",
-    top: 60,
+    top: 101,
     left: 16,
     right: 16,
     backgroundColor: "#ffffff",
@@ -162,18 +162,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     zIndex: 1000,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    padding: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-  },
-  closeButton: {
-    padding: 4,
   },
   searchContainer: {
     flexDirection: "row",
@@ -216,6 +204,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     flex: 1,
+  },
+  chevronContainer: {
+    width: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 4,
   },
   categoryTextContainer: {
     flex: 1,

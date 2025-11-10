@@ -4,22 +4,37 @@ import { useEntries, useCategories } from "@trace/core";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { ScreenHeader } from "../components/navigation/ScreenHeader";
 import { EntryList } from "../modules/entries/components/EntryList";
-import { InboxCategoryDropdown } from "../components/navigation/InboxCategoryDropdown";
+import { EntryNavigator } from "../components/navigation/EntryNavigator";
 
-export function InboxScreen() {
+export function EntryListScreen() {
   const { navigate } = useNavigation();
   const { categories } = useCategories();
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | "all">(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | "all" | "tasks" | "events" | "categories" | "tags" | "ats">(null);
   const [selectedCategoryName, setSelectedCategoryName] = useState<string>("Inbox");
 
-  console.log("InboxScreen - selectedCategoryName:", selectedCategoryName);
+  console.log("EntryListScreen - selectedCategoryName:", selectedCategoryName);
 
   // Determine filter based on selected category
   let categoryFilter: { category_id?: string | null } = {};
 
   if (selectedCategoryId === "all") {
-    // Don't set category_id - will fetch all entries
+    // "All" - fetch all entries (inbox + categorized)
+    // Don't set category_id filter
+  } else if (selectedCategoryId === "categories") {
+    // "Categories" - show all categorized entries
+    // Don't set category_id filter (will show all, but "categories" is just a nav item)
+    // Actually, this should probably not be used as a filter - it's just the collapsible section
+    // For now, treat it like "all"
+  } else if (selectedCategoryId === "tasks" || selectedCategoryId === "events") {
+    // TODO: Filter by tasks or events when those are implemented
+    // For now, show all entries
+  } else if (selectedCategoryId === "tags") {
+    // TODO: Filter by tags when those are implemented
+    // For now, show all entries (noop)
+  } else if (selectedCategoryId === "ats") {
+    // TODO: Filter by @s when those are implemented
+    // For now, show all entries (noop)
   } else if (selectedCategoryId !== null) {
     // Specific category ID
     categoryFilter = { category_id: selectedCategoryId };
@@ -34,7 +49,7 @@ export function InboxScreen() {
     navigate("capture", { entryId });
   };
 
-  const handleCategorySelect = (categoryId: string | null | "all", categoryName: string) => {
+  const handleCategorySelect = (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "ats", categoryName: string) => {
     setSelectedCategoryId(categoryId);
     setSelectedCategoryName(categoryName);
   };
@@ -63,7 +78,7 @@ export function InboxScreen() {
             activeOpacity={1}
             onPress={() => setShowCategoryDropdown(false)}
           />
-          <InboxCategoryDropdown
+          <EntryNavigator
             visible={showCategoryDropdown}
             onClose={() => setShowCategoryDropdown(false)}
             onSelect={handleCategorySelect}

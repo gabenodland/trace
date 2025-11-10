@@ -9,7 +9,7 @@ import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { HamburgerMenu } from "./src/components/navigation/HamburgerMenu";
 import { FloatingActionButton } from "./src/components/navigation/FloatingActionButton";
 import { CaptureScreen } from "./src/screens/CaptureScreen";
-import { InboxScreen } from "./src/screens/InboxScreen";
+import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CategoriesScreen } from "./src/screens/CategoriesScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { TasksScreen } from "./src/screens/TasksScreen";
@@ -70,7 +70,7 @@ function AuthGate() {
       case "capture":
         return <CaptureScreen entryId={navParams.entryId} />;
       case "inbox":
-        return <InboxScreen />;
+        return <EntryListScreen />;
       case "categories":
         return <CategoriesScreen />;
       case "calendar":
@@ -78,7 +78,7 @@ function AuthGate() {
       case "tasks":
         return <TasksScreen />;
       default:
-        return <InboxScreen />;
+        return <EntryListScreen />;
     }
   };
 

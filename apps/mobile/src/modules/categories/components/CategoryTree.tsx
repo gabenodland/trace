@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import type { CategoryTree as CategoryTreeType } from "@trace/core";
 import Svg, { Path } from "react-native-svg";
@@ -41,41 +42,73 @@ interface CategoryNodeProps {
 }
 
 function CategoryNode({ node, depth, onPress, selectedId }: CategoryNodeProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
   const isSelected = selectedId === node.category.category_id;
   const hasChildren = node.children.length > 0;
   const paddingLeft = 16 + depth * 20;
 
+  const handleSelect = () => {
+    onPress?.(node.category.category_id);
+  };
+
+  const handleToggleExpand = () => {
+    if (hasChildren) {
+      setIsExpanded(!isExpanded);
+    }
+  };
+
   return (
     <View>
-      <TouchableOpacity
+      <View
         style={[
           styles.nodeContainer,
           { paddingLeft },
           isSelected && styles.nodeContainerSelected,
         ]}
-        onPress={() => onPress?.(node.category.category_id)}
       >
         <View style={styles.nodeContent}>
-          {hasChildren && (
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2} style={styles.chevron}>
-              <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          )}
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-            <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-          <Text style={[styles.nodeName, isSelected && styles.nodeNameSelected]}>
-            {node.category.name}
-          </Text>
-          {node.entry_count > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{node.entry_count}</Text>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
+          {/* Chevron - clickable to expand/collapse */}
+          <TouchableOpacity
+            style={styles.chevronContainer}
+            onPress={handleToggleExpand}
+            disabled={!hasChildren}
+          >
+            {hasChildren && (
+              <Svg
+                width={16}
+                height={16}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#6b7280"
+                strokeWidth={2}
+                style={[styles.chevron, isExpanded && styles.chevronExpanded]}
+              >
+                <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            )}
+          </TouchableOpacity>
 
-      {hasChildren && (
+          {/* Name and icon - clickable to select */}
+          <TouchableOpacity
+            style={styles.selectableContent}
+            onPress={handleSelect}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+            <Text style={[styles.nodeName, isSelected && styles.nodeNameSelected]}>
+              {node.category.name}
+            </Text>
+            {node.entry_count > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{node.entry_count}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {hasChildren && isExpanded && (
         <View>
           {node.children.map((childNode) => (
             <CategoryNode
@@ -127,8 +160,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  chevron: {
+  chevronContainer: {
+    width: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 4,
+  },
+  chevron: {
+    transform: [{ rotate: "0deg" }],
+  },
+  chevronExpanded: {
+    transform: [{ rotate: "90deg" }],
+  },
+  selectableContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
   },
   nodeName: {
     fontSize: 16,
