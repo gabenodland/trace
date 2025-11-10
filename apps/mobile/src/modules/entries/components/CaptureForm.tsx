@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView, Keyboard, StatusBar } from "react-native";
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from "react-native";
 import * as Location from "expo-location";
-import { useEntries, useEntry, useCategories, extractTagsAndMentions, getWordCount, getCharacterCount } from "@trace/core";
+import { useEntries, useEntry, useCategories, extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState } from "@trace/core";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { CategoryPicker } from "../../categories/components/CategoryPicker";
+import { TopBar } from "../../../components/layout/TopBar";
+import { BottomBar } from "../../../components/layout/BottomBar";
+import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdownContainer";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 
 interface CaptureFormProps {
@@ -33,10 +36,19 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
 
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
+  const { signOut } = useAuthState();
   const { categories } = useCategories();
   const { navigate } = useNavigation();
 
   const isEditing = !!entryId;
+
+  const menuItems = [
+    { label: "Inbox", onPress: () => navigate("inbox") },
+    { label: "Categories", onPress: () => navigate("categories") },
+    { label: "Calendar", onPress: () => navigate("calendar") },
+    { label: "Tasks", onPress: () => navigate("tasks") },
+    { label: "Sign Out", onPress: signOut },
+  ];
 
   // Determine if title should be collapsed
   const shouldCollapse = !title.trim() && content.trim().length > 0 && !isTitleExpanded;
@@ -328,46 +340,44 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
 
   return (
     <View style={styles.container}>
-      {/* Top Toolbar - Absolutely Fixed */}
-      <View style={styles.topToolbar}>
-        <View style={styles.topToolbarLeft}>
-          {/* Location Toggle */}
-          <TouchableOpacity
-            style={[styles.topToolbarButton, captureLocation && styles.topToolbarButtonActive]}
-            onPress={() => setCaptureLocation(!captureLocation)}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={captureLocation ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-              <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-              <Circle
-                cx={12}
-                cy={10}
-                r={3}
-                fill={
-                  locationData.lat && locationData.lng
-                    ? (captureLocation ? "#2563eb" : "#6b7280")  // Has location: solid
-                    : (captureLocation && locationIconBlink ? "#2563eb" : "none")  // Loading: blinking
-                }
-              />
-            </Svg>
-            <Text style={[styles.topToolbarButtonText, captureLocation && styles.topToolbarButtonTextActive]}>
-              Location
-            </Text>
-          </TouchableOpacity>
+      {/* Top Bar */}
+      <TopBar menuItems={menuItems}>
+        {/* Location Toggle */}
+        <TouchableOpacity
+          style={[styles.topBarButton, captureLocation && styles.topBarButtonActive]}
+          onPress={() => setCaptureLocation(!captureLocation)}
+        >
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={captureLocation ? "#2563eb" : "#6b7280"} strokeWidth={2}>
+            <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+            <Circle
+              cx={12}
+              cy={10}
+              r={3}
+              fill={
+                locationData.lat && locationData.lng
+                  ? (captureLocation ? "#2563eb" : "#6b7280")  // Has location: solid
+                  : (captureLocation && locationIconBlink ? "#2563eb" : "none")  // Loading: blinking
+              }
+            />
+          </Svg>
+          <Text style={[styles.topBarButtonText, captureLocation && styles.topBarButtonTextActive]}>
+            Location
+          </Text>
+        </TouchableOpacity>
 
-          {/* Category Button */}
-          <TouchableOpacity
-            style={[styles.topToolbarButton, categoryId && styles.topToolbarButtonActive]}
-            onPress={() => setShowCategoryPicker(!showCategoryPicker)}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={categoryId ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-              <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-            <Text style={[styles.topToolbarButtonText, categoryId && styles.topToolbarButtonTextActive]}>
-              {categoryName || "Inbox"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        {/* Category Button */}
+        <TouchableOpacity
+          style={[styles.topBarButton, categoryId && styles.topBarButtonActive]}
+          onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+        >
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={categoryId ? "#2563eb" : "#6b7280"} strokeWidth={2}>
+            <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+          <Text style={[styles.topBarButtonText, categoryId && styles.topBarButtonTextActive]}>
+            {categoryName || "Inbox"}
+          </Text>
+        </TouchableOpacity>
+      </TopBar>
 
       {/* Content Area */}
       <View style={styles.contentContainer}>
@@ -400,7 +410,10 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
         )}
 
         {/* Editor */}
-        <View style={styles.editorContainer}>
+        <View style={[
+          styles.editorContainer,
+          keyboardHeight > 0 && { paddingBottom: keyboardHeight + 105 }
+        ]}>
           <RichTextEditor
             ref={editorRef}
             value={content}
@@ -417,9 +430,9 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
         </View>
       </View>
 
-      {/* Fixed Bottom Toolbar */}
-      <View style={[styles.toolbar, keyboardHeight > 0 && { bottom: keyboardHeight + 25 }]}>
-        <View style={styles.toolbarLeft}>
+      {/* Bottom Bar */}
+      <BottomBar keyboardOffset={keyboardHeight}>
+        <View style={styles.formatButtons}>
           {/* Bold Button */}
           <TouchableOpacity
             style={styles.toolbarButton}
@@ -480,7 +493,7 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.toolbarRight}>
+        <View style={styles.actionButtons}>
           {/* Delete Button (only when editing) */}
           {isEditing && (
             <TouchableOpacity
@@ -515,28 +528,23 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
             </Svg>
           </TouchableOpacity>
         </View>
-      </View>
+      </BottomBar>
 
       {/* Category Picker Dropdown */}
-      {showCategoryPicker && (
-        <>
-          {/* Backdrop overlay */}
-          <TouchableOpacity
-            style={styles.backdrop}
-            activeOpacity={1}
-            onPress={() => setShowCategoryPicker(false)}
-          />
-          <CategoryPicker
-            visible={showCategoryPicker}
-            onClose={() => setShowCategoryPicker(false)}
-            onSelect={(id, name) => {
-              setCategoryId(id);
-              setCategoryName(name);
-            }}
-            selectedCategoryId={categoryId}
-          />
-        </>
-      )}
+      <TopBarDropdownContainer
+        visible={showCategoryPicker}
+        onClose={() => setShowCategoryPicker(false)}
+      >
+        <CategoryPicker
+          visible={showCategoryPicker}
+          onClose={() => setShowCategoryPicker(false)}
+          onSelect={(id, name) => {
+            setCategoryId(id);
+            setCategoryName(name);
+          }}
+          selectedCategoryId={categoryId}
+        />
+      </TopBarDropdownContainer>
     </View>
   );
 }
@@ -570,29 +578,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  topToolbar: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 1,
-    paddingBottom: 12,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-    zIndex: 10,
-    elevation: 10,
-  },
-  topToolbarLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  topToolbarButton: {
+  topBarButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -601,20 +587,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#f9fafb",
   },
-  topToolbarButtonActive: {
+  topBarButtonActive: {
     backgroundColor: "#dbeafe",
   },
-  topToolbarButtonText: {
+  topBarButtonText: {
     fontSize: 14,
     color: "#6b7280",
     fontWeight: "500",
   },
-  topToolbarButtonTextActive: {
+  topBarButtonTextActive: {
     color: "#2563eb",
   },
   contentContainer: {
     flex: 1,
-    paddingTop: Platform.OS === "ios" ? 105 : (StatusBar.currentHeight || 0) + 61,
   },
   titleContainer: {
     paddingHorizontal: 24,
@@ -654,28 +639,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
   },
-  toolbar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    backgroundColor: "#ffffff",
-    zIndex: 50,
-    elevation: 50,
-  },
-  toolbarLeft: {
+  formatButtons: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  toolbarRight: {
+  actionButtons: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -719,14 +688,5 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     opacity: 0.5,
-  },
-  backdrop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    zIndex: 999,
   },
 });

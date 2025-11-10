@@ -130,10 +130,8 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
     onClose();
   };
 
-  if (!visible) return null;
-
   return (
-    <View style={styles.dropdownContainer}>
+    <View style={styles.container}>
       {/* Search Input */}
           <View style={styles.searchContainer}>
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2} style={styles.searchIcon}>
@@ -374,20 +372,8 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
 }
 
 const styles = StyleSheet.create({
-  dropdownContainer: {
-    position: "absolute",
-    top: 120,
-    left: 16,
-    right: 16,
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    maxHeight: 500,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 1000,
+  container: {
+    flex: 1,
   },
   searchContainer: {
     flexDirection: "row",

@@ -1,15 +1,26 @@
 import { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
-import { useCategories } from "@trace/core";
-import { ScreenHeader } from "../components/navigation/ScreenHeader";
+import { useCategories, useAuthState } from "@trace/core";
+import { useNavigation } from "../shared/contexts/NavigationContext";
+import { TopBar } from "../components/layout/TopBar";
 import { CategoryTree } from "../modules/categories/components/CategoryTree";
 import { AddCategoryModal } from "../modules/categories/components/AddCategoryModal";
 import Svg, { Path } from "react-native-svg";
 
 export function CategoriesScreen() {
   const { categories, categoryTree, isLoading, categoryMutations } = useCategories();
+  const { signOut } = useAuthState();
+  const { navigate } = useNavigation();
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
+  const menuItems = [
+    { label: "Inbox", onPress: () => navigate("inbox") },
+    { label: "Categories", onPress: () => navigate("categories") },
+    { label: "Calendar", onPress: () => navigate("calendar") },
+    { label: "Tasks", onPress: () => navigate("tasks") },
+    { label: "Sign Out", onPress: signOut },
+  ];
 
   const handleCreateCategory = async (name: string, parentId: string | null) => {
     await categoryMutations.createCategory(name, parentId);
@@ -22,7 +33,10 @@ export function CategoriesScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Categories" />
+        <TopBar
+          title="Categories"
+          menuItems={menuItems}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3b82f6" />
           <Text style={styles.loadingText}>Loading categories...</Text>
@@ -33,7 +47,11 @@ export function CategoriesScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Categories" badge={categories.length} />
+      <TopBar
+        title="Categories"
+        badge={categories.length}
+        menuItems={menuItems}
+      />
 
       <View style={styles.content}>
         <CategoryTree

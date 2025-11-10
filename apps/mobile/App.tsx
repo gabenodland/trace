@@ -6,7 +6,6 @@ import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
 import { NavigationProvider } from "./src/shared/contexts/NavigationContext";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
-import { HamburgerMenu } from "./src/components/navigation/HamburgerMenu";
 import { FloatingActionButton } from "./src/components/navigation/FloatingActionButton";
 import { CaptureScreen } from "./src/screens/CaptureScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
@@ -86,11 +85,6 @@ function AuthGate() {
   return (
     <NavigationProvider navigate={handleNavigate}>
       <View style={styles.appContainer}>
-        {/* Hamburger Menu */}
-        <View style={styles.headerContainer}>
-          <HamburgerMenu />
-        </View>
-
         {/* Active Screen */}
         {renderScreen()}
 
@@ -132,15 +126,6 @@ const styles = StyleSheet.create({
   appContainer: {
     flex: 1,
     backgroundColor: "#f9fafb",
-  },
-  headerContainer: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    zIndex: 200,
-    elevation: 200,
-    paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 1,
-    paddingRight: 12,
   },
   loadingText: {
     marginTop: 16,

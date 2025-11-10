@@ -1,10 +1,26 @@
 import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { ScreenHeader } from "../components/navigation/ScreenHeader";
+import { useAuthState } from "@trace/core";
+import { useNavigation } from "../shared/contexts/NavigationContext";
+import { TopBar } from "../components/layout/TopBar";
 
 export function CalendarScreen() {
+  const { signOut } = useAuthState();
+  const { navigate } = useNavigation();
+
+  const menuItems = [
+    { label: "Inbox", onPress: () => navigate("inbox") },
+    { label: "Categories", onPress: () => navigate("categories") },
+    { label: "Calendar", onPress: () => navigate("calendar") },
+    { label: "Tasks", onPress: () => navigate("tasks") },
+    { label: "Sign Out", onPress: signOut },
+  ];
+
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Calendar" />
+      <TopBar
+        title="Calendar"
+        menuItems={menuItems}
+      />
       <ScrollView style={styles.content}>
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Date-Based View</Text>
