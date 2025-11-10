@@ -13,7 +13,7 @@ import { CategoriesScreen } from "./src/screens/CategoriesScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { TasksScreen } from "./src/screens/TasksScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
-import { DebugScreen } from "./src/screens/DebugScreen";
+import { DatabaseInfoScreen } from "./src/screens/DatabaseInfoScreen";
 import { localDB } from "./src/shared/db/localDB";
 import { syncQueue } from "./src/shared/sync/syncQueue";
 import "./src/shared/db/dbDebug"; // Global debug utilities
@@ -157,7 +157,7 @@ function AuthGate() {
       case "profile":
         return <ProfileScreen />;
       case "debug":
-        return <DebugScreen />;
+        return <DatabaseInfoScreen />;
       default:
         return (
           <EntryListScreen
