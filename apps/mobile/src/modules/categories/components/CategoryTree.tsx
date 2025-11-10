@@ -106,6 +106,7 @@ function CategoryNode({ node, depth, onPress, selectedId }: CategoryNodeProps) {
             )}
           </TouchableOpacity>
         </View>
+        <View style={styles.nodeDivider} />
       </View>
 
       {hasChildren && isExpanded && (
@@ -149,8 +150,14 @@ const styles = StyleSheet.create({
   nodeContainer: {
     paddingVertical: 12,
     paddingRight: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+  },
+  nodeDivider: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 28,
+    height: 1,
+    backgroundColor: "#f3f4f6",
   },
   nodeContainerSelected: {
     backgroundColor: "#dbeafe",

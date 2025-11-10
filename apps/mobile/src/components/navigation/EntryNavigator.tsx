@@ -157,7 +157,13 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
           </View>
 
           {/* Content */}
-          <ScrollView style={styles.content}>
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+            bounces={false}
+          >
             {searchQuery === "" ? (
               <>
                 {/* "All" Item - Top level, shows all entries */}
@@ -381,16 +387,18 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
 
 const styles = StyleSheet.create({
   container: {
-    // No flex, let it size naturally to fit content
+    flexDirection: 'column',
+    height: '100%',
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
+    flexShrink: 0,
   },
   searchIcon: {
     marginRight: 8,
@@ -405,7 +413,11 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   content: {
-    maxHeight: 340, // Reduced to account for search bar (~60px)
+    flex: 1,
+    flexShrink: 1,
+  },
+  contentContainer: {
+    paddingBottom: 8,
   },
   categoryTreeWrapper: {
     paddingLeft: 20,
@@ -420,8 +432,8 @@ const styles = StyleSheet.create({
   categoryItemDivider: {
     position: "absolute",
     bottom: 0,
-    left: 15,
-    right: 15,
+    left: 20,
+    right: 28,
     height: 1,
     backgroundColor: "#f3f4f6",
   },
