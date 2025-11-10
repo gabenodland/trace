@@ -1,14 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from "react-native";
 import Svg, { Path, Line } from "react-native-svg";
-import { useState, ReactNode } from "react";
-
-export interface TopBarMenuItem {
-  label?: string;
-  onPress?: () => void;
-  icon?: ReactNode;
-  isDivider?: boolean;
-  isSignOut?: boolean;
-}
+import { useState } from "react";
+import { NavigationMenu, NavigationMenuItem } from "../navigation/NavigationMenu";
 
 interface TopBarProps {
   // Title mode (for list screens)
@@ -21,8 +14,9 @@ interface TopBarProps {
   children?: React.ReactNode;
 
   // Hamburger menu (customizable menu items)
-  menuItems?: TopBarMenuItem[];
+  menuItems?: NavigationMenuItem[];
   userEmail?: string;
+  onProfilePress?: () => void;
 }
 
 export function TopBar({
@@ -33,6 +27,7 @@ export function TopBar({
   children,
   menuItems = [],
   userEmail,
+  onProfilePress,
 }: TopBarProps) {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -81,58 +76,13 @@ export function TopBar({
             </Svg>
           </TouchableOpacity>
 
-          {showMenu && (
-            <>
-              <TouchableOpacity
-                style={styles.menuBackdrop}
-                activeOpacity={1}
-                onPress={() => setShowMenu(false)}
-              />
-              <View style={styles.menu}>
-                {/* User Email Section */}
-                {userEmail && (
-                  <>
-                    <View style={styles.userSection}>
-                      <Text style={styles.userEmail}>{userEmail}</Text>
-                    </View>
-                    <View style={styles.divider} />
-                  </>
-                )}
-
-                {/* Menu Items */}
-                <View style={styles.menuItemsContainer}>
-                  {menuItems.map((item, index) => {
-                    if (item.isDivider) {
-                      return <View key={index} style={styles.divider} />;
-                    }
-
-                    return (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.menuItem,
-                          item.isSignOut && styles.signOutButton,
-                        ]}
-                        onPress={() => {
-                          setShowMenu(false);
-                          item.onPress?.();
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        {item.icon}
-                        <Text style={[
-                          styles.menuItemText,
-                          item.isSignOut && styles.signOutText,
-                        ]}>
-                          {item.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            </>
-          )}
+          <NavigationMenu
+            visible={showMenu}
+            onClose={() => setShowMenu(false)}
+            menuItems={menuItems}
+            userEmail={userEmail}
+            onProfilePress={onProfilePress}
+          />
         </View>
       )}
     </View>
@@ -191,63 +141,5 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 8,
-  },
-  menuBackdrop: {
-    position: "absolute",
-    top: -1000,
-    left: -1000,
-    right: -1000,
-    bottom: -1000,
-    zIndex: 199,
-  },
-  menu: {
-    position: "absolute",
-    top: 51,
-    right: 0,
-    backgroundColor: "#ffffff",
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    minWidth: 240,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 200,
-  },
-  userSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: "#1f2937",
-    fontWeight: "600",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#e5e7eb",
-  },
-  menuItemsContainer: {
-    paddingVertical: 8,
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  menuItemText: {
-    fontSize: 15,
-    color: "#1f2937",
-    fontWeight: "500",
-  },
-  signOutButton: {
-    paddingVertical: 16,
-  },
-  signOutText: {
-    color: "#ef4444",
-    fontWeight: "600",
   },
 });

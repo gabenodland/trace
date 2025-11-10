@@ -48,6 +48,9 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     !isEditing && initialCategoryName && getInitialCategoryId() !== null ? initialCategoryName : null
   );
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [status, setStatus] = useState<"none" | "incomplete" | "complete">("none");
+  const [dueDate, setDueDate] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   // Store original category for cancel navigation (for edited entries)
   const [originalCategoryId, setOriginalCategoryId] = useState<string | null>(null);
   const [originalCategoryName, setOriginalCategoryName] = useState<string | null>(null);
@@ -99,15 +102,6 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     }
   };
 
-  const menuItems = [
-    { label: "Inbox", onPress: () => navigate("inbox") },
-    { label: "Categories", onPress: () => navigate("categories") },
-    { label: "Calendar", onPress: () => navigate("calendar") },
-    { label: "Tasks", onPress: () => navigate("tasks") },
-    { label: "🔍 Debug DB", onPress: () => navigate("debug") },
-    { label: "Sign Out", onPress: signOut },
-  ];
-
   // Determine if title should be collapsed
   const shouldCollapse = !title.trim() && content.trim().length > 0 && !isTitleExpanded;
 
@@ -146,6 +140,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       setTitle(entry.title || "");
       setContent(entry.content);
       setCategoryId(entry.category_id || null);
+      setStatus(entry.status);
+      setDueDate(entry.due_date);
 
       // Load location data if available, keep toggle state reflecting what's saved
       if (entry.location_lat && entry.location_lng) {
@@ -316,6 +312,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           tags,
           mentions,
           category_id: categoryId,
+          status,
+          due_date: dueDate,
         });
       } else {
         // Create new entry
@@ -328,6 +326,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           location_lng: locationData.lng,
           location_accuracy: locationData.accuracy,
           category_id: categoryId,
+          status,
+          due_date: dueDate,
         });
 
         // Clear form only when creating
@@ -336,6 +336,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         setCategoryId(null);
         setCategoryName(null);
         setLocationData({ lat: null, lng: null, accuracy: null });
+        setStatus("none");
+        setDueDate(null);
       }
 
       // Navigate back to inbox with the category that was set
@@ -412,7 +414,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   return (
     <View style={styles.container}>
       {/* Top Bar */}
-      <TopBar menuItems={menuItems}>
+      <TopBar>
         {/* Location Toggle */}
         <TouchableOpacity
           style={[styles.topBarButton, captureLocation && styles.topBarButtonActive]}
@@ -451,6 +453,70 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           </Svg>
           <Text style={[styles.topBarButtonText, categoryId && styles.topBarButtonTextActive]}>
             {categoryName || "Inbox"}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Task Status Button */}
+        <TouchableOpacity
+          style={[
+            styles.topBarButton,
+            status === "incomplete" && styles.topBarButtonTask,
+            status === "complete" && styles.topBarButtonComplete
+          ]}
+          onPress={() => {
+            // Cycle through: none -> incomplete -> complete -> none
+            if (status === "none") setStatus("incomplete");
+            else if (status === "incomplete") setStatus("complete");
+            else setStatus("none");
+            if (!isEditMode) enterEditMode();
+          }}
+        >
+          {status === "incomplete" || status === "complete" ? (
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+              <Circle
+                cx="12"
+                cy="12"
+                r="10"
+                stroke={status === "complete" ? "#10b981" : "#3b82f6"}
+                strokeWidth={2}
+                fill={status === "complete" ? "#10b981" : "none"}
+              />
+              {status === "complete" && (
+                <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+              )}
+            </Svg>
+          ) : (
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          )}
+          <Text
+            style={[
+              styles.topBarButtonText,
+              status === "incomplete" && styles.topBarButtonTaskText,
+              status === "complete" && styles.topBarButtonCompleteText
+            ]}
+          >
+            {status === "none" ? "Note" : status === "incomplete" ? "Task" : "Done"}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Due Date Button - Always visible (makes notes into events) */}
+        <TouchableOpacity
+          style={[styles.topBarButton, dueDate && styles.topBarButtonDue]}
+          onPress={() => {
+            setShowDatePicker(!showDatePicker);
+            if (!isEditMode) enterEditMode();
+          }}
+        >
+          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dueDate ? "#f97316" : "#6b7280"} strokeWidth={2}>
+            <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
+            <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
+            <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
+            <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+          <Text style={[styles.topBarButtonText, dueDate && styles.topBarButtonDueText]}>
+            {dueDate ? new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : "Due"}
           </Text>
         </TouchableOpacity>
       </TopBar>
@@ -659,6 +725,70 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           selectedCategoryId={categoryId}
         />
       </TopBarDropdownContainer>
+
+      {/* Date Picker Modal */}
+      <TopBarDropdownContainer
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.datePickerContainer}>
+          <Text style={styles.datePickerTitle}>Set Due Date</Text>
+
+          {/* Quick Action Buttons */}
+          <TouchableOpacity
+            style={styles.datePickerButton}
+            onPress={() => {
+              const today = new Date();
+              today.setHours(12, 0, 0, 0);
+              setDueDate(today.toISOString());
+              setShowDatePicker(false);
+            }}
+          >
+            <Text style={styles.datePickerButtonText}>Today</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.datePickerButton}
+            onPress={() => {
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              tomorrow.setHours(12, 0, 0, 0);
+              setDueDate(tomorrow.toISOString());
+              setShowDatePicker(false);
+            }}
+          >
+            <Text style={styles.datePickerButtonText}>Tomorrow</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.datePickerButton}
+            onPress={() => {
+              const nextWeek = new Date();
+              nextWeek.setDate(nextWeek.getDate() + 7);
+              nextWeek.setHours(12, 0, 0, 0);
+              setDueDate(nextWeek.toISOString());
+              setShowDatePicker(false);
+            }}
+          >
+            <Text style={styles.datePickerButtonText}>Next Week</Text>
+          </TouchableOpacity>
+
+          {/* Remove Due Date */}
+          {dueDate && (
+            <TouchableOpacity
+              style={[styles.datePickerButton, styles.datePickerButtonDanger]}
+              onPress={() => {
+                setDueDate(null);
+                setShowDatePicker(false);
+              }}
+            >
+              <Text style={[styles.datePickerButtonText, styles.datePickerButtonDangerText]}>
+                Remove Due Date
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TopBarDropdownContainer>
     </View>
   );
 }
@@ -711,6 +841,24 @@ const styles = StyleSheet.create({
   },
   topBarButtonTextActive: {
     color: "#2563eb",
+  },
+  topBarButtonTask: {
+    backgroundColor: "#dbeafe",
+  },
+  topBarButtonTaskText: {
+    color: "#3b82f6",
+  },
+  topBarButtonComplete: {
+    backgroundColor: "#d1fae5",
+  },
+  topBarButtonCompleteText: {
+    color: "#10b981",
+  },
+  topBarButtonDue: {
+    backgroundColor: "#ffedd5",
+  },
+  topBarButtonDueText: {
+    color: "#f97316",
   },
   contentContainer: {
     flex: 1,
@@ -812,5 +960,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 8,
+  },
+  datePickerContainer: {
+    padding: 16,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 16,
+  },
+  datePickerButton: {
+    padding: 16,
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  datePickerButtonText: {
+    fontSize: 16,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  datePickerButtonDanger: {
+    backgroundColor: "#fee2e2",
+  },
+  datePickerButtonDangerText: {
+    color: "#dc2626",
   },
 });

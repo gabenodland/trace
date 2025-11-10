@@ -17,6 +17,9 @@ export function CaptureForm() {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState<string | null>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [status, setStatus] = useState<"none" | "incomplete" | "complete">("none");
+  const [dueDate, setDueDate] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const isLocalChange = useRef(false);
 
   const { entryMutations } = useEntries();
@@ -64,6 +67,8 @@ export function CaptureForm() {
       setTitle(entry.title || "");
       editor.commands.setContent(entry.content);
       setCategoryId(entry.category_id || null);
+      setStatus(entry.status);
+      setDueDate(entry.due_date);
 
       // Look up category name from categories list
       if (entry.category_id && categories.length > 0) {
@@ -112,6 +117,8 @@ export function CaptureForm() {
           tags,
           mentions,
           category_id: categoryId,
+          status,
+          due_date: dueDate,
         });
         console.log("Entry updated successfully");
       } else {
@@ -149,6 +156,8 @@ export function CaptureForm() {
           location_lng: longitude,
           location_accuracy: accuracy,
           category_id: categoryId,
+          status,
+          due_date: dueDate,
         });
         console.log("Entry created successfully");
 
@@ -157,6 +166,8 @@ export function CaptureForm() {
         editor.commands.setContent("");
         setCategoryId(null);
         setCategoryName(null);
+        setStatus("none");
+        setDueDate(null);
       }
 
       // Navigate to inbox
@@ -290,6 +301,138 @@ export function CaptureForm() {
               selectedCategoryId={categoryId}
             />
           </div>
+
+          {/* Task Status Toggle */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setStatus("none")}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                status === "none"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+              title="Note (no task)"
+            >
+              Note
+            </button>
+            <button
+              onClick={() => setStatus("incomplete")}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                status === "incomplete"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+              title="Task - incomplete"
+            >
+              Task
+            </button>
+            <button
+              onClick={() => {
+                setStatus(status === "complete" ? "incomplete" : "complete");
+              }}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                status === "complete"
+                  ? "bg-white text-green-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+              title="Task - complete"
+            >
+              Done
+            </button>
+          </div>
+
+          {/* Due Date Picker */}
+          {(status === "incomplete" || status === "complete" || dueDate) && (
+            <div className="relative">
+              <button
+                onClick={() => setShowDatePicker(!showDatePicker)}
+                className={`flex items-center gap-2 px-3 py-2 rounded transition-colors ${
+                  dueDate ? "bg-orange-50 text-orange-600" : "text-gray-400 hover:bg-gray-50"
+                }`}
+                title={dueDate ? `Due: ${new Date(dueDate).toLocaleDateString()}` : "Set due date"}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth={2} />
+                  <line x1="16" y1="2" x2="16" y2="6" strokeWidth={2} />
+                  <line x1="8" y1="2" x2="8" y2="6" strokeWidth={2} />
+                  <line x1="3" y1="10" x2="21" y2="10" strokeWidth={2} />
+                </svg>
+                <span className="text-sm font-medium">
+                  {dueDate ? new Date(dueDate).toLocaleDateString() : "Due date"}
+                </span>
+                {dueDate && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDueDate(null);
+                    }}
+                    className="ml-1 text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </button>
+
+              {/* Date Picker Dropdown */}
+              {showDatePicker && (
+                <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-50 min-w-[280px]">
+                  <input
+                    type="date"
+                    value={dueDate ? dueDate.split('T')[0] : ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        // Convert to ISO string with time at start of day
+                        const date = new Date(e.target.value);
+                        date.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
+                        setDueDate(date.toISOString());
+                      } else {
+                        setDueDate(null);
+                      }
+                      setShowDatePicker(false);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="mt-3 flex flex-col gap-2">
+                    <button
+                      onClick={() => {
+                        const today = new Date();
+                        today.setHours(12, 0, 0, 0);
+                        setDueDate(today.toISOString());
+                        setShowDatePicker(false);
+                      }}
+                      className="text-sm text-left px-3 py-2 rounded hover:bg-gray-100 transition-colors"
+                    >
+                      Today
+                    </button>
+                    <button
+                      onClick={() => {
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        tomorrow.setHours(12, 0, 0, 0);
+                        setDueDate(tomorrow.toISOString());
+                        setShowDatePicker(false);
+                      }}
+                      className="text-sm text-left px-3 py-2 rounded hover:bg-gray-100 transition-colors"
+                    >
+                      Tomorrow
+                    </button>
+                    <button
+                      onClick={() => {
+                        const nextWeek = new Date();
+                        nextWeek.setDate(nextWeek.getDate() + 7);
+                        nextWeek.setHours(12, 0, 0, 0);
+                        setDueDate(nextWeek.toISOString());
+                        setShowDatePicker(false);
+                      }}
+                      className="text-sm text-left px-3 py-2 rounded hover:bg-gray-100 transition-colors"
+                    >
+                      Next week
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

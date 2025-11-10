@@ -131,3 +131,126 @@ export function formatEntryDate(dateString: string): string {
 
   return `Last edited ${timeStr}`;
 }
+
+/**
+ * Check if an entry is a task (has incomplete or complete status)
+ */
+export function isTask(status: "none" | "incomplete" | "complete"): boolean {
+  return status === "incomplete" || status === "complete";
+}
+
+/**
+ * Check if a task is overdue (has due_date in the past and status is incomplete)
+ */
+export function isTaskOverdue(
+  status: "none" | "incomplete" | "complete",
+  dueDate: string | null
+): boolean {
+  if (status !== "incomplete" || !dueDate) return false;
+
+  const due = new Date(dueDate);
+  const now = new Date();
+  // Set time to start of day for comparison
+  due.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+
+  return due < now;
+}
+
+/**
+ * Check if a due date is today
+ */
+export function isDueToday(dueDate: string | null): boolean {
+  if (!dueDate) return false;
+
+  const due = new Date(dueDate);
+  const now = new Date();
+
+  return (
+    due.getFullYear() === now.getFullYear() &&
+    due.getMonth() === now.getMonth() &&
+    due.getDate() === now.getDate()
+  );
+}
+
+/**
+ * Check if a due date is within the next 7 days
+ */
+export function isDueThisWeek(dueDate: string | null): boolean {
+  if (!dueDate) return false;
+
+  const due = new Date(dueDate);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const weekFromNow = new Date(now);
+  weekFromNow.setDate(weekFromNow.getDate() + 7);
+
+  return due >= now && due <= weekFromNow;
+}
+
+/**
+ * Format due date for display
+ * Examples: "Today", "Tomorrow", "Mon, Jan 15", "Overdue by 3 days"
+ */
+export function formatDueDate(
+  dueDate: string | null,
+  status: "none" | "incomplete" | "complete"
+): string {
+  if (!dueDate) return "";
+
+  const due = new Date(dueDate);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+
+  const diffMs = due.getTime() - now.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  // Overdue
+  if (status === "incomplete" && diffDays < 0) {
+    const daysOverdue = Math.abs(diffDays);
+    return `Overdue by ${daysOverdue} day${daysOverdue !== 1 ? "s" : ""}`;
+  }
+
+  // Today
+  if (diffDays === 0) return "Today";
+
+  // Tomorrow
+  if (diffDays === 1) return "Tomorrow";
+
+  // This week (next 7 days)
+  if (diffDays > 1 && diffDays <= 7) {
+    return due.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  // Future dates
+  return due.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: due.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
+}
+
+/**
+ * Get task statistics (completed vs incomplete)
+ */
+export function getTaskStats(
+  entries: Array<{ status: "none" | "incomplete" | "complete" }>
+): {
+  total: number;
+  incomplete: number;
+  complete: number;
+} {
+  const tasks = entries.filter((e) => isTask(e.status));
+
+  return {
+    total: tasks.length,
+    incomplete: tasks.filter((t) => t.status === "incomplete").length,
+    complete: tasks.filter((t) => t.status === "complete").length,
+  };
+}

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
-import { useAuthState } from "@trace/core";
 import { useCategories } from "../modules/categories/mobileCategoryHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
 import { CategoryTree } from "../modules/categories/components/CategoryTree";
 import { AddCategoryModal } from "../modules/categories/components/AddCategoryModal";
@@ -10,18 +10,11 @@ import Svg, { Path } from "react-native-svg";
 
 export function CategoriesScreen() {
   const { categories, categoryTree, isLoading, categoryMutations } = useCategories();
-  const { signOut } = useAuthState();
   const { navigate } = useNavigation();
+  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
-  const menuItems = [
-    { label: "Inbox", onPress: () => navigate("inbox") },
-    { label: "Categories", onPress: () => navigate("categories") },
-    { label: "Calendar", onPress: () => navigate("calendar") },
-    { label: "Tasks", onPress: () => navigate("tasks") },
-    { label: "Sign Out", onPress: signOut },
-  ];
 
   const handleCreateCategory = async (name: string, parentId: string | null) => {
     await categoryMutations.createCategory(name, parentId);
@@ -37,6 +30,8 @@ export function CategoriesScreen() {
         <TopBar
           title="Categories"
           menuItems={menuItems}
+          userEmail={userEmail}
+          onProfilePress={onProfilePress}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3b82f6" />
@@ -52,6 +47,8 @@ export function CategoriesScreen() {
         title="Categories"
         badge={categories.length}
         menuItems={menuItems}
+        userEmail={userEmail}
+        onProfilePress={onProfilePress}
       />
 
       <View style={styles.content}>

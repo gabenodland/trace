@@ -1,25 +1,20 @@
 import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { useAuthState } from "@trace/core";
 import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
 
 export function CalendarScreen() {
-  const { signOut } = useAuthState();
   const { navigate } = useNavigation();
+  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
 
-  const menuItems = [
-    { label: "Inbox", onPress: () => navigate("inbox") },
-    { label: "Categories", onPress: () => navigate("categories") },
-    { label: "Calendar", onPress: () => navigate("calendar") },
-    { label: "Tasks", onPress: () => navigate("tasks") },
-    { label: "Sign Out", onPress: signOut },
-  ];
 
   return (
     <View style={styles.container}>
       <TopBar
         title="Calendar"
         menuItems={menuItems}
+        userEmail={userEmail}
+        onProfilePress={onProfilePress}
       />
       <ScrollView style={styles.content}>
         <View style={styles.card}>

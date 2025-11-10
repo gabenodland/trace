@@ -1,37 +1,105 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import Svg, { Path, Circle } from "react-native-svg";
 import type { Entry } from "@trace/core";
-import { getPreviewText, formatEntryDate } from "@trace/core";
+import { getPreviewText, formatEntryDate, isTask, formatDueDate, isTaskOverdue } from "@trace/core";
 
 interface EntryListItemProps {
   entry: Entry;
   onPress: () => void;
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
+  onToggleComplete?: (entryId: string, currentStatus: "incomplete" | "complete") => void;
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onToggleComplete }: EntryListItemProps) {
   const preview = getPreviewText(entry.content, 100);
   const dateStr = formatEntryDate(entry.updated_at);
+  const isATask = isTask(entry.status);
+  const isOverdue = isTaskOverdue(entry.status, entry.due_date);
+  const dueDateStr = formatDueDate(entry.due_date, entry.status);
+
+  const handleCheckboxPress = (e: any) => {
+    e.stopPropagation();
+    if (onToggleComplete && (entry.status === "incomplete" || entry.status === "complete")) {
+      onToggleComplete(entry.entry_id, entry.status);
+    }
+  };
 
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.7}>
-      {/* Title or Preview */}
-      {entry.title ? (
-        <>
-          <Text style={styles.title}>{entry.title}</Text>
-          <Text style={styles.preview} numberOfLines={2}>
-            {preview}
-          </Text>
-        </>
-      ) : (
-        <Text style={styles.content} numberOfLines={3}>
-          {preview}
-        </Text>
-      )}
+    <TouchableOpacity
+      style={[
+        styles.container,
+        isOverdue && styles.containerOverdue
+      ]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.contentRow}>
+        {/* Task Checkbox */}
+        {isATask && (
+          <TouchableOpacity
+            style={[
+              styles.checkbox,
+              entry.status === "complete" && styles.checkboxComplete
+            ]}
+            onPress={handleCheckboxPress}
+            activeOpacity={0.7}
+          >
+            {entry.status === "complete" && (
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                <Path d="M5 13l4 4L19 7" stroke="#ffffff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            )}
+          </TouchableOpacity>
+        )}
 
-      {/* Metadata */}
-      <View style={styles.metadata}>
-        <Text style={styles.date}>{dateStr}</Text>
+        {/* Content */}
+        <View style={styles.contentWrapper}>
+          {/* Title or Preview */}
+          {entry.title ? (
+            <>
+              <Text style={[
+                styles.title,
+                entry.status === "complete" && styles.strikethrough
+              ]}>
+                {entry.title}
+              </Text>
+              <Text style={[
+                styles.preview,
+                entry.status === "complete" && styles.strikethrough
+              ]} numberOfLines={2}>
+                {preview}
+              </Text>
+            </>
+          ) : (
+            <Text style={[
+              styles.content,
+              entry.status === "complete" && styles.strikethrough
+            ]} numberOfLines={3}>
+              {preview}
+            </Text>
+          )}
+
+          {/* Metadata */}
+          <View style={styles.metadata}>
+            <Text style={styles.date}>{dateStr}</Text>
+
+            {/* Due Date Badge */}
+            {dueDateStr && (
+              <View style={[
+                styles.dueDate,
+                isOverdue && styles.dueDateOverdue,
+                dueDateStr === "Today" && styles.dueDateToday
+              ]}>
+                <Text style={[
+                  styles.dueDateText,
+                  isOverdue && styles.dueDateTextOverdue,
+                  dueDateStr === "Today" && styles.dueDateTextToday
+                ]}>
+                  📅 {dueDateStr}
+                </Text>
+              </View>
+            )}
 
         {/* Tags */}
         {entry.tags && entry.tags.length > 0 && (
@@ -77,10 +145,12 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress }: En
           </View>
         )}
 
-        {/* Location indicator */}
-        {entry.location_lat && entry.location_lng && (
-          <Text style={styles.location}>📍 GPS</Text>
-        )}
+            {/* Location indicator */}
+            {entry.location_lat && entry.location_lng && (
+              <Text style={styles.location}>📍 GPS</Text>
+            )}
+          </View>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -95,11 +165,41 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
+  containerOverdue: {
+    borderColor: "#fca5a5",
+    backgroundColor: "#fef2f2",
+  },
+  contentRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: "#9ca3af",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  checkboxComplete: {
+    backgroundColor: "#10b981",
+    borderColor: "#10b981",
+  },
+  contentWrapper: {
+    flex: 1,
+  },
   title: {
     fontSize: 16,
     fontWeight: "600",
     color: "#111827",
     marginBottom: 4,
+  },
+  strikethrough: {
+    textDecorationLine: "line-through",
+    opacity: 0.6,
   },
   preview: {
     fontSize: 14,
@@ -161,5 +261,28 @@ const styles = StyleSheet.create({
   location: {
     fontSize: 11,
     color: "#9ca3af",
+  },
+  dueDate: {
+    backgroundColor: "#dbeafe",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  dueDateText: {
+    fontSize: 11,
+    color: "#1d4ed8",
+    fontWeight: "500",
+  },
+  dueDateOverdue: {
+    backgroundColor: "#fee2e2",
+  },
+  dueDateTextOverdue: {
+    color: "#dc2626",
+  },
+  dueDateToday: {
+    backgroundColor: "#ffedd5",
+  },
+  dueDateTextToday: {
+    color: "#f97316",
   },
 });
