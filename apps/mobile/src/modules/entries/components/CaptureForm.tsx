@@ -15,6 +15,9 @@ interface CaptureFormProps {
 }
 
 export function CaptureForm({ entryId }: CaptureFormProps = {}) {
+  // Determine if we're editing an existing entry or creating a new one
+  const isEditing = !!entryId;
+
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,6 +36,7 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
   const editorRef = useRef<any>(null);
   const titleInputRef = useRef<TextInput>(null);
   const isInitialLoad = useRef(true); // Track if this is first load
+  const lastTitleTap = useRef<number | null>(null); // Track last tap time for double-tap detection
 
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
@@ -40,7 +44,35 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
   const { categories } = useCategories();
   const { navigate } = useNavigation();
 
-  const isEditing = !!entryId;
+  // Edit mode: new entries start in edit mode, existing entries start in read-only
+  const [isEditMode, setIsEditMode] = useState(!isEditing);
+
+  // Enter edit mode
+  const enterEditMode = () => {
+    setIsEditMode(true);
+  };
+
+  // Handle double-tap on title to enter edit mode
+  const handleTitlePress = () => {
+    const now = Date.now();
+    const DOUBLE_PRESS_DELAY = 300; // ms
+
+    if (lastTitleTap.current && (now - lastTitleTap.current) < DOUBLE_PRESS_DELAY) {
+      // Double tap detected
+      if (!isEditMode) {
+        enterEditMode();
+        // Focus the title input after a short delay to ensure edit mode is active
+        setTimeout(() => {
+          titleInputRef.current?.focus();
+        }, 100);
+      }
+      lastTitleTap.current = null;
+    } else {
+      // Single tap
+      lastTitleTap.current = now;
+      setIsTitleExpanded(true);
+    }
+  };
 
   const menuItems = [
     { label: "Inbox", onPress: () => navigate("inbox") },
@@ -203,6 +235,13 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       (e) => {
         setKeyboardHeight(e.endCoordinates.height);
+
+        // Scroll cursor into view when keyboard appears in edit mode
+        if (isEditMode && editorRef.current) {
+          setTimeout(() => {
+            editorRef.current?.scrollToCursor();
+          }, 150);
+        }
       }
     );
     const keyboardDidHideListener = Keyboard.addListener(
@@ -216,7 +255,7 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
-  }, []);
+  }, [isEditMode]); // Re-register when edit mode changes to capture current state
 
   // Save handler
   const handleSave = async () => {
@@ -225,31 +264,20 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
 
     setIsSubmitting(true);
 
-    console.log("=== SAVE BUTTON PRESSED ===");
-    console.log("isEditing:", isEditing);
-    console.log("Raw content:", content);
-    console.log("Content length:", content.length);
-
     // Check if there's actual content (strip HTML tags to check)
     const textContent = content.replace(/<[^>]*>/g, '').trim();
-    console.log("Text content:", textContent);
-    console.log("Text content length:", textContent.length);
 
     if (!textContent || textContent.length === 0) {
-      console.log("❌ No content to save - showing alert");
       setIsSubmitting(false);
       Alert.alert("Empty Entry", "Please add some content before saving");
       return;
     }
-
-    console.log("✓ Content validated, proceeding with save...");
 
     try {
       const { tags, mentions } = extractTagsAndMentions(content);
 
       if (isEditing) {
         // Update existing entry
-        console.log("Updating entry...");
         await singleEntryMutations.updateEntry({
           title: title.trim() || null,
           content,
@@ -257,10 +285,8 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
           mentions,
           category_id: categoryId,
         });
-        console.log("Entry updated successfully");
       } else {
         // Create new entry
-        console.log("Creating entry...");
         await entryMutations.createEntry({
           title: title.trim() || null,
           content,
@@ -271,7 +297,6 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
           location_accuracy: locationData.accuracy,
           category_id: categoryId,
         });
-        console.log("Entry created successfully");
 
         // Clear form only when creating
         setTitle("");
@@ -345,7 +370,12 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
         {/* Location Toggle */}
         <TouchableOpacity
           style={[styles.topBarButton, captureLocation && styles.topBarButtonActive]}
-          onPress={() => setCaptureLocation(!captureLocation)}
+          onPress={() => {
+            setCaptureLocation(!captureLocation);
+            if (!isEditMode) {
+              enterEditMode();
+            }
+          }}
         >
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={captureLocation ? "#2563eb" : "#6b7280"} strokeWidth={2}>
             <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
@@ -401,10 +431,13 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
               placeholder="Title"
               placeholderTextColor="#9ca3af"
               style={styles.titleInput}
-              editable={!isSubmitting}
+              editable={isEditMode && !isSubmitting}
               returnKeyType="next"
               blurOnSubmit={false}
-              onFocus={() => setIsTitleExpanded(true)}
+              onFocus={() => {
+                setIsTitleExpanded(true);
+              }}
+              onPressIn={handleTitlePress}
             />
           </View>
         )}
@@ -419,6 +452,8 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
             value={content}
             onChange={setContent}
             placeholder="What's on your mind? Use #tags and @mentions..."
+            editable={isEditMode}
+            onDoublePress={enterEditMode}
           />
         </View>
 
@@ -432,70 +467,73 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
 
       {/* Bottom Bar */}
       <BottomBar keyboardOffset={keyboardHeight}>
-        <View style={styles.formatButtons}>
-          {/* Bold Button */}
-          <TouchableOpacity
-            style={styles.toolbarButton}
-            onPress={() => editorRef.current?.toggleBold()}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
-              <Path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
+        {/* Formatting Buttons - Only show in edit mode */}
+        {isEditMode && (
+          <View style={styles.formatButtons}>
+            {/* Bold Button */}
+            <TouchableOpacity
+              style={styles.toolbarButton}
+              onPress={() => editorRef.current?.toggleBold()}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
+                <Path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
 
-          {/* Italic Button */}
-          <TouchableOpacity
-            style={styles.toolbarButton}
-            onPress={() => editorRef.current?.toggleItalic()}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Line x1={19} y1={4} x2={10} y2={4} strokeLinecap="round" />
-              <Line x1={14} y1={20} x2={5} y2={20} strokeLinecap="round" />
-              <Line x1={15} y1={4} x2={9} y2={20} strokeLinecap="round" />
-            </Svg>
-          </TouchableOpacity>
+            {/* Italic Button */}
+            <TouchableOpacity
+              style={styles.toolbarButton}
+              onPress={() => editorRef.current?.toggleItalic()}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Line x1={19} y1={4} x2={10} y2={4} strokeLinecap="round" />
+                <Line x1={14} y1={20} x2={5} y2={20} strokeLinecap="round" />
+                <Line x1={15} y1={4} x2={9} y2={20} strokeLinecap="round" />
+              </Svg>
+            </TouchableOpacity>
 
-          {/* Bullet List Button */}
-          <TouchableOpacity
-            style={styles.toolbarButton}
-            onPress={() => editorRef.current?.toggleBulletList()}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Line x1={9} y1={6} x2={20} y2={6} strokeLinecap="round" />
-              <Line x1={9} y1={12} x2={20} y2={12} strokeLinecap="round" />
-              <Line x1={9} y1={18} x2={20} y2={18} strokeLinecap="round" />
-              <Circle cx={5} cy={6} r={1} fill="#6b7280" />
-              <Circle cx={5} cy={12} r={1} fill="#6b7280" />
-              <Circle cx={5} cy={18} r={1} fill="#6b7280" />
-            </Svg>
-          </TouchableOpacity>
+            {/* Bullet List Button */}
+            <TouchableOpacity
+              style={styles.toolbarButton}
+              onPress={() => editorRef.current?.toggleBulletList()}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Line x1={9} y1={6} x2={20} y2={6} strokeLinecap="round" />
+                <Line x1={9} y1={12} x2={20} y2={12} strokeLinecap="round" />
+                <Line x1={9} y1={18} x2={20} y2={18} strokeLinecap="round" />
+                <Circle cx={5} cy={6} r={1} fill="#6b7280" />
+                <Circle cx={5} cy={12} r={1} fill="#6b7280" />
+                <Circle cx={5} cy={18} r={1} fill="#6b7280" />
+              </Svg>
+            </TouchableOpacity>
 
-          {/* Indent Button */}
-          <TouchableOpacity
-            style={styles.toolbarButton}
-            onPress={() => editorRef.current?.indent()}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M3 9l4 3-4 3" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
+            {/* Indent Button */}
+            <TouchableOpacity
+              style={styles.toolbarButton}
+              onPress={() => editorRef.current?.indent()}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Path d="M3 9l4 3-4 3" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
 
-          {/* Outdent Button */}
-          <TouchableOpacity
-            style={styles.toolbarButton}
-            onPress={() => editorRef.current?.outdent()}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M7 9l-4 3 4 3" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-        </View>
+            {/* Outdent Button */}
+            <TouchableOpacity
+              style={styles.toolbarButton}
+              onPress={() => editorRef.current?.outdent()}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Path d="M7 9l-4 3 4 3" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.actionButtons}>
-          {/* Delete Button (only when editing) */}
-          {isEditing && (
+          {/* Delete Button (only when editing and in edit mode) */}
+          {isEditing && isEditMode && (
             <TouchableOpacity
               onPress={handleDelete}
               disabled={isSubmitting}
@@ -517,16 +555,27 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
             </Svg>
           </TouchableOpacity>
 
-          {/* Save Button (Green Check) */}
-          <TouchableOpacity
-            onPress={handleSave}
-            disabled={isSubmitting}
-            style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
-          >
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
-              <Path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
+          {/* Edit/Save Button - Blue pencil in read-only, green check in edit mode */}
+          {isEditMode ? (
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={isSubmitting}
+              style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
+            >
+              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
+                <Path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={enterEditMode}
+              style={styles.editButton}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
+                <Path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+          )}
         </View>
       </BottomBar>
 
@@ -541,6 +590,9 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
           onSelect={(id, name) => {
             setCategoryId(id);
             setCategoryName(name);
+            if (!isEditMode) {
+              enterEditMode();
+            }
           }}
           selectedCategoryId={categoryId}
         />
@@ -648,6 +700,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    marginLeft: "auto",
   },
   toolbarButton: {
     padding: 8,
@@ -688,5 +741,14 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     opacity: 0.5,
+  },
+  editButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#3b82f6",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
   },
 });

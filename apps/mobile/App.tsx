@@ -7,7 +7,7 @@ import { NavigationProvider } from "./src/shared/contexts/NavigationContext";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { FloatingActionButton } from "./src/components/navigation/FloatingActionButton";
-import { CaptureScreen } from "./src/screens/CaptureScreen";
+import { EntryScreen } from "./src/screens/EntryScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CategoriesScreen } from "./src/screens/CategoriesScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
@@ -67,7 +67,7 @@ function AuthGate() {
   const renderScreen = () => {
     switch (activeTab) {
       case "capture":
-        return <CaptureScreen entryId={navParams.entryId} />;
+        return <EntryScreen entryId={navParams.entryId} />;
       case "inbox":
         return <EntryListScreen />;
       case "categories":

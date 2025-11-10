@@ -3,8 +3,8 @@ import Svg, { Path, Line } from "react-native-svg";
 import { useState, ReactNode } from "react";
 
 export interface TopBarMenuItem {
-  label: string;
-  onPress: () => void;
+  label?: string;
+  onPress?: () => void;
   icon?: ReactNode;
   isDivider?: boolean;
   isSignOut?: boolean;
@@ -115,7 +115,7 @@ export function TopBar({
                         ]}
                         onPress={() => {
                           setShowMenu(false);
-                          item.onPress();
+                          item.onPress?.();
                         }}
                         activeOpacity={0.7}
                       >
