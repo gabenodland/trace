@@ -314,6 +314,8 @@ class LocalDatabase {
   async getAllEntries(filter?: {
     category_id?: string | null;
     status?: string;
+    tag?: string; // Filter by single tag
+    mention?: string; // Filter by single mention
     includeDeleted?: boolean; // For sync operations
   }): Promise<Entry[]> {
     await this.init();
@@ -341,6 +343,18 @@ class LocalDatabase {
       if (filter.status) {
         query += ' AND status = ?';
         params.push(filter.status);
+      }
+
+      // Filter by tag (check if tag is in JSON array)
+      if (filter.tag) {
+        query += ' AND tags LIKE ?';
+        params.push(`%"${filter.tag.toLowerCase()}"%`);
+      }
+
+      // Filter by mention (check if mention is in JSON array)
+      if (filter.mention) {
+        query += ' AND mentions LIKE ?';
+        params.push(`%"${filter.mention.toLowerCase()}"%`);
       }
     }
 
@@ -696,6 +710,96 @@ class LocalDatabase {
       WHERE category_id = ?`,
       [error, categoryId]
     );
+  }
+
+  /**
+   * Get all unique tags with entry counts
+   * Returns array of {tag: string, count: number}
+   */
+  async getAllTags(): Promise<Array<{ tag: string; count: number }>> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Get all non-deleted entries with tags
+    const deleteFilter = this.hasDeletedAtColumn ? 'AND deleted_at IS NULL' : '';
+    const rows = await this.db.getAllAsync<any>(
+      `SELECT tags FROM entries
+       WHERE tags IS NOT NULL
+       AND tags != '[]'
+       ${deleteFilter}`
+    );
+
+    // Aggregate tags and count occurrences
+    const tagCounts = new Map<string, number>();
+
+    rows.forEach(row => {
+      if (row.tags) {
+        try {
+          const tags: string[] = JSON.parse(row.tags);
+          tags.forEach(tag => {
+            const lowerTag = tag.toLowerCase();
+            tagCounts.set(lowerTag, (tagCounts.get(lowerTag) || 0) + 1);
+          });
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+    });
+
+    // Convert to array and sort by count (desc) then by tag name (asc)
+    return Array.from(tagCounts.entries())
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => {
+        if (b.count !== a.count) {
+          return b.count - a.count; // Higher counts first
+        }
+        return a.tag.localeCompare(b.tag); // Alphabetical for same count
+      });
+  }
+
+  /**
+   * Get all unique mentions with entry counts
+   * Returns array of {mention: string, count: number}
+   */
+  async getAllMentions(): Promise<Array<{ mention: string; count: number }>> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Get all non-deleted entries with mentions
+    const deleteFilter = this.hasDeletedAtColumn ? 'AND deleted_at IS NULL' : '';
+    const rows = await this.db.getAllAsync<any>(
+      `SELECT mentions FROM entries
+       WHERE mentions IS NOT NULL
+       AND mentions != '[]'
+       ${deleteFilter}`
+    );
+
+    // Aggregate mentions and count occurrences
+    const mentionCounts = new Map<string, number>();
+
+    rows.forEach(row => {
+      if (row.mentions) {
+        try {
+          const mentions: string[] = JSON.parse(row.mentions);
+          mentions.forEach(mention => {
+            const lowerMention = mention.toLowerCase();
+            mentionCounts.set(lowerMention, (mentionCounts.get(lowerMention) || 0) + 1);
+          });
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+    });
+
+    // Convert to array and sort by count (desc) then by mention name (asc)
+    return Array.from(mentionCounts.entries())
+      .map(([mention, count]) => ({ mention, count }))
+      .sort((a, b) => {
+        if (b.count !== a.count) {
+          return b.count - a.count; // Higher counts first
+        }
+        return a.mention.localeCompare(b.mention); // Alphabetical for same count
+      });
   }
 
   /**

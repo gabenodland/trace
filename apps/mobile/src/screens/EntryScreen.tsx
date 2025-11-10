@@ -5,15 +5,17 @@ interface EntryScreenProps {
   entryId?: string | null;
   initialCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
   initialCategoryName?: string;
+  initialContent?: string;
 }
 
-export function EntryScreen({ entryId, initialCategoryId, initialCategoryName }: EntryScreenProps = {}) {
+export function EntryScreen({ entryId, initialCategoryId, initialCategoryName, initialContent }: EntryScreenProps = {}) {
   return (
     <View style={styles.container}>
       <CaptureForm
         entryId={entryId}
         initialCategoryId={initialCategoryId}
         initialCategoryName={initialCategoryName}
+        initialContent={initialContent}
       />
     </View>
   );

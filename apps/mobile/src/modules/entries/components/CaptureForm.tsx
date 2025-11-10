@@ -16,14 +16,15 @@ interface CaptureFormProps {
   entryId?: string | null;
   initialCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
   initialCategoryName?: string;
+  initialContent?: string;
 }
 
-export function CaptureForm({ entryId, initialCategoryId, initialCategoryName }: CaptureFormProps = {}) {
+export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, initialContent }: CaptureFormProps = {}) {
   // Determine if we're editing an existing entry or creating a new one
   const isEditing = !!entryId;
 
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  const [content, setContent] = useState(initialContent || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [captureLocation, setCaptureLocation] = useState(!isEditing); // Default ON for new entries, OFF for editing

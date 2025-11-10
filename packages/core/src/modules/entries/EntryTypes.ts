@@ -60,6 +60,8 @@ export interface UpdateEntryInput {
 export interface EntryFilter {
   category_id?: string | null;
   tags?: string[];
+  tag?: string; // Filter by single tag
+  mention?: string; // Filter by single mention
   start_date?: string;
   end_date?: string;
   status?: "none" | "incomplete" | "complete";

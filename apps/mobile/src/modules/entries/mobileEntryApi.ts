@@ -56,6 +56,8 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
 export async function getEntries(filter?: {
   category_id?: string | null;
   status?: string;
+  tag?: string;
+  mention?: string;
 }): Promise<Entry[]> {
   return await localDB.getAllEntries(filter);
 }
@@ -113,4 +115,18 @@ export async function getUnsyncedCount(): Promise<number> {
  */
 export async function getUnsyncedEntries(): Promise<Entry[]> {
   return await localDB.getUnsyncedEntries();
+}
+
+/**
+ * Get all unique tags with entry counts
+ */
+export async function getTags(): Promise<Array<{ tag: string; count: number }>> {
+  return await localDB.getAllTags();
+}
+
+/**
+ * Get all unique mentions (people) with entry counts
+ */
+export async function getMentions(): Promise<Array<{ mention: string; count: number }>> {
+  return await localDB.getAllMentions();
 }

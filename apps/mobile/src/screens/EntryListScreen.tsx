@@ -11,7 +11,7 @@ import { EntryNavigator } from "../components/navigation/EntryNavigator";
 import Svg, { Path } from "react-native-svg";
 
 interface EntryListScreenProps {
-  returnCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
+  returnCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people"; // Also supports "tag:tagname" and "mention:mentionname"
   returnCategoryName?: string;
   onCategoryChange?: (category: { id: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people"; name: string }) => void;
 }
@@ -93,7 +93,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName, onCatego
   console.log("EntryListScreen - selectedCategoryName:", selectedCategoryName);
 
   // Determine filter based on selected category
-  let categoryFilter: { category_id?: string | null } = {};
+  let categoryFilter: { category_id?: string | null; tag?: string; mention?: string } = {};
 
   if (selectedCategoryId === "all") {
     // "All" - fetch all entries (inbox + categorized)
@@ -107,11 +107,19 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName, onCatego
     // TODO: Filter by tasks or events when those are implemented
     // For now, show all entries
   } else if (selectedCategoryId === "tags") {
-    // TODO: Filter by tags when those are implemented
+    // "Tags" - just the collapsible section, not a filter
     // For now, show all entries (noop)
   } else if (selectedCategoryId === "people") {
-    // TODO: Filter by @people when those are implemented
+    // "People" - just the collapsible section, not a filter
     // For now, show all entries (noop)
+  } else if (typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('tag:')) {
+    // Filter by specific tag
+    const tag = selectedCategoryId.substring(4); // Remove "tag:" prefix
+    categoryFilter = { tag };
+  } else if (typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('mention:')) {
+    // Filter by specific mention
+    const mention = selectedCategoryId.substring(8); // Remove "mention:" prefix
+    categoryFilter = { mention };
   } else if (selectedCategoryId !== null) {
     // Specific category ID
     categoryFilter = { category_id: selectedCategoryId };

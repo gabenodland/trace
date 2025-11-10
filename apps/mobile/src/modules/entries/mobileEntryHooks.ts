@@ -11,6 +11,8 @@ import {
   updateEntry,
   deleteEntry,
   getUnsyncedCount,
+  getTags,
+  getMentions,
 } from './mobileEntryApi';
 import { CreateEntryInput, EntryFilter } from '@trace/core';
 import * as entryHelpers from '@trace/core/src/modules/entries/entryHelpers';
@@ -49,6 +51,8 @@ function useCreateEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+      queryClient.invalidateQueries({ queryKey: ['mentions'] });
     },
   });
 }
@@ -67,6 +71,8 @@ function useUpdateEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ['entry', data.entry_id] });
       queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+      queryClient.invalidateQueries({ queryKey: ['mentions'] });
     },
   });
 }
@@ -83,6 +89,8 @@ function useDeleteEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+      queryClient.invalidateQueries({ queryKey: ['mentions'] });
     },
   });
 }
@@ -164,4 +172,50 @@ export function useSyncStatus() {
     queryFn: getUnsyncedCount,
     refetchInterval: 5000, // Check every 5 seconds
   });
+}
+
+/**
+ * Internal: Query hook for fetching tags
+ */
+function useTagsQuery() {
+  return useQuery({
+    queryKey: ['tags'],
+    queryFn: getTags,
+  });
+}
+
+/**
+ * Internal: Query hook for fetching mentions
+ */
+function useMentionsQuery() {
+  return useQuery({
+    queryKey: ['mentions'],
+    queryFn: getMentions,
+  });
+}
+
+/**
+ * Hook for fetching all tags with counts
+ */
+export function useTags() {
+  const tagsQuery = useTagsQuery();
+
+  return {
+    tags: tagsQuery.data || [],
+    isLoading: tagsQuery.isLoading,
+    error: tagsQuery.error,
+  };
+}
+
+/**
+ * Hook for fetching all mentions (people) with counts
+ */
+export function useMentions() {
+  const mentionsQuery = useMentionsQuery();
+
+  return {
+    mentions: mentionsQuery.data || [],
+    isLoading: mentionsQuery.isLoading,
+    error: mentionsQuery.error,
+  };
 }

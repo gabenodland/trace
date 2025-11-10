@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
-import { useEntries } from "../../modules/entries/mobileEntryHooks";
+import { useEntries, useTags, useMentions } from "../../modules/entries/mobileEntryHooks";
 import { useCategories } from "../../modules/categories/mobileCategoryHooks";
 import Svg, { Path } from "react-native-svg";
 import { CategoryTree as CategoryTreeComponent } from "../../modules/categories/components/CategoryTree";
+import { TagList } from "../../modules/entries/components/TagList";
+import { PeopleList } from "../../modules/entries/components/PeopleList";
 
 interface EntryNavigatorProps {
   visible: boolean;
@@ -20,6 +22,8 @@ interface SpecialItem {
 
 export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId }: EntryNavigatorProps) {
   const { categories, categoryTree, isLoading } = useCategories();
+  const { tags, isLoading: isLoadingTags } = useTags();
+  const { mentions, isLoading: isLoadingMentions } = useMentions();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAllCategoriesExpanded, setIsAllCategoriesExpanded] = useState(false);
   const [isAllTagsExpanded, setIsAllTagsExpanded] = useState(false);
@@ -105,7 +109,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
     },
   ], [nonAllItems]);
 
-  // Filter special items and categories based on search query
+  // Filter special items, categories, tags, and mentions based on search query
   const filteredSpecialItems = useMemo(() =>
     allSpecialItems.filter((item) =>
       item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -119,6 +123,28 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
     ),
     [categories, searchQuery]
   );
+
+  // Filter tags - match tag name or #tag format
+  const filteredTags = useMemo(() => {
+    if (!searchQuery) return [];
+    const query = searchQuery.toLowerCase();
+    // Remove # if user types it
+    const cleanQuery = query.startsWith('#') ? query.slice(1) : query;
+    return tags.filter((tag) =>
+      tag.tag.toLowerCase().includes(cleanQuery)
+    );
+  }, [tags, searchQuery]);
+
+  // Filter mentions - match mention name or @mention format
+  const filteredMentions = useMemo(() => {
+    if (!searchQuery) return [];
+    const query = searchQuery.toLowerCase();
+    // Remove @ if user types it
+    const cleanQuery = query.startsWith('@') ? query.slice(1) : query;
+    return mentions.filter((mention) =>
+      mention.mention.toLowerCase().includes(cleanQuery)
+    );
+  }, [mentions, searchQuery]);
 
   const handleSelect = (categoryId: string | null | "all" | "tasks" | "events" | "all-tags" | "all-people", categoryName: string) => {
     onSelect(categoryId, categoryName);
@@ -275,15 +301,28 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                 <TouchableOpacity
                   style={styles.categoryItem}
                   onPress={() => {
-                    // No tags yet, but set up for future
-                    setIsAllTagsExpanded(!isAllTagsExpanded);
+                    if (tags.length > 0) {
+                      setIsAllTagsExpanded(!isAllTagsExpanded);
+                    }
                   }}
-                  disabled={true}
+                  disabled={tags.length === 0}
                 >
                   <View style={styles.categoryContent}>
-                    {/* Chevron (will show when tags are implemented) */}
+                    {/* Chevron */}
                     <View style={styles.chevronContainer}>
-                      {/* No chevron shown since no tags yet */}
+                      {tags.length > 0 && (
+                        <Svg
+                          width={16}
+                          height={16}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#6b7280"
+                          strokeWidth={2}
+                          style={[styles.chevron, isAllTagsExpanded && styles.chevronExpanded]}
+                        >
+                          <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                      )}
                     </View>
                     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
                       <Path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" strokeLinecap="round" strokeLinejoin="round" />
@@ -295,10 +334,20 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                   <View style={styles.categoryItemDivider} />
                 </TouchableOpacity>
 
-                {/* Tags list - shown when "Tags" is expanded (placeholder for future) */}
-                {isAllTagsExpanded && (
+                {/* Tags list - shown when "Tags" is expanded */}
+                {isAllTagsExpanded && !isLoadingTags && tags.length > 0 && (
                   <View style={styles.categoryTreeWrapper}>
-                    {/* Tags will be rendered here in the future */}
+                    <TagList
+                      tags={tags}
+                      onTagPress={(tag) => {
+                        handleSelect(`tag:${tag}`, `#${tag}`);
+                      }}
+                      selectedTag={
+                        typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('tag:')
+                          ? selectedCategoryId.substring(4)
+                          : null
+                      }
+                    />
                   </View>
                 )}
 
@@ -306,15 +355,28 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                 <TouchableOpacity
                   style={styles.categoryItem}
                   onPress={() => {
-                    // No @people yet, but set up for future
-                    setIsAllPeopleExpanded(!isAllPeopleExpanded);
+                    if (mentions.length > 0) {
+                      setIsAllPeopleExpanded(!isAllPeopleExpanded);
+                    }
                   }}
-                  disabled={true}
+                  disabled={mentions.length === 0}
                 >
                   <View style={styles.categoryContent}>
-                    {/* Chevron (will show when @people are implemented) */}
+                    {/* Chevron */}
                     <View style={styles.chevronContainer}>
-                      {/* No chevron shown since no @people yet */}
+                      {mentions.length > 0 && (
+                        <Svg
+                          width={16}
+                          height={16}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#6b7280"
+                          strokeWidth={2}
+                          style={[styles.chevron, isAllPeopleExpanded && styles.chevronExpanded]}
+                        >
+                          <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                      )}
                     </View>
                     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
                       <Path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" strokeLinecap="round" strokeLinejoin="round" />
@@ -326,10 +388,20 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                   <View style={styles.categoryItemDivider} />
                 </TouchableOpacity>
 
-                {/* @people list - shown when "People" is expanded (placeholder for future) */}
-                {isAllPeopleExpanded && (
+                {/* @people list - shown when "People" is expanded */}
+                {isAllPeopleExpanded && !isLoadingMentions && mentions.length > 0 && (
                   <View style={styles.categoryTreeWrapper}>
-                    {/* @people will be rendered here in the future */}
+                    <PeopleList
+                      people={mentions}
+                      onPersonPress={(mention) => {
+                        handleSelect(`mention:${mention}`, `@${mention}`);
+                      }}
+                      selectedPerson={
+                        typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('mention:')
+                          ? selectedCategoryId.substring(8)
+                          : null
+                      }
+                    />
                   </View>
                 )}
               </>
@@ -378,6 +450,64 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                     <View style={styles.categoryItemDivider} />
                   </TouchableOpacity>
                 ))}
+
+                {/* Filtered Tags when searching */}
+                {filteredTags.length > 0 && filteredTags.map((tag) => {
+                  const tagId = `tag:${tag.tag}`;
+                  const isSelected = selectedCategoryId === tagId;
+                  return (
+                    <TouchableOpacity
+                      key={tagId}
+                      style={[
+                        styles.categoryItem,
+                        isSelected && styles.categoryItemSelected,
+                      ]}
+                      onPress={() => handleSelect(tagId, `#${tag.tag}`)}
+                    >
+                      <View style={styles.categoryContent}>
+                        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
+                          <Path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                        <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
+                          #{tag.tag}
+                        </Text>
+                      </View>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{tag.count}</Text>
+                      </View>
+                      <View style={styles.categoryItemDivider} />
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {/* Filtered Mentions when searching */}
+                {filteredMentions.length > 0 && filteredMentions.map((mention) => {
+                  const mentionId = `mention:${mention.mention}`;
+                  const isSelected = selectedCategoryId === mentionId;
+                  return (
+                    <TouchableOpacity
+                      key={mentionId}
+                      style={[
+                        styles.categoryItem,
+                        isSelected && styles.categoryItemSelected,
+                      ]}
+                      onPress={() => handleSelect(mentionId, `@${mention.mention}`)}
+                    >
+                      <View style={styles.categoryContent}>
+                        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
+                          <Path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                        <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
+                          @{mention.mention}
+                        </Text>
+                      </View>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{mention.count}</Text>
+                      </View>
+                      <View style={styles.categoryItemDivider} />
+                    </TouchableOpacity>
+                  );
+                })}
               </>
             )}
           </ScrollView>
