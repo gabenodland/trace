@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from "react-native";
 import * as Location from "expo-location";
-import { useEntries, useEntry, useCategories, extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState } from "@trace/core";
+import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState } from "@trace/core";
+import { useEntries, useEntry } from "../mobileEntryHooks";
+import { useCategories } from "../../categories/mobileCategoryHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { CategoryPicker } from "../../categories/components/CategoryPicker";
@@ -79,6 +81,7 @@ export function CaptureForm({ entryId }: CaptureFormProps = {}) {
     { label: "Categories", onPress: () => navigate("categories") },
     { label: "Calendar", onPress: () => navigate("calendar") },
     { label: "Tasks", onPress: () => navigate("tasks") },
+    { label: "🔍 Debug DB", onPress: () => navigate("debug") },
     { label: "Sign Out", onPress: signOut },
   ];
 

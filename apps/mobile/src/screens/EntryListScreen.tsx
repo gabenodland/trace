@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { View, StyleSheet } from "react-native";
-import { useEntries, useCategories, useAuthState } from "@trace/core";
+import { useAuthState } from "@trace/core";
+import { useEntries } from "../modules/entries/mobileEntryHooks";
+import { useCategories } from "../modules/categories/mobileCategoryHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { TopBar } from "../components/layout/TopBar";
 import { TopBarDropdownContainer } from "../components/layout/TopBarDropdownContainer";
@@ -13,7 +15,7 @@ export function EntryListScreen() {
   const { categories } = useCategories();
   const { user, signOut } = useAuthState();
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | "all" | "tasks" | "events" | "categories" | "tags" | "ats">(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people">(null);
   const [selectedCategoryName, setSelectedCategoryName] = useState<string>("Inbox");
 
   const menuItems = [
@@ -89,8 +91,8 @@ export function EntryListScreen() {
   } else if (selectedCategoryId === "tags") {
     // TODO: Filter by tags when those are implemented
     // For now, show all entries (noop)
-  } else if (selectedCategoryId === "ats") {
-    // TODO: Filter by @s when those are implemented
+  } else if (selectedCategoryId === "people") {
+    // TODO: Filter by @people when those are implemented
     // For now, show all entries (noop)
   } else if (selectedCategoryId !== null) {
     // Specific category ID
@@ -106,7 +108,7 @@ export function EntryListScreen() {
     navigate("capture", { entryId });
   };
 
-  const handleCategorySelect = (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "ats", categoryName: string) => {
+  const handleCategorySelect = (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people", categoryName: string) => {
     setSelectedCategoryId(categoryId);
     setSelectedCategoryName(categoryName);
   };

@@ -1,18 +1,19 @@
 import React, { useState, useMemo } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
-import { useCategories, useEntries } from "@trace/core";
+import { useEntries } from "../../modules/entries/mobileEntryHooks";
+import { useCategories } from "../../modules/categories/mobileCategoryHooks";
 import Svg, { Path } from "react-native-svg";
 import { CategoryTree as CategoryTreeComponent } from "../../modules/categories/components/CategoryTree";
 
 interface EntryNavigatorProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "ats", categoryName: string) => void;
-  selectedCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "ats";
+  onSelect: (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people", categoryName: string) => void;
+  selectedCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
 }
 
 interface SpecialItem {
-  id: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "ats";
+  id: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
   name: string;
   icon: (selected: boolean) => React.ReactElement;
 }
@@ -22,7 +23,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
   const [searchQuery, setSearchQuery] = useState("");
   const [isAllCategoriesExpanded, setIsAllCategoriesExpanded] = useState(false);
   const [isAllTagsExpanded, setIsAllTagsExpanded] = useState(false);
-  const [isAllAtsExpanded, setIsAllAtsExpanded] = useState(false);
+  const [isAllPeopleExpanded, setIsAllPeopleExpanded] = useState(false);
 
   // Get entry counts
   const { entries: inboxEntries } = useEntries({ category_id: null });
@@ -63,7 +64,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
     },
   ], []);
 
-  // All items for searching (includes: All, Inbox, Tasks, Events, Categories, Tags, Ats)
+  // All items for searching (includes: All, Inbox, Tasks, Events, Categories, Tags, People)
   const allSpecialItems: SpecialItem[] = useMemo(() => [
     {
       id: "all",
@@ -94,8 +95,8 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
       ),
     },
     {
-      id: "ats",
-      name: "Ats",
+      id: "people",
+      name: "People",
       icon: (selected: boolean) => (
         <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
           <Path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" strokeLinecap="round" strokeLinejoin="round" />
@@ -119,7 +120,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
     [categories, searchQuery]
   );
 
-  const handleSelect = (categoryId: string | null | "all" | "tasks" | "events" | "all-tags" | "all-ats", categoryName: string) => {
+  const handleSelect = (categoryId: string | null | "all" | "tasks" | "events" | "all-tags" | "all-people", categoryName: string) => {
     onSelect(categoryId, categoryName);
     setSearchQuery("");
     onClose();
@@ -180,6 +181,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>{allCount}</Text>
                   </View>
+                  <View style={styles.categoryItemDivider} />
                 </TouchableOpacity>
 
                 {/* Special Items (Inbox, Tasks, Events) - Indented to align */}
@@ -207,6 +209,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                           <Text style={styles.badgeText}>{count}</Text>
                         </View>
                       )}
+                      <View style={styles.categoryItemDivider} />
                     </TouchableOpacity>
                   );
                 })}
@@ -245,6 +248,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                       Categories
                     </Text>
                   </View>
+                  <View style={styles.categoryItemDivider} />
                 </TouchableOpacity>
 
                 {/* Category Tree - shown when "Categories" is expanded */}
@@ -256,7 +260,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                         const category = categories.find((c) => c.category_id === categoryId);
                         handleSelect(categoryId, category?.name || "Unknown");
                       }}
-                      selectedId={selectedCategoryId === "all" || selectedCategoryId === null || selectedCategoryId === "tasks" || selectedCategoryId === "events" || selectedCategoryId === "categories" || selectedCategoryId === "tags" || selectedCategoryId === "ats" ? null : selectedCategoryId}
+                      selectedId={selectedCategoryId === "all" || selectedCategoryId === null || selectedCategoryId === "tasks" || selectedCategoryId === "events" || selectedCategoryId === "categories" || selectedCategoryId === "tags" || selectedCategoryId === "people" ? null : selectedCategoryId}
                     />
                   </View>
                 )}
@@ -282,6 +286,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                       Tags
                     </Text>
                   </View>
+                  <View style={styles.categoryItemDivider} />
                 </TouchableOpacity>
 
                 {/* Tags list - shown when "Tags" is expanded (placeholder for future) */}
@@ -291,33 +296,34 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                   </View>
                 )}
 
-                {/* "Ats" Item - Collapsible (expand only, not selectable) */}
+                {/* "People" Item - Collapsible (expand only, not selectable) */}
                 <TouchableOpacity
                   style={styles.categoryItem}
                   onPress={() => {
-                    // No @s yet, but set up for future
-                    setIsAllAtsExpanded(!isAllAtsExpanded);
+                    // No @people yet, but set up for future
+                    setIsAllPeopleExpanded(!isAllPeopleExpanded);
                   }}
                   disabled={true}
                 >
                   <View style={styles.categoryContent}>
-                    {/* Chevron (will show when @s are implemented) */}
+                    {/* Chevron (will show when @people are implemented) */}
                     <View style={styles.chevronContainer}>
-                      {/* No chevron shown since no @s yet */}
+                      {/* No chevron shown since no @people yet */}
                     </View>
                     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
                       <Path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
                     <Text style={styles.categoryName}>
-                      Ats
+                      People
                     </Text>
                   </View>
+                  <View style={styles.categoryItemDivider} />
                 </TouchableOpacity>
 
-                {/* @s list - shown when "Ats" is expanded (placeholder for future) */}
-                {isAllAtsExpanded && (
+                {/* @people list - shown when "People" is expanded (placeholder for future) */}
+                {isAllPeopleExpanded && (
                   <View style={styles.categoryTreeWrapper}>
-                    {/* @s will be rendered here in the future */}
+                    {/* @people will be rendered here in the future */}
                   </View>
                 )}
               </>
@@ -339,6 +345,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                         {item.name}
                       </Text>
                     </View>
+                    <View style={styles.categoryItemDivider} />
                   </TouchableOpacity>
                 ))}
 
@@ -362,6 +369,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                         </Text>
                       </View>
                     </View>
+                    <View style={styles.categoryItemDivider} />
                   </TouchableOpacity>
                 ))}
               </>
@@ -373,7 +381,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    // No flex, let it size naturally to fit content
   },
   searchContainer: {
     flexDirection: "row",
@@ -397,7 +405,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   content: {
-    maxHeight: 400,
+    maxHeight: 340, // Reduced to account for search bar (~60px)
   },
   categoryTreeWrapper: {
     paddingLeft: 20,
@@ -408,8 +416,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+  },
+  categoryItemDivider: {
+    position: "absolute",
+    bottom: 0,
+    left: 15,
+    right: 15,
+    height: 1,
+    backgroundColor: "#f3f4f6",
   },
   indentedItem: {
     paddingLeft: 36,

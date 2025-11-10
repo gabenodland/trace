@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
-import { useCategories, useAuthState } from "@trace/core";
+import { useAuthState } from "@trace/core";
+import { useCategories } from "../modules/categories/mobileCategoryHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { TopBar } from "../components/layout/TopBar";
 import { CategoryTree } from "../modules/categories/components/CategoryTree";

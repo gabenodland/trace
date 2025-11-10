@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
-import { useCategories } from "@trace/core";
+import { useCategories } from "../mobileCategoryHooks";
 import Svg, { Path } from "react-native-svg";
 import { CategoryTree } from "./CategoryTree";
 

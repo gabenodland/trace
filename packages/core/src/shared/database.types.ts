@@ -72,6 +72,7 @@ export interface Database {
           mentions: string[];
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
           location_lat: number | null;
           location_lng: number | null;
           location_name: string | null;
@@ -90,6 +91,7 @@ export interface Database {
           mentions?: string[];
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
           location_lat?: number | null;
           location_lng?: number | null;
           location_name?: string | null;
@@ -108,6 +110,7 @@ export interface Database {
           mentions?: string[];
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
           location_lat?: number | null;
           location_lng?: number | null;
           location_name?: string | null;

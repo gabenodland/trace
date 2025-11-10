@@ -12,6 +12,7 @@ export interface Entry {
   mentions: string[];
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null; // Soft delete timestamp
   location_lat: number | null;
   location_lng: number | null;
   location_accuracy: number | null; // GPS accuracy in meters
@@ -20,6 +21,11 @@ export interface Entry {
   due_date: string | null;
   completed_at: string | null;
   attachments: Json;
+  // Sync tracking fields (mobile only)
+  local_only?: number; // 0 = sync enabled, 1 = local only
+  synced?: number; // 0 = needs sync, 1 = synced
+  sync_action?: 'create' | 'update' | 'delete' | null;
+  sync_error?: string | null;
 }
 
 export interface CreateEntryInput {
@@ -34,6 +40,7 @@ export interface CreateEntryInput {
   location_name?: string | null;
   status?: "none" | "incomplete" | "complete";
   due_date?: string | null;
+  local_only?: number; // 0 = sync enabled (default), 1 = local only
 }
 
 export interface UpdateEntryInput {

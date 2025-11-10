@@ -44,7 +44,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Trace to use your location to add context to your captured entries."
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }

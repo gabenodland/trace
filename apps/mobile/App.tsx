@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View, ActivityIndicator, Platform, StatusBar } from "react-native";
@@ -12,6 +12,10 @@ import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CategoriesScreen } from "./src/screens/CategoriesScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { TasksScreen } from "./src/screens/TasksScreen";
+import { DebugScreen } from "./src/screens/DebugScreen";
+import { localDB } from "./src/shared/db/localDB";
+import { syncQueue } from "./src/shared/sync/syncQueue";
+import "./src/shared/db/dbDebug"; // Global debug utilities
 
 // Create a query client
 const queryClient = new QueryClient({
@@ -31,6 +35,40 @@ function AuthGate() {
   const [showSignUp, setShowSignUp] = useState(false);
   const [activeTab, setActiveTab] = useState("inbox");
   const [navParams, setNavParams] = useState<Record<string, any>>({});
+  const [dbInitialized, setDbInitialized] = useState(false);
+
+  // Initialize database and sync when authenticated
+  useEffect(() => {
+    if (isAuthenticated && !dbInitialized) {
+      console.log('🚀 Initializing offline database...');
+
+      localDB.init()
+        .then(() => {
+          console.log('✅ Database initialized');
+          return syncQueue.initialize(queryClient); // Pass queryClient for cache invalidation
+        })
+        .then(async () => {
+          console.log('✅ Sync queue initialized');
+
+          // Note: syncQueue.initialize() already triggers an initial sync which includes pull
+          // No need to manually call pullFromSupabase here
+        })
+        .then(() => {
+          console.log('✅ Initialization complete');
+          setDbInitialized(true);
+        })
+        .catch((error) => {
+          console.error('❌ Failed to initialize:', error);
+        });
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (dbInitialized) {
+        syncQueue.destroy();
+      }
+    };
+  }, [isAuthenticated, dbInitialized, queryClient]);
 
   // Show loading spinner while checking auth state
   if (isLoading) {
@@ -76,6 +114,8 @@ function AuthGate() {
         return <CalendarScreen />;
       case "tasks":
         return <TasksScreen />;
+      case "debug":
+        return <DebugScreen />;
       default:
         return <EntryListScreen />;
     }
