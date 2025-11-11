@@ -151,7 +151,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     navigate("inbox", { returnCategoryId: `mention:${mention}`, returnCategoryName: `@${mention}` });
   };
 
-  const handleCategoryPress = (categoryId: string, categoryName: string) => {
+  const handleCategoryPress = (categoryId: string | null, categoryName: string) => {
     // Navigate to inbox with category filter
     navigate("inbox", { returnCategoryId: categoryId, returnCategoryName: categoryName });
   };

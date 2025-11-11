@@ -1,21 +1,31 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import type { Entry } from "@trace/core";
-import { getPreviewText, formatEntryDateTime, isTask, formatDueDate, isTaskOverdue } from "@trace/core";
+import { formatEntryDateTime, formatRelativeTime, isTask, formatDueDate, isTaskOverdue } from "@trace/core";
+import { getFormattedContent, getDisplayModeLines } from "../helpers/entryDisplayHelpers";
+import type { EntryDisplayMode } from "../types/EntryDisplayMode";
+import { HtmlRenderer } from "../helpers/htmlRenderer";
 
 interface EntryListItemProps {
   entry: Entry;
   onPress: () => void;
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
-  onCategoryPress?: (categoryId: string, categoryName: string) => void;
+  onCategoryPress?: (categoryId: string | null, categoryName: string) => void;
   onToggleComplete?: (entryId: string, currentStatus: "incomplete" | "complete") => void;
   categoryName?: string | null; // Category name to display
+  displayMode?: EntryDisplayMode; // Display mode for content rendering
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, categoryName }: EntryListItemProps) {
-  const preview = getPreviewText(entry.content, 100);
-  const dateStr = formatEntryDateTime(entry.entry_date || entry.updated_at);
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, categoryName, displayMode = 'smashed' }: EntryListItemProps) {
+  // Format content based on display mode
+  const formattedContent = getFormattedContent(entry.content, displayMode);
+  const maxLines = getDisplayModeLines(displayMode);
+
+  // Entry date (normal format) - shown below title in flow mode
+  const entryDateStr = formatEntryDateTime(entry.entry_date || entry.updated_at);
+  // Updated date (relative format) - shown in metadata at bottom
+  const updatedDateStr = formatRelativeTime(entry.updated_at);
   const isATask = isTask(entry.status);
   const isOverdue = isTaskOverdue(entry.status, entry.due_date);
   const dueDateStr = formatDueDate(entry.due_date, entry.status);
@@ -57,7 +67,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
 
         {/* Content */}
         <View style={styles.contentWrapper}>
-          {/* Title or Preview */}
+          {/* Title or Preview based on display mode */}
           {entry.title ? (
             <>
               <Text style={[
@@ -66,25 +76,55 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
               ]}>
                 {entry.title}
               </Text>
-              <Text style={[
-                styles.preview,
-                entry.status === "complete" && styles.strikethrough
-              ]} numberOfLines={2}>
-                {preview}
-              </Text>
+              {displayMode === 'flow' && (
+                <Text style={styles.dateSmall}>{entryDateStr}</Text>
+              )}
+              {displayMode === 'flow' ? (
+                <HtmlRenderer
+                  html={entry.content || ''}
+                  style={[
+                    styles.preview,
+                    entry.status === "complete" && styles.strikethrough
+                  ]}
+                  strikethrough={entry.status === "complete"}
+                />
+              ) : (
+                <Text style={[
+                  styles.preview,
+                  entry.status === "complete" && styles.strikethrough
+                ]} numberOfLines={maxLines}>
+                  {formattedContent}
+                </Text>
+              )}
             </>
           ) : (
-            <Text style={[
-              styles.content,
-              entry.status === "complete" && styles.strikethrough
-            ]} numberOfLines={3}>
-              {preview}
-            </Text>
+            displayMode === 'flow' ? (
+              <>
+                {displayMode === 'flow' && (
+                  <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                )}
+                <HtmlRenderer
+                  html={entry.content || ''}
+                  style={[
+                    styles.content,
+                    entry.status === "complete" && styles.strikethrough
+                  ]}
+                  strikethrough={entry.status === "complete"}
+                />
+              </>
+            ) : (
+              <Text style={[
+                styles.content,
+                entry.status === "complete" && styles.strikethrough
+              ]} numberOfLines={maxLines}>
+                {formattedContent}
+              </Text>
+            )
           )}
 
           {/* Metadata */}
           <View style={styles.metadata}>
-            <Text style={styles.date}>{dateStr}</Text>
+            <Text style={styles.date}>Updated {updatedDateStr}</Text>
 
             {/* Category Badge */}
             <TouchableOpacity
@@ -220,6 +260,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#111827",
     marginBottom: 4,
+  },
+  dateSmall: {
+    fontSize: 11,
+    color: "#9ca3af",
+    marginBottom: 8,
   },
   strikethrough: {
     textDecorationLine: "line-through",

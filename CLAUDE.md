@@ -28,6 +28,12 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
    - Mac/Linux: `afplay /path/to/question.wav` or `aplay /path/to/question.wav`
    - Then say "answer please"
 
+8. **Never create 'nul' files** - Always use correct null device syntax for bash:
+   - ✅ Use `/dev/null` in bash/Git Bash commands
+   - ❌ NEVER use `> nul` (Windows CMD syntax - creates a file in bash)
+   - Example: `ping -n 10 127.0.0.1 > /dev/null` (not `> nul`)
+   - If you accidentally create a 'nul' file, delete it immediately
+
 ---
 
 ## 🎯 Project Overview

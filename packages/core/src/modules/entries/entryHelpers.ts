@@ -117,37 +117,41 @@ export function getPreviewText(content: string, maxLength: number = 100): string
 }
 
 /**
- * Format date for display (relative or absolute) with "Last edited" prefix
+ * Format date as relative time (without prefix)
+ * Examples: "just now", "5 minutes ago", "2 hours ago", "yesterday", "3 days ago", "Jan 15"
  */
-export function formatEntryDate(dateString: string): string {
+export function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffHours / 24);
 
-  let timeStr = "";
-
   if (diffHours < 1) {
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    if (diffMinutes < 1) timeStr = "just now";
-    else timeStr = `${diffMinutes} minute${diffMinutes !== 1 ? "s" : ""} ago`;
+    if (diffMinutes < 1) return "just now";
+    return `${diffMinutes} minute${diffMinutes !== 1 ? "s" : ""} ago`;
   } else if (diffHours < 24) {
-    timeStr = `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
+    return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
   } else if (diffDays === 1) {
-    timeStr = "yesterday";
+    return "yesterday";
   } else if (diffDays < 7) {
-    timeStr = `${diffDays} days ago`;
+    return `${diffDays} days ago`;
   } else {
-    // Format as date
-    timeStr = date.toLocaleDateString(undefined, {
+    // Format as date for older entries
+    return date.toLocaleDateString(undefined, {
       month: "short",
       day: "numeric",
       year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
     });
   }
+}
 
-  return `Last edited ${timeStr}`;
+/**
+ * Format date for display (relative or absolute) with "Last edited" prefix
+ */
+export function formatEntryDate(dateString: string): string {
+  return `Last edited ${formatRelativeTime(dateString)}`;
 }
 
 /**

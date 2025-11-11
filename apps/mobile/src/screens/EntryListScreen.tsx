@@ -1,15 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { View, StyleSheet } from "react-native";
 import { useAuthState } from "@trace/core";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { useCategories } from "../modules/categories/mobileCategoryHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
+import { usePersistedState } from "../shared/hooks/usePersistedState";
 import { TopBar } from "../components/layout/TopBar";
 import { TopBarDropdownContainer } from "../components/layout/TopBarDropdownContainer";
+import { SubBar, SubBarSelector } from "../components/layout/SubBar";
 import { EntryList } from "../modules/entries/components/EntryList";
 import { EntryNavigator } from "../components/navigation/EntryNavigator";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
+import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
+import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
+import type { EntryDisplayMode } from "../modules/entries/types/EntryDisplayMode";
+import { DEFAULT_DISPLAY_MODE, ENTRY_DISPLAY_MODES } from "../modules/entries/types/EntryDisplayMode";
+import type { EntrySortMode } from "../modules/entries/types/EntrySortMode";
+import { DEFAULT_SORT_MODE, ENTRY_SORT_MODES } from "../modules/entries/types/EntrySortMode";
+import { sortEntries } from "../modules/entries/helpers/entrySortHelpers";
 
 interface EntryListScreenProps {
   returnCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people"; // Also supports "tag:tagname" and "mention:mentionname"
@@ -22,8 +31,12 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
   const { user } = useAuthState();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
+  const [showSortModeSelector, setShowSortModeSelector] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people">(null);
   const [selectedCategoryName, setSelectedCategoryName] = useState<string>("Inbox");
+  const [displayMode, setDisplayMode] = usePersistedState<EntryDisplayMode>('@entryListDisplayMode', DEFAULT_DISPLAY_MODE);
+  const [sortMode, setSortMode] = usePersistedState<EntrySortMode>('@entryListSortMode', DEFAULT_SORT_MODE);
 
   // Update category when returning from entry screen
   useEffect(() => {
@@ -73,6 +86,22 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
 
   const { entries, isLoading } = useEntries(categoryFilter);
 
+  // Sort entries based on selected sort mode
+  const categoryMap = useMemo(() => {
+    return categories.reduce((map, cat) => {
+      map[cat.category_id] = cat.full_path;
+      return map;
+    }, {} as Record<string, string>);
+  }, [categories]);
+
+  const sortedEntries = useMemo(() => {
+    return sortEntries(entries, sortMode, categoryMap);
+  }, [entries, sortMode, categoryMap]);
+
+  // Get display labels
+  const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Smashed';
+  const sortModeLabel = ENTRY_SORT_MODES.find(m => m.value === sortMode)?.label || 'Entry Date';
+
   const handleEntryPress = (entryId: string) => {
     navigate("capture", {
       entryId,
@@ -110,7 +139,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     setSelectedCategoryName(mentionName);
   };
 
-  const handleCategoryPress = (categoryId: string, categoryName: string) => {
+  const handleCategoryPress = (categoryId: string | null, categoryName: string) => {
     setSelectedCategoryId(categoryId);
     setSelectedCategoryName(categoryName);
   };
@@ -124,7 +153,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     <View style={styles.container}>
       <TopBar
         title={selectedCategoryName}
-        badge={entries.length}
+        badge={sortedEntries.length}
         onTitlePress={() => setShowCategoryDropdown(true)}
         showDropdownArrow={true}
         menuItems={menuItems}
@@ -132,14 +161,28 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         onProfilePress={onProfilePress}
       />
 
+      <SubBar>
+        <SubBarSelector
+          label="View"
+          value={displayModeLabel}
+          onPress={() => setShowDisplayModeSelector(true)}
+        />
+        <SubBarSelector
+          label="Sort"
+          value={sortModeLabel}
+          onPress={() => setShowSortModeSelector(true)}
+        />
+      </SubBar>
+
       <EntryList
-        entries={entries}
+        entries={sortedEntries}
         isLoading={isLoading}
         onEntryPress={handleEntryPress}
         onTagPress={handleTagPress}
         onMentionPress={handleMentionPress}
         onCategoryPress={handleCategoryPress}
         categories={categories}
+        displayMode={displayMode}
       />
 
       {/* Category Navigator Dropdown */}
@@ -154,6 +197,22 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
           selectedCategoryId={selectedCategoryId}
         />
       </TopBarDropdownContainer>
+
+      {/* Display Mode Selector */}
+      <DisplayModeSelector
+        visible={showDisplayModeSelector}
+        selectedMode={displayMode}
+        onSelect={setDisplayMode}
+        onClose={() => setShowDisplayModeSelector(false)}
+      />
+
+      {/* Sort Mode Selector */}
+      <SortModeSelector
+        visible={showSortModeSelector}
+        selectedMode={sortMode}
+        onSelect={setSortMode}
+        onClose={() => setShowSortModeSelector(false)}
+      />
 
       <FloatingActionButton onPress={handleAddEntry} />
     </View>

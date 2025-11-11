@@ -587,7 +587,17 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    const rows = await this.db.getAllAsync<any>('SELECT * FROM categories ORDER BY full_path');
+    // Calculate entry_count dynamically by counting entries (excluding deleted)
+    const rows = await this.db.getAllAsync<any>(`
+      SELECT
+        c.*,
+        COALESCE(COUNT(e.entry_id), 0) as entry_count
+      FROM categories c
+      LEFT JOIN entries e ON c.category_id = e.category_id
+        AND (e.deleted_at IS NULL OR e.deleted_at = '')
+      GROUP BY c.category_id
+      ORDER BY c.full_path
+    `);
     return rows;
   }
 
@@ -598,8 +608,16 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
+    // Calculate entry_count dynamically by counting entries (excluding deleted)
     const row = await this.db.getFirstAsync<any>(
-      'SELECT * FROM categories WHERE category_id = ?',
+      `SELECT
+        c.*,
+        COALESCE(COUNT(e.entry_id), 0) as entry_count
+      FROM categories c
+      LEFT JOIN entries e ON c.category_id = e.category_id
+        AND (e.deleted_at IS NULL OR e.deleted_at = '')
+      WHERE c.category_id = ?
+      GROUP BY c.category_id`,
       [categoryId]
     );
 

@@ -8,18 +8,21 @@ interface Category {
   full_path: string;
 }
 
+import type { EntryDisplayMode } from '../types/EntryDisplayMode';
+
 interface EntryListProps {
   entries: Entry[];
   isLoading: boolean;
   onEntryPress: (entryId: string) => void;
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
-  onCategoryPress?: (categoryId: string, categoryName: string) => void;
+  onCategoryPress?: (categoryId: string | null, categoryName: string) => void;
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
   categories?: Category[]; // Optional categories for displaying category names
+  displayMode?: EntryDisplayMode; // Display mode for entry items
 }
 
-export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, ListHeaderComponent, categories }: EntryListProps) {
+export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, ListHeaderComponent, categories, displayMode }: EntryListProps) {
   // Create a lookup map for categories (using full_path)
   const categoryMap = categories?.reduce((map, cat) => {
     map[cat.category_id] = cat.full_path;
@@ -47,6 +50,7 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
             onMentionPress={onMentionPress}
             onCategoryPress={onCategoryPress}
             categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
+            displayMode={displayMode}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -83,6 +87,7 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
           onMentionPress={onMentionPress}
           onCategoryPress={onCategoryPress}
           categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
+          displayMode={displayMode}
         />
       )}
       contentContainerStyle={styles.listContent}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View, ActivityIndicator, Platform, StatusBar } from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator, Platform, StatusBar, BackHandler } from "react-native";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
 import { NavigationProvider } from "./src/shared/contexts/NavigationContext";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
@@ -30,12 +30,20 @@ const queryClient = new QueryClient({
 /**
  * AuthGate - Shows login/signup when not authenticated, main app when authenticated
  */
+interface NavigationHistoryItem {
+  tabId: string;
+  params: Record<string, any>;
+}
+
 function AuthGate() {
   const { isAuthenticated, isLoading } = useAuth();
   const [showSignUp, setShowSignUp] = useState(false);
   const [activeTab, setActiveTab] = useState("inbox");
   const [navParams, setNavParams] = useState<Record<string, any>>({});
   const [dbInitialized, setDbInitialized] = useState(false);
+  const [navigationHistory, setNavigationHistory] = useState<NavigationHistoryItem[]>([
+    { tabId: "inbox", params: {} }
+  ]);
 
   // Initialize database and sync when authenticated
   useEffect(() => {
@@ -70,6 +78,17 @@ function AuthGate() {
     };
   }, [isAuthenticated, dbInitialized, queryClient]);
 
+  // Handle Android back button
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      return handleBack();
+    });
+
+    return () => backHandler.remove();
+  }, [isAuthenticated, navigationHistory]);
+
   // Show loading spinner while checking auth state
   if (isLoading) {
     return (
@@ -93,6 +112,26 @@ function AuthGate() {
   const handleNavigate = (tabId: string, params?: Record<string, any>) => {
     setActiveTab(tabId);
     setNavParams(params || {});
+
+    // Add to navigation history
+    setNavigationHistory(prev => [...prev, { tabId, params: params || {} }]);
+  };
+
+  // Handle back navigation
+  const handleBack = () => {
+    if (navigationHistory.length > 1) {
+      // Remove current screen
+      const newHistory = navigationHistory.slice(0, -1);
+      setNavigationHistory(newHistory);
+
+      // Navigate to previous screen
+      const previous = newHistory[newHistory.length - 1];
+      setActiveTab(previous.tabId);
+      setNavParams(previous.params);
+
+      return true; // Handled
+    }
+    return false; // Not handled, allow default behavior (exit app)
   };
 
   // Render the active screen

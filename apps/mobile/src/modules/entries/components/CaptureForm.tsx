@@ -326,6 +326,34 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     };
   }, [isEditMode]); // Re-register when edit mode changes to capture current state
 
+  // Cancel handler
+  const handleCancel = () => {
+    // Navigate back based on returnContext
+    if (returnContext) {
+      if (returnContext.screen === "calendar") {
+        navigate("calendar", {
+          returnDate: entryDate,
+          returnZoomLevel: returnContext.zoomLevel
+        });
+        return;
+      } else if (returnContext.screen === "tasks") {
+        navigate("tasks");
+        return;
+      } else if (returnContext.screen === "inbox") {
+        navigate("inbox", {
+          returnCategoryId: returnContext.categoryId || null,
+          returnCategoryName: returnContext.categoryName || "Inbox"
+        });
+        return;
+      }
+    }
+
+    // Default: go to inbox with original category (for edited entries) or current category
+    const returnCategoryId = isEditing ? originalCategoryId : (categoryId || null);
+    const returnCategoryName = isEditing ? originalCategoryName : (categoryName || "Inbox");
+    navigate("inbox", { returnCategoryId, returnCategoryName });
+  };
+
   // Save handler
   const handleSave = async () => {
     // Prevent multiple simultaneous saves
@@ -477,7 +505,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   return (
     <View style={styles.container}>
       {/* Top Bar */}
-      <TopBar>
+      <TopBar showBackButton={true} onBackPress={handleCancel}>
         {/* Location Toggle */}
         <TouchableOpacity
           style={[styles.topBarButton, captureLocation && styles.topBarButtonActive]}

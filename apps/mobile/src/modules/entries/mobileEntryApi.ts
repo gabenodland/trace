@@ -77,9 +77,17 @@ export async function updateEntry(
   id: string,
   updates: Partial<Entry>
 ): Promise<Entry> {
+  // Mark as needing sync (unless explicitly specified otherwise, like during pull sync)
+  const updatesWithSync = {
+    ...updates,
+    // Only override sync fields if not explicitly provided (preserves sync operation behavior)
+    synced: updates.synced !== undefined ? updates.synced : 0,
+    sync_action: updates.sync_action !== undefined ? updates.sync_action : 'update',
+  };
+
   // Update in SQLite
   // Sync will be handled by syncQueue in background
-  const updated = await localDB.updateEntry(id, updates);
+  const updated = await localDB.updateEntry(id, updatesWithSync);
 
   return updated;
 }

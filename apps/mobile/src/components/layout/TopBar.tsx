@@ -13,6 +13,10 @@ interface TopBarProps {
   // Custom content mode (for editing screens)
   children?: React.ReactNode;
 
+  // Back button
+  showBackButton?: boolean;
+  onBackPress?: () => void;
+
   // Hamburger menu (customizable menu items)
   menuItems?: NavigationMenuItem[];
   userEmail?: string;
@@ -25,6 +29,8 @@ export function TopBar({
   onTitlePress,
   showDropdownArrow = false,
   children,
+  showBackButton = false,
+  onBackPress,
   menuItems = [],
   userEmail,
   onProfilePress,
@@ -33,6 +39,19 @@ export function TopBar({
 
   return (
     <View style={styles.container}>
+      {/* Back Button */}
+      {showBackButton && onBackPress && (
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={onBackPress}
+          activeOpacity={0.7}
+        >
+          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
+            <Path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
+      )}
+
       {/* Title Mode */}
       {title && (
         <TouchableOpacity
@@ -101,6 +120,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
   titleContainer: {
     flexDirection: "row",
