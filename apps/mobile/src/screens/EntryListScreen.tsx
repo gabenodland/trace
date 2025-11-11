@@ -9,14 +9,14 @@ import { TopBar } from "../components/layout/TopBar";
 import { TopBarDropdownContainer } from "../components/layout/TopBarDropdownContainer";
 import { EntryList } from "../modules/entries/components/EntryList";
 import { EntryNavigator } from "../components/navigation/EntryNavigator";
+import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
 
 interface EntryListScreenProps {
   returnCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people"; // Also supports "tag:tagname" and "mention:mentionname"
   returnCategoryName?: string;
-  onCategoryChange?: (category: { id: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people"; name: string }) => void;
 }
 
-export function EntryListScreen({ returnCategoryId, returnCategoryName, onCategoryChange }: EntryListScreenProps = {}) {
+export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryListScreenProps = {}) {
   const { navigate } = useNavigation();
   const { categories } = useCategories();
   const { user } = useAuthState();
@@ -30,12 +30,8 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName, onCatego
     if (returnCategoryId !== undefined && returnCategoryName !== undefined) {
       setSelectedCategoryId(returnCategoryId);
       setSelectedCategoryName(returnCategoryName);
-      // Notify parent of category change
-      if (onCategoryChange) {
-        onCategoryChange({ id: returnCategoryId, name: returnCategoryName });
-      }
     }
-  }, [returnCategoryId, returnCategoryName, onCategoryChange]);
+  }, [returnCategoryId, returnCategoryName]);
 
   console.log("EntryListScreen - selectedCategoryName:", selectedCategoryName);
 
@@ -78,7 +74,26 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName, onCatego
   const { entries, isLoading } = useEntries(categoryFilter);
 
   const handleEntryPress = (entryId: string) => {
-    navigate("capture", { entryId });
+    navigate("capture", {
+      entryId,
+      returnContext: {
+        screen: "inbox",
+        categoryId: selectedCategoryId,
+        categoryName: selectedCategoryName
+      }
+    });
+  };
+
+  const handleAddEntry = () => {
+    navigate("capture", {
+      initialCategoryId: selectedCategoryId,
+      initialCategoryName: selectedCategoryName,
+      returnContext: {
+        screen: "inbox",
+        categoryId: selectedCategoryId,
+        categoryName: selectedCategoryName
+      }
+    });
   };
 
   const handleTagPress = (tag: string) => {
@@ -86,10 +101,6 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName, onCatego
     const tagName = `#${tag}`;
     setSelectedCategoryId(tagId);
     setSelectedCategoryName(tagName);
-    // Notify parent of category change
-    if (onCategoryChange) {
-      onCategoryChange({ id: tagId, name: tagName });
-    }
   };
 
   const handleMentionPress = (mention: string) => {
@@ -97,19 +108,11 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName, onCatego
     const mentionName = `@${mention}`;
     setSelectedCategoryId(mentionId);
     setSelectedCategoryName(mentionName);
-    // Notify parent of category change
-    if (onCategoryChange) {
-      onCategoryChange({ id: mentionId, name: mentionName });
-    }
   };
 
   const handleCategorySelect = (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people", categoryName: string) => {
     setSelectedCategoryId(categoryId);
     setSelectedCategoryName(categoryName);
-    // Notify parent of category change
-    if (onCategoryChange) {
-      onCategoryChange({ id: categoryId, name: categoryName });
-    }
   };
 
   return (
@@ -144,6 +147,8 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName, onCatego
           selectedCategoryId={selectedCategoryId}
         />
       </TopBarDropdownContainer>
+
+      <FloatingActionButton onPress={handleAddEntry} />
     </View>
   );
 }

@@ -12,6 +12,7 @@ export interface Entry {
   mentions: string[];
   created_at: string;
   updated_at: string;
+  entry_date: string | null; // When the memory/event actually happened (can be backdated)
   deleted_at?: string | null; // Soft delete timestamp
   location_lat: number | null;
   location_lng: number | null;
@@ -34,6 +35,7 @@ export interface CreateEntryInput {
   tags?: string[];
   mentions?: string[];
   category_id?: string | null;
+  entry_date?: string | null; // When the memory/event actually happened
   location_lat?: number | null;
   location_lng?: number | null;
   location_accuracy?: number | null;
@@ -49,6 +51,7 @@ export interface UpdateEntryInput {
   tags?: string[];
   mentions?: string[];
   category_id?: string | null;
+  entry_date?: string | null; // When the memory/event actually happened
   location_lat?: number | null;
   location_lng?: number | null;
   location_accuracy?: number | null;

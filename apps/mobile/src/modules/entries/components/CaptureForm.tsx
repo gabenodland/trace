@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from "react-native";
 import * as Location from "expo-location";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState } from "@trace/core";
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useCategories } from "../../categories/mobileCategoryHooks";
@@ -12,14 +13,18 @@ import { BottomBar } from "../../../components/layout/BottomBar";
 import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdownContainer";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 
+import type { ReturnContext } from "../../../screens/EntryScreen";
+
 interface CaptureFormProps {
   entryId?: string | null;
   initialCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
   initialCategoryName?: string;
   initialContent?: string;
+  initialDate?: string;
+  returnContext?: ReturnContext;
 }
 
-export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, initialContent }: CaptureFormProps = {}) {
+export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, initialContent, initialDate, returnContext }: CaptureFormProps = {}) {
   // Determine if we're editing an existing entry or creating a new one
   const isEditing = !!entryId;
 
@@ -51,6 +56,30 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const [status, setStatus] = useState<"none" | "incomplete" | "complete">("none");
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [entryDate, setEntryDate] = useState<string>(() => {
+    // If initialDate is provided (from calendar), use it with current time + 100ms to hide time
+    if (initialDate) {
+      // Parse YYYY-MM-DD in local timezone to avoid UTC conversion issues
+      const [year, month, day] = initialDate.split('-').map(Number);
+      const selectedDate = new Date(year, month - 1, day); // month is 0-indexed
+      const now = new Date();
+      // Set the time to current time but on the selected date
+      selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 100); // 100ms to hide time
+      return selectedDate.toISOString();
+    }
+    // Default to current date and time (with 0 milliseconds to show time)
+    const now = new Date();
+    now.setMilliseconds(0);
+    return now.toISOString();
+  });
+  const [showNativePicker, setShowNativePicker] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
+  // Check milliseconds to determine if time should be shown (0 = show, 100 = hidden)
+  const [includeTime, setIncludeTime] = useState(() => {
+    // If initialDate provided, hide time initially
+    return !initialDate;
+  });
+  const [showTimeModal, setShowTimeModal] = useState(false); // Custom modal for time with Clear button
   // Store original category for cancel navigation (for edited entries)
   const [originalCategoryId, setOriginalCategoryId] = useState<string | null>(null);
   const [originalCategoryName, setOriginalCategoryName] = useState<string | null>(null);
@@ -142,6 +171,18 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       setCategoryId(entry.category_id || null);
       setStatus(entry.status);
       setDueDate(entry.due_date);
+
+      // Load entry_date or default to created_at
+      if (entry.entry_date) {
+        setEntryDate(entry.entry_date);
+        // Check milliseconds to determine if time should be shown
+        const date = new Date(entry.entry_date);
+        setIncludeTime(date.getMilliseconds() !== 100);
+      } else if (entry.created_at) {
+        setEntryDate(entry.created_at);
+        const date = new Date(entry.created_at);
+        setIncludeTime(date.getMilliseconds() !== 100);
+      }
 
       // Load location data if available, keep toggle state reflecting what's saved
       if (entry.location_lat && entry.location_lng) {
@@ -312,6 +353,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           tags,
           mentions,
           category_id: categoryId,
+          entry_date: entryDate,
           status,
           due_date: dueDate,
         });
@@ -322,6 +364,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           content,
           tags,
           mentions,
+          entry_date: entryDate,
           location_lat: locationData.lat,
           location_lng: locationData.lng,
           location_accuracy: locationData.accuracy,
@@ -353,6 +396,26 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           (typeof returnCategoryId === 'string' && (returnCategoryId.startsWith("tag:") || returnCategoryId.startsWith("mention:")))) {
         returnCategoryId = null;
         returnCategoryName = "Inbox";
+      }
+
+      // Navigate back based on returnContext
+      if (returnContext) {
+        if (returnContext.screen === "calendar") {
+          navigate("calendar", {
+            returnDate: entryDate,
+            returnZoomLevel: returnContext.zoomLevel
+          });
+          return;
+        } else if (returnContext.screen === "tasks") {
+          navigate("tasks");
+          return;
+        } else if (returnContext.screen === "inbox") {
+          navigate("inbox", {
+            returnCategoryId: returnContext.categoryId || null,
+            returnCategoryName: returnContext.categoryName || "Inbox"
+          });
+          return;
+        }
       }
 
       navigate("inbox", { returnCategoryId, returnCategoryName });
@@ -532,7 +595,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               setTimeout(() => titleInputRef.current?.focus(), 100);
             }}
           >
-            <View style={styles.titleCollapsedLine} />
+            <View style={styles.titlePlaceholderLine} />
           </TouchableOpacity>
         ) : (
           <View style={styles.titleContainer}>
@@ -553,6 +616,62 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             />
           </View>
         )}
+
+        {/* Entry Date & Time - Below title */}
+        <View style={styles.entryDateContainer}>
+          {/* Date */}
+          <TouchableOpacity
+            onPress={() => {
+              setPickerMode("date");
+              setShowNativePicker(true);
+              if (!isEditMode) enterEditMode();
+            }}
+          >
+            <Text style={styles.entryDateText}>
+              {entryDate ? new Date(entryDate).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              }) : 'Set date'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Time or Watch Icon */}
+          {includeTime ? (
+            <TouchableOpacity
+              style={styles.timeContainer}
+              onPress={() => {
+                setShowTimeModal(true);
+                if (!isEditMode) enterEditMode();
+              }}
+            >
+              <Text style={styles.entryDateText}>
+                {entryDate ? new Date(entryDate).toLocaleTimeString(undefined, {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true
+                }) : 'Set time'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.watchIconButton}
+              onPress={() => {
+                // Show time again by setting milliseconds to 0
+                setIncludeTime(true);
+                const date = new Date(entryDate);
+                date.setMilliseconds(0);
+                setEntryDate(date.toISOString());
+                if (!isEditMode) enterEditMode();
+              }}
+            >
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+                <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Editor */}
         <View style={[
@@ -663,6 +782,26 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               // Navigate back to the appropriate category (or filter view like tag:xxx, mention:xxx)
               let returnCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
               let returnCategoryName: string;
+
+              // Navigate back based on returnContext
+              if (returnContext) {
+                if (returnContext.screen === "calendar") {
+                  navigate("calendar", {
+                    returnDate: entryDate,
+                    returnZoomLevel: returnContext.zoomLevel
+                  });
+                  return;
+                } else if (returnContext.screen === "tasks") {
+                  navigate("tasks");
+                  return;
+                } else if (returnContext.screen === "inbox") {
+                  navigate("inbox", {
+                    returnCategoryId: returnContext.categoryId || null,
+                    returnCategoryName: returnContext.categoryName || "Inbox"
+                  });
+                  return;
+                }
+              }
 
               if (isEditing) {
                 // For editing: return to entry's original category
@@ -789,6 +928,86 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           )}
         </View>
       </TopBarDropdownContainer>
+
+      {/* Time Picker Modal */}
+      <TopBarDropdownContainer
+        visible={showTimeModal}
+        onClose={() => setShowTimeModal(false)}
+      >
+        <View style={styles.datePickerContainer}>
+          <Text style={styles.datePickerTitle}>Set Time</Text>
+
+          {/* Change Time Button */}
+          <TouchableOpacity
+            style={styles.datePickerButton}
+            onPress={() => {
+              setShowTimeModal(false);
+              // Show native picker after a small delay
+              setTimeout(() => {
+                setPickerMode("time");
+                setShowNativePicker(true);
+              }, 100);
+            }}
+          >
+            <Text style={styles.datePickerButtonText}>
+              Change Time ({new Date(entryDate).toLocaleTimeString(undefined, {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              })})
+            </Text>
+          </TouchableOpacity>
+
+          {/* Clear Time Button */}
+          <TouchableOpacity
+            style={[styles.datePickerButton, styles.datePickerButtonDanger]}
+            onPress={() => {
+              // Clear time by setting milliseconds to 100 (flag to hide time but remember it)
+              setIncludeTime(false);
+              const date = new Date(entryDate);
+              date.setMilliseconds(100);
+              setEntryDate(date.toISOString());
+              setShowTimeModal(false);
+            }}
+          >
+            <Text style={[styles.datePickerButtonText, styles.datePickerButtonDangerText]}>
+              Clear Time
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </TopBarDropdownContainer>
+
+      {/* Native Date Picker */}
+      {showNativePicker && pickerMode === "date" && (
+        <DateTimePicker
+          value={new Date(entryDate)}
+          mode="date"
+          display="spinner"
+          onChange={(event, selectedDate) => {
+            if (event.type === "set" && selectedDate) {
+              setEntryDate(selectedDate.toISOString());
+            }
+            setShowNativePicker(false);
+          }}
+        />
+      )}
+
+      {/* Native Time Picker (triggered from modal) */}
+      {showNativePicker && pickerMode === "time" && (
+        <DateTimePicker
+          value={new Date(entryDate)}
+          mode="time"
+          display="default"
+          onChange={(event, selectedDate) => {
+            if (event.type === "set" && selectedDate) {
+              // Set milliseconds to 0 to indicate time should be shown
+              selectedDate.setMilliseconds(0);
+              setEntryDate(selectedDate.toISOString());
+            }
+            setShowNativePicker(false);
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -866,26 +1085,46 @@ const styles = StyleSheet.create({
   titleContainer: {
     paddingHorizontal: 24,
     paddingTop: 4,
-    paddingBottom: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    paddingBottom: 2,
   },
   titleCollapsed: {
     paddingHorizontal: 24,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    paddingTop: 4,
+    paddingBottom: 2,
   },
-  titleCollapsedLine: {
-    height: 0.5,
+  titlePlaceholderLine: {
+    width: 170,
+    height: 2,
     backgroundColor: "#d1d5db",
+    borderRadius: 1,
   },
   titleInput: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: "700",
     color: "#111827",
     padding: 0,
     margin: 0,
+  },
+  entryDateContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingLeft: 40,
+    paddingRight: 24,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
+  entryDateText: {
+    fontSize: 13,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  timeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  watchIconButton: {
+    padding: 4,
   },
   editorContainer: {
     flex: 1,

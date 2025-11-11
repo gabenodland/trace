@@ -159,6 +159,36 @@ class LocalDatabase {
         console.log('✅ Migration 3 complete');
       }
 
+      // Migration 4: Add entry_date column to entries
+      if (currentVersion < 4) {
+        console.log('⬆️ Running migration 4: Add entry_date to entries');
+
+        const entriesTableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
+        const hasEntryDate = entriesTableInfo.some((col: any) => col.name === 'entry_date');
+
+        if (!hasEntryDate) {
+          // Add entry_date column
+          await this.db.execAsync('ALTER TABLE entries ADD COLUMN entry_date INTEGER;');
+
+          // Set entry_date = created_at for existing entries
+          await this.db.execAsync('UPDATE entries SET entry_date = created_at WHERE entry_date IS NULL;');
+
+          console.log('  ✓ Added entry_date column to entries');
+
+          // Create index for entry_date
+          await this.db.execAsync('CREATE INDEX IF NOT EXISTS idx_entries_entry_date ON entries(entry_date);');
+          console.log('  ✓ Created entry_date index');
+        } else {
+          console.log('  ℹ️ entries entry_date column already exists');
+        }
+
+        await this.db.runAsync(
+          'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
+          ['schema_version', '4', Date.now()]
+        );
+        console.log('✅ Migration 4 complete');
+      }
+
       console.log('✅ All migrations complete');
     } catch (error) {
       console.error('❌ Migration failed:', error);
@@ -260,10 +290,10 @@ class LocalDatabase {
     await this.db.runAsync(
       `INSERT OR REPLACE INTO entries (
         entry_id, user_id, title, content, tags, mentions,
-        category_id, location_lat, location_lng, location_accuracy, location_name,
+        category_id, entry_date, location_lat, location_lng, location_accuracy, location_name,
         status, due_date, completed_at, created_at, updated_at,
         local_only, synced, sync_action
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -272,6 +302,7 @@ class LocalDatabase {
         JSON.stringify(entry.tags || []),
         JSON.stringify(entry.mentions || []),
         entry.category_id || null,
+        entry.entry_date ? Date.parse(entry.entry_date) : (entry.created_at ? Date.parse(entry.created_at) : now),
         entry.location_lat || null,
         entry.location_lng || null,
         entry.location_accuracy || null,
@@ -387,7 +418,7 @@ class LocalDatabase {
     await this.db.runAsync(
       `UPDATE entries SET
         title = ?, content = ?, tags = ?, mentions = ?,
-        category_id = ?, location_lat = ?, location_lng = ?, location_accuracy = ?,
+        category_id = ?, entry_date = ?, location_lat = ?, location_lng = ?, location_accuracy = ?,
         location_name = ?, status = ?, due_date = ?, completed_at = ?,
         updated_at = ?, local_only = ?, synced = ?, sync_action = ?
       WHERE entry_id = ?`,
@@ -397,6 +428,7 @@ class LocalDatabase {
         JSON.stringify(updated.tags || []),
         JSON.stringify(updated.mentions || []),
         updated.category_id || null,
+        updated.entry_date ? Date.parse(updated.entry_date) : null,
         updated.location_lat || null,
         updated.location_lng || null,
         updated.location_accuracy || null,
@@ -528,6 +560,7 @@ class LocalDatabase {
       tags: row.tags ? JSON.parse(row.tags) : [],
       mentions: row.mentions ? JSON.parse(row.mentions) : [],
       category_id: row.category_id,
+      entry_date: row.entry_date ? new Date(row.entry_date).toISOString() : null,
       location_lat: row.location_lat,
       location_lng: row.location_lng,
       location_accuracy: row.location_accuracy,

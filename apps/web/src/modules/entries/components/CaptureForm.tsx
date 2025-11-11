@@ -20,6 +20,14 @@ export function CaptureForm() {
   const [status, setStatus] = useState<"none" | "incomplete" | "complete">("none");
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [entryDate, setEntryDate] = useState<string>(() => {
+    // Default to current date and time (with 0 milliseconds to show time)
+    const now = new Date();
+    now.setMilliseconds(0);
+    return now.toISOString();
+  });
+  const [includeTime, setIncludeTime] = useState(true); // Whether to show/include time in entry_date
+  const [showEntryDatePicker, setShowEntryDatePicker] = useState(false);
   const isLocalChange = useRef(false);
 
   const { entryMutations } = useEntries();
@@ -70,6 +78,18 @@ export function CaptureForm() {
       setStatus(entry.status);
       setDueDate(entry.due_date);
 
+      // Load entry_date or default to created_at
+      if (entry.entry_date) {
+        setEntryDate(entry.entry_date);
+        // Check milliseconds to determine if time should be shown
+        const date = new Date(entry.entry_date);
+        setIncludeTime(date.getMilliseconds() !== 100);
+      } else if (entry.created_at) {
+        setEntryDate(entry.created_at);
+        const date = new Date(entry.created_at);
+        setIncludeTime(date.getMilliseconds() !== 100);
+      }
+
       // Look up category name from categories list
       if (entry.category_id && categories.length > 0) {
         const category = categories.find(c => c.category_id === entry.category_id);
@@ -117,6 +137,7 @@ export function CaptureForm() {
           tags,
           mentions,
           category_id: categoryId,
+          entry_date: entryDate,
           status,
           due_date: dueDate,
         });
@@ -152,6 +173,7 @@ export function CaptureForm() {
           content,
           tags,
           mentions,
+          entry_date: entryDate,
           location_lat: latitude,
           location_lng: longitude,
           location_accuracy: accuracy,
@@ -446,6 +468,145 @@ export function CaptureForm() {
           className="w-full text-3xl font-semibold text-gray-900 placeholder-gray-300 focus:outline-none bg-transparent"
           disabled={isSubmitting}
         />
+      </div>
+
+      {/* Entry Date & Time - Below title */}
+      <div className="px-6 pb-3">
+        <div className="flex items-center gap-2 ml-10">
+          {/* Date */}
+          <button
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'date';
+              input.value = entryDate ? new Date(entryDate).toISOString().slice(0, 10) : '';
+              input.onchange = (e) => {
+                const target = e.target as HTMLInputElement;
+                if (target.value) {
+                  const date = new Date(entryDate || new Date());
+                  const [year, month, day] = target.value.split('-');
+                  date.setFullYear(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  setEntryDate(date.toISOString());
+                }
+              };
+              input.click();
+            }}
+            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            {entryDate ? new Date(entryDate).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            }) : 'Set date'}
+          </button>
+
+          {/* Time or Watch Icon */}
+          {includeTime ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'time';
+                  const date = new Date(entryDate);
+                  input.value = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+                  // Create overlay with backdrop
+                  const overlay = document.createElement('div');
+                  overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9998; display: flex; align-items: center; justify-content: center;';
+
+                  // Create modal container
+                  const modal = document.createElement('div');
+                  modal.style.cssText = 'background: white; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 16px;';
+
+                  // Add title
+                  const title = document.createElement('div');
+                  title.textContent = 'Select Time';
+                  title.style.cssText = 'font-size: 18px; font-weight: 600; color: #111827;';
+                  modal.appendChild(title);
+
+                  // Add time input
+                  const timeInput = document.createElement('input');
+                  timeInput.type = 'time';
+                  timeInput.value = input.value;
+                  timeInput.style.cssText = 'padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; width: 200px;';
+                  modal.appendChild(timeInput);
+
+                  // Add buttons container
+                  const buttonsContainer = document.createElement('div');
+                  buttonsContainer.style.cssText = 'display: flex; gap: 12px; justify-content: flex-end;';
+
+                  // Add Clear Time button
+                  const clearBtn = document.createElement('button');
+                  clearBtn.textContent = 'Clear Time';
+                  clearBtn.style.cssText = 'padding: 10px 20px; background: #fee2e2; color: #dc2626; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; transition: background 0.2s;';
+                  clearBtn.onmouseenter = () => clearBtn.style.background = '#fecaca';
+                  clearBtn.onmouseleave = () => clearBtn.style.background = '#fee2e2';
+                  clearBtn.onclick = () => {
+                    setIncludeTime(false);
+                    const date = new Date(entryDate);
+                    date.setMilliseconds(100); // Flag to hide time but remember it
+                    setEntryDate(date.toISOString());
+                    overlay.remove();
+                  };
+                  buttonsContainer.appendChild(clearBtn);
+
+                  // Add Set Time button
+                  const setBtn = document.createElement('button');
+                  setBtn.textContent = 'Set Time';
+                  setBtn.style.cssText = 'padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; transition: background 0.2s;';
+                  setBtn.onmouseenter = () => setBtn.style.background = '#1d4ed8';
+                  setBtn.onmouseleave = () => setBtn.style.background = '#2563eb';
+                  setBtn.onclick = () => {
+                    if (timeInput.value) {
+                      const [hours, minutes] = timeInput.value.split(':');
+                      const date = new Date(entryDate);
+                      date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                      date.setMilliseconds(0); // Set to 0 to show time
+                      setEntryDate(date.toISOString());
+                    }
+                    overlay.remove();
+                  };
+                  buttonsContainer.appendChild(setBtn);
+
+                  modal.appendChild(buttonsContainer);
+                  overlay.appendChild(modal);
+
+                  // Close on backdrop click
+                  overlay.onclick = (e) => {
+                    if (e.target === overlay) {
+                      overlay.remove();
+                    }
+                  };
+
+                  document.body.appendChild(overlay);
+                  setTimeout(() => timeInput.focus(), 100);
+                }}
+                className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                {entryDate ? new Date(entryDate).toLocaleTimeString(undefined, {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true
+                }) : 'Set time'}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setIncludeTime(true);
+                const date = new Date(entryDate);
+                date.setMilliseconds(0); // Set to 0 to show time again
+                setEntryDate(date.toISOString());
+              }}
+              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Add time"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                <path d="M12 6v6l4 2" strokeWidth={2} />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Editor Content Area */}

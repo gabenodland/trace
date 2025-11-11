@@ -6,7 +6,6 @@ import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
 import { NavigationProvider } from "./src/shared/contexts/NavigationContext";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
-import { FloatingActionButton } from "./src/components/navigation/FloatingActionButton";
 import { EntryScreen } from "./src/screens/EntryScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CategoriesScreen } from "./src/screens/CategoriesScreen";
@@ -37,11 +36,6 @@ function AuthGate() {
   const [activeTab, setActiveTab] = useState("inbox");
   const [navParams, setNavParams] = useState<Record<string, any>>({});
   const [dbInitialized, setDbInitialized] = useState(false);
-  // Track current list category for passing to new entries
-  const [currentListCategory, setCurrentListCategory] = useState<{
-    id: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
-    name: string;
-  }>({ id: null, name: "Inbox" });
 
   // Initialize database and sync when authenticated
   useEffect(() => {
@@ -101,33 +95,6 @@ function AuthGate() {
     setNavParams(params || {});
   };
 
-  // Handle FAB add action
-  const handleAddPress = () => {
-    const initialCategoryId = currentListCategory.id;
-    const initialCategoryName = currentListCategory.name;
-    let initialContent: string | undefined = undefined;
-
-    // If viewing a tag or mention, pre-populate content with that tag/mention
-    // Keep the categoryId as-is for navigation (cancel will return to tag view)
-    // CaptureForm will handle filtering out tag:xxx/mention:xxx when saving the entry
-    if (typeof currentListCategory.id === 'string') {
-      if (currentListCategory.id.startsWith('tag:')) {
-        const tag = currentListCategory.id.substring(4);
-        initialContent = `#${tag} `;
-      } else if (currentListCategory.id.startsWith('mention:')) {
-        const mention = currentListCategory.id.substring(8);
-        initialContent = `@${mention} `;
-      }
-    }
-
-    setNavParams({
-      initialCategoryId,
-      initialCategoryName,
-      initialContent,
-    });
-    setActiveTab("capture");
-  };
-
   // Render the active screen
   const renderScreen = () => {
     switch (activeTab) {
@@ -138,6 +105,8 @@ function AuthGate() {
             initialCategoryId={navParams.initialCategoryId}
             initialCategoryName={navParams.initialCategoryName}
             initialContent={navParams.initialContent}
+            initialDate={navParams.initialDate}
+            returnContext={navParams.returnContext}
           />
         );
       case "inbox":
@@ -145,13 +114,12 @@ function AuthGate() {
           <EntryListScreen
             returnCategoryId={navParams.returnCategoryId}
             returnCategoryName={navParams.returnCategoryName}
-            onCategoryChange={setCurrentListCategory}
           />
         );
       case "categories":
         return <CategoriesScreen />;
       case "calendar":
-        return <CalendarScreen />;
+        return <CalendarScreen returnDate={navParams.returnDate} />;
       case "tasks":
         return <TasksScreen />;
       case "profile":
@@ -163,7 +131,6 @@ function AuthGate() {
           <EntryListScreen
             returnCategoryId={navParams.returnCategoryId}
             returnCategoryName={navParams.returnCategoryName}
-            onCategoryChange={setCurrentListCategory}
           />
         );
     }
@@ -175,14 +142,6 @@ function AuthGate() {
       <View style={styles.appContainer}>
         {/* Active Screen */}
         {renderScreen()}
-
-        {/* Floating Action Button - Only show when NOT in capture or categories mode */}
-        {activeTab !== "capture" && activeTab !== "categories" && (
-          <FloatingActionButton
-            mode="add"
-            onAdd={handleAddPress}
-          />
-        )}
 
         <ExpoStatusBar style="dark" />
       </View>

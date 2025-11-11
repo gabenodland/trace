@@ -22,6 +22,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
       tags: data.tags || [],
       mentions: data.mentions || [],
       category_id: data.category_id || null,
+      entry_date: data.entry_date || null,
       location_lat: data.location_lat || null,
       location_lng: data.location_lng || null,
       location_name: data.location_name || null,

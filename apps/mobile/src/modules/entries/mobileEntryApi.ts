@@ -35,6 +35,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     status: data.status || 'none',
     due_date: data.due_date || null,
     completed_at: null,
+    entry_date: data.entry_date || new Date().toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     attachments: null,

@@ -6,6 +6,7 @@ import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
 import { EntryListItem } from "../modules/entries/components/EntryListItem";
+import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
 
 type TaskFilter = "all" | "incomplete" | "complete";
 type TaskGroup = {
@@ -91,6 +92,15 @@ export function TasksScreen() {
     } catch (error) {
       console.error("Failed to toggle task:", error);
     }
+  };
+
+  const handleAddEntry = () => {
+    navigate("capture", {
+      returnContext: {
+        screen: "tasks",
+        taskFilter: filter
+      }
+    });
   };
 
   if (isLoading) {
@@ -192,7 +202,13 @@ export function TasksScreen() {
                   <EntryListItem
                     key={entry.entry_id}
                     entry={entry}
-                    onPress={() => navigate("capture", { entryId: entry.entry_id })}
+                    onPress={() => navigate("capture", {
+                      entryId: entry.entry_id,
+                      returnContext: {
+                        screen: "tasks",
+                        taskFilter: filter
+                      }
+                    })}
                     onToggleComplete={handleToggleComplete}
                   />
                 ))}
@@ -201,6 +217,8 @@ export function TasksScreen() {
           </View>
         )}
       </ScrollView>
+
+      <FloatingActionButton onPress={handleAddEntry} />
     </View>
   );
 }

@@ -13,7 +13,7 @@ interface EntryListItemProps {
 
 export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onToggleComplete }: EntryListItemProps) {
   const preview = getPreviewText(entry.content, 100);
-  const dateStr = formatEntryDate(entry.updated_at);
+  const dateStr = formatEntryDate(entry.entry_date || entry.updated_at);
   const isATask = isTask(entry.status);
   const isOverdue = isTaskOverdue(entry.status, entry.due_date);
   const dueDateStr = formatDueDate(entry.due_date, entry.status);
