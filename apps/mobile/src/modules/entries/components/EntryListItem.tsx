@@ -1,19 +1,21 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import type { Entry } from "@trace/core";
-import { getPreviewText, formatEntryDate, isTask, formatDueDate, isTaskOverdue } from "@trace/core";
+import { getPreviewText, formatEntryDateTime, isTask, formatDueDate, isTaskOverdue } from "@trace/core";
 
 interface EntryListItemProps {
   entry: Entry;
   onPress: () => void;
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
+  onCategoryPress?: (categoryId: string, categoryName: string) => void;
   onToggleComplete?: (entryId: string, currentStatus: "incomplete" | "complete") => void;
+  categoryName?: string | null; // Category name to display
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onToggleComplete }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, categoryName }: EntryListItemProps) {
   const preview = getPreviewText(entry.content, 100);
-  const dateStr = formatEntryDate(entry.entry_date || entry.updated_at);
+  const dateStr = formatEntryDateTime(entry.entry_date || entry.updated_at);
   const isATask = isTask(entry.status);
   const isOverdue = isTaskOverdue(entry.status, entry.due_date);
   const dueDateStr = formatDueDate(entry.due_date, entry.status);
@@ -83,6 +85,28 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onTo
           {/* Metadata */}
           <View style={styles.metadata}>
             <Text style={styles.date}>{dateStr}</Text>
+
+            {/* Category Badge */}
+            <TouchableOpacity
+              style={styles.category}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (onCategoryPress) {
+                  // If entry has a category, use it; otherwise navigate to Inbox
+                  const categoryId = entry.category_id || null;
+                  // Extract just the node name (last segment of path) for title bar
+                  let displayName = "Inbox";
+                  if (categoryName) {
+                    const segments = categoryName.split("/");
+                    displayName = segments[segments.length - 1];
+                  }
+                  onCategoryPress(categoryId, displayName);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.categoryText}>📁 {categoryName || "Inbox"}</Text>
+            </TouchableOpacity>
 
             {/* Due Date Badge */}
             {dueDateStr && (
@@ -221,6 +245,17 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 12,
     color: "#9ca3af",
+  },
+  category: {
+    backgroundColor: "#f3e8ff",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  categoryText: {
+    fontSize: 11,
+    color: "#7c3aed",
+    fontWeight: "500",
   },
   tags: {
     flexDirection: "row",

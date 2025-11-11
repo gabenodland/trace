@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
+import { useCategories } from "../modules/categories/mobileCategoryHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
@@ -65,6 +66,9 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
 
   // Get all entries
   const { entries, isLoading } = useEntries({});
+
+  // Get categories for display
+  const { categories } = useCategories();
 
   // Calculate entry counts by date
   const entryCounts = useMemo(() => {
@@ -145,6 +149,11 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
   const handleMentionPress = (mention: string) => {
     // Navigate to inbox with mention filter
     navigate("inbox", { returnCategoryId: `mention:${mention}`, returnCategoryName: `@${mention}` });
+  };
+
+  const handleCategoryPress = (categoryId: string, categoryName: string) => {
+    // Navigate to inbox with category filter
+    navigate("inbox", { returnCategoryId: categoryId, returnCategoryName: categoryName });
   };
 
   const handlePrevMonth = () => {
@@ -411,6 +420,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
               onEntryPress={handleEntryPress}
               onTagPress={handleTagPress}
               onMentionPress={handleMentionPress}
+              categories={categories}
             />
           </View>
         )}
@@ -496,6 +506,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
               onEntryPress={handleEntryPress}
               onTagPress={handleTagPress}
               onMentionPress={handleMentionPress}
+              categories={categories}
             />
           </View>
         )}
@@ -554,6 +565,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           onTagPress={handleTagPress}
           onMentionPress={handleMentionPress}
           ListHeaderComponent={renderCalendarHeader}
+          categories={categories}
         />
       )}
 

@@ -110,6 +110,11 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     setSelectedCategoryName(mentionName);
   };
 
+  const handleCategoryPress = (categoryId: string, categoryName: string) => {
+    setSelectedCategoryId(categoryId);
+    setSelectedCategoryName(categoryName);
+  };
+
   const handleCategorySelect = (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people", categoryName: string) => {
     setSelectedCategoryId(categoryId);
     setSelectedCategoryName(categoryName);
@@ -133,6 +138,8 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         onEntryPress={handleEntryPress}
         onTagPress={handleTagPress}
         onMentionPress={handleMentionPress}
+        onCategoryPress={handleCategoryPress}
+        categories={categories}
       />
 
       {/* Category Navigator Dropdown */}

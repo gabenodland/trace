@@ -47,11 +47,20 @@ export function extractTagsAndMentions(content: string): {
 
 /**
  * Strip HTML tags from content to get plain text
- * Simple implementation - for preview/search purposes
+ * Adds spacing between block elements to prevent text from jamming together
  */
 export function stripHtml(htmlContent: string): string {
-  // Remove HTML tags
-  let text = htmlContent.replace(/<[^>]*>/g, "");
+  // Replace block-level elements with newlines before stripping tags
+  let text = htmlContent
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/h[1-6]>/gi, "\n\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<\/tr>/gi, "\n");
+
+  // Remove all remaining HTML tags
+  text = text.replace(/<[^>]*>/g, "");
 
   // Decode common HTML entities
   text = text
@@ -61,6 +70,15 @@ export function stripHtml(htmlContent: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'");
+
+  // Normalize whitespace: replace multiple consecutive newlines with max 2
+  text = text.replace(/\n{3,}/g, "\n\n");
+
+  // Trim leading/trailing whitespace from each line
+  text = text
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n");
 
   return text.trim();
 }
@@ -130,6 +148,59 @@ export function formatEntryDate(dateString: string): string {
   }
 
   return `Last edited ${timeStr}`;
+}
+
+/**
+ * Format entry date/time for display
+ * Shows date + time with AM/PM, or just date if time is hidden (milliseconds === 100)
+ */
+export function formatEntryDateTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const milliseconds = date.getMilliseconds();
+  const hideTime = milliseconds === 100;
+
+  // Check if it's today, yesterday, or another day
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate();
+
+  // Format date part
+  let dateStr = "";
+  if (isToday) {
+    dateStr = "Today";
+  } else if (isYesterday) {
+    dateStr = "Yesterday";
+  } else {
+    dateStr = date.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+    });
+  }
+
+  // If time is hidden, return just the date
+  if (hideTime) {
+    return dateStr;
+  }
+
+  // Format time part (12-hour with AM/PM)
+  const timeStr = date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  return `${dateStr} ${timeStr}`;
 }
 
 /**
