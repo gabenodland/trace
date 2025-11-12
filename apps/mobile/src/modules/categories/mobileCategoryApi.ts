@@ -3,6 +3,7 @@
  * Saves to SQLite immediately, syncs to Supabase in background
  */
 
+import * as Crypto from 'expo-crypto';
 import { localDB } from '../../shared/db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
 import type { CategoryWithPath, CategoryTree } from '@trace/core';
@@ -35,7 +36,7 @@ export async function createCategory(data: {
   if (!user) throw new Error('Not authenticated');
 
   // Generate ID
-  const category_id = crypto.randomUUID();
+  const category_id = Crypto.randomUUID();
 
   // Calculate full_path and depth
   let full_path = data.name;
@@ -81,6 +82,7 @@ export async function updateCategory(
   categoryId: string,
   data: {
     name?: string;
+    parent_category_id?: string | null;
     color?: string | null;
     icon?: string | null;
   }
@@ -93,17 +95,26 @@ export async function updateCategory(
     ...data,
   };
 
-  // If name changed, recalculate full_path
-  if (data.name && data.name !== existing.name) {
-    if (existing.parent_category_id) {
-      const parent = await localDB.getCategory(existing.parent_category_id);
+  // If parent changed or name changed, recalculate full_path and depth
+  const parentChanged = data.parent_category_id !== undefined && data.parent_category_id !== existing.parent_category_id;
+  const nameChanged = data.name && data.name !== existing.name;
+
+  if (parentChanged || nameChanged) {
+    const newParentId = data.parent_category_id !== undefined ? data.parent_category_id : existing.parent_category_id;
+    const newName = data.name || existing.name;
+
+    if (newParentId) {
+      const parent = await localDB.getCategory(newParentId);
       if (parent) {
-        updated.full_path = `${parent.full_path} / ${data.name}`;
+        updated.full_path = `${parent.full_path} / ${newName}`;
+        updated.depth = parent.depth + 1;
       } else {
-        updated.full_path = data.name;
+        updated.full_path = newName;
+        updated.depth = 0;
       }
     } else {
-      updated.full_path = data.name;
+      updated.full_path = newName;
+      updated.depth = 0;
     }
   }
 

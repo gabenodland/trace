@@ -1,12 +1,13 @@
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from "react-native";
+import React from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
-import { useState } from "react";
 import type { Entry } from "@trace/core";
 import { formatEntryDateTime, formatRelativeTime, isTask, formatDueDate, isTaskOverdue } from "@trace/core";
 import { getFormattedContent, getDisplayModeLines } from "../helpers/entryDisplayHelpers";
 import type { EntryDisplayMode } from "../types/EntryDisplayMode";
 import { HtmlRenderer } from "../helpers/htmlRenderer";
 import { theme } from "../../../shared/theme/theme";
+import { DropdownMenu, type DropdownMenuItem } from "../../../components/layout/DropdownMenu";
 
 interface EntryListItemProps {
   entry: Entry;
@@ -19,10 +20,12 @@ interface EntryListItemProps {
   onDelete?: (entryId: string) => void;
   categoryName?: string | null; // Category name to display
   displayMode?: EntryDisplayMode; // Display mode for content rendering
+  showMenu?: boolean; // Whether menu is shown for this entry
+  onMenuToggle?: () => void; // Toggle menu visibility
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, categoryName, displayMode = 'smashed' }: EntryListItemProps) {
-  const [showMenu, setShowMenu] = useState(false);
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, categoryName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
+  const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
 
   // Format content based on display mode
   const formattedContent = getFormattedContent(entry.content, displayMode);
@@ -45,22 +48,30 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
 
   const handleMenuPress = (e: any) => {
     e.stopPropagation();
-    setShowMenu(true);
+    // Capture the touch position
+    setMenuPosition({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
+    onMenuToggle?.();
   };
 
-  const handleMovePress = () => {
-    setShowMenu(false);
-    if (onMove) {
-      onMove(entry.entry_id);
-    }
-  };
-
-  const handleDeletePress = () => {
-    setShowMenu(false);
-    if (onDelete) {
-      onDelete(entry.entry_id);
-    }
-  };
+  const menuItems: DropdownMenuItem[] = [
+    {
+      label: "Move",
+      onPress: () => {
+        if (onMove) {
+          onMove(entry.entry_id);
+        }
+      },
+    },
+    {
+      label: "Delete",
+      onPress: () => {
+        if (onDelete) {
+          onDelete(entry.entry_id);
+        }
+      },
+      isDanger: true,
+    },
+  ];
 
   return (
     <TouchableOpacity
@@ -99,11 +110,19 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
             activeOpacity={0.7}
           >
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-              <Circle cx={12} cy={6} r={1.5} fill={theme.colors.text.tertiary} />
-              <Circle cx={12} cy={12} r={1.5} fill={theme.colors.text.tertiary} />
-              <Circle cx={12} cy={18} r={1.5} fill={theme.colors.text.tertiary} />
+              <Circle cx={12} cy={6} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
+              <Circle cx={12} cy={12} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
+              <Circle cx={12} cy={18} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
             </Svg>
           </TouchableOpacity>
+
+          {/* Dropdown menu modal */}
+          <DropdownMenu
+            visible={showMenu}
+            onClose={() => onMenuToggle?.()}
+            items={menuItems}
+            anchorPosition={menuPosition}
+          />
           {/* Title or Preview based on display mode */}
           {entry.title ? (
             <>
@@ -253,46 +272,6 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
           </View>
         </View>
       </View>
-
-      {/* Menu Modal */}
-      <Modal
-        visible={showMenu}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowMenu(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowMenu(false)}
-        >
-          <View style={styles.menuContainer}>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={handleMovePress}
-              activeOpacity={0.7}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-                <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-              <Text style={styles.menuItemText}>Move</Text>
-            </TouchableOpacity>
-
-            <View style={styles.menuDivider} />
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={handleDeletePress}
-              activeOpacity={0.7}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-                <Path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-              <Text style={styles.menuItemText}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </TouchableOpacity>
   );
 }
@@ -445,36 +424,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     right: 0,
-    padding: theme.spacing.xs,
+    padding: 6,
     zIndex: 10,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  menuContainer: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.sm,
-    minWidth: 180,
-    ...theme.shadows.md,
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.md,
-    padding: theme.spacing.lg,
-  },
-  menuItemText: {
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeight.medium,
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: theme.colors.border.light,
-    marginVertical: theme.spacing.xs,
   },
 });

@@ -595,6 +595,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     // Calculate entry_count dynamically by counting entries (excluding deleted)
+    // Exclude categories marked for deletion
     const rows = await this.db.getAllAsync<any>(`
       SELECT
         c.*,
@@ -602,6 +603,7 @@ class LocalDatabase {
       FROM categories c
       LEFT JOIN entries e ON c.category_id = e.category_id
         AND (e.deleted_at IS NULL OR e.deleted_at = '')
+      WHERE c.sync_action IS NULL OR c.sync_action != 'delete'
       GROUP BY c.category_id
       ORDER BY c.full_path
     `);
@@ -683,6 +685,8 @@ class LocalDatabase {
       `UPDATE categories SET
         name = ?,
         full_path = ?,
+        parent_category_id = ?,
+        depth = ?,
         color = ?,
         icon = ?,
         updated_at = ?,
@@ -692,6 +696,8 @@ class LocalDatabase {
       [
         updates.name,
         updates.full_path,
+        updates.parent_category_id !== undefined ? updates.parent_category_id : null,
+        updates.depth !== undefined ? updates.depth : 0,
         updates.color || null,
         updates.icon || null,
         updatedAt,
@@ -709,7 +715,29 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Mark for deletion
+    // Get the category to find its parent
+    const category = await this.getCategory(categoryId);
+    if (!category) return;
+
+    const parentCategoryId = category.parent_category_id;
+
+    // Move all entries in this category to the parent category (or uncategorized if no parent)
+    await this.db.runAsync(
+      `UPDATE entries
+       SET category_id = ?, synced = 0
+       WHERE category_id = ?`,
+      [parentCategoryId, categoryId]
+    );
+
+    // Move all child categories to the parent category
+    await this.db.runAsync(
+      `UPDATE categories
+       SET parent_category_id = ?, synced = 0
+       WHERE parent_category_id = ?`,
+      [parentCategoryId, categoryId]
+    );
+
+    // Mark category for deletion
     await this.db.runAsync(
       `UPDATE categories SET synced = 0, sync_action = 'delete' WHERE category_id = ?`,
       [categoryId]

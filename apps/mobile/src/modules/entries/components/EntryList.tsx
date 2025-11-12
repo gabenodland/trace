@@ -1,4 +1,5 @@
 import { View, Text, FlatList, StyleSheet, ActivityIndicator } from "react-native";
+import { useState } from "react";
 import type { Entry } from "@trace/core";
 import { EntryListItem } from "./EntryListItem";
 
@@ -25,6 +26,8 @@ interface EntryListProps {
 }
 
 export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, onMove, onDelete, ListHeaderComponent, categories, displayMode }: EntryListProps) {
+  const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
+
   // Create a lookup map for categories (using full_path)
   const categoryMap = categories?.reduce((map, cat) => {
     map[cat.category_id] = cat.full_path;
@@ -55,6 +58,8 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
             onDelete={onDelete}
             categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
             displayMode={displayMode}
+            showMenu={openMenuEntryId === item.entry_id}
+            onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -94,6 +99,8 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
           onDelete={onDelete}
           categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
           displayMode={displayMode}
+          showMenu={openMenuEntryId === item.entry_id}
+          onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}
         />
       )}
       contentContainerStyle={styles.listContent}

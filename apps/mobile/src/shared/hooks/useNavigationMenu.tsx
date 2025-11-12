@@ -8,7 +8,7 @@ export function useNavigationMenu() {
 
   const menuItems = [
     {
-      label: "Uncategorized",
+      label: "Entries",
       onPress: () => navigate("inbox"),
       icon: (
         <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
