@@ -12,6 +12,8 @@ import { TopBar } from "../../../components/layout/TopBar";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdownContainer";
 import Svg, { Path, Circle, Line } from "react-native-svg";
+import { theme } from "../../../shared/theme/theme";
+import { SimpleDatePicker } from "./SimpleDatePicker";
 
 import type { ReturnContext } from "../../../screens/EntryScreen";
 
@@ -43,7 +45,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         initialCategoryId === "events" || initialCategoryId === "categories" ||
         initialCategoryId === "tags" || initialCategoryId === "people" ||
         initialCategoryId.startsWith("tag:") || initialCategoryId.startsWith("mention:")) {
-      return null; // Default to Inbox for filters
+      return null; // Default to Uncategorized for filters
     }
     return initialCategoryId;
   };
@@ -207,7 +209,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         setOriginalCategoryName(category?.name || null);
       } else {
         setCategoryName(null);
-        // Store original category (Inbox) for cancel navigation
+        // Store original category (Uncategorized) for cancel navigation
         setOriginalCategoryId(null);
         setOriginalCategoryName(null);
       }
@@ -342,7 +344,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       } else if (returnContext.screen === "inbox") {
         navigate("inbox", {
           returnCategoryId: returnContext.categoryId || null,
-          returnCategoryName: returnContext.categoryName || "Inbox"
+          returnCategoryName: returnContext.categoryName || "Uncategorized"
         });
         return;
       }
@@ -350,7 +352,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
     // Default: go to inbox with original category (for edited entries) or current category
     const returnCategoryId = isEditing ? originalCategoryId : (categoryId || null);
-    const returnCategoryName = isEditing ? originalCategoryName : (categoryName || "Inbox");
+    const returnCategoryName = isEditing ? originalCategoryName : (categoryName || "Uncategorized");
     navigate("inbox", { returnCategoryId, returnCategoryName });
   };
 
@@ -413,17 +415,17 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
       // Navigate back to inbox with the category that was set
       // This ensures the list shows the category where the entry was saved
-      // If category is a filter (all, tasks, etc.), default to Inbox
+      // If category is a filter (all, tasks, etc.), default to Uncategorized
       let returnCategoryId: string | null = categoryId || null;
-      let returnCategoryName: string = categoryName || "Inbox";
+      let returnCategoryName: string = categoryName || "Uncategorized";
 
-      // Edge case: If returning to a filter view, switch to Inbox instead
+      // Edge case: If returning to a filter view, switch to Uncategorized instead
       if (returnCategoryId === "all" || returnCategoryId === "tasks" ||
           returnCategoryId === "events" || returnCategoryId === "categories" ||
           returnCategoryId === "tags" || returnCategoryId === "people" ||
           (typeof returnCategoryId === 'string' && (returnCategoryId.startsWith("tag:") || returnCategoryId.startsWith("mention:")))) {
         returnCategoryId = null;
-        returnCategoryName = "Inbox";
+        returnCategoryName = "Uncategorized";
       }
 
       // Navigate back based on returnContext
@@ -440,7 +442,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         } else if (returnContext.screen === "inbox") {
           navigate("inbox", {
             returnCategoryId: returnContext.categoryId || null,
-            returnCategoryName: returnContext.categoryName || "Inbox"
+            returnCategoryName: returnContext.categoryName || "Uncategorized"
           });
           return;
         }
@@ -496,7 +498,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       <View style={[styles.container, styles.loadingContainer]}>
         <Text style={styles.errorText}>Entry not found</Text>
         <TouchableOpacity onPress={() => navigate("inbox")} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back to Inbox</Text>
+          <Text style={styles.backButtonText}>Back to Uncategorized</Text>
         </TouchableOpacity>
       </View>
     );
@@ -516,7 +518,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             }
           }}
         >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={captureLocation ? "#2563eb" : "#6b7280"} strokeWidth={2}>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={captureLocation ? theme.colors.text.primary : theme.colors.text.disabled} strokeWidth={2}>
             <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
             <Circle
               cx={12}
@@ -524,26 +526,30 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               r={3}
               fill={
                 locationData.lat && locationData.lng
-                  ? (captureLocation ? "#2563eb" : "#6b7280")  // Has location: solid
-                  : (captureLocation && locationIconBlink ? "#2563eb" : "none")  // Loading: blinking
+                  ? (captureLocation ? theme.colors.text.primary : theme.colors.text.disabled)  // Has location: solid
+                  : (captureLocation && locationIconBlink ? theme.colors.text.primary : "none")  // Loading: blinking
               }
             />
           </Svg>
           <Text style={[styles.topBarButtonText, captureLocation && styles.topBarButtonTextActive]}>
-            Location
+            {captureLocation ? "GPS" : "None"}
           </Text>
         </TouchableOpacity>
 
         {/* Category Button */}
         <TouchableOpacity
-          style={[styles.topBarButton, categoryId && styles.topBarButtonActive]}
-          onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+          style={[styles.topBarButton, styles.topBarButtonActive]}
+          onPress={() => {
+            editorRef.current?.blur(); // Blur editor first
+            Keyboard.dismiss(); // Dismiss keyboard before opening picker
+            setTimeout(() => setShowCategoryPicker(!showCategoryPicker), 100); // Small delay to ensure keyboard is dismissed
+          }}
         >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={categoryId ? "#2563eb" : "#6b7280"} strokeWidth={2}>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
             <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={[styles.topBarButtonText, categoryId && styles.topBarButtonTextActive]}>
-            {categoryName || "Inbox"}
+          <Text style={[styles.topBarButtonText, styles.topBarButtonTextActive]}>
+            {categoryName || "Uncategorized"}
           </Text>
         </TouchableOpacity>
 
@@ -568,22 +574,23 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
                 cx="12"
                 cy="12"
                 r="10"
-                stroke={status === "complete" ? "#10b981" : "#3b82f6"}
+                stroke={theme.colors.text.primary}
                 strokeWidth={2}
-                fill={status === "complete" ? "#10b981" : "none"}
+                fill={status === "complete" ? theme.colors.text.primary : "none"}
               />
               {status === "complete" && (
                 <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
               )}
             </Svg>
           ) : (
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
               <Path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           )}
           <Text
             style={[
               styles.topBarButtonText,
+              status === "none" && styles.topBarButtonTextActive,
               status === "incomplete" && styles.topBarButtonTaskText,
               status === "complete" && styles.topBarButtonCompleteText
             ]}
@@ -596,11 +603,15 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         <TouchableOpacity
           style={[styles.topBarButton, dueDate && styles.topBarButtonDue]}
           onPress={() => {
-            setShowDatePicker(!showDatePicker);
-            if (!isEditMode) enterEditMode();
+            editorRef.current?.blur(); // Blur editor first
+            Keyboard.dismiss(); // Dismiss keyboard before opening picker
+            setTimeout(() => {
+              setShowDatePicker(!showDatePicker);
+              if (!isEditMode) enterEditMode();
+            }, 100); // Small delay to ensure keyboard is dismissed
           }}
         >
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dueDate ? "#f97316" : "#6b7280"} strokeWidth={2}>
+          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dueDate ? theme.colors.text.primary : theme.colors.text.disabled} strokeWidth={2}>
             <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
             <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
             <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
@@ -616,15 +627,17 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       <View style={styles.contentContainer}>
         {/* Title Input - Collapsible */}
         {shouldCollapse ? (
-          <TouchableOpacity
-            style={styles.titleCollapsed}
-            onPress={() => {
-              setIsTitleExpanded(true);
-              setTimeout(() => titleInputRef.current?.focus(), 100);
-            }}
-          >
-            <View style={styles.titlePlaceholderLine} />
-          </TouchableOpacity>
+          isEditMode ? (
+            <TouchableOpacity
+              style={styles.titleCollapsed}
+              onPress={() => {
+                setIsTitleExpanded(true);
+                setTimeout(() => titleInputRef.current?.focus(), 100);
+              }}
+            >
+              <Text style={styles.titlePlaceholder}>Add Title</Text>
+            </TouchableOpacity>
+          ) : null
         ) : (
           <View style={styles.titleContainer}>
             <TextInput
@@ -798,13 +811,13 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               disabled={isSubmitting}
               style={[styles.deleteButton, isSubmitting && styles.buttonDisabled]}
             >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
                 <Path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             </TouchableOpacity>
           )}
 
-          {/* Cancel Button (Red X) */}
+          {/* Cancel/Back Button - Back arrow in view mode, X in edit mode */}
           <TouchableOpacity
             onPress={() => {
               // Navigate back to the appropriate category (or filter view like tag:xxx, mention:xxx)
@@ -825,7 +838,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
                 } else if (returnContext.screen === "inbox") {
                   navigate("inbox", {
                     returnCategoryId: returnContext.categoryId || null,
-                    returnCategoryName: returnContext.categoryName || "Inbox"
+                    returnCategoryName: returnContext.categoryName || "Uncategorized"
                   });
                   return;
                 }
@@ -834,30 +847,36 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               if (isEditing) {
                 // For editing: return to entry's original category
                 returnCategoryId = originalCategoryId;
-                returnCategoryName = originalCategoryName || "Inbox";
+                returnCategoryName = originalCategoryName || "Uncategorized";
               } else {
                 // For new entries: return to the list category/filter we came from
                 returnCategoryId = initialCategoryId || null;
-                returnCategoryName = initialCategoryName || "Inbox";
+                returnCategoryName = initialCategoryName || "Uncategorized";
               }
 
               navigate("inbox", { returnCategoryId, returnCategoryName });
             }}
             style={styles.cancelButton}
           >
-            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
-              <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            {isEditMode ? (
+              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
+                <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            ) : (
+              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            )}
           </TouchableOpacity>
 
-          {/* Edit/Save Button - Blue pencil in read-only, green check in edit mode */}
+          {/* Edit/Save Button - Pencil in read-only, check in edit mode */}
           {isEditMode ? (
             <TouchableOpacity
               onPress={handleSave}
               disabled={isSubmitting}
               style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
             >
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
+              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
                 <Path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             </TouchableOpacity>
@@ -866,7 +885,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               onPress={enterEditMode}
               style={styles.editButton}
             >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
                 <Path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             </TouchableOpacity>
@@ -893,68 +912,22 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         />
       </TopBarDropdownContainer>
 
-      {/* Date Picker Modal */}
+      {/* Date Picker Dropdown */}
       <TopBarDropdownContainer
         visible={showDatePicker}
         onClose={() => setShowDatePicker(false)}
       >
-        <View style={styles.datePickerContainer}>
-          <Text style={styles.datePickerTitle}>Set Due Date</Text>
-
-          {/* Quick Action Buttons */}
-          <TouchableOpacity
-            style={styles.datePickerButton}
-            onPress={() => {
-              const today = new Date();
-              today.setHours(12, 0, 0, 0);
-              setDueDate(today.toISOString());
-              setShowDatePicker(false);
-            }}
-          >
-            <Text style={styles.datePickerButtonText}>Today</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.datePickerButton}
-            onPress={() => {
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              tomorrow.setHours(12, 0, 0, 0);
-              setDueDate(tomorrow.toISOString());
-              setShowDatePicker(false);
-            }}
-          >
-            <Text style={styles.datePickerButtonText}>Tomorrow</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.datePickerButton}
-            onPress={() => {
-              const nextWeek = new Date();
-              nextWeek.setDate(nextWeek.getDate() + 7);
-              nextWeek.setHours(12, 0, 0, 0);
-              setDueDate(nextWeek.toISOString());
-              setShowDatePicker(false);
-            }}
-          >
-            <Text style={styles.datePickerButtonText}>Next Week</Text>
-          </TouchableOpacity>
-
-          {/* Remove Due Date */}
-          {dueDate && (
-            <TouchableOpacity
-              style={[styles.datePickerButton, styles.datePickerButtonDanger]}
-              onPress={() => {
-                setDueDate(null);
-                setShowDatePicker(false);
-              }}
-            >
-              <Text style={[styles.datePickerButtonText, styles.datePickerButtonDangerText]}>
-                Remove Due Date
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <SimpleDatePicker
+          value={dueDate ? new Date(dueDate) : null}
+          onChange={(date) => {
+            if (date) {
+              setDueDate(date.toISOString());
+            } else {
+              setDueDate(null);
+            }
+          }}
+          onClose={() => setShowDatePicker(false)}
+        />
       </TopBarDropdownContainer>
 
       {/* Time Picker Modal */}
@@ -1075,37 +1048,35 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: "#f9fafb",
   },
   topBarButtonActive: {
-    backgroundColor: "#dbeafe",
+    // No background color - active state shown via icon/text color
   },
   topBarButtonText: {
     fontSize: 14,
-    color: "#6b7280",
+    color: theme.colors.text.disabled,
     fontWeight: "500",
   },
   topBarButtonTextActive: {
-    color: "#2563eb",
+    color: theme.colors.text.primary,
   },
   topBarButtonTask: {
-    backgroundColor: "#dbeafe",
+    // No background color
   },
   topBarButtonTaskText: {
-    color: "#3b82f6",
+    color: theme.colors.text.primary,
   },
   topBarButtonComplete: {
-    backgroundColor: "#d1fae5",
+    // No background color
   },
   topBarButtonCompleteText: {
-    color: "#10b981",
+    color: theme.colors.text.primary,
   },
   topBarButtonDue: {
-    backgroundColor: "#ffedd5",
+    // No background color
   },
   topBarButtonDueText: {
-    color: "#f97316",
+    color: theme.colors.text.primary,
   },
   contentContainer: {
     flex: 1,
@@ -1120,11 +1091,10 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 2,
   },
-  titlePlaceholderLine: {
-    width: 170,
-    height: 2,
-    backgroundColor: "#d1d5db",
-    borderRadius: 1,
+  titlePlaceholder: {
+    fontSize: 16,
+    color: theme.colors.text.disabled,
+    fontWeight: "400",
   },
   titleInput: {
     fontSize: 24,
@@ -1187,71 +1157,33 @@ const styles = StyleSheet.create({
     backgroundColor: "#dbeafe",
   },
   deleteButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#f97316",
+    padding: theme.spacing.sm,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
+    marginLeft: theme.spacing.sm,
   },
   cancelButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#ef4444",
+    padding: theme.spacing.sm,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
+    marginLeft: theme.spacing.sm,
   },
   buttonDisabled: {
-    opacity: 0.5,
+    opacity: 0.3,
   },
   saveButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#10b981",
+    padding: theme.spacing.sm,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
+    marginLeft: theme.spacing.sm,
   },
   saveButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.3,
   },
   editButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#3b82f6",
+    padding: theme.spacing.sm,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
-  },
-  datePickerContainer: {
-    padding: 16,
-  },
-  datePickerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 16,
-  },
-  datePickerButton: {
-    padding: 16,
-    backgroundColor: "#f9fafb",
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  datePickerButtonText: {
-    fontSize: 16,
-    color: "#374151",
-    fontWeight: "500",
-  },
-  datePickerButtonDanger: {
-    backgroundColor: "#fee2e2",
-  },
-  datePickerButtonDangerText: {
-    color: "#dc2626",
+    marginLeft: theme.spacing.sm,
   },
 });

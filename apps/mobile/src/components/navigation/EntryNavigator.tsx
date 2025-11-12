@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { useEntries, useTags, useMentions } from "../../modules/entries/mobileEntryHooks";
 import { useCategories } from "../../modules/categories/mobileCategoryHooks";
 import Svg, { Path } from "react-native-svg";
 import { CategoryTree as CategoryTreeComponent } from "../../modules/categories/components/CategoryTree";
 import { TagList } from "../../modules/entries/components/TagList";
 import { PeopleList } from "../../modules/entries/components/PeopleList";
+import { theme } from "../../shared/theme/theme";
 
 interface EntryNavigatorProps {
   visible: boolean;
@@ -14,115 +15,80 @@ interface EntryNavigatorProps {
   selectedCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
 }
 
-interface SpecialItem {
-  id: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
-  name: string;
-  icon: (selected: boolean) => React.ReactElement;
-}
+type SegmentType = "categories" | "tags" | "mentions";
 
 export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId }: EntryNavigatorProps) {
   const { categories, categoryTree, isLoading } = useCategories();
   const { tags, isLoading: isLoadingTags } = useTags();
   const { mentions, isLoading: isLoadingMentions } = useMentions();
   const [searchQuery, setSearchQuery] = useState("");
-  const [isAllCategoriesExpanded, setIsAllCategoriesExpanded] = useState(false);
-  const [isAllTagsExpanded, setIsAllTagsExpanded] = useState(false);
-  const [isAllPeopleExpanded, setIsAllPeopleExpanded] = useState(false);
+  const [selectedSegment, setSelectedSegment] = useState<SegmentType>("categories");
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Get entry counts
-  const { entries: inboxEntries } = useEntries({ category_id: null });
+  const { entries: uncategorizedEntries } = useEntries({ category_id: null });
+  const uncategorizedCount = uncategorizedEntries.length;
   const { entries: allEntries } = useEntries({});
+  const allEntriesCount = allEntries.length;
 
-  const allCount = allEntries.length;
-  const inboxCount = inboxEntries.length;
-  const categoriesCount = allEntries.filter(e => e.category_id !== null).length;
+  // Set correct tab and scroll to selected when modal first opens
+  useEffect(() => {
+    if (visible) {
+      // Determine which tab to show based on selectedCategoryId (only on first open)
+      if (typeof selectedCategoryId === 'string') {
+        if (selectedCategoryId.startsWith('tag:')) {
+          setSelectedSegment('tags');
+        } else if (selectedCategoryId.startsWith('mention:')) {
+          setSelectedSegment('mentions');
+        } else {
+          setSelectedSegment('categories');
+        }
+      } else {
+        setSelectedSegment('categories');
+      }
 
-  // Define special navigation items (Inbox, Tasks, Events) - ordered before All
-  const nonAllItems: SpecialItem[] = useMemo(() => [
-    {
-      id: null,
-      name: "Inbox",
-      icon: (selected: boolean) => (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-          <Path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      ),
-    },
-    {
-      id: "tasks",
-      name: "Tasks",
-      icon: (selected: boolean) => (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-          <Path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      ),
-    },
-    {
-      id: "events",
-      name: "Events",
-      icon: (selected: boolean) => (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-          <Path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      ),
-    },
-  ], []);
+      // Scroll to selected item after a brief delay
+      setTimeout(() => {
+        if (scrollViewRef.current && selectedCategoryId) {
+          // Estimate scroll position based on item height (~60px per item)
+          const itemHeight = 60;
+          let scrollOffset = 0;
 
-  // All items for searching (includes: All, Inbox, Tasks, Events, Categories, Tags, People)
-  const allSpecialItems: SpecialItem[] = useMemo(() => [
-    {
-      id: "all",
-      name: "All",
-      icon: (selected: boolean) => (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-          <Path d="M4 6h16M4 10h16M4 14h16M4 18h16" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      ),
-    },
-    ...nonAllItems,
-    {
-      id: "categories",
-      name: "Categories",
-      icon: (selected: boolean) => (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-          <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      ),
-    },
-    {
-      id: "tags",
-      name: "Tags",
-      icon: (selected: boolean) => (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-          <Path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      ),
-    },
-    {
-      id: "people",
-      name: "People",
-      icon: (selected: boolean) => (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-          <Path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      ),
-    },
-  ], [nonAllItems]);
+          if (selectedSegment === 'categories') {
+            // Find index in category tree
+            const flatCategories = [{ category_id: 'all' }, { category_id: null }, ...categories];
+            const index = flatCategories.findIndex(c => c.category_id === selectedCategoryId);
+            if (index >= 0) {
+              scrollOffset = index * itemHeight;
+            }
+          } else if (selectedSegment === 'tags' && typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('tag:')) {
+            const tag = selectedCategoryId.substring(4);
+            const index = tags.findIndex(t => t.tag === tag);
+            if (index >= 0) {
+              scrollOffset = index * itemHeight;
+            }
+          } else if (selectedSegment === 'mentions' && typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('mention:')) {
+            const mention = selectedCategoryId.substring(8);
+            const index = mentions.findIndex(m => m.mention === mention);
+            if (index >= 0) {
+              scrollOffset = index * itemHeight;
+            }
+          }
 
-  // Filter special items, categories, tags, and mentions based on search query
-  const filteredSpecialItems = useMemo(() =>
-    allSpecialItems.filter((item) =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    ),
-    [allSpecialItems, searchQuery]
-  );
+          scrollViewRef.current.scrollTo({ y: scrollOffset, animated: true });
+        }
+      }, 100);
+    }
+  }, [visible]); // Only run when visible changes
 
-  const filteredCategories = useMemo(() =>
-    categories.filter((category) =>
+  // Filter categories, tags, and mentions based on search query
+  // When searching, search all types globally (ignore selectedSegment)
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery) return [];
+    return categories.filter((category) =>
       category.display_path.toLowerCase().includes(searchQuery.toLowerCase())
-    ),
-    [categories, searchQuery]
-  );
+    );
+  }, [categories, searchQuery]);
 
   // Filter tags - match tag name or #tag format
   const filteredTags = useMemo(() => {
@@ -146,7 +112,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
     );
   }, [mentions, searchQuery]);
 
-  const handleSelect = (categoryId: string | null | "all" | "tasks" | "events" | "all-tags" | "all-people", categoryName: string) => {
+  const handleSelect = (categoryId: string | null, categoryName: string) => {
     onSelect(categoryId, categoryName);
     setSearchQuery("");
     onClose();
@@ -160,131 +126,152 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
   return (
     <View style={styles.container}>
       {/* Search Input */}
-          <View style={styles.searchContainer}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2} style={styles.searchIcon}>
-              <Path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" />
+      <View style={styles.searchContainer}>
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2} style={styles.searchIcon}>
+          <Path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+        <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search all..."
+          placeholderTextColor="#9ca3af"
+          style={styles.searchInput}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearSearch}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+              <Path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search..."
-              placeholderTextColor="#9ca3af"
-              style={styles.searchInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearSearch}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
-                  <Path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </TouchableOpacity>
-            )}
-          </View>
+          </TouchableOpacity>
+        )}
+      </View>
 
-          {/* Content */}
-          <ScrollView
-            style={styles.content}
-            contentContainerStyle={styles.contentContainer}
-            showsVerticalScrollIndicator={true}
-            nestedScrollEnabled={true}
-            bounces={false}
-          >
-            {searchQuery === "" ? (
+      {/* Segmented Control - Hide when searching */}
+      {!searchQuery && (
+        <View style={styles.segmentedControl}>
+        <TouchableOpacity
+          style={[
+            styles.segment,
+            selectedSegment === "categories" && styles.segmentActive
+          ]}
+          onPress={() => {
+            setSelectedSegment("categories");
+            setSearchQuery("");
+          }}
+        >
+          <Text style={[
+            styles.segmentText,
+            selectedSegment === "categories" && styles.segmentTextActive
+          ]}>
+            Categories
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.segment,
+            selectedSegment === "tags" && styles.segmentActive
+          ]}
+          onPress={() => {
+            setSelectedSegment("tags");
+            setSearchQuery("");
+          }}
+        >
+          <Text style={[
+            styles.segmentText,
+            selectedSegment === "tags" && styles.segmentTextActive
+          ]}>
+            Tags
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.segment,
+            selectedSegment === "mentions" && styles.segmentActive
+          ]}
+          onPress={() => {
+            setSelectedSegment("mentions");
+            setSearchQuery("");
+          }}
+        >
+          <Text style={[
+            styles.segmentText,
+            selectedSegment === "mentions" && styles.segmentTextActive
+          ]}>
+            Mentions
+          </Text>
+        </TouchableOpacity>
+      </View>
+      )}
+
+      {/* Content */}
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={true}
+        nestedScrollEnabled={true}
+        bounces={false}
+      >
+        {searchQuery === "" ? (
+          <>
+            {/* Categories View */}
+            {selectedSegment === "categories" && (
               <>
-                {/* "All" Item - Top level, shows all entries */}
-                <TouchableOpacity
-                  style={[
-                    styles.categoryItem,
-                    selectedCategoryId === "all" && styles.categoryItemSelected,
-                  ]}
-                  onPress={() => handleSelect("all", "All")}
-                >
-                  <View style={styles.categoryContent}>
-                    {/* Spacer for alignment with collapsible items */}
-                    <View style={styles.chevronContainer} />
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === "all" ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-                      <Path d="M4 6h16M4 10h16M4 14h16M4 18h16" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                    <Text style={[styles.categoryName, selectedCategoryId === "all" && styles.categoryNameSelected]}>
-                      All
-                    </Text>
-                  </View>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{allCount}</Text>
-                  </View>
-                  <View style={styles.categoryItemDivider} />
-                </TouchableOpacity>
-
-                {/* Special Items (Inbox, Tasks, Events) - Indented to align */}
-                {nonAllItems.map((item) => {
-                  const count = item.id === null ? inboxCount : undefined;
-                  return (
-                    <TouchableOpacity
-                      key={item.id || "inbox"}
-                      style={[
-                        styles.categoryItem,
-                        selectedCategoryId === item.id && styles.categoryItemSelected,
-                      ]}
-                      onPress={() => handleSelect(item.id, item.name)}
-                    >
-                      <View style={styles.categoryContent}>
-                        {/* Spacer for alignment with collapsible items */}
-                        <View style={styles.chevronContainer} />
-                        {item.icon(selectedCategoryId === item.id)}
-                        <Text style={[styles.categoryName, selectedCategoryId === item.id && styles.categoryNameSelected]}>
-                          {item.name}
-                        </Text>
-                      </View>
-                      {count !== undefined && (
-                        <View style={styles.badge}>
-                          <Text style={styles.badgeText}>{count}</Text>
-                        </View>
-                      )}
-                      <View style={styles.categoryItemDivider} />
-                    </TouchableOpacity>
-                  );
-                })}
-
-                {/* "Categories" Item - Collapsible parent for categories (expand only, not selectable) */}
-                <TouchableOpacity
-                  style={styles.categoryItem}
-                  onPress={() => {
-                    if (categoryTree.length > 0) {
-                      setIsAllCategoriesExpanded(!isAllCategoriesExpanded);
-                    }
-                  }}
-                  disabled={categoryTree.length === 0}
-                >
-                  <View style={styles.categoryContent}>
-                    {/* Chevron */}
-                    <View style={styles.chevronContainer}>
-                      {categoryTree.length > 0 && (
-                        <Svg
-                          width={16}
-                          height={16}
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="#6b7280"
-                          strokeWidth={2}
-                          style={[styles.chevron, isAllCategoriesExpanded && styles.chevronExpanded]}
-                        >
-                          <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
-                      )}
+                {/* Home > Uncategorized */}
+                <View style={styles.homeContainer}>
+                  {/* All - Clickable */}
+                  <TouchableOpacity
+                    style={[
+                      styles.categoryItem,
+                      selectedCategoryId === "all" && styles.categoryItemSelected,
+                    ]}
+                    onPress={() => handleSelect("all", "Home")}
+                  >
+                    <View style={styles.categoryContent}>
+                      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === "all" ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
+                        <Path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                      <Text style={[styles.categoryName, selectedCategoryId === "all" && styles.categoryNameSelected]}>
+                        All
+                      </Text>
                     </View>
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                      <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                    <Text style={styles.categoryName}>
-                      Categories
-                    </Text>
-                  </View>
-                  <View style={styles.categoryItemDivider} />
-                </TouchableOpacity>
+                    {allEntriesCount > 0 && (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{allEntriesCount}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
 
-                {/* Category Tree - shown when "Categories" is expanded */}
-                {isAllCategoriesExpanded && !isLoading && categoryTree.length > 0 && (
+                  {/* Uncategorized */}
+                  <TouchableOpacity
+                    style={[
+                      styles.categoryItem,
+                      selectedCategoryId === null && styles.categoryItemSelected,
+                    ]}
+                    onPress={() => handleSelect(null, "Uncategorized")}
+                  >
+                    <View style={styles.categoryContent}>
+                      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === null ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
+                        <Path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                      <Text style={[styles.categoryName, selectedCategoryId === null && styles.categoryNameSelected]}>
+                        Uncategorized
+                      </Text>
+                    </View>
+                    {uncategorizedCount > 0 && (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{uncategorizedCount}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Category Tree - always expanded */}
+                {!isLoading && categoryTree.length > 0 && (
                   <View style={styles.categoryTreeWrapper}>
                     <CategoryTreeComponent
                       tree={categoryTree}
@@ -292,51 +279,28 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                         const category = categories.find((c) => c.category_id === categoryId);
                         handleSelect(categoryId, category?.name || "Unknown");
                       }}
-                      selectedId={selectedCategoryId === "all" || selectedCategoryId === null || selectedCategoryId === "tasks" || selectedCategoryId === "events" || selectedCategoryId === "categories" || selectedCategoryId === "tags" || selectedCategoryId === "people" ? null : selectedCategoryId}
+                      selectedId={
+                        selectedCategoryId === null ||
+                        selectedCategoryId === "all" ||
+                        selectedCategoryId === "tasks" ||
+                        selectedCategoryId === "events" ||
+                        selectedCategoryId === "categories" ||
+                        selectedCategoryId === "tags" ||
+                        selectedCategoryId === "people"
+                          ? null
+                          : selectedCategoryId
+                      }
                     />
                   </View>
                 )}
+              </>
+            )}
 
-                {/* "Tags" Item - Collapsible (expand only, not selectable) */}
-                <TouchableOpacity
-                  style={styles.categoryItem}
-                  onPress={() => {
-                    if (tags.length > 0) {
-                      setIsAllTagsExpanded(!isAllTagsExpanded);
-                    }
-                  }}
-                  disabled={tags.length === 0}
-                >
-                  <View style={styles.categoryContent}>
-                    {/* Chevron */}
-                    <View style={styles.chevronContainer}>
-                      {tags.length > 0 && (
-                        <Svg
-                          width={16}
-                          height={16}
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="#6b7280"
-                          strokeWidth={2}
-                          style={[styles.chevron, isAllTagsExpanded && styles.chevronExpanded]}
-                        >
-                          <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
-                      )}
-                    </View>
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                      <Path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                    <Text style={styles.categoryName}>
-                      Tags
-                    </Text>
-                  </View>
-                  <View style={styles.categoryItemDivider} />
-                </TouchableOpacity>
-
-                {/* Tags list - shown when "Tags" is expanded */}
-                {isAllTagsExpanded && !isLoadingTags && tags.length > 0 && (
-                  <View style={styles.categoryTreeWrapper}>
+            {/* Tags View */}
+            {selectedSegment === "tags" && (
+              <>
+                {!isLoadingTags && tags.length > 0 ? (
+                  <View style={styles.listWrapper}>
                     <TagList
                       tags={tags}
                       onTagPress={(tag) => {
@@ -349,48 +313,20 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                       }
                     />
                   </View>
-                )}
-
-                {/* "People" Item - Collapsible (expand only, not selectable) */}
-                <TouchableOpacity
-                  style={styles.categoryItem}
-                  onPress={() => {
-                    if (mentions.length > 0) {
-                      setIsAllPeopleExpanded(!isAllPeopleExpanded);
-                    }
-                  }}
-                  disabled={mentions.length === 0}
-                >
-                  <View style={styles.categoryContent}>
-                    {/* Chevron */}
-                    <View style={styles.chevronContainer}>
-                      {mentions.length > 0 && (
-                        <Svg
-                          width={16}
-                          height={16}
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="#6b7280"
-                          strokeWidth={2}
-                          style={[styles.chevron, isAllPeopleExpanded && styles.chevronExpanded]}
-                        >
-                          <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
-                      )}
-                    </View>
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                      <Path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                    <Text style={styles.categoryName}>
-                      People
-                    </Text>
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No tags yet</Text>
+                    <Text style={styles.emptySubtext}>Tags will appear when you use #hashtags in your entries</Text>
                   </View>
-                  <View style={styles.categoryItemDivider} />
-                </TouchableOpacity>
+                )}
+              </>
+            )}
 
-                {/* @people list - shown when "People" is expanded */}
-                {isAllPeopleExpanded && !isLoadingMentions && mentions.length > 0 && (
-                  <View style={styles.categoryTreeWrapper}>
+            {/* Mentions View */}
+            {selectedSegment === "mentions" && (
+              <>
+                {!isLoadingMentions && mentions.length > 0 ? (
+                  <View style={styles.listWrapper}>
                     <PeopleList
                       people={mentions}
                       onPersonPress={(mention) => {
@@ -403,114 +339,108 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                       }
                     />
                   </View>
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No mentions yet</Text>
+                    <Text style={styles.emptySubtext}>Mentions will appear when you use @mentions in your entries</Text>
+                  </View>
                 )}
               </>
-            ) : (
-              <>
-                {/* Filtered Special Items when searching */}
-                {filteredSpecialItems.map((item) => (
-                  <TouchableOpacity
-                    key={item.id || "inbox"}
-                    style={[
-                      styles.categoryItem,
-                      selectedCategoryId === item.id && styles.categoryItemSelected,
-                    ]}
-                    onPress={() => handleSelect(item.id, item.name)}
-                  >
-                    <View style={styles.categoryContent}>
-                      {item.icon(selectedCategoryId === item.id)}
-                      <Text style={[styles.categoryName, selectedCategoryId === item.id && styles.categoryNameSelected]}>
-                        {item.name}
-                      </Text>
-                    </View>
-                    <View style={styles.categoryItemDivider} />
-                  </TouchableOpacity>
-                ))}
-
-                {/* Filtered Categories when searching */}
-                {filteredCategories.length > 0 && filteredCategories.map((category) => (
-                  <TouchableOpacity
-                    key={category.category_id}
-                    style={[
-                      styles.categoryItem,
-                      selectedCategoryId === category.category_id && styles.categoryItemSelected,
-                    ]}
-                    onPress={() => handleSelect(category.category_id, category.name)}
-                  >
-                    <View style={styles.categoryContent}>
-                      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === category.category_id ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-                        <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                      <View style={styles.categoryTextContainer}>
-                        <Text style={[styles.categoryPath, selectedCategoryId === category.category_id && styles.categoryPathSelected]}>
-                          {category.display_path}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.categoryItemDivider} />
-                  </TouchableOpacity>
-                ))}
-
-                {/* Filtered Tags when searching */}
-                {filteredTags.length > 0 && filteredTags.map((tag) => {
-                  const tagId = `tag:${tag.tag}`;
-                  const isSelected = selectedCategoryId === tagId;
-                  return (
-                    <TouchableOpacity
-                      key={tagId}
-                      style={[
-                        styles.categoryItem,
-                        isSelected && styles.categoryItemSelected,
-                      ]}
-                      onPress={() => handleSelect(tagId, `#${tag.tag}`)}
-                    >
-                      <View style={styles.categoryContent}>
-                        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-                          <Path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
-                        <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
-                          #{tag.tag}
-                        </Text>
-                      </View>
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{tag.count}</Text>
-                      </View>
-                      <View style={styles.categoryItemDivider} />
-                    </TouchableOpacity>
-                  );
-                })}
-
-                {/* Filtered Mentions when searching */}
-                {filteredMentions.length > 0 && filteredMentions.map((mention) => {
-                  const mentionId = `mention:${mention.mention}`;
-                  const isSelected = selectedCategoryId === mentionId;
-                  return (
-                    <TouchableOpacity
-                      key={mentionId}
-                      style={[
-                        styles.categoryItem,
-                        isSelected && styles.categoryItemSelected,
-                      ]}
-                      onPress={() => handleSelect(mentionId, `@${mention.mention}`)}
-                    >
-                      <View style={styles.categoryContent}>
-                        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
-                          <Path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
-                        <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
-                          @{mention.mention}
-                        </Text>
-                      </View>
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{mention.count}</Text>
-                      </View>
-                      <View style={styles.categoryItemDivider} />
-                    </TouchableOpacity>
-                  );
-                })}
-              </>
             )}
-          </ScrollView>
+          </>
+        ) : (
+          <>
+            {/* Global Search Results - All categories, tags, and mentions together */}
+
+            {/* Categories */}
+            {filteredCategories.map((category) => (
+              <TouchableOpacity
+                key={category.category_id}
+                style={[
+                  styles.categoryItem,
+                  selectedCategoryId === category.category_id && styles.categoryItemSelected,
+                ]}
+                onPress={() => handleSelect(category.category_id, category.name)}
+              >
+                <View style={styles.categoryContent}>
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === category.category_id ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
+                    <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                  <View style={styles.categoryTextContainer}>
+                    <Text style={[styles.categoryPath, selectedCategoryId === category.category_id && styles.categoryPathSelected]}>
+                      {category.display_path}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+
+            {/* Tags */}
+            {filteredTags.map((tag) => {
+              const tagId = `tag:${tag.tag}`;
+              const isSelected = selectedCategoryId === tagId;
+              return (
+                <TouchableOpacity
+                  key={tagId}
+                  style={[
+                    styles.categoryItem,
+                    isSelected && styles.categoryItemSelected,
+                  ]}
+                  onPress={() => handleSelect(tagId, `#${tag.tag}`)}
+                >
+                  <View style={styles.categoryContent}>
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
+                      <Path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                    <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
+                      #{tag.tag}
+                    </Text>
+                  </View>
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{tag.count}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Mentions */}
+            {filteredMentions.map((mention) => {
+              const mentionId = `mention:${mention.mention}`;
+              const isSelected = selectedCategoryId === mentionId;
+              return (
+                <TouchableOpacity
+                  key={mentionId}
+                  style={[
+                    styles.categoryItem,
+                    isSelected && styles.categoryItemSelected,
+                  ]}
+                  onPress={() => handleSelect(mentionId, `@${mention.mention}`)}
+                >
+                  <View style={styles.categoryContent}>
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
+                      <Path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                    <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
+                      @{mention.mention}
+                    </Text>
+                  </View>
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{mention.count}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* No results */}
+            {filteredCategories.length === 0 && filteredTags.length === 0 && filteredMentions.length === 0 && (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No results found</Text>
+                <Text style={styles.emptySubtext}>Try a different search term</Text>
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -523,142 +453,146 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#ffffff",
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    backgroundColor: theme.colors.background.primary,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: theme.colors.border.light,
     flexShrink: 0,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: theme.spacing.sm,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: "#111827",
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.primary,
     padding: 0,
   },
   clearSearch: {
-    padding: 4,
+    padding: theme.spacing.xs,
+  },
+  segmentedControl: {
+    flexDirection: "row",
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    backgroundColor: theme.colors.background.primary,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border.light,
+    gap: theme.spacing.sm,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: theme.spacing.sm,
+    alignItems: "center",
+    borderRadius: theme.borderRadius.md,
+  },
+  segmentActive: {
+    backgroundColor: theme.colors.background.tertiary,
+  },
+  segmentText: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  segmentTextActive: {
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   content: {
     flex: 1,
     flexShrink: 1,
   },
   contentContainer: {
-    paddingBottom: 8,
+    paddingBottom: theme.spacing.sm,
+  },
+  homeContainer: {
+    paddingTop: theme.spacing.sm,
+  },
+  homeTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+  },
+  homeTitle: {
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  indentSpacer: {
+    width: 20,
   },
   categoryTreeWrapper: {
     paddingLeft: 20,
+  },
+  listWrapper: {
+    paddingTop: theme.spacing.sm,
   },
   categoryItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  categoryItemDivider: {
-    position: "absolute",
-    bottom: 0,
-    left: 20,
-    right: 28,
-    height: 1,
-    backgroundColor: "#f3f4f6",
-  },
-  indentedItem: {
-    paddingLeft: 36,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
   },
   categoryItemSelected: {
-    backgroundColor: "#dbeafe",
+    backgroundColor: theme.colors.background.tertiary,
   },
   categoryContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    flex: 1,
-  },
-  chevronContainer: {
-    width: 20,
-    height: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 4,
-  },
-  chevron: {
-    transform: [{ rotate: "0deg" }],
-  },
-  chevronExpanded: {
-    transform: [{ rotate: "90deg" }],
-  },
-  selectableContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    gap: theme.spacing.sm,
     flex: 1,
   },
   categoryTextContainer: {
     flex: 1,
   },
   categoryName: {
-    fontSize: 16,
-    color: "#374151",
-    fontWeight: "500",
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.secondary,
+    fontWeight: theme.typography.fontWeight.medium,
   },
   categoryNameSelected: {
-    color: "#1e40af",
-    fontWeight: "600",
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   badge: {
-    backgroundColor: "#e5e7eb",
-    borderRadius: 12,
-    paddingHorizontal: 8,
+    backgroundColor: theme.colors.background.tertiary,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: theme.spacing.sm,
     paddingVertical: 2,
-    minWidth: 32,
+    minWidth: 24,
     alignItems: "center",
   },
   badgeText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6b7280",
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.tertiary,
   },
   categoryPath: {
-    fontSize: 16,
-    color: "#374151",
-    fontWeight: "500",
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.secondary,
+    fontWeight: theme.typography.fontWeight.medium,
   },
   categoryPathSelected: {
-    color: "#1e40af",
-    fontWeight: "600",
-  },
-  divider: {
-    height: 8,
-    backgroundColor: "#f9fafb",
-  },
-  loadingContainer: {
-    padding: 40,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: "#9ca3af",
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   emptyContainer: {
-    padding: 40,
+    padding: theme.spacing.xxxl,
     alignItems: "center",
   },
   emptyText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#9ca3af",
-    marginBottom: 4,
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.tertiary,
+    marginBottom: theme.spacing.xs,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: "#9ca3af",
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.tertiary,
+    textAlign: "center",
   },
 });

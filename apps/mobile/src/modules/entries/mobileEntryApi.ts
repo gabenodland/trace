@@ -59,6 +59,8 @@ export async function getEntries(filter?: {
   status?: string;
   tag?: string;
   mention?: string;
+  includeChildren?: boolean;
+  childCategoryIds?: string[];
 }): Promise<Entry[]> {
   return await localDB.getAllEntries(filter);
 }

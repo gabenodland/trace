@@ -2,6 +2,8 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from "r
 import Svg, { Path, Line } from "react-native-svg";
 import { useState } from "react";
 import { NavigationMenu, NavigationMenuItem } from "../navigation/NavigationMenu";
+import { Breadcrumb, BreadcrumbSegment } from "./Breadcrumb";
+import { theme } from "../../shared/theme/theme";
 
 interface TopBarProps {
   // Title mode (for list screens)
@@ -9,6 +11,11 @@ interface TopBarProps {
   badge?: number;
   onTitlePress?: () => void;
   showDropdownArrow?: boolean;
+
+  // Breadcrumb mode (for hierarchical navigation)
+  breadcrumbs?: BreadcrumbSegment[];
+  onBreadcrumbPress?: (segment: BreadcrumbSegment) => void;
+  onBreadcrumbDropdownPress?: () => void;
 
   // Custom content mode (for editing screens)
   children?: React.ReactNode;
@@ -28,6 +35,9 @@ export function TopBar({
   badge,
   onTitlePress,
   showDropdownArrow = false,
+  breadcrumbs,
+  onBreadcrumbPress,
+  onBreadcrumbDropdownPress,
   children,
   showBackButton = false,
   onBackPress,
@@ -39,8 +49,8 @@ export function TopBar({
 
   return (
     <View style={styles.container}>
-      {/* Back Button */}
-      {showBackButton && onBackPress && (
+      {/* Back Button - Hidden for minimalist design */}
+      {false && showBackButton && onBackPress && (
         <TouchableOpacity
           style={styles.backButton}
           onPress={onBackPress}
@@ -52,8 +62,20 @@ export function TopBar({
         </TouchableOpacity>
       )}
 
+      {/* Breadcrumb Mode */}
+      {breadcrumbs && onBreadcrumbPress && (
+        <View style={styles.breadcrumbContainer}>
+          <Breadcrumb
+            segments={breadcrumbs}
+            onSegmentPress={onBreadcrumbPress}
+            badge={badge}
+            onDropdownPress={onBreadcrumbDropdownPress}
+          />
+        </View>
+      )}
+
       {/* Title Mode */}
-      {title && (
+      {!breadcrumbs && title && (
         <TouchableOpacity
           style={styles.titleContainer}
           onPress={onTitlePress}
@@ -75,7 +97,7 @@ export function TopBar({
       )}
 
       {/* Custom Content Mode */}
-      {children && (
+      {!breadcrumbs && children && (
         <View style={styles.customContent}>
           {children}
         </View>
@@ -112,43 +134,44 @@ const styles = StyleSheet.create({
   container: {
     height: 110,
     paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
+    backgroundColor: theme.colors.background.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   backButton: {
-    padding: 8,
-    marginRight: 8,
+    padding: theme.spacing.sm,
+    marginRight: theme.spacing.sm,
+  },
+  breadcrumbContainer: {
+    flex: 1,
   },
   titleContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: theme.spacing.sm,
     flex: 1,
   },
   title: {
     fontSize: 28,
-    fontWeight: "700",
-    color: "#111827",
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.text.primary,
   },
   badge: {
-    backgroundColor: "#3b82f6",
-    borderRadius: 12,
-    paddingHorizontal: 8,
+    backgroundColor: theme.colors.background.tertiary,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: theme.spacing.sm,
     paddingVertical: 2,
     minWidth: 24,
     alignItems: "center",
     justifyContent: "center",
   },
   badgeText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   dropdownArrow: {
     marginLeft: 4,
@@ -157,12 +180,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: theme.spacing.md,
   },
   menuContainer: {
     position: "relative",
   },
   menuButton: {
-    padding: 8,
+    padding: theme.spacing.sm,
   },
 });

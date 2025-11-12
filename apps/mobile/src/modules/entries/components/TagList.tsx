@@ -33,7 +33,7 @@ export function TagList({ tags, onTagPress, selectedTag }: TagListProps) {
           >
             <View style={styles.tagContent}>
               {/* Hash Icon */}
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#111827" : "#6b7280"} strokeWidth={2}>
                 <Path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
 
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     paddingLeft: 20, // Indent tags inside section
   },
   tagItemSelected: {
-    backgroundColor: "#dbeafe",
+    backgroundColor: "#f3f4f6",
   },
   tagItemDivider: {
     position: "absolute",
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tagNameSelected: {
-    color: "#1e40af",
+    color: "#111827",
     fontWeight: "600",
   },
   badge: {

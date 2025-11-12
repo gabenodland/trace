@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f3f4f6",
   },
   nodeContainerSelected: {
-    backgroundColor: "#dbeafe",
+    backgroundColor: "#f3f4f6",
   },
   nodeContent: {
     flexDirection: "row",
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   nodeNameSelected: {
-    color: "#1e40af",
+    color: "#111827",
     fontWeight: "600",
   },
   badge: {

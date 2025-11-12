@@ -33,7 +33,7 @@ export function PeopleList({ people, onPersonPress, selectedPerson }: PeopleList
           >
             <View style={styles.personContent}>
               {/* Person Icon */}
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#111827" : "#6b7280"} strokeWidth={2}>
                 <Path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
 
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     paddingLeft: 20, // Indent people inside section
   },
   personItemSelected: {
-    backgroundColor: "#dbeafe",
+    backgroundColor: "#f3f4f6",
   },
   personItemDivider: {
     position: "absolute",
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   personNameSelected: {
-    color: "#1e40af",
+    color: "#111827",
     fontWeight: "600",
   },
   badge: {

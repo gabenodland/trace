@@ -11,8 +11,37 @@ import {
   updateCategory,
   deleteCategory,
 } from './mobileCategoryApi';
-import type { UpdateCategoryInput } from '@trace/core';
+import type { UpdateCategoryInput, CategoryTree } from '@trace/core';
 import * as categoryHelpers from '@trace/core/src/modules/categories/categoryHelpers';
+
+/**
+ * Get all child category IDs recursively from a category tree
+ */
+export function getAllChildCategoryIds(tree: CategoryTree[], categoryId: string): string[] {
+  const childIds: string[] = [];
+
+  function traverse(nodes: CategoryTree[]) {
+    for (const node of nodes) {
+      if (node.category.category_id === categoryId) {
+        // Found the target category, collect all its children
+        collectChildren(node.children);
+        return;
+      }
+      // Keep searching in children
+      traverse(node.children);
+    }
+  }
+
+  function collectChildren(children: CategoryTree[]) {
+    for (const child of children) {
+      childIds.push(child.category.category_id);
+      collectChildren(child.children);
+    }
+  }
+
+  traverse(tree);
+  return childIds;
+}
 
 /**
  * Internal: Query hook for fetching categories from local SQLite

@@ -1,10 +1,12 @@
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
+import { useState } from "react";
 import type { Entry } from "@trace/core";
 import { formatEntryDateTime, formatRelativeTime, isTask, formatDueDate, isTaskOverdue } from "@trace/core";
 import { getFormattedContent, getDisplayModeLines } from "../helpers/entryDisplayHelpers";
 import type { EntryDisplayMode } from "../types/EntryDisplayMode";
 import { HtmlRenderer } from "../helpers/htmlRenderer";
+import { theme } from "../../../shared/theme/theme";
 
 interface EntryListItemProps {
   entry: Entry;
@@ -13,11 +15,15 @@ interface EntryListItemProps {
   onMentionPress?: (mention: string) => void;
   onCategoryPress?: (categoryId: string | null, categoryName: string) => void;
   onToggleComplete?: (entryId: string, currentStatus: "incomplete" | "complete") => void;
+  onMove?: (entryId: string) => void;
+  onDelete?: (entryId: string) => void;
   categoryName?: string | null; // Category name to display
   displayMode?: EntryDisplayMode; // Display mode for content rendering
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, categoryName, displayMode = 'smashed' }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, categoryName, displayMode = 'smashed' }: EntryListItemProps) {
+  const [showMenu, setShowMenu] = useState(false);
+
   // Format content based on display mode
   const formattedContent = getFormattedContent(entry.content, displayMode);
   const maxLines = getDisplayModeLines(displayMode);
@@ -34,6 +40,25 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
     e.stopPropagation();
     if (onToggleComplete && (entry.status === "incomplete" || entry.status === "complete")) {
       onToggleComplete(entry.entry_id, entry.status);
+    }
+  };
+
+  const handleMenuPress = (e: any) => {
+    e.stopPropagation();
+    setShowMenu(true);
+  };
+
+  const handleMovePress = () => {
+    setShowMenu(false);
+    if (onMove) {
+      onMove(entry.entry_id);
+    }
+  };
+
+  const handleDeletePress = () => {
+    setShowMenu(false);
+    if (onDelete) {
+      onDelete(entry.entry_id);
     }
   };
 
@@ -67,6 +92,18 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
 
         {/* Content */}
         <View style={styles.contentWrapper}>
+          {/* Menu Button - Upper Right */}
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={handleMenuPress}
+            activeOpacity={0.7}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+              <Circle cx={12} cy={6} r={1.5} fill={theme.colors.text.tertiary} />
+              <Circle cx={12} cy={12} r={1.5} fill={theme.colors.text.tertiary} />
+              <Circle cx={12} cy={18} r={1.5} fill={theme.colors.text.tertiary} />
+            </Svg>
+          </TouchableOpacity>
           {/* Title or Preview based on display mode */}
           {entry.title ? (
             <>
@@ -132,10 +169,10 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
               onPress={(e) => {
                 e.stopPropagation();
                 if (onCategoryPress) {
-                  // If entry has a category, use it; otherwise navigate to Inbox
+                  // If entry has a category, use it; otherwise navigate to Uncategorized
                   const categoryId = entry.category_id || null;
                   // Extract just the node name (last segment of path) for title bar
-                  let displayName = "Inbox";
+                  let displayName = "Uncategorized";
                   if (categoryName) {
                     const segments = categoryName.split("/");
                     displayName = segments[segments.length - 1];
@@ -145,7 +182,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
               }}
               activeOpacity={0.7}
             >
-              <Text style={styles.categoryText}>📁 {categoryName || "Inbox"}</Text>
+              <Text style={styles.categoryText}>{categoryName || "Uncategorized"}</Text>
             </TouchableOpacity>
 
             {/* Due Date Badge */}
@@ -160,7 +197,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
                   isOverdue && styles.dueDateTextOverdue,
                   dueDateStr === "Today" && styles.dueDateTextToday
                 ]}>
-                  📅 {dueDateStr}
+                  {dueDateStr}
                 </Text>
               </View>
             )}
@@ -211,158 +248,233 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
 
             {/* Location indicator */}
             {entry.location_lat && entry.location_lng && (
-              <Text style={styles.location}>📍 GPS</Text>
+              <Text style={styles.location}>GPS</Text>
             )}
           </View>
         </View>
       </View>
+
+      {/* Menu Modal */}
+      <Modal
+        visible={showMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMenu(false)}
+        >
+          <View style={styles.menuContainer}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleMovePress}
+              activeOpacity={0.7}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
+                <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={styles.menuItemText}>Move</Text>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleDeletePress}
+              activeOpacity={0.7}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
+                <Path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={styles.menuItemText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: theme.colors.background.primary,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
+    ...theme.shadows.xs,
   },
   containerOverdue: {
-    borderColor: "#fca5a5",
-    backgroundColor: "#fef2f2",
+    backgroundColor: theme.colors.background.secondary,
   },
   contentRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
+    gap: theme.spacing.md,
   },
   checkbox: {
     width: 20,
     height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: "#9ca3af",
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border.dark,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 2,
   },
   checkboxComplete: {
-    backgroundColor: "#10b981",
-    borderColor: "#10b981",
+    backgroundColor: theme.colors.text.primary,
+    borderColor: theme.colors.text.primary,
   },
   contentWrapper: {
     flex: 1,
   },
   title: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 4,
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.xs,
+    lineHeight: theme.typography.fontSize.lg * theme.typography.lineHeight.normal,
   },
   dateSmall: {
-    fontSize: 11,
-    color: "#9ca3af",
-    marginBottom: 8,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    marginBottom: theme.spacing.md,
   },
   strikethrough: {
     textDecorationLine: "line-through",
-    opacity: 0.6,
+    opacity: 0.5,
   },
   preview: {
-    fontSize: 14,
-    color: "#6b7280",
-    lineHeight: 20,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
+    lineHeight: theme.typography.fontSize.sm * theme.typography.lineHeight.relaxed,
   },
   content: {
-    fontSize: 15,
-    color: "#111827",
-    lineHeight: 22,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.primary,
+    lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.relaxed,
   },
   metadata: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginTop: 12,
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
     flexWrap: "wrap",
   },
   date: {
-    fontSize: 12,
-    color: "#9ca3af",
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
   },
   category: {
-    backgroundColor: "#f3e8ff",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
+    backgroundColor: theme.colors.background.tertiary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs - 2,
+    borderRadius: theme.borderRadius.full,
   },
   categoryText: {
-    fontSize: 11,
-    color: "#7c3aed",
-    fontWeight: "500",
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
   },
   tags: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: theme.spacing.xs,
   },
   tag: {
-    backgroundColor: "#dbeafe",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
+    backgroundColor: theme.colors.background.tertiary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs - 2,
+    borderRadius: theme.borderRadius.full,
   },
   tagText: {
-    fontSize: 11,
-    color: "#1d4ed8",
-    fontWeight: "500",
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
   },
   mentions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: theme.spacing.xs,
   },
   mention: {
-    backgroundColor: "#ede9fe",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
+    backgroundColor: theme.colors.background.tertiary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs - 2,
+    borderRadius: theme.borderRadius.full,
   },
   mentionText: {
-    fontSize: 11,
-    color: "#7c3aed",
-    fontWeight: "500",
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
   },
   moreText: {
-    fontSize: 11,
-    color: "#9ca3af",
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
   },
   location: {
-    fontSize: 11,
-    color: "#9ca3af",
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
   },
   dueDate: {
-    backgroundColor: "#dbeafe",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
+    backgroundColor: theme.colors.background.tertiary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs - 2,
+    borderRadius: theme.borderRadius.full,
   },
   dueDateText: {
-    fontSize: 11,
-    color: "#1d4ed8",
-    fontWeight: "500",
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
   },
   dueDateOverdue: {
-    backgroundColor: "#fee2e2",
+    backgroundColor: theme.colors.background.secondary,
   },
   dueDateTextOverdue: {
-    color: "#dc2626",
+    color: theme.colors.text.secondary,
   },
   dueDateToday: {
-    backgroundColor: "#ffedd5",
+    backgroundColor: theme.colors.background.tertiary,
   },
   dueDateTextToday: {
-    color: "#f97316",
+    color: theme.colors.text.secondary,
+  },
+  menuButton: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    padding: theme.spacing.xs,
+    zIndex: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuContainer: {
+    backgroundColor: theme.colors.background.primary,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.sm,
+    minWidth: 180,
+    ...theme.shadows.md,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
+    padding: theme.spacing.lg,
+  },
+  menuItemText: {
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border.light,
+    marginVertical: theme.spacing.xs,
   },
 });

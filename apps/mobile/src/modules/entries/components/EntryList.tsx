@@ -17,12 +17,14 @@ interface EntryListProps {
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
   onCategoryPress?: (categoryId: string | null, categoryName: string) => void;
+  onMove?: (entryId: string) => void;
+  onDelete?: (entryId: string) => void;
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
   categories?: Category[]; // Optional categories for displaying category names
   displayMode?: EntryDisplayMode; // Display mode for entry items
 }
 
-export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, ListHeaderComponent, categories, displayMode }: EntryListProps) {
+export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, onMove, onDelete, ListHeaderComponent, categories, displayMode }: EntryListProps) {
   // Create a lookup map for categories (using full_path)
   const categoryMap = categories?.reduce((map, cat) => {
     map[cat.category_id] = cat.full_path;
@@ -49,6 +51,8 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
             onTagPress={onTagPress}
             onMentionPress={onMentionPress}
             onCategoryPress={onCategoryPress}
+            onMove={onMove}
+            onDelete={onDelete}
             categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
             displayMode={displayMode}
           />
@@ -86,6 +90,8 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
           onTagPress={onTagPress}
           onMentionPress={onMentionPress}
           onCategoryPress={onCategoryPress}
+          onMove={onMove}
+          onDelete={onDelete}
           categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
           displayMode={displayMode}
         />

@@ -1,4 +1,5 @@
 import { View, StyleSheet } from "react-native";
+import { theme } from "../../shared/theme/theme";
 
 interface BottomBarProps {
   children: React.ReactNode;
@@ -28,10 +29,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: "#ffffff",
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    backgroundColor: theme.colors.background.primary,
   },
 });

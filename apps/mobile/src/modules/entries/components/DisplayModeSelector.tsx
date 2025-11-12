@@ -1,7 +1,9 @@
-import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
+import { useRef, useEffect } from 'react';
 import type { EntryDisplayMode } from '../types/EntryDisplayMode';
 import { ENTRY_DISPLAY_MODES } from '../types/EntryDisplayMode';
 import Svg, { Path } from 'react-native-svg';
+import { theme } from '../../../shared/theme/theme';
 
 interface DisplayModeSelectorProps {
   visible: boolean;
@@ -16,10 +18,27 @@ export function DisplayModeSelector({
   onSelect,
   onClose,
 }: DisplayModeSelectorProps) {
+  const scrollViewRef = useRef<ScrollView>(null);
+
   const handleSelect = (mode: EntryDisplayMode) => {
     onSelect(mode);
     onClose();
   };
+
+  // Scroll to selected item when modal opens
+  useEffect(() => {
+    if (visible && scrollViewRef.current) {
+      const selectedIndex = ENTRY_DISPLAY_MODES.findIndex(m => m.value === selectedMode);
+      if (selectedIndex >= 0) {
+        // Each option is ~80px tall (16px padding top + 16px padding bottom + ~48px content)
+        const optionHeight = 80;
+        const offset = selectedIndex * optionHeight;
+        setTimeout(() => {
+          scrollViewRef.current?.scrollTo({ y: offset, animated: true });
+        }, 100);
+      }
+    }
+  }, [visible, selectedMode]);
 
   return (
     <Modal
@@ -38,37 +57,39 @@ export function DisplayModeSelector({
             <Text style={styles.title}>Display Mode</Text>
           </View>
 
-          {ENTRY_DISPLAY_MODES.map((mode) => {
-            const isSelected = mode.value === selectedMode;
+          <ScrollView ref={scrollViewRef} style={styles.scrollView}>
+            {ENTRY_DISPLAY_MODES.map((mode) => {
+              const isSelected = mode.value === selectedMode;
 
-            return (
-              <TouchableOpacity
-                key={mode.value}
-                style={[styles.option, isSelected && styles.optionSelected]}
-                onPress={() => handleSelect(mode.value)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.optionContent}>
-                  <Text style={[styles.optionLabel, isSelected && styles.optionLabelSelected]}>
-                    {mode.label}
-                  </Text>
-                  <Text style={styles.optionDescription}>{mode.description}</Text>
-                </View>
+              return (
+                <TouchableOpacity
+                  key={mode.value}
+                  style={[styles.option, isSelected && styles.optionSelected]}
+                  onPress={() => handleSelect(mode.value)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.optionContent}>
+                    <Text style={[styles.optionLabel, isSelected && styles.optionLabelSelected]}>
+                      {mode.label}
+                    </Text>
+                    <Text style={styles.optionDescription}>{mode.description}</Text>
+                  </View>
 
-                {isSelected && (
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M5 13l4 4L19 7"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+                  {isSelected && (
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <Path
+                        d="M5 13l4 4L19 7"
+                        stroke={theme.colors.text.primary}
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </Svg>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
       </TouchableOpacity>
     </Modal>
@@ -88,11 +109,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     width: '100%',
     maxWidth: 400,
+    maxHeight: '80%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 5,
+  },
+  scrollView: {
+    maxHeight: 400,
   },
   header: {
     padding: 16,
@@ -113,7 +138,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f3f4f6',
   },
   optionSelected: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#f3f4f6',
   },
   optionContent: {
     flex: 1,
@@ -125,7 +150,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   optionLabelSelected: {
-    color: '#2563eb',
+    color: '#111827',
+    fontWeight: '600',
   },
   optionDescription: {
     fontSize: 13,

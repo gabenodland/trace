@@ -71,6 +71,7 @@ export const RichTextEditor = forwardRef(({
     toggleTaskList: () => editor.toggleTaskList(),
     indent: () => editor.sink(),
     outdent: () => editor.lift(),
+    blur: () => editor.blur(),
     // Force scroll to cursor position
     scrollToCursor: () => {
       editor.focus();

@@ -348,6 +348,8 @@ class LocalDatabase {
     tag?: string; // Filter by single tag
     mention?: string; // Filter by single mention
     includeDeleted?: boolean; // For sync operations
+    includeChildren?: boolean; // Include entries in child categories
+    childCategoryIds?: string[]; // List of child category IDs to include
   }): Promise<Entry[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
@@ -365,6 +367,11 @@ class LocalDatabase {
       if (filter.category_id !== undefined) {
         if (filter.category_id === null) {
           query += ' AND category_id IS NULL';
+        } else if (filter.includeChildren && filter.childCategoryIds && filter.childCategoryIds.length > 0) {
+          // Include the category and all its children
+          const placeholders = filter.childCategoryIds.map(() => '?').join(',');
+          query += ` AND category_id IN (?, ${placeholders})`;
+          params.push(filter.category_id, ...filter.childCategoryIds);
         } else {
           query += ' AND category_id = ?';
           params.push(filter.category_id);
