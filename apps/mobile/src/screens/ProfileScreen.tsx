@@ -1,14 +1,55 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
 import Svg, { Path } from "react-native-svg";
+import { syncQueue } from "../shared/sync/syncQueue";
+import { useState } from "react";
 
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    try {
+      setIsSigningOut(true);
+      console.log('🔄 Syncing before sign out...');
+
+      // Try to sync all unsaved changes before signing out
+      await syncQueue.sync();
+
+      console.log('✅ Sync complete, signing out...');
+      await signOut();
+    } catch (error) {
+      console.error('❌ Error during sign out:', error);
+
+      // Ask user if they still want to sign out despite sync failure
+      Alert.alert(
+        'Sync Failed',
+        'Could not sync your changes. Sign out anyway? Unsaved changes may be lost.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => setIsSigningOut(false),
+          },
+          {
+            text: 'Sign Out Anyway',
+            style: 'destructive',
+            onPress: async () => {
+              await signOut();
+              setIsSigningOut(false);
+            },
+          },
+        ]
+      );
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -45,15 +86,18 @@ export function ProfileScreen() {
 
         {/* Sign Out Button */}
         <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={signOut}
+          style={[styles.signOutButton, isSigningOut && styles.signOutButtonDisabled]}
+          onPress={handleSignOut}
           activeOpacity={0.7}
+          disabled={isSigningOut}
         >
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
             <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
             <Path d="M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={styles.signOutText}>Sign Out</Text>
+          <Text style={styles.signOutText}>
+            {isSigningOut ? "Syncing & Signing Out..." : "Sign Out"}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -116,6 +160,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 24,
     marginBottom: 40,
+  },
+  signOutButtonDisabled: {
+    backgroundColor: "#9ca3af",
+    opacity: 0.7,
   },
   signOutText: {
     color: "#ffffff",

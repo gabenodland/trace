@@ -27,6 +27,13 @@ export interface Entry {
   synced?: number; // 0 = needs sync, 1 = synced
   sync_action?: 'create' | 'update' | 'delete' | null;
   sync_error?: string | null;
+  // Conflict resolution fields (multi-device sync)
+  version?: number; // Increments with each edit - used for conflict detection
+  base_version?: number; // Server version this edit is based on - used for 3-way merge
+  conflict_status?: 'conflicted' | 'resolved' | null; // Conflict state
+  conflict_backup?: string | null; // JSON backup of losing version when conflict detected
+  last_edited_by?: string | null; // User email who last edited
+  last_edited_device?: string | null; // Device name that last edited
 }
 
 export interface CreateEntryInput {

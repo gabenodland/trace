@@ -10,6 +10,7 @@ class LocalDatabase {
   private db: SQLite.SQLiteDatabase | null = null;
   private initPromise: Promise<void> | null = null;
   private hasDeletedAtColumn: boolean = false;
+  private currentUserId: string | null = null;
 
   /**
    * Initialize database and create tables
@@ -27,6 +28,7 @@ class LocalDatabase {
   private async _initInternal(): Promise<void> {
     try {
       // Open database (creates if doesn't exist)
+      // Single database stores data for ALL users, filtered by user_id
       this.db = await SQLite.openDatabaseAsync('trace.db');
 
       // Log database opened
@@ -189,6 +191,67 @@ class LocalDatabase {
         console.log('✅ Migration 4 complete');
       }
 
+      // Migration 5: Add sync_logs table
+      if (currentVersion < 5) {
+        console.log('⬆️ Running migration 5: Add sync_logs table');
+
+        await this.db.execAsync(`
+          CREATE TABLE IF NOT EXISTS sync_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp INTEGER NOT NULL,
+            log_level TEXT NOT NULL CHECK (log_level IN ('info', 'warning', 'error')),
+            operation TEXT NOT NULL,
+            message TEXT NOT NULL,
+            details TEXT,
+            entries_pushed INTEGER DEFAULT 0,
+            entries_errors INTEGER DEFAULT 0,
+            categories_pushed INTEGER DEFAULT 0,
+            categories_errors INTEGER DEFAULT 0,
+            entries_pulled INTEGER DEFAULT 0
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp DESC);
+          CREATE INDEX IF NOT EXISTS idx_sync_logs_level ON sync_logs(log_level);
+        `);
+
+        console.log('  ✓ Created sync_logs table');
+
+        await this.db.runAsync(
+          'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
+          ['schema_version', '5', Date.now()]
+        );
+        console.log('✅ Migration 5 complete');
+      }
+
+      // Migration 6: Add conflict resolution columns for multi-device sync
+      if (currentVersion < 6) {
+        console.log('⬆️ Running migration 6: Add conflict resolution columns');
+
+        await this.db.execAsync(`
+          ALTER TABLE entries ADD COLUMN version INTEGER DEFAULT 1;
+          ALTER TABLE entries ADD COLUMN base_version INTEGER DEFAULT 1;
+          ALTER TABLE entries ADD COLUMN conflict_status TEXT;
+          ALTER TABLE entries ADD COLUMN conflict_backup TEXT;
+          ALTER TABLE entries ADD COLUMN last_edited_by TEXT;
+          ALTER TABLE entries ADD COLUMN last_edited_device TEXT;
+
+          ALTER TABLE categories ADD COLUMN version INTEGER DEFAULT 1;
+          ALTER TABLE categories ADD COLUMN base_version INTEGER DEFAULT 1;
+          ALTER TABLE categories ADD COLUMN conflict_status TEXT;
+          ALTER TABLE categories ADD COLUMN conflict_backup TEXT;
+          ALTER TABLE categories ADD COLUMN last_edited_by TEXT;
+          ALTER TABLE categories ADD COLUMN last_edited_device TEXT;
+        `);
+
+        console.log('  ✓ Added conflict resolution columns to entries and categories');
+
+        await this.db.runAsync(
+          'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
+          ['schema_version', '6', Date.now()]
+        );
+        console.log('✅ Migration 6 complete');
+      }
+
       console.log('✅ All migrations complete');
     } catch (error) {
       console.error('❌ Migration failed:', error);
@@ -233,7 +296,15 @@ class LocalDatabase {
         sync_action TEXT,                 -- 'create', 'update', 'delete', or NULL
         sync_error TEXT,                  -- Error message if sync failed
         sync_retry_count INTEGER DEFAULT 0,
-        sync_last_attempt INTEGER         -- Unix timestamp of last sync attempt
+        sync_last_attempt INTEGER,        -- Unix timestamp of last sync attempt
+
+        -- Conflict resolution fields (for multi-device sync)
+        version INTEGER DEFAULT 1,        -- Increments with each local edit
+        base_version INTEGER DEFAULT 1,   -- Server version this edit is based on
+        conflict_status TEXT,             -- null, 'conflicted', 'resolved'
+        conflict_backup TEXT,             -- JSON backup of losing version
+        last_edited_by TEXT,              -- User email who last edited
+        last_edited_device TEXT           -- Device name that last edited
       );
 
       -- Indexes for performance
@@ -262,7 +333,15 @@ class LocalDatabase {
         -- Sync tracking fields
         synced INTEGER DEFAULT 0,         -- 0 = needs sync, 1 = synced
         sync_action TEXT,                 -- 'create', 'update', 'delete', or NULL
-        sync_error TEXT
+        sync_error TEXT,
+
+        -- Conflict resolution fields (for multi-device sync)
+        version INTEGER DEFAULT 1,        -- Increments with each local edit
+        base_version INTEGER DEFAULT 1,   -- Server version this edit is based on
+        conflict_status TEXT,             -- null, 'conflicted', 'resolved'
+        conflict_backup TEXT,             -- JSON backup of losing version
+        last_edited_by TEXT,              -- User email who last edited
+        last_edited_device TEXT           -- Device name that last edited
       );
 
       CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
@@ -275,6 +354,24 @@ class LocalDatabase {
         value TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
+
+      -- Sync logs table (created in migration 5, but define here for new installs)
+      CREATE TABLE IF NOT EXISTS sync_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        log_level TEXT NOT NULL CHECK (log_level IN ('info', 'warning', 'error')),
+        operation TEXT NOT NULL,
+        message TEXT NOT NULL,
+        details TEXT,
+        entries_pushed INTEGER DEFAULT 0,
+        entries_errors INTEGER DEFAULT 0,
+        categories_pushed INTEGER DEFAULT 0,
+        categories_errors INTEGER DEFAULT 0,
+        entries_pulled INTEGER DEFAULT 0
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_sync_logs_level ON sync_logs(log_level);
     `);
   }
 
@@ -328,10 +425,16 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    const row = await this.db.getFirstAsync<any>(
-      'SELECT * FROM entries WHERE entry_id = ?',
-      [entryId]
-    );
+    // Filter by user_id if set (for multi-user support)
+    let query = 'SELECT * FROM entries WHERE entry_id = ?';
+    const params: any[] = [entryId];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    const row = await this.db.getFirstAsync<any>(query, params);
 
     if (!row) return null;
 
@@ -356,6 +459,12 @@ class LocalDatabase {
 
     let query = 'SELECT * FROM entries WHERE 1=1';
     const params: any[] = [];
+
+    // CRITICAL: Filter by current user_id to support multiple users
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
 
     // Exclude soft-deleted entries unless explicitly requested
     // Only apply filter if deleted_at column exists (post-migration)
@@ -596,17 +705,33 @@ class LocalDatabase {
 
     // Calculate entry_count dynamically by counting entries (excluding deleted)
     // Exclude categories marked for deletion
-    const rows = await this.db.getAllAsync<any>(`
+    // Filter by user_id to support multiple users
+    let query = `
       SELECT
         c.*,
         COALESCE(COUNT(e.entry_id), 0) as entry_count
       FROM categories c
       LEFT JOIN entries e ON c.category_id = e.category_id
         AND (e.deleted_at IS NULL OR e.deleted_at = '')
-      WHERE c.sync_action IS NULL OR c.sync_action != 'delete'
+    `;
+
+    const params: any[] = [];
+
+    // Add user_id filter if currentUserId is set
+    if (this.currentUserId) {
+      query += ` WHERE (c.sync_action IS NULL OR c.sync_action != 'delete')
+        AND c.user_id = ?`;
+      params.push(this.currentUserId);
+    } else {
+      query += ` WHERE c.sync_action IS NULL OR c.sync_action != 'delete'`;
+    }
+
+    query += `
       GROUP BY c.category_id
       ORDER BY c.full_path
-    `);
+    `;
+
+    const rows = await this.db.getAllAsync<any>(query, params);
     return rows;
   }
 
@@ -889,6 +1014,100 @@ class LocalDatabase {
   }
 
   /**
+   * Add a sync log entry
+   */
+  async addSyncLog(
+    logLevel: 'info' | 'warning' | 'error',
+    operation: string,
+    message: string,
+    details?: {
+      entries_pushed?: number;
+      entries_errors?: number;
+      categories_pushed?: number;
+      categories_errors?: number;
+      entries_pulled?: number;
+    }
+  ): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.runAsync(
+      `INSERT INTO sync_logs (
+        timestamp, log_level, operation, message,
+        entries_pushed, entries_errors, categories_pushed, categories_errors, entries_pulled
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        Date.now(),
+        logLevel,
+        operation,
+        message,
+        details?.entries_pushed || 0,
+        details?.entries_errors || 0,
+        details?.categories_pushed || 0,
+        details?.categories_errors || 0,
+        details?.entries_pulled || 0,
+      ]
+    );
+
+    // Auto-cleanup old logs after adding
+    await this.cleanupOldSyncLogs();
+  }
+
+  /**
+   * Get recent sync logs
+   */
+  async getSyncLogs(limit: number = 100): Promise<Array<{
+    id: number;
+    timestamp: number;
+    log_level: 'info' | 'warning' | 'error';
+    operation: string;
+    message: string;
+    entries_pushed: number;
+    entries_errors: number;
+    categories_pushed: number;
+    categories_errors: number;
+    entries_pulled: number;
+  }>> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const logs = await this.db.getAllAsync<any>(
+      'SELECT * FROM sync_logs ORDER BY timestamp DESC LIMIT ?',
+      [limit]
+    );
+
+    return logs;
+  }
+
+  /**
+   * Clean up sync logs older than 7 days
+   */
+  async cleanupOldSyncLogs(): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+    await this.db.runAsync(
+      'DELETE FROM sync_logs WHERE timestamp < ?',
+      [sevenDaysAgo]
+    );
+  }
+
+  /**
+   * DEBUG: Run raw SQL query (development only)
+   */
+  async debugQuery(sql: string): Promise<any[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    console.log('🔍 Debug query:', sql);
+    const result = await this.db.getAllAsync<any>(sql);
+    console.log('📊 Result:', JSON.stringify(result, null, 2));
+    return result;
+  }
+
+  /**
    * Clear all data (for testing or logout)
    */
   async clearAllData(): Promise<void> {
@@ -899,6 +1118,7 @@ class LocalDatabase {
       DELETE FROM entries;
       DELETE FROM categories;
       DELETE FROM sync_metadata;
+      DELETE FROM sync_logs;
     `);
 
     console.log('🗑️ All local data cleared');
@@ -914,6 +1134,32 @@ class LocalDatabase {
     const result = await this.db.getAllAsync(sql, params || []);
     console.log('📊 Query result:', result);
     return result;
+  }
+
+  /**
+   * Set current user ID for query filtering
+   * Call this after user signs in/switches accounts
+   */
+  setCurrentUser(userId: string): void {
+    if (this.currentUserId !== userId) {
+      console.log(`👤 Switched to user: ${userId}`);
+      this.currentUserId = userId;
+    }
+  }
+
+  /**
+   * Clear current user (on sign out)
+   */
+  clearCurrentUser(): void {
+    console.log('👤 Cleared current user');
+    this.currentUserId = null;
+  }
+
+  /**
+   * Get current user ID
+   */
+  getCurrentUserId(): string | null {
+    return this.currentUserId;
   }
 }
 

@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Clipboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Clipboard, Platform } from 'react-native';
 import { supabase } from '@trace/core';
 import { useNavigation } from '../shared/contexts/NavigationContext';
 import { useNavigationMenu } from '../shared/hooks/useNavigationMenu';
@@ -12,7 +12,7 @@ import { localDB } from '../shared/db/localDB';
 import { syncQueue } from '../shared/sync/syncQueue';
 import Svg, { Path } from 'react-native-svg';
 
-type TabType = 'status' | 'entries' | 'categories';
+type TabType = 'status' | 'entries' | 'categories' | 'logs';
 type SyncFilter = 'all' | 'synced' | 'unsynced' | 'errors';
 
 interface CloudCounts {
@@ -26,6 +26,7 @@ export function DatabaseInfoScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('status');
   const [entries, setEntries] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [syncLogs, setSyncLogs] = useState<any[]>([]);
   const [cloudCounts, setCloudCounts] = useState<CloudCounts>({ entries: 0, categories: 0 });
   const [syncStatus, setSyncStatus] = useState<any>(null);
   const [entrySyncFilter, setEntrySyncFilter] = useState<SyncFilter>('all');
@@ -48,6 +49,10 @@ export function DatabaseInfoScreen() {
       // Get all categories from SQLite
       const allCategories = await localDB.runCustomQuery('SELECT * FROM categories ORDER BY name');
       setCategories(allCategories);
+
+      // Get sync logs from SQLite
+      const logs = await localDB.getSyncLogs(50); // Get last 50 logs
+      setSyncLogs(logs);
 
       // Get sync status
       const status = await syncQueue.getSyncStatus();
@@ -263,6 +268,14 @@ export function DatabaseInfoScreen() {
             Categories
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'logs' && styles.tabActive]}
+          onPress={() => setActiveTab('logs')}
+        >
+          <Text style={[styles.tabText, activeTab === 'logs' && styles.tabTextActive]}>
+            Logs
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content}>
@@ -429,6 +442,9 @@ export function DatabaseInfoScreen() {
                   <Text style={[styles.badge, styles.errorBadge]}>❌ Error</Text>
                 )}
               </View>
+              {entry.sync_error && (
+                <Text style={styles.errorMessage}>{entry.sync_error}</Text>
+              )}
               <Text style={styles.entryId}>ID: {entry.entry_id.slice(0, 8)}...</Text>
             </TouchableOpacity>
               ))}
@@ -506,9 +522,66 @@ export function DatabaseInfoScreen() {
                       <Text style={[styles.badge, styles.errorBadge]}>❌ Error</Text>
                     )}
                   </View>
+                  {category.sync_error && (
+                    <Text style={styles.errorMessage}>{category.sync_error}</Text>
+                  )}
                   <Text style={styles.categoryId}>ID: {category.category_id.slice(0, 8)}...</Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          </>
+        )}
+
+        {/* LOGS TAB */}
+        {activeTab === 'logs' && (
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sync Logs (Last 50)</Text>
+              <Text style={styles.subtitle}>Logs older than 7 days are automatically deleted</Text>
+
+              {syncLogs.length === 0 ? (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoText}>No sync logs found</Text>
+                </View>
+              ) : (
+                syncLogs.map((log) => {
+                  const date = new Date(log.timestamp);
+                  const levelColor = log.log_level === 'error' ? '#dc2626' : log.log_level === 'warning' ? '#f59e0b' : '#3b82f6';
+                  const levelBg = log.log_level === 'error' ? '#fef2f2' : log.log_level === 'warning' ? '#fffbeb' : '#eff6ff';
+
+                  return (
+                    <View key={log.id} style={[styles.logCard, { borderLeftColor: levelColor }]}>
+                      <View style={styles.logHeader}>
+                        <Text style={[styles.logLevel, { backgroundColor: levelBg, color: levelColor }]}>
+                          {log.log_level.toUpperCase()}
+                        </Text>
+                        <Text style={styles.logTimestamp}>
+                          {date.toLocaleString()}
+                        </Text>
+                      </View>
+                      <Text style={styles.logOperation}>{log.operation}</Text>
+                      <Text style={styles.logMessage}>{log.message}</Text>
+
+                      {(log.entries_pushed > 0 || log.entries_errors > 0 || log.categories_pushed > 0 || log.categories_errors > 0) && (
+                        <View style={styles.logStats}>
+                          {log.entries_pushed > 0 && (
+                            <Text style={styles.logStat}>📤 Entries: {log.entries_pushed}</Text>
+                          )}
+                          {log.entries_errors > 0 && (
+                            <Text style={[styles.logStat, styles.logStatError]}>❌ Entry Errors: {log.entries_errors}</Text>
+                          )}
+                          {log.categories_pushed > 0 && (
+                            <Text style={styles.logStat}>📁 Categories: {log.categories_pushed}</Text>
+                          )}
+                          {log.categories_errors > 0 && (
+                            <Text style={[styles.logStat, styles.logStatError]}>❌ Category Errors: {log.categories_errors}</Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
+              )}
             </View>
           </>
         )}
@@ -737,6 +810,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#fee2e2',
     color: '#991b1b',
   },
+  errorMessage: {
+    fontSize: 11,
+    color: '#dc2626',
+    backgroundColor: '#fef2f2',
+    padding: 8,
+    borderRadius: 4,
+    marginTop: 8,
+    marginBottom: 4,
+    fontFamily: 'monospace',
+    lineHeight: 16,
+  },
   entryId: {
     fontSize: 10,
     color: '#9ca3af',
@@ -838,5 +922,76 @@ const styles = StyleSheet.create({
   },
   jsonSpacer: {
     height: 100,
+  },
+  // Log styles
+  logCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  logHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  logLevel: {
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  logTimestamp: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  logOperation: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  logMessage: {
+    fontSize: 14,
+    color: '#1f2937',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  logStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  logStat: {
+    fontSize: 12,
+    color: '#6b7280',
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  logStatError: {
+    color: '#dc2626',
+    backgroundColor: '#fef2f2',
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginBottom: 12,
   },
 });

@@ -49,6 +49,7 @@
     "@trace/core": "^1.0.0",
     "expo": "~54.0.22",
     "expo-crypto": "~15.0.7",
+    "expo-device": "^8.0.9",
     "expo-linking": "^8.0.8",
     "expo-location": "~19.0.7",
     "expo-sqlite": "~16.0.9",

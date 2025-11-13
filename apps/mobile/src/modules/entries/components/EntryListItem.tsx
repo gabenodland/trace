@@ -123,6 +123,19 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
             items={menuItems}
             anchorPosition={menuPosition}
           />
+          {/* Conflict Warning Banner */}
+          {entry.conflict_status === 'conflicted' && (
+            <View style={styles.conflictBanner}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path d="M12 2L2 7l10 5 10-5-10-5z" fill="#f59e0b" />
+                <Path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#f59e0b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </Svg>
+              <Text style={styles.conflictText}>
+                Changes merged - tap to review
+              </Text>
+            </View>
+          )}
+
           {/* Title or Preview based on display mode */}
           {entry.title ? (
             <>
@@ -426,5 +439,23 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 6,
     zIndex: 10,
+  },
+  conflictBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fffbeb",
+    borderLeftWidth: 3,
+    borderLeftColor: "#f59e0b",
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+    borderRadius: theme.borderRadius.sm,
+    gap: theme.spacing.sm,
+  },
+  conflictText: {
+    fontSize: theme.typography.fontSize.xs,
+    color: "#92400e",
+    fontWeight: theme.typography.fontWeight.medium,
+    flex: 1,
   },
 });

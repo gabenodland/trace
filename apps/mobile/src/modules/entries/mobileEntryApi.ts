@@ -6,6 +6,17 @@
 import { Entry, CreateEntryInput } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
+import { Platform } from 'react-native';
+import * as Device from 'expo-device';
+
+/**
+ * Get device identifier for attribution
+ */
+function getDeviceName(): string {
+  const deviceName = Device.deviceName || 'Unknown Device';
+  const platformName = Platform.OS === 'ios' ? 'iOS' : 'Android';
+  return `${deviceName} (${platformName})`;
+}
 
 /**
  * Create a new entry (offline-first)
@@ -42,6 +53,13 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     local_only: data.local_only || 0,
     synced: 0,
     sync_action: 'create',
+    // Conflict resolution fields
+    version: 1,
+    base_version: 1,
+    conflict_status: null,
+    conflict_backup: null,
+    last_edited_by: user.email || null,
+    last_edited_device: getDeviceName(),
   };
 
   // Save to SQLite immediately (always succeeds, works offline)
@@ -79,6 +97,16 @@ export async function updateEntry(
   id: string,
   updates: Partial<Entry>
 ): Promise<Entry> {
+  // Get current entry to increment version
+  const currentEntry = await localDB.getEntry(id);
+  if (!currentEntry) throw new Error('Entry not found');
+
+  // Get user for attribution
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Determine if this is a user edit (needs version increment) or a sync operation
+  const isUserEdit = updates.sync_action === undefined || updates.sync_action === 'update';
+
   // Mark as needing sync (unless explicitly specified otherwise, like during pull sync)
   const updatesWithSync = {
     ...updates,
@@ -86,6 +114,13 @@ export async function updateEntry(
     synced: updates.synced !== undefined ? updates.synced : 0,
     sync_action: updates.sync_action !== undefined ? updates.sync_action : 'update',
   };
+
+  // Add version tracking and attribution for user edits
+  if (isUserEdit) {
+    updatesWithSync.version = (currentEntry.version || 1) + 1;
+    updatesWithSync.last_edited_by = user?.email || null;
+    updatesWithSync.last_edited_device = getDeviceName();
+  }
 
   // Update in SQLite
   // Sync will be handled by syncQueue in background
