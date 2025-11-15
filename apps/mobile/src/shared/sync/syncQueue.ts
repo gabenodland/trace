@@ -9,6 +9,7 @@ import { Entry } from '@trace/core';
 import { AppState, AppStateStatus } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import type { QueryClient } from '@tanstack/react-query';
+import { uploadPhotoToSupabase, downloadPhotosInBackground } from '../../modules/photos/mobilePhotoApi';
 
 class SyncQueue {
   private isSyncing = false;
@@ -17,6 +18,8 @@ class SyncQueue {
   private realtimeChannel: any = null;
   private queryClient: QueryClient | null = null;
   private realtimeDebounceTimer: NodeJS.Timeout | null = null;
+  private lastSyncTime: number = 0;
+  private readonly SYNC_THROTTLE_MS = 30000; // Don't sync more than once per 30 seconds
 
   /**
    * Initialize sync listeners
@@ -36,16 +39,20 @@ class SyncQueue {
     }
     console.log('🔄 Initializing sync queue...');
 
-    // Listen to app state changes (foreground/background)
-    // This is the PRIMARY sync trigger - sync when user opens app
-    this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
+    // Clean up entries that don't belong to current user (from previous logins)
+    await this.cleanupWrongUserData();
+
+    // DISABLED: App state change listener was causing excessive syncs
+    // When opening camera and returning to app, it would trigger full sync
+    // We rely on: (1) Realtime subscription for server changes, (2) Post-save sync
+    // this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
 
     // Set up Supabase Realtime subscriptions for instant updates
     // This provides real-time sync when changes occur on server
     await this.setupRealtimeSubscription();
 
-    console.log('✅ Sync queue initialized (3 triggers: app foreground, realtime, manual)');
-  }
+    console.log('✅ Sync queue initialized (2 triggers: realtime, post-save)');
+  } // Force Metro rebuild
 
   /**
    * Set up Supabase Realtime subscription for instant updates
@@ -58,7 +65,7 @@ class SyncQueue {
         return;
       }
 
-      // Subscribe to changes on entries and categories tables for this user
+      // Subscribe to changes on entries, categories, and photos tables for this user
       this.realtimeChannel = supabase
         .channel('db-changes')
         .on(
@@ -89,9 +96,23 @@ class SyncQueue {
             this.handleRealtimeChange(payload);
           }
         )
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+            schema: 'public',
+            table: 'photos',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+            console.log('📸 Realtime photo update received:', payload.eventType);
+            // Trigger a pull sync when changes are detected
+            this.handleRealtimeChange(payload);
+          }
+        )
         .subscribe();
 
-      console.log('📡 Realtime subscription active (entries + categories)');
+      console.log('📡 Realtime subscription active (entries + categories + photos)');
     } catch (error) {
       console.error('❌ Failed to set up Realtime subscription:', error);
     }
@@ -137,10 +158,81 @@ class SyncQueue {
   }
 
   /**
-   * Handle app state changes
+   * Clean up data that belongs to a different user
+   * This happens when user logs out and logs in as a different user
+   */
+  private async cleanupWrongUserData() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('🔒 Not authenticated, skipping cleanup');
+        return;
+      }
+
+      // Find entries that don't belong to current user
+      const wrongUserEntries = await localDB.runCustomQuery(
+        'SELECT entry_id, user_id FROM entries WHERE user_id != ?',
+        [user.id]
+      );
+
+      if (wrongUserEntries.length > 0) {
+        console.log(`🧹 Cleaning up ${wrongUserEntries.length} entries from previous user`);
+
+        // Delete entries that don't belong to current user
+        await localDB.runCustomQuery('DELETE FROM entries WHERE user_id != ?', [user.id]);
+
+        console.log(`✅ Cleaned up ${wrongUserEntries.length} wrong-user entries`);
+      }
+
+      // Find categories that don't belong to current user
+      const wrongUserCategories = await localDB.runCustomQuery(
+        'SELECT category_id, user_id FROM categories WHERE user_id != ?',
+        [user.id]
+      );
+
+      if (wrongUserCategories.length > 0) {
+        console.log(`🧹 Cleaning up ${wrongUserCategories.length} categories from previous user`);
+
+        // Delete categories that don't belong to current user
+        await localDB.runCustomQuery('DELETE FROM categories WHERE user_id != ?', [user.id]);
+
+        console.log(`✅ Cleaned up ${wrongUserCategories.length} wrong-user categories`);
+      }
+
+      // Find photos that don't belong to current user
+      const wrongUserPhotos = await localDB.runCustomQuery(
+        'SELECT photo_id, user_id FROM photos WHERE user_id != ?',
+        [user.id]
+      );
+
+      if (wrongUserPhotos.length > 0) {
+        console.log(`🧹 Cleaning up ${wrongUserPhotos.length} photos from previous user`);
+
+        // Delete photos that don't belong to current user
+        await localDB.runCustomQuery('DELETE FROM photos WHERE user_id != ?', [user.id]);
+
+        console.log(`✅ Cleaned up ${wrongUserPhotos.length} wrong-user photos`);
+      }
+
+    } catch (error) {
+      console.error('❌ Failed to cleanup wrong-user data:', error);
+      // Don't throw - initialization should continue even if cleanup fails
+    }
+  }
+
+  /**
+   * Handle app state changes (throttled to prevent excessive syncing)
    */
   private handleAppStateChange = (nextAppState: AppStateStatus) => {
     if (nextAppState === 'active') {
+      const now = Date.now();
+      const timeSinceLastSync = now - this.lastSyncTime;
+
+      if (timeSinceLastSync < this.SYNC_THROTTLE_MS) {
+        console.log(`⏸️ App became active, but synced ${Math.round(timeSinceLastSync / 1000)}s ago (throttled)`);
+        return;
+      }
+
       console.log('📱 App became active, triggering sync');
       this.processQueue();
     }
@@ -183,6 +275,8 @@ class SyncQueue {
       let pushErrorCount = 0;
       let categoryPushSuccessCount = 0;
       let categoryPushErrorCount = 0;
+      let photoPushSuccessCount = 0;
+      let photoPushErrorCount = 0;
 
       // STEP 1: Push unsynced categories to Supabase (MUST BE FIRST - entries depend on categories)
       const unsyncedCategories = await localDB.getUnsyncedCategories();
@@ -214,13 +308,16 @@ class SyncQueue {
         console.log('✅ No category changes to push');
       }
 
-      // STEP 2: Push local entry changes to Supabase (AFTER categories are synced)
+      // STEP 2: Push local entry CREATE/UPDATE to Supabase (BEFORE photos)
+      // Entries must exist before photos can reference them
       const unsyncedEntries = await localDB.getUnsyncedEntries();
+      const entriesToCreateOrUpdate = unsyncedEntries.filter(e => e.sync_action !== 'delete');
+      const entriesToDelete = unsyncedEntries.filter(e => e.sync_action === 'delete');
 
-      if (unsyncedEntries.length > 0) {
-        console.log(`📤 Pushing ${unsyncedEntries.length} entry changes...`);
+      if (entriesToCreateOrUpdate.length > 0) {
+        console.log(`📤 Pushing ${entriesToCreateOrUpdate.length} entry create/update...`);
 
-        for (const entry of unsyncedEntries) {
+        for (const entry of entriesToCreateOrUpdate) {
           try {
             await this.syncEntry(entry);
             pushSuccessCount++;
@@ -235,16 +332,219 @@ class SyncQueue {
           }
         }
 
-        console.log(`📤 Entry push complete: ${pushSuccessCount} success, ${pushErrorCount} errors`);
+        console.log(`📤 Entry create/update complete: ${pushSuccessCount} success, ${pushErrorCount} errors`);
       } else {
-        console.log('✅ No entry changes to push');
+        console.log('✅ No entry creates/updates to push');
       }
 
-      // STEP 3: Pull remote changes from Supabase (incremental or full if empty)
+      // STEP 3: Upload photos to Supabase Storage (AFTER entries exist)
+      // 3a. Upload photo files that need uploading
+      const photosToUpload = await localDB.getPhotosNeedingUpload();
+
+      if (photosToUpload.length > 0) {
+        console.log(`📸 Uploading ${photosToUpload.length} photo files...`);
+
+        for (const photo of photosToUpload) {
+          try {
+            if (photo.local_path) {
+              // Upload photo file to Supabase Storage
+              await uploadPhotoToSupabase(photo.local_path, photo.file_path);
+
+              // Mark as uploaded in local DB
+              await localDB.updatePhoto(photo.photo_id, {
+                uploaded: true,
+              });
+
+              photoPushSuccessCount++;
+              console.log(`✓ Uploaded photo ${photo.photo_id}`);
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            // Handle missing local file gracefully (orphaned photo, not a real error)
+            if (errorMessage.includes('Local file does not exist') || errorMessage.includes('File not found')) {
+              console.log(`⚠️ Photo ${photo.photo_id} file missing locally (orphaned entry)`);
+              // Mark as uploaded to prevent retrying (file is gone, nothing we can do)
+              await localDB.updatePhoto(photo.photo_id, {
+                uploaded: true,
+              });
+              photoPushErrorCount++;
+            } else {
+              // Real error - log and retry on next sync
+              console.log(`❌ Failed to upload photo ${photo.photo_id}:`, errorMessage);
+              photoPushErrorCount++;
+            }
+          }
+        }
+
+        console.log(`📸 Photo upload complete: ${photoPushSuccessCount} success, ${photoPushErrorCount} errors`);
+      } else {
+        console.log('✅ No photos to upload');
+      }
+
+      // 3b. Sync photo metadata CREATE/UPDATE to Supabase (AFTER entries exist)
+      // Note: Orphan cleanup is now manual-only (Database Info screen) for performance
+      // Running it every sync is O(n) where n = total photos, which can slow down sync significantly
+      const photosNeedingSync = await localDB.getPhotosNeedingSync();
+      const photosToCreateOrUpdate = photosNeedingSync.filter(p => p.sync_action !== 'delete');
+      const photosToDelete = photosNeedingSync.filter(p => p.sync_action === 'delete');
+
+      if (photosToCreateOrUpdate.length > 0) {
+        console.log(`📸 Syncing ${photosToCreateOrUpdate.length} photo create/update...`);
+
+        for (const photo of photosToCreateOrUpdate) {
+          try {
+            // Validate photo has required fields
+            if (!photo.file_size || !photo.mime_type) {
+              console.log(`ℹ️ Skipping incomplete photo ${photo.photo_id} (missing file_size or mime_type) - marking as synced to prevent retry`);
+              // Mark as synced to prevent infinite retry
+              await localDB.updatePhoto(photo.photo_id, {
+                synced: 1,
+                sync_action: null,
+              });
+              continue;
+            }
+
+            // Check if entry exists (don't sync orphaned photos)
+            const entry = await localDB.getEntry(photo.entry_id);
+            if (!entry || entry.deleted_at) {
+              console.log(`ℹ️ Skipping orphaned photo ${photo.photo_id} (entry ${photo.entry_id} not found or deleted) - marking for deletion`);
+              // Mark photo for deletion since its entry is gone
+              await localDB.deletePhoto(photo.photo_id);
+              continue;
+            }
+
+            // Create or update
+            const { data, error } = await supabase
+              .from('photos')
+              .upsert({
+                photo_id: photo.photo_id,
+                entry_id: photo.entry_id,
+                user_id: photo.user_id,
+                file_path: photo.file_path,
+                mime_type: photo.mime_type,
+                file_size: photo.file_size,
+                width: photo.width || null,
+                height: photo.height || null,
+                position: photo.position,
+              });
+
+            if (error) throw error;
+
+            // Mark as synced in local DB
+            await localDB.updatePhoto(photo.photo_id, {
+              synced: 1,
+              sync_action: null,
+            });
+
+            console.log(`✓ Synced photo metadata ${photo.photo_id}`);
+          } catch (error) {
+            const errorMessage = error instanceof Error
+              ? error.message
+              : JSON.stringify(error, null, 2);
+            console.error(`❌ Failed to sync photo metadata ${photo.photo_id}:`, errorMessage);
+            console.error('Full error object:', error);
+            photoPushErrorCount++;
+            // Will retry on next sync
+          }
+        }
+
+        console.log(`📸 Photo create/update complete`);
+      } else {
+        console.log('✅ No photo creates/updates to sync');
+      }
+
+      // 3d. Delete photos from Supabase (BEFORE deleting entries)
+      if (photosToDelete.length > 0) {
+        console.log(`📸 Deleting ${photosToDelete.length} photos...`);
+
+        for (const photo of photosToDelete) {
+          try {
+            // Delete from Supabase (ignore if file doesn't exist)
+            try {
+              const { error: deleteError } = await supabase
+                .from('photos')
+                .delete()
+                .eq('photo_id', photo.photo_id);
+
+              if (deleteError) {
+                console.log(`ℹ️ Photo delete from Supabase (ignoring error): ${photo.photo_id}`, deleteError.message);
+              }
+            } catch (deleteErr) {
+              console.log(`ℹ️ Photo delete from Supabase failed (ignoring): ${photo.photo_id}`);
+            }
+
+            // Try to delete from storage (ignore if file doesn't exist)
+            if (photo.file_path) {
+              try {
+                const { error: storageError } = await supabase.storage
+                  .from('photos')
+                  .remove([photo.file_path]);
+
+                if (storageError) {
+                  console.log(`ℹ️ Photo storage file delete (ignoring error): ${photo.file_path}`, storageError.message);
+                }
+              } catch (storageErr) {
+                console.log(`ℹ️ Photo storage file delete failed (ignoring): ${photo.file_path}`);
+              }
+            }
+
+            // Permanently delete from local DB
+            await localDB.permanentlyDeletePhoto(photo.photo_id);
+            console.log(`✓ Deleted photo ${photo.photo_id}`);
+          } catch (error) {
+            const errorMessage = error instanceof Error
+              ? error.message
+              : JSON.stringify(error, null, 2);
+            console.error(`❌ Failed to delete photo ${photo.photo_id}:`, errorMessage);
+            photoPushErrorCount++;
+            // Will retry on next sync
+          }
+        }
+
+        console.log(`📸 Photo delete complete`);
+      } else {
+        console.log('✅ No photo deletes to sync');
+      }
+
+      // STEP 4: Push entry DELETES to Supabase (AFTER photos are deleted)
+      // Delete photos first to avoid foreign key constraint violations
+      if (entriesToDelete.length > 0) {
+        console.log(`📤 Pushing ${entriesToDelete.length} entry deletes...`);
+
+        for (const entry of entriesToDelete) {
+          try {
+            await this.syncEntry(entry);
+            pushSuccessCount++;
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error(`❌ Failed to push entry delete ${entry.entry_id}:`, errorMessage);
+
+            // Record the error in the database
+            await localDB.recordSyncError(entry.entry_id, errorMessage);
+            pushErrorCount++;
+            // Will retry on next sync trigger
+          }
+        }
+
+        console.log(`📤 Entry delete complete: ${pushSuccessCount} success, ${pushErrorCount} errors`);
+      } else {
+        console.log('✅ No entry deletes to push');
+      }
+
+      // STEP 5: Pull remote changes from Supabase (incremental or full if empty)
       console.log('📥 Pulling remote changes...');
       await this.pullFromSupabase(); // Auto-detects empty DB and does full pull if needed
 
       console.log('✅ Bidirectional sync complete');
+
+      // STEP 5: Background photo download (non-blocking)
+      // Download up to 10 photos in the background
+      setTimeout(() => {
+        downloadPhotosInBackground(10).catch(error => {
+          console.error('Background photo download error:', error);
+        });
+      }, 1000); // Delay 1 second to not block sync completion
 
       // STEP 4: Invalidate React Query cache to trigger UI refresh
       if (this.queryClient) {
@@ -258,11 +558,11 @@ class SyncQueue {
 
       // STEP 5: Log sync summary
       const syncDuration = Date.now() - syncStartTime;
-      const hasErrors = pushErrorCount > 0 || categoryPushErrorCount > 0;
+      const hasErrors = pushErrorCount > 0 || categoryPushErrorCount > 0 || photoPushErrorCount > 0;
       const logLevel = hasErrors ? 'warning' : 'info';
 
-      const totalPushed = pushSuccessCount + categoryPushSuccessCount;
-      const totalErrors = pushErrorCount + categoryPushErrorCount;
+      const totalPushed = pushSuccessCount + categoryPushSuccessCount + photoPushSuccessCount;
+      const totalErrors = pushErrorCount + categoryPushErrorCount + photoPushErrorCount;
 
       let message = `Sync completed in ${(syncDuration / 1000).toFixed(1)}s`;
       if (totalPushed > 0) {
@@ -277,6 +577,8 @@ class SyncQueue {
         entries_errors: pushErrorCount,
         categories_pushed: categoryPushSuccessCount,
         categories_errors: categoryPushErrorCount,
+        photos_pushed: photoPushSuccessCount,
+        photos_errors: photoPushErrorCount,
         entries_pulled: 0, // Pull stats not tracked yet
       });
     } catch (error) {
@@ -287,6 +589,7 @@ class SyncQueue {
       await localDB.addSyncLog('error', 'bidirectional_sync', `Sync failed: ${errorMessage}`);
     } finally {
       this.isSyncing = false;
+      this.lastSyncTime = Date.now(); // Update last sync time for throttling
     }
   }
 
@@ -415,20 +718,40 @@ class SyncQueue {
         });
 
       } else if (sync_action === 'delete') {
-        // Soft delete: Update deleted_at timestamp in Supabase
-        // Note: We don't update updated_at - that should only change when content changes
-        const { error } = await supabase
+        // Check if entry exists in Supabase first
+        // Use maybeSingle() to avoid errors when row doesn't exist
+        const { data: existingEntry, error: checkError } = await supabase
           .from('entries')
-          .update({
-            deleted_at: entry.deleted_at || new Date().toISOString(),
-          })
-          .eq('entry_id', entry.entry_id);
+          .select('entry_id')
+          .eq('entry_id', entry.entry_id)
+          .maybeSingle();
 
-        if (error) {
-          throw new Error(`Supabase delete failed: ${error.message} (code: ${error.code || 'unknown'})`);
+        // If entry exists in Supabase, soft delete it
+        if (existingEntry && !checkError) {
+          const { error } = await supabase
+            .from('entries')
+            .update({
+              deleted_at: entry.deleted_at || new Date().toISOString(),
+            })
+            .eq('entry_id', entry.entry_id);
+
+          if (error) {
+            // Check if it's an RLS error (entry in weird state, can't be updated)
+            if (error.code === '42501') {
+              console.log(`ℹ️ Entry ${entry.entry_id} exists but RLS blocks update (orphaned/inconsistent state), marking as synced`);
+            } else {
+              throw new Error(`Supabase delete failed: ${error.message} (code: ${error.code || 'unknown'})`);
+            }
+          } else {
+            console.log(`✓ Soft deleted entry ${entry.entry_id} in Supabase`);
+          }
+        } else {
+          // Entry never existed in Supabase (local-only draft that was deleted)
+          // This is expected for drafts that were never synced
+          console.log(`ℹ️ Entry ${entry.entry_id} never synced to Supabase, skipping delete`);
         }
 
-        // Mark as synced after deletion
+        // Mark as synced after deletion (whether it was in Supabase or not)
         await localDB.markSynced(entry.entry_id);
       }
     } catch (error) {
@@ -631,23 +954,17 @@ class SyncQueue {
         return;
       }
 
-      if (!remoteEntries || remoteEntries.length === 0) {
-        console.log('No new entries to pull from Supabase');
-        // Still update timestamp even if no changes
-        await this.saveLastPullTimestamp(pullStartTime);
-        return;
-      }
-
-      console.log(`📥 Found ${remoteEntries.length} entries to pull from Supabase...`);
-
-      // Process each entry with last-write-wins resolution
+      // Process entries if they exist
       let savedCount = 0;
       let updatedCount = 0;
       let deletedCount = 0;
       let skippedCount = 0;
 
-      for (const remoteEntry of remoteEntries) {
-        try {
+      if (remoteEntries && remoteEntries.length > 0) {
+        console.log(`📥 Found ${remoteEntries.length} entries to pull from Supabase...`);
+
+        for (const remoteEntry of remoteEntries) {
+          try {
           // Check if entry already exists locally
           const localEntry = await localDB.getEntry(remoteEntry.entry_id);
 
@@ -726,9 +1043,19 @@ class SyncQueue {
         } catch (error) {
           console.error(`Failed to process entry ${remoteEntry.entry_id}:`, error);
         }
+        }
+
+        console.log(`✅ Entry pull sync complete: ${savedCount} new, ${updatedCount} updated, ${deletedCount} deleted, ${skippedCount} skipped`);
+      } else {
+        console.log('No new entries to pull from Supabase');
       }
 
-      console.log(`✅ Pull sync complete: ${savedCount} new, ${updatedCount} updated, ${deletedCount} deleted, ${skippedCount} skipped`);
+      // Pull photo metadata from Supabase (files downloaded on-demand)
+      console.log('🔍 DEBUG: About to call pullPhotosFromSupabase...');
+      console.log('🔍 DEBUG: forceFullPull =', forceFullPull);
+      console.log('🔍 DEBUG: pullStartTime =', pullStartTime);
+      await this.pullPhotosFromSupabase(forceFullPull, pullStartTime);
+      console.log('🔍 DEBUG: pullPhotosFromSupabase completed');
 
       // Save last pull timestamp for incremental sync
       await this.saveLastPullTimestamp(pullStartTime);
@@ -811,11 +1138,22 @@ class SyncQueue {
             savedCount++;
             console.log(`  ✓ New category: ${category.name}`);
           } else {
-            // Category exists - update it (categories don't have conflict resolution, server wins)
-            await localDB.updateCategory(category.category_id, category);
-            await localDB.markCategorySynced(category.category_id);
-            updatedCount++;
-            console.log(`  ↻ Updated category: ${category.name}`);
+            // Category exists - only update if actual content changed
+            // Don't include updated_at in comparison (it changes on every server touch)
+            const hasChanged =
+              localCategory.name !== category.name ||
+              localCategory.full_path !== category.full_path ||
+              localCategory.parent_category_id !== category.parent_category_id ||
+              localCategory.color !== category.color ||
+              localCategory.icon !== category.icon;
+
+            if (hasChanged) {
+              await localDB.updateCategory(category.category_id, category);
+              await localDB.markCategorySynced(category.category_id);
+              updatedCount++;
+              console.log(`  ↻ Updated category: ${category.name}`);
+            }
+            // Silently skip if no content changes
           }
         } catch (error) {
           console.error(`Failed to process category ${remoteCategory.category_id}:`, error);
@@ -825,6 +1163,161 @@ class SyncQueue {
       console.log(`✅ Category pull complete: ${savedCount} new, ${updatedCount} updated`);
     } catch (error) {
       console.error('Category pull sync failed:', error);
+    }
+  }
+
+  /**
+   * Pull photo metadata from Supabase
+   * Downloads metadata only - actual files are downloaded on-demand
+   */
+  private async pullPhotosFromSupabase(forceFullPull: boolean, pullStartTime: Date): Promise<void> {
+    try {
+      console.log('📸 ========================================');
+      console.log('📸 STARTING PHOTO PULL SYNC');
+      console.log('📸 ========================================');
+
+      // Get user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('❌ Not authenticated, skipping photo pull');
+        return;
+      }
+
+      console.log(`📸 Authenticated user: ${user.id}`);
+      console.log('📸 Fetching photos from Supabase...');
+
+      // Fetch all photos for this user
+      const { data: remotePhotos, error } = await supabase
+        .from('photos')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      console.log('📸 Supabase query response:', {
+        success: !error,
+        photoCount: remotePhotos?.length || 0,
+        error: error?.message
+      });
+
+      if (error) {
+        console.error('❌ Failed to fetch photos from Supabase:', error);
+        console.error('   Error code:', error.code);
+        console.error('   Error message:', error.message);
+        console.error('   Error details:', JSON.stringify(error, null, 2));
+        return;
+      }
+
+      if (!remotePhotos || remotePhotos.length === 0) {
+        console.log('ℹ️ No photos to pull from Supabase (empty result)');
+        return;
+      }
+
+      console.log(`📸 ✅ Found ${remotePhotos.length} photos to pull from Supabase!`);
+      console.log('📸 Sample photo data:', JSON.stringify(remotePhotos[0], null, 2));
+
+      // Process each photo
+      let savedCount = 0;
+      let updatedCount = 0;
+      let skippedCount = 0;
+
+      console.log(`📸 Processing ${remotePhotos.length} photos...`);
+
+      for (const remotePhoto of remotePhotos) {
+        try {
+          console.log(`📸 [${savedCount + updatedCount + skippedCount + 1}/${remotePhotos.length}] Processing photo: ${remotePhoto.photo_id}`);
+
+          // Check if photo already exists locally
+          const localPhotos = await localDB.runCustomQuery(
+            'SELECT * FROM photos WHERE photo_id = ?',
+            [remotePhoto.photo_id]
+          );
+          const localPhoto = localPhotos.length > 0 ? localPhotos[0] : null;
+
+          console.log(`   Local status: ${localPhoto ? 'EXISTS' : 'NEW'}`);
+          if (localPhoto) {
+            console.log(`   Local photo:`, {
+              photo_id: localPhoto.photo_id,
+              position: localPhoto.position,
+              mime_type: localPhoto.mime_type,
+              synced: localPhoto.synced
+            });
+          }
+
+          // Type cast to include all photo fields (TypeScript types need regeneration)
+          const remotePhotoWithFields = remotePhoto as any;
+
+          const photo = {
+            photo_id: remotePhotoWithFields.photo_id,
+            entry_id: remotePhotoWithFields.entry_id,
+            user_id: remotePhotoWithFields.user_id,
+            file_path: remotePhotoWithFields.file_path,
+            local_path: localPhoto?.local_path || null, // Keep existing local_path if it exists
+            mime_type: remotePhotoWithFields.mime_type,
+            file_size: remotePhotoWithFields.file_size || null, // Optional metadata
+            width: remotePhotoWithFields.width || null,
+            height: remotePhotoWithFields.height || null,
+            position: remotePhotoWithFields.position,
+            created_at: new Date(remotePhotoWithFields.created_at).getTime(),
+            updated_at: new Date(remotePhotoWithFields.updated_at).getTime(),
+            uploaded: true, // From Supabase, so it's uploaded
+            synced: 1, // Already in Supabase, so marked as synced
+            sync_action: null,
+          };
+
+          if (!localPhoto) {
+            // New photo from remote - save metadata only
+            console.log(`   📥 Creating NEW photo metadata for entry ${photo.entry_id}`);
+            console.log(`   Photo data:`, {
+              photo_id: photo.photo_id,
+              entry_id: photo.entry_id,
+              file_path: photo.file_path,
+              file_size: photo.file_size,
+              position: photo.position
+            });
+            await localDB.createPhoto(photo);
+            savedCount++;
+            console.log(`   ✅ Successfully created photo metadata: ${photo.photo_id}`);
+          } else {
+            // Photo exists - update metadata if changed
+            const hasChanged =
+              localPhoto.position !== photo.position ||
+              localPhoto.mime_type !== photo.mime_type;
+
+            if (hasChanged) {
+              console.log(`   📝 Updating photo metadata (changed)`);
+              await localDB.updatePhoto(photo.photo_id, photo);
+              updatedCount++;
+              console.log(`   ✅ Updated photo metadata: ${photo.photo_id}`);
+            } else {
+              console.log(`   ⏭️ Skipping (no changes)`);
+              skippedCount++;
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Failed to process photo ${remotePhoto.photo_id}:`, error);
+          if (error instanceof Error) {
+            console.error(`   Error details: ${error.message}`);
+            console.error(`   Stack: ${error.stack}`);
+          }
+        }
+      }
+
+      console.log('📸 ========================================');
+      console.log(`📸 PHOTO PULL SYNC COMPLETE`);
+      console.log(`📸 ✅ New: ${savedCount}`);
+      console.log(`📸 ↻ Updated: ${updatedCount}`);
+      console.log(`📸 ⏭️ Skipped: ${skippedCount}`);
+      console.log(`📸 Total processed: ${savedCount + updatedCount + skippedCount}/${remotePhotos.length}`);
+      console.log('📸 ========================================');
+    } catch (error) {
+      console.error('📸 ========================================');
+      console.error('❌ PHOTO METADATA PULL SYNC FAILED');
+      console.error('📸 ========================================');
+      console.error('Error:', error);
+      if (error instanceof Error) {
+        console.error(`Error message: ${error.message}`);
+        console.error(`Error stack: ${error.stack}`);
+      }
     }
   }
 }

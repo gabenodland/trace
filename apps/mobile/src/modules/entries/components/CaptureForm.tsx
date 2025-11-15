@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from "react-native";
 import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState } from "@trace/core";
+import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState, generatePhotoPath } from "@trace/core";
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useCategories } from "../../categories/mobileCategoryHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
@@ -14,6 +14,12 @@ import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdo
 import Svg, { Path, Circle, Line } from "react-native-svg";
 import { theme } from "../../../shared/theme/theme";
 import { SimpleDatePicker } from "./SimpleDatePicker";
+import { PhotoCapture } from "../../photos/components/PhotoCapture";
+import { PhotoGallery } from "../../photos/components/PhotoGallery";
+import { compressPhoto, savePhotoToLocalStorage, deletePhoto } from "../../photos/mobilePhotoApi";
+import { localDB } from "../../../shared/db/localDB";
+import { syncQueue } from "../../../shared/sync/syncQueue";
+import * as Crypto from "expo-crypto";
 
 import type { ReturnContext } from "../../../screens/EntryScreen";
 
@@ -96,10 +102,25 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const titleInputRef = useRef<TextInput>(null);
   const isInitialLoad = useRef(true); // Track if this is first load
   const lastTitleTap = useRef<number | null>(null); // Track last tap time for double-tap detection
+  const [photoCount, setPhotoCount] = useState(0); // Track photo position for ordering
+  const [tempEntryId] = useState(() => entryId || Crypto.randomUUID()); // Temp ID for new entries
+
+  // Pending photos for NEW entries only (not saved to DB yet)
+  // For EXISTING entries, photos are saved to DB immediately
+  const [pendingPhotos, setPendingPhotos] = useState<Array<{
+    photoId: string;
+    localPath: string;
+    filePath: string;
+    mimeType: string;
+    fileSize: number;
+    width: number;
+    height: number;
+    position: number;
+  }>>([]);
 
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
-  const { signOut } = useAuthState();
+  const { user, signOut } = useAuthState();
   const { categories } = useCategories();
   const { navigate } = useNavigation();
 
@@ -359,7 +380,9 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   // Save handler
   const handleSave = async () => {
     // Prevent multiple simultaneous saves
-    if (isSubmitting) return;
+    if (isSubmitting) {
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -389,7 +412,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         });
       } else {
         // Create new entry
-        await entryMutations.createEntry({
+        const newEntry = await entryMutations.createEntry({
           title: title.trim() || null,
           content,
           tags,
@@ -402,6 +425,41 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           status,
           due_date: dueDate,
         });
+
+        // CRITICAL: Save all pending photos to DB with the real entry_id
+        if (pendingPhotos.length > 0) {
+          for (const photo of pendingPhotos) {
+            // Update file path and local path to use real entry_id
+            const newFilePath = photo.filePath.replace(tempEntryId, newEntry.entry_id);
+            const newLocalPath = photo.localPath.replace(tempEntryId, newEntry.entry_id);
+
+            // Move file from temp directory to real directory
+            const FileSystem = await import('expo-file-system/legacy');
+            const newDir = newLocalPath.substring(0, newLocalPath.lastIndexOf('/'));
+            await FileSystem.makeDirectoryAsync(newDir, { intermediates: true });
+            await FileSystem.moveAsync({
+              from: photo.localPath,
+              to: newLocalPath,
+            });
+
+            // Save to DB with real entry_id
+            await localDB.createPhoto({
+              photo_id: photo.photoId,
+              entry_id: newEntry.entry_id,
+              user_id: user!.id,
+              file_path: newFilePath,
+              local_path: newLocalPath,
+              mime_type: photo.mimeType,
+              file_size: photo.fileSize,
+              width: photo.width,
+              height: photo.height,
+              position: photo.position,
+              uploaded: false,
+            });
+          }
+
+          setPendingPhotos([]); // Clear pending photos
+        }
 
         // Clear form only when creating
         setTitle("");
@@ -427,6 +485,11 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         returnCategoryId = null;
         returnCategoryName = "Uncategorized";
       }
+
+      // Trigger sync in background after save (non-blocking)
+      syncQueue.processQueue().catch(err => {
+        console.error('Background sync failed:', err);
+      });
 
       // Navigate back based on returnContext
       if (returnContext) {
@@ -481,6 +544,88 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         },
       ]
     );
+  };
+
+  // Photo handler
+  const handlePhotoSelected = async (uri: string, width: number, height: number) => {
+    try {
+      // Check if user is logged in
+      if (!user) {
+        Alert.alert("Error", "You must be logged in to add photos");
+        return;
+      }
+
+      // Compress photo
+      const compressed = await compressPhoto(uri);
+
+      // Generate IDs
+      const photoId = Crypto.randomUUID();
+      const userId = user.id;
+
+      if (isEditing) {
+        // EXISTING ENTRY: Save photo to DB immediately (entry exists in Supabase)
+        const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, entryId!);
+
+        await localDB.createPhoto({
+          photo_id: photoId,
+          entry_id: entryId!,
+          user_id: userId,
+          file_path: generatePhotoPath(userId, entryId!, photoId, 'jpg'),
+          local_path: localPath,
+          mime_type: 'image/jpeg',
+          file_size: compressed.file_size,
+          width: compressed.width,
+          height: compressed.height,
+          position: photoCount,
+          uploaded: false,
+        });
+
+        setPhotoCount(photoCount + 1);
+      } else {
+        // NEW ENTRY: Store photo in state only (don't save to DB until entry is saved)
+        const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, tempEntryId);
+
+        setPendingPhotos(prev => [...prev, {
+          photoId,
+          localPath,
+          filePath: generatePhotoPath(userId, tempEntryId, photoId, 'jpg'),
+          mimeType: 'image/jpeg',
+          fileSize: compressed.file_size,
+          width: compressed.width,
+          height: compressed.height,
+          position: photoCount,
+        }]);
+
+        setPhotoCount(photoCount + 1);
+      }
+
+      // Enter edit mode if not already in it
+      if (!isEditMode) {
+        enterEditMode();
+      }
+    } catch (error) {
+      console.error('Error adding photo:', error);
+      Alert.alert('Error', 'Failed to add photo');
+    }
+  };
+
+  // Photo deletion handler
+  const handlePhotoDelete = async (photoId: string) => {
+    try {
+      if (isEditing) {
+        // EXISTING ENTRY: Delete from DB
+        await deletePhoto(photoId);
+      } else {
+        // NEW ENTRY: Remove from pending photos state
+        setPendingPhotos(prev => prev.filter(p => p.photoId !== photoId));
+      }
+
+      // Decrement photo count
+      setPhotoCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error deleting photo:', error);
+      Alert.alert('Error', 'Failed to delete photo');
+    }
   };
 
   // Show loading when editing and entry is loading
@@ -714,6 +859,14 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           )}
         </View>
 
+        {/* Photo Gallery */}
+        <PhotoGallery
+          entryId={entryId || tempEntryId}
+          refreshKey={photoCount}
+          onPhotoDelete={handlePhotoDelete}
+          pendingPhotos={isEditing ? undefined : pendingPhotos}
+        />
+
         {/* Editor */}
         <View style={[
           styles.editorContainer,
@@ -800,6 +953,12 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
                 <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             </TouchableOpacity>
+
+            {/* Photo Capture Button */}
+            <PhotoCapture
+              onPhotoSelected={handlePhotoSelected}
+              disabled={isSubmitting}
+            />
           </View>
         )}
 

@@ -6,6 +6,7 @@ import { formatEntryDateTime, formatRelativeTime, isTask, formatDueDate, isTaskO
 import { getFormattedContent, getDisplayModeLines } from "../helpers/entryDisplayHelpers";
 import type { EntryDisplayMode } from "../types/EntryDisplayMode";
 import { HtmlRenderer } from "../helpers/htmlRenderer";
+import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { theme } from "../../../shared/theme/theme";
 import { DropdownMenu, type DropdownMenuItem } from "../../../components/layout/DropdownMenu";
 
@@ -148,6 +149,9 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
               {displayMode === 'flow' && (
                 <Text style={styles.dateSmall}>{entryDateStr}</Text>
               )}
+              {displayMode === 'flow' && (
+                <PhotoGallery entryId={entry.entry_id} />
+              )}
               {displayMode === 'flow' ? (
                 <HtmlRenderer
                   html={entry.content || ''}
@@ -171,6 +175,9 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
               <>
                 {displayMode === 'flow' && (
                   <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                )}
+                {displayMode === 'flow' && (
+                  <PhotoGallery entryId={entry.entry_id} />
                 )}
                 <HtmlRenderer
                   html={entry.content || ''}

@@ -48,16 +48,16 @@ class LocalDatabase {
   }
 
   /**
-   * Create all database tables
-   */
-  /**
-   * Run database migrations for schema changes
+   * Run database migrations
+   *
+   * Migrations 1-7 have been consolidated into the createTables() schema.
+   * This method now only sets the version for fresh installs.
    */
   private async runMigrations(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 
     try {
-      // Check current schema version (handle case where sync_metadata doesn't exist yet)
+      // Check current schema version
       let currentVersion = 0;
       try {
         const result = await this.db.getAllAsync<{ value: string }>(
@@ -72,189 +72,112 @@ class LocalDatabase {
 
       console.log(`📊 Current schema version: ${currentVersion}`);
 
-      // Migration 1: Add deleted_at column
-      if (currentVersion < 1) {
-        console.log('⬆️ Running migration 1: Add deleted_at column');
+      if (currentVersion === 0) {
+        // Fresh install - all tables created in createTables() with version 9 schema
+        console.log('🆕 Fresh install - setting schema version to 9');
 
-        // Check if column already exists by querying table info
-        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        const hasDeletedAt = tableInfo.some((col: any) => col.name === 'deleted_at');
-
-        if (!hasDeletedAt) {
-          // Add the column
-          await this.db.execAsync('ALTER TABLE entries ADD COLUMN deleted_at INTEGER;');
-          console.log('  ✓ Added deleted_at column');
-
-          // Create index
-          await this.db.execAsync('CREATE INDEX IF NOT EXISTS idx_entries_deleted_at ON entries(deleted_at);');
-          console.log('  ✓ Created deleted_at index');
-
-          this.hasDeletedAtColumn = true;
-        } else {
-          console.log('  ℹ️ deleted_at column already exists');
-          this.hasDeletedAtColumn = true;
-        }
-
-        // Mark migration as complete
         await this.db.runAsync(
           'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
-          ['schema_version', '1', Date.now()]
+          ['schema_version', '9', Date.now()]
         );
-        console.log('✅ Migration 1 complete');
+
+        // Check if deleted_at column exists
+        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
+        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
+
+        console.log('✅ Schema initialized at version 9');
+      } else if (currentVersion < 7) {
+        // Old database detected - recommend reinstall for clean migration
+        console.warn('⚠️ Old schema detected (version ' + currentVersion + ')');
+        console.warn('⚠️ For photo support, clear Expo Go app data and restart the app');
+        console.warn('⚠️ Settings > Apps > Expo Go > Storage > Clear Data');
+
+        // Check if deleted_at column exists
+        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
+        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
+      } else if (currentVersion === 7) {
+        // Migration 8: Simplify photos table schema
+        console.log('🔄 Migrating schema from version 7 to 8: Simplifying photos table');
+
+        // SQLite doesn't support DROP COLUMN directly, need to recreate table
+        await this.db.execAsync(`
+          -- Create new photos table with simplified schema
+          CREATE TABLE IF NOT EXISTS photos_new (
+            photo_id TEXT PRIMARY KEY,
+            entry_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            local_path TEXT,
+            mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
+            position INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            uploaded INTEGER DEFAULT 0,
+            synced INTEGER DEFAULT 0,
+            sync_action TEXT,
+            FOREIGN KEY (entry_id) REFERENCES entries(entry_id) ON DELETE CASCADE
+          );
+
+          -- Copy data from old table (only the columns we're keeping)
+          INSERT INTO photos_new (photo_id, entry_id, user_id, file_path, local_path, mime_type, position, created_at, updated_at, uploaded, synced, sync_action)
+          SELECT photo_id, entry_id, user_id, file_path, local_path, mime_type, position, created_at, updated_at, uploaded, synced, sync_action
+          FROM photos;
+
+          -- Drop old table
+          DROP TABLE photos;
+
+          -- Rename new table
+          ALTER TABLE photos_new RENAME TO photos;
+
+          -- Recreate indexes
+          CREATE INDEX idx_photos_entry_id ON photos(entry_id);
+          CREATE INDEX idx_photos_user_id ON photos(user_id);
+          CREATE INDEX idx_photos_position ON photos(entry_id, position);
+          CREATE INDEX idx_photos_uploaded ON photos(uploaded);
+          CREATE INDEX idx_photos_synced ON photos(synced);
+        `);
+
+        await this.db.runAsync(
+          'UPDATE sync_metadata SET value = ?, updated_at = ? WHERE key = ?',
+          ['8', Date.now(), 'schema_version']
+        );
+
+        // Check if deleted_at column exists
+        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
+        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
+
+        console.log('✅ Migrated to schema version 8');
+      } else if (currentVersion === 8) {
+        // Migration 9: Add optional metadata columns to photos
+        console.log('🔄 Migrating schema from version 8 to 9: Adding optional photo metadata');
+
+        await this.db.execAsync(`
+          -- Add optional metadata columns
+          ALTER TABLE photos ADD COLUMN file_size INTEGER;
+          ALTER TABLE photos ADD COLUMN width INTEGER;
+          ALTER TABLE photos ADD COLUMN height INTEGER;
+        `);
+
+        await this.db.runAsync(
+          'UPDATE sync_metadata SET value = ?, updated_at = ? WHERE key = ?',
+          ['9', Date.now(), 'schema_version']
+        );
+
+        // Check if deleted_at column exists
+        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
+        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
+
+        console.log('✅ Migrated to schema version 9');
       } else {
-        // Migration already completed in a previous run
-        // Check if column exists
+        // Already on latest version
+        console.log('✅ Schema is up to date (version 9)');
+
+        // Check if deleted_at column exists
         const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
         this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
       }
-
-      // Migration 2: Add sync fields to categories table
-      if (currentVersion < 2) {
-        console.log('⬆️ Running migration 2: Add sync fields to categories');
-
-        const catTableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(categories)');
-        const hasSynced = catTableInfo.some((col: any) => col.name === 'synced');
-
-        if (!hasSynced) {
-          await this.db.execAsync('ALTER TABLE categories ADD COLUMN synced INTEGER DEFAULT 0;');
-          await this.db.execAsync('ALTER TABLE categories ADD COLUMN sync_action TEXT;');
-          await this.db.execAsync('ALTER TABLE categories ADD COLUMN sync_error TEXT;');
-          console.log('  ✓ Added sync fields to categories');
-        } else {
-          console.log('  ℹ️ categories sync fields already exist');
-        }
-
-        // Create index for synced column (whether we just added it or it already existed)
-        await this.db.execAsync('CREATE INDEX IF NOT EXISTS idx_categories_synced ON categories(synced);');
-        console.log('  ✓ Created synced index');
-
-        await this.db.runAsync(
-          'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
-          ['schema_version', '2', Date.now()]
-        );
-        console.log('✅ Migration 2 complete');
-      }
-
-      // Migration 3: Add updated_at column to categories
-      if (currentVersion < 3) {
-        console.log('⬆️ Running migration 3: Add updated_at to categories');
-
-        const catTableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(categories)');
-        const hasUpdatedAt = catTableInfo.some((col: any) => col.name === 'updated_at');
-
-        if (!hasUpdatedAt) {
-          // Add updated_at column with default value (same as created_at initially)
-          await this.db.execAsync('ALTER TABLE categories ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;');
-
-          // Update existing rows to set updated_at = created_at
-          await this.db.execAsync('UPDATE categories SET updated_at = created_at WHERE updated_at = 0;');
-
-          console.log('  ✓ Added updated_at column to categories');
-        } else {
-          console.log('  ℹ️ categories updated_at column already exists');
-        }
-
-        await this.db.runAsync(
-          'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
-          ['schema_version', '3', Date.now()]
-        );
-        console.log('✅ Migration 3 complete');
-      }
-
-      // Migration 4: Add entry_date column to entries
-      if (currentVersion < 4) {
-        console.log('⬆️ Running migration 4: Add entry_date to entries');
-
-        const entriesTableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        const hasEntryDate = entriesTableInfo.some((col: any) => col.name === 'entry_date');
-
-        if (!hasEntryDate) {
-          // Add entry_date column
-          await this.db.execAsync('ALTER TABLE entries ADD COLUMN entry_date INTEGER;');
-
-          // Set entry_date = created_at for existing entries
-          await this.db.execAsync('UPDATE entries SET entry_date = created_at WHERE entry_date IS NULL;');
-
-          console.log('  ✓ Added entry_date column to entries');
-
-          // Create index for entry_date
-          await this.db.execAsync('CREATE INDEX IF NOT EXISTS idx_entries_entry_date ON entries(entry_date);');
-          console.log('  ✓ Created entry_date index');
-        } else {
-          console.log('  ℹ️ entries entry_date column already exists');
-        }
-
-        await this.db.runAsync(
-          'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
-          ['schema_version', '4', Date.now()]
-        );
-        console.log('✅ Migration 4 complete');
-      }
-
-      // Migration 5: Add sync_logs table
-      if (currentVersion < 5) {
-        console.log('⬆️ Running migration 5: Add sync_logs table');
-
-        await this.db.execAsync(`
-          CREATE TABLE IF NOT EXISTS sync_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp INTEGER NOT NULL,
-            log_level TEXT NOT NULL CHECK (log_level IN ('info', 'warning', 'error')),
-            operation TEXT NOT NULL,
-            message TEXT NOT NULL,
-            details TEXT,
-            entries_pushed INTEGER DEFAULT 0,
-            entries_errors INTEGER DEFAULT 0,
-            categories_pushed INTEGER DEFAULT 0,
-            categories_errors INTEGER DEFAULT 0,
-            entries_pulled INTEGER DEFAULT 0
-          );
-
-          CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp DESC);
-          CREATE INDEX IF NOT EXISTS idx_sync_logs_level ON sync_logs(log_level);
-        `);
-
-        console.log('  ✓ Created sync_logs table');
-
-        await this.db.runAsync(
-          'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
-          ['schema_version', '5', Date.now()]
-        );
-        console.log('✅ Migration 5 complete');
-      }
-
-      // Migration 6: Add conflict resolution columns for multi-device sync
-      if (currentVersion < 6) {
-        console.log('⬆️ Running migration 6: Add conflict resolution columns');
-
-        await this.db.execAsync(`
-          ALTER TABLE entries ADD COLUMN version INTEGER DEFAULT 1;
-          ALTER TABLE entries ADD COLUMN base_version INTEGER DEFAULT 1;
-          ALTER TABLE entries ADD COLUMN conflict_status TEXT;
-          ALTER TABLE entries ADD COLUMN conflict_backup TEXT;
-          ALTER TABLE entries ADD COLUMN last_edited_by TEXT;
-          ALTER TABLE entries ADD COLUMN last_edited_device TEXT;
-
-          ALTER TABLE categories ADD COLUMN version INTEGER DEFAULT 1;
-          ALTER TABLE categories ADD COLUMN base_version INTEGER DEFAULT 1;
-          ALTER TABLE categories ADD COLUMN conflict_status TEXT;
-          ALTER TABLE categories ADD COLUMN conflict_backup TEXT;
-          ALTER TABLE categories ADD COLUMN last_edited_by TEXT;
-          ALTER TABLE categories ADD COLUMN last_edited_device TEXT;
-        `);
-
-        console.log('  ✓ Added conflict resolution columns to entries and categories');
-
-        await this.db.runAsync(
-          'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
-          ['schema_version', '6', Date.now()]
-        );
-        console.log('✅ Migration 6 complete');
-      }
-
-      console.log('✅ All migrations complete');
     } catch (error) {
-      console.error('❌ Migration failed:', error);
+      console.error('❌ Migration check failed:', error);
       // Check if column exists despite error
       try {
         const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
@@ -279,6 +202,7 @@ class LocalDatabase {
         tags TEXT,                    -- JSON array: '["tag1","tag2"]'
         mentions TEXT,                -- JSON array: '["person1","person2"]'
         category_id TEXT,
+        entry_date INTEGER,           -- Unix timestamp for calendar grouping (Migration 4)
         location_lat REAL,
         location_lng REAL,
         location_accuracy REAL,
@@ -288,7 +212,7 @@ class LocalDatabase {
         completed_at INTEGER,         -- Unix timestamp
         created_at INTEGER NOT NULL,  -- Unix timestamp
         updated_at INTEGER NOT NULL,  -- Unix timestamp
-        deleted_at INTEGER,           -- Unix timestamp (soft delete)
+        deleted_at INTEGER,           -- Unix timestamp (soft delete - Migration 1)
 
         -- Sync tracking fields
         local_only INTEGER DEFAULT 0,     -- 0 = sync enabled, 1 = local only
@@ -298,7 +222,7 @@ class LocalDatabase {
         sync_retry_count INTEGER DEFAULT 0,
         sync_last_attempt INTEGER,        -- Unix timestamp of last sync attempt
 
-        -- Conflict resolution fields (for multi-device sync)
+        -- Conflict resolution fields (Migration 6)
         version INTEGER DEFAULT 1,        -- Increments with each local edit
         base_version INTEGER DEFAULT 1,   -- Server version this edit is based on
         conflict_status TEXT,             -- null, 'conflicted', 'resolved'
@@ -311,11 +235,12 @@ class LocalDatabase {
       CREATE INDEX IF NOT EXISTS idx_entries_user_id ON entries(user_id);
       CREATE INDEX IF NOT EXISTS idx_entries_created_at ON entries(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_entries_updated_at ON entries(updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_entries_deleted_at ON entries(deleted_at);
+      CREATE INDEX IF NOT EXISTS idx_entries_entry_date ON entries(entry_date);
       CREATE INDEX IF NOT EXISTS idx_entries_category_id ON entries(category_id);
       CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status);
       CREATE INDEX IF NOT EXISTS idx_entries_synced ON entries(synced);
       CREATE INDEX IF NOT EXISTS idx_entries_local_only ON entries(local_only);
-      -- Note: idx_entries_deleted_at is created in migration 1
 
       -- Categories table (with sync support)
       CREATE TABLE IF NOT EXISTS categories (
@@ -329,13 +254,14 @@ class LocalDatabase {
         color TEXT,
         icon TEXT,
         created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,   -- Migration 3
 
-        -- Sync tracking fields
+        -- Sync tracking fields (Migration 2)
         synced INTEGER DEFAULT 0,         -- 0 = needs sync, 1 = synced
         sync_action TEXT,                 -- 'create', 'update', 'delete', or NULL
         sync_error TEXT,
 
-        -- Conflict resolution fields (for multi-device sync)
+        -- Conflict resolution fields (Migration 6)
         version INTEGER DEFAULT 1,        -- Increments with each local edit
         base_version INTEGER DEFAULT 1,   -- Server version this edit is based on
         conflict_status TEXT,             -- null, 'conflicted', 'resolved'
@@ -346,7 +272,33 @@ class LocalDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
       CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_category_id);
-      -- Note: idx_categories_synced is created in migration 2
+      CREATE INDEX IF NOT EXISTS idx_categories_synced ON categories(synced);
+
+      -- Photos table (Migration 7, simplified in Migration 8, updated in Migration 9)
+      CREATE TABLE IF NOT EXISTS photos (
+        photo_id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        local_path TEXT,
+        mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
+        file_size INTEGER,
+        width INTEGER,
+        height INTEGER,
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        uploaded INTEGER DEFAULT 0,
+        synced INTEGER DEFAULT 0,
+        sync_action TEXT,
+        FOREIGN KEY (entry_id) REFERENCES entries(entry_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_photos_entry_id ON photos(entry_id);
+      CREATE INDEX IF NOT EXISTS idx_photos_user_id ON photos(user_id);
+      CREATE INDEX IF NOT EXISTS idx_photos_position ON photos(entry_id, position);
+      CREATE INDEX IF NOT EXISTS idx_photos_uploaded ON photos(uploaded);
+      CREATE INDEX IF NOT EXISTS idx_photos_synced ON photos(synced);
 
       -- Sync metadata table
       CREATE TABLE IF NOT EXISTS sync_metadata (
@@ -355,7 +307,7 @@ class LocalDatabase {
         updated_at INTEGER NOT NULL
       );
 
-      -- Sync logs table (created in migration 5, but define here for new installs)
+      -- Sync logs table (Migration 5)
       CREATE TABLE IF NOT EXISTS sync_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp INTEGER NOT NULL,
@@ -367,6 +319,8 @@ class LocalDatabase {
         entries_errors INTEGER DEFAULT 0,
         categories_pushed INTEGER DEFAULT 0,
         categories_errors INTEGER DEFAULT 0,
+        photos_pushed INTEGER DEFAULT 0,
+        photos_errors INTEGER DEFAULT 0,
         entries_pulled INTEGER DEFAULT 0
       );
 
@@ -574,6 +528,12 @@ class LocalDatabase {
     if (!entry) return;
 
     const now = Date.now();
+
+    // Mark all associated photos for deletion
+    const photos = await this.getPhotosForEntry(entryId);
+    for (const photo of photos) {
+      await this.deletePhoto(photo.photo_id);
+    }
 
     if (entry.local_only) {
       // Local-only entries can be hard deleted immediately
@@ -1115,6 +1075,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.execAsync(`
+      DELETE FROM photos;
       DELETE FROM entries;
       DELETE FROM categories;
       DELETE FROM sync_metadata;
@@ -1132,7 +1093,8 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     const result = await this.db.getAllAsync(sql, params || []);
-    console.log('📊 Query result:', result);
+    // Only log row count, not full data (can be massive)
+    // console.log(`📊 Query returned ${result.length} rows`);
     return result;
   }
 
@@ -1153,6 +1115,404 @@ class LocalDatabase {
   clearCurrentUser(): void {
     console.log('👤 Cleared current user');
     this.currentUserId = null;
+  }
+
+  // ========================================
+  // PHOTO OPERATIONS
+  // ========================================
+
+  /**
+   * Create a new photo record
+   */
+  async createPhoto(photo: {
+    photo_id: string;
+    entry_id: string;
+    user_id: string;
+    file_path: string;
+    local_path?: string;
+    mime_type: string;
+    file_size?: number;
+    width?: number;
+    height?: number;
+    position: number;
+    uploaded?: boolean;
+  }): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const now = Date.now();
+
+    await this.db.runAsync(
+      `INSERT INTO photos (
+        photo_id, entry_id, user_id, file_path, local_path,
+        mime_type, file_size, width, height, position,
+        created_at, updated_at, uploaded, synced, sync_action
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        photo.photo_id,
+        photo.entry_id,
+        photo.user_id,
+        photo.file_path,
+        photo.local_path || null,
+        photo.mime_type,
+        photo.file_size || null,
+        photo.width || null,
+        photo.height || null,
+        photo.position,
+        now,
+        now,
+        photo.uploaded ? 1 : 0,
+        0, // Not synced yet
+        'create', // Mark for sync
+      ]
+    );
+
+    console.log(`📸 Photo created: ${photo.photo_id}`);
+  }
+
+  /**
+   * Get all photos for an entry (excludes photos marked for deletion)
+   */
+  async getPhotosForEntry(entryId: string): Promise<any[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    let query = 'SELECT * FROM photos WHERE entry_id = ? AND (sync_action IS NULL OR sync_action != ?)';
+    const params: any[] = [entryId, 'delete'];
+
+    // Filter by current user if set
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    query += ' ORDER BY position ASC';
+
+    const photos = await this.db.getAllAsync<any>(query, params);
+    return photos;
+  }
+
+  /**
+   * Get a single photo by ID
+   */
+  async getPhoto(photoId: string): Promise<any | null> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    let query = 'SELECT * FROM photos WHERE photo_id = ?';
+    const params: any[] = [photoId];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    const photo = await this.db.getFirstAsync<any>(query, params);
+    return photo || null;
+  }
+
+  /**
+   * Update a photo
+   */
+  async updatePhoto(photoId: string, updates: Partial<{
+    file_path: string;
+    local_path: string;
+    file_size: number;
+    width: number;
+    height: number;
+    position: number;
+    uploaded: boolean;
+    synced: number;
+    sync_action: string | null;
+  }>): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    if (updates.file_path !== undefined) {
+      fields.push('file_path = ?');
+      values.push(updates.file_path);
+    }
+    if (updates.local_path !== undefined) {
+      fields.push('local_path = ?');
+      values.push(updates.local_path);
+    }
+    if (updates.file_size !== undefined) {
+      fields.push('file_size = ?');
+      values.push(updates.file_size);
+    }
+    if (updates.width !== undefined) {
+      fields.push('width = ?');
+      values.push(updates.width);
+    }
+    if (updates.height !== undefined) {
+      fields.push('height = ?');
+      values.push(updates.height);
+    }
+    if (updates.position !== undefined) {
+      fields.push('position = ?');
+      values.push(updates.position);
+    }
+    if (updates.uploaded !== undefined) {
+      fields.push('uploaded = ?');
+      values.push(updates.uploaded ? 1 : 0);
+    }
+    if (updates.synced !== undefined) {
+      fields.push('synced = ?');
+      values.push(updates.synced);
+    }
+    if (updates.sync_action !== undefined) {
+      fields.push('sync_action = ?');
+      values.push(updates.sync_action);
+    }
+
+    if (fields.length === 0) return;
+
+    fields.push('updated_at = ?');
+    values.push(Date.now());
+
+    values.push(photoId);
+
+    const sql = `UPDATE photos SET ${fields.join(', ')} WHERE photo_id = ?`;
+    await this.db.runAsync(sql, values);
+
+    console.log(`📸 Photo updated: ${photoId}`);
+  }
+
+  /**
+   * Update entry_id for all photos (used when entry is created with temp ID)
+   * This fixes the issue where photos are saved before entry creation
+   * Also renames local file paths to match new entry_id
+   */
+  async updatePhotoEntryIds(oldEntryId: string, newEntryId: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    console.log(`📸 updatePhotoEntryIds: ${oldEntryId} → ${newEntryId}`);
+
+    // Get all photos with the old entry_id
+    const photos = await this.db.getAllAsync<any>(
+      'SELECT photo_id, file_path, local_path FROM photos WHERE entry_id = ?',
+      [oldEntryId]
+    );
+
+    console.log(`📸 Found ${photos.length} photos to update`);
+
+    if (photos.length === 0) return;
+
+    // Import FileSystem
+    const FileSystem = await import('expo-file-system/legacy');
+
+    // Update entry_id, file_path, and local_path for each photo
+    for (const photo of photos) {
+      console.log(`📸 Processing photo ${photo.photo_id}:`);
+      console.log(`  Old path: ${photo.local_path}`);
+
+      // Update file_path to use new entry_id (Supabase path)
+      const newFilePath = photo.file_path.replace(oldEntryId, newEntryId);
+
+      // Update local_path to use new entry_id (local file system path)
+      let newLocalPath = photo.local_path ? photo.local_path.replace(oldEntryId, newEntryId) : null;
+
+      console.log(`  New path: ${newLocalPath}`);
+
+      // If photo has a local file, rename the directory
+      if (photo.local_path && newLocalPath) {
+        try {
+          // Check if old file exists
+          const oldFileInfo = await FileSystem.getInfoAsync(photo.local_path);
+          console.log(`  Old file exists: ${oldFileInfo.exists}`);
+
+          if (oldFileInfo.exists) {
+            // Get new directory path
+            const newDir = newLocalPath.substring(0, newLocalPath.lastIndexOf('/'));
+            console.log(`  Creating new directory: ${newDir}`);
+
+            // Create new directory
+            await FileSystem.makeDirectoryAsync(newDir, { intermediates: true });
+
+            // Move file from old path to new path
+            console.log(`  Moving file...`);
+            await FileSystem.moveAsync({
+              from: photo.local_path,
+              to: newLocalPath,
+            });
+
+            console.log(`✅ Moved photo file successfully`);
+
+            // Verify file exists at new location
+            const newFileInfo = await FileSystem.getInfoAsync(newLocalPath);
+            console.log(`  New file exists: ${newFileInfo.exists}`);
+          } else {
+            console.log(`⚠️ Old file doesn't exist at ${photo.local_path}`);
+          }
+        } catch (error) {
+          console.error(`❌ Failed to move photo file ${photo.photo_id}:`, error);
+          // Continue with database update even if file move failed
+        }
+      }
+
+      await this.db.runAsync(
+        'UPDATE photos SET entry_id = ?, file_path = ?, local_path = ?, synced = 0 WHERE photo_id = ?',
+        [newEntryId, newFilePath, newLocalPath, photo.photo_id]
+      );
+      console.log(`✅ Updated database for photo ${photo.photo_id}`);
+    }
+
+    console.log(`📸 Finished updating ${photos.length} photos`);
+  }
+
+  /**
+   * Delete a photo
+   */
+  async deletePhoto(photoId: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Mark for deletion sync first
+    await this.db.runAsync(
+      'UPDATE photos SET sync_action = ?, synced = 0 WHERE photo_id = ?',
+      ['delete', photoId]
+    );
+
+    console.log(`📸 Photo marked for deletion: ${photoId}`);
+  }
+
+  /**
+   * Permanently delete a photo (after sync)
+   */
+  async permanentlyDeletePhoto(photoId: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.runAsync('DELETE FROM photos WHERE photo_id = ?', [photoId]);
+    console.log(`📸 Photo permanently deleted: ${photoId}`);
+  }
+
+  /**
+   * Clean up orphaned photos (photos whose entries no longer exist)
+   * Returns count of orphans found and marked for deletion
+   *
+   * PERFORMANCE NOTE: This is O(n) where n = total photos.
+   * Use sparingly - recommended triggers:
+   * - Manual user action (Database Info screen)
+   * - Weekly background task
+   * - After bulk entry deletions
+   *
+   * DO NOT run on every sync - it will slow down sync significantly with large photo counts.
+   */
+  async cleanupOrphanedPhotos(): Promise<number> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    console.log('🧹 Searching for orphaned photos...');
+
+    // Get all photos (excluding already marked for deletion)
+    let query = 'SELECT * FROM photos WHERE sync_action IS NULL OR sync_action != ?';
+    const params: any[] = ['delete'];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    const photos = await this.db.getAllAsync<any>(query, params);
+    let orphanCount = 0;
+
+    for (const photo of photos) {
+      // Check if entry exists
+      const entry = await this.getEntry(photo.entry_id);
+
+      // If entry doesn't exist or is deleted, mark photo for deletion
+      if (!entry || entry.deleted_at) {
+        console.log(`🗑️ Found orphaned photo ${photo.photo_id} (entry ${photo.entry_id} ${!entry ? 'not found' : 'deleted'})`);
+        await this.deletePhoto(photo.photo_id);
+        orphanCount++;
+      }
+    }
+
+    if (orphanCount > 0) {
+      console.log(`🧹 Cleanup complete: Found and marked ${orphanCount} orphaned photos for deletion`);
+    } else {
+      console.log('✅ No orphaned photos found');
+    }
+
+    return orphanCount;
+  }
+
+  /**
+   * Get all photos needing upload
+   */
+  async getPhotosNeedingUpload(): Promise<any[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    let query = 'SELECT * FROM photos WHERE uploaded = 0';
+    const params: any[] = [];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    query += ' ORDER BY created_at ASC';
+
+    const photos = await this.db.getAllAsync<any>(query, params);
+    return photos;
+  }
+
+  /**
+   * Get all photos needing sync
+   */
+  async getPhotosNeedingSync(): Promise<any[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Sync photos if:
+    // 1. Parent entry has been synced (for create/update) OR
+    // 2. Photo is marked for deletion (delete even if entry not synced or deleted)
+    let query = `
+      SELECT p.*
+      FROM photos p
+      LEFT JOIN entries e ON p.entry_id = e.entry_id
+      WHERE p.synced = 0
+        AND p.sync_action IS NOT NULL
+        AND (e.synced = 1 OR p.sync_action = 'delete' OR e.entry_id IS NULL)
+    `;
+    const params: any[] = [];
+
+    if (this.currentUserId) {
+      query += ' AND p.user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    query += ' ORDER BY p.created_at ASC';
+
+    const photos = await this.db.getAllAsync<any>(query, params);
+    return photos;
+  }
+
+  /**
+   * Get all photos for current user
+   */
+  async getAllPhotos(): Promise<any[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    let query = 'SELECT * FROM photos';
+    const params: any[] = [];
+
+    if (this.currentUserId) {
+      query += ' WHERE user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const photos = await this.db.getAllAsync<any>(query, params);
+    return photos;
   }
 
   /**

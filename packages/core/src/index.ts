@@ -5,6 +5,7 @@
 export * from "./modules/auth";
 export * from "./modules/categories";
 export * from "./modules/entries";
+export * from "./modules/photos";
 
 // Shared utilities
 export * from "./shared/types";

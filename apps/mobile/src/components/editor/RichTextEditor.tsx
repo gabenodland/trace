@@ -1,5 +1,5 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { View, StyleSheet, TouchableWithoutFeedback } from "react-native";
+import { View, StyleSheet } from "react-native";
 import {
   RichText,
   useEditorBridge,
@@ -72,6 +72,8 @@ export const RichTextEditor = forwardRef(({
     indent: () => editor.sink(),
     outdent: () => editor.lift(),
     blur: () => editor.blur(),
+    getHTML: () => editor.getHTML(),
+    setContent: (html: string) => editor.setContent(html),
     // Force scroll to cursor position
     scrollToCursor: () => {
       editor.focus();

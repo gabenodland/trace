@@ -4,20 +4,23 @@
 
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Clipboard, Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '@trace/core';
 import { useNavigation } from '../shared/contexts/NavigationContext';
 import { useNavigationMenu } from '../shared/hooks/useNavigationMenu';
 import { TopBar } from '../components/layout/TopBar';
 import { localDB } from '../shared/db/localDB';
 import { syncQueue } from '../shared/sync/syncQueue';
+import { deletePhotoFromLocalStorage } from '../modules/photos/mobilePhotoApi';
 import Svg, { Path } from 'react-native-svg';
 
-type TabType = 'status' | 'entries' | 'categories' | 'logs';
+type TabType = 'status' | 'entries' | 'categories' | 'photos' | 'logs';
 type SyncFilter = 'all' | 'synced' | 'unsynced' | 'errors';
 
 interface CloudCounts {
   entries: number;
   categories: number;
+  photos: number;
 }
 
 export function DatabaseInfoScreen() {
@@ -26,15 +29,19 @@ export function DatabaseInfoScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('status');
   const [entries, setEntries] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [photos, setPhotos] = useState<any[]>([]);
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
-  const [cloudCounts, setCloudCounts] = useState<CloudCounts>({ entries: 0, categories: 0 });
+  const [cloudCounts, setCloudCounts] = useState<CloudCounts>({ entries: 0, categories: 0, photos: 0 });
   const [syncStatus, setSyncStatus] = useState<any>(null);
   const [entrySyncFilter, setEntrySyncFilter] = useState<SyncFilter>('all');
   const [categorySyncFilter, setCategorySyncFilter] = useState<SyncFilter>('all');
+  const [photoSyncFilter, setPhotoSyncFilter] = useState<SyncFilter>('all');
   const [refreshKey, setRefreshKey] = useState(0);
   const [jsonModalVisible, setJsonModalVisible] = useState(false);
   const [jsonModalContent, setJsonModalContent] = useState<string>('');
   const [jsonModalTitle, setJsonModalTitle] = useState<string>('');
+  const [schemaVersion, setSchemaVersion] = useState<number>(0);
+  const [photoFilesExist, setPhotoFilesExist] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadDebugInfo();
@@ -50,6 +57,26 @@ export function DatabaseInfoScreen() {
       const allCategories = await localDB.runCustomQuery('SELECT * FROM categories ORDER BY name');
       setCategories(allCategories);
 
+      // Get all photos from SQLite
+      const allPhotos = await localDB.runCustomQuery('SELECT * FROM photos ORDER BY created_at DESC');
+      setPhotos(allPhotos);
+
+      // Check which photo files exist locally
+      const fileExistenceMap: Record<string, boolean> = {};
+      for (const photo of allPhotos) {
+        if (photo.local_path) {
+          try {
+            const fileInfo = await FileSystem.getInfoAsync(photo.local_path);
+            fileExistenceMap[photo.photo_id] = fileInfo.exists;
+          } catch (error) {
+            fileExistenceMap[photo.photo_id] = false;
+          }
+        } else {
+          fileExistenceMap[photo.photo_id] = false;
+        }
+      }
+      setPhotoFilesExist(fileExistenceMap);
+
       // Get sync logs from SQLite
       const logs = await localDB.getSyncLogs(50); // Get last 50 logs
       setSyncLogs(logs);
@@ -58,10 +85,17 @@ export function DatabaseInfoScreen() {
       const status = await syncQueue.getSyncStatus();
       setSyncStatus(status);
 
+      // Get schema version
+      const versionResult = await localDB.runCustomQuery(
+        'SELECT value FROM sync_metadata WHERE key = ?',
+        ['schema_version']
+      );
+      setSchemaVersion(versionResult.length > 0 ? parseInt(versionResult[0].value) : 0);
+
       // Get counts from Cloud
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const [entriesCount, categoriesCount] = await Promise.all([
+        const [entriesCount, categoriesCount, photosCount] = await Promise.all([
           supabase
             .from('entries')
             .select('*', { count: 'exact', head: true })
@@ -70,11 +104,16 @@ export function DatabaseInfoScreen() {
             .from('categories')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', user.id),
+          supabase
+            .from('photos')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id),
         ]);
 
         setCloudCounts({
           entries: entriesCount.count || 0,
           categories: categoriesCount.count || 0,
+          photos: photosCount.count || 0,
         });
       }
     } catch (error) {
@@ -105,6 +144,20 @@ export function DatabaseInfoScreen() {
         return !category.synced;
       case 'errors':
         return category.sync_error;
+      default:
+        return true;
+    }
+  });
+
+  // Filter photos based on sync filter
+  const filteredPhotos = photos.filter(photo => {
+    switch (photoSyncFilter) {
+      case 'synced':
+        return photo.synced;
+      case 'unsynced':
+        return !photo.synced;
+      case 'errors':
+        return photo.sync_error;
       default:
         return true;
     }
@@ -197,6 +250,62 @@ export function DatabaseInfoScreen() {
     );
   };
 
+  const handleClearLocalPhotos = () => {
+    Alert.alert(
+      'Clear Local Photos',
+      'This will delete all photo files and database records. Photos will re-download from Cloud on next sync if they were uploaded.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Photos',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Get all photos
+              const allPhotos = await localDB.runCustomQuery('SELECT * FROM photos');
+
+              // Delete all local photo files
+              let deletedCount = 0;
+              for (const photo of allPhotos) {
+                if (photo.local_path) {
+                  try {
+                    await deletePhotoFromLocalStorage(photo.local_path);
+                    deletedCount++;
+                  } catch (err) {
+                    console.warn(`Failed to delete photo file: ${photo.local_path}`, err);
+                  }
+                }
+              }
+
+              // Delete all photo records from database
+              await localDB.runCustomQuery('DELETE FROM photos');
+
+              setRefreshKey(prev => prev + 1);
+              Alert.alert('Success', `Cleared ${allPhotos.length} photo records and deleted ${deletedCount} local files. Uploaded photos will re-download from Cloud on next sync.`);
+            } catch (error) {
+              Alert.alert('Error', `Failed to clear photos: ${error}`);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCleanupOrphanedPhotos = async () => {
+    try {
+      const orphanCount = await localDB.cleanupOrphanedPhotos();
+      setRefreshKey(prev => prev + 1);
+
+      if (orphanCount > 0) {
+        Alert.alert('Success', `Found and marked ${orphanCount} orphaned photo${orphanCount === 1 ? '' : 's'} for deletion. They will be removed on next sync.`);
+      } else {
+        Alert.alert('All Good', 'No orphaned photos found.');
+      }
+    } catch (error) {
+      Alert.alert('Error', `Failed to cleanup orphaned photos: ${error}`);
+    }
+  };
+
   const showJsonModal = (obj: any, title: string) => {
     setJsonModalTitle(title);
     setJsonModalContent(JSON.stringify(obj, null, 2));
@@ -269,6 +378,14 @@ export function DatabaseInfoScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={[styles.tab, activeTab === 'photos' && styles.tabActive]}
+          onPress={() => setActiveTab('photos')}
+        >
+          <Text style={[styles.tabText, activeTab === 'photos' && styles.tabTextActive]}>
+            Photos
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.tab, activeTab === 'logs' && styles.tabActive]}
           onPress={() => setActiveTab('logs')}
         >
@@ -282,6 +399,21 @@ export function DatabaseInfoScreen() {
         {/* STATUS TAB */}
         {activeTab === 'status' && (
           <>
+            {/* Database Schema Version */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Database</Text>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>
+                  Schema Version: <Text style={styles.versionNumber}>{schemaVersion}</Text>
+                </Text>
+                <Text style={styles.infoTextSmall}>
+                  {schemaVersion === 7 ? '✅ Latest version (includes photos table)' :
+                   schemaVersion < 7 ? '⚠️ Old version - clear app data to upgrade' :
+                   '❓ Unknown version'}
+                </Text>
+              </View>
+            </View>
+
             {/* Sync Status */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Sync Status</Text>
@@ -359,6 +491,41 @@ export function DatabaseInfoScreen() {
                   <Text style={styles.statsCount}>{cloudCounts.categories}</Text>
                   <Text style={styles.infoText}>
                     Diff: {cloudCounts.categories - categories.length}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Photos</Text>
+              <View style={styles.statsRow}>
+                <View style={[styles.infoBox, styles.statsBox]}>
+                  <Text style={styles.statsLabel}>Local</Text>
+                  <Text style={styles.statsCount}>{photos.length}</Text>
+                  <Text style={styles.infoText}>
+                    Synced: {photos.filter(p => p.synced).length}
+                  </Text>
+                  <Text style={styles.infoText}>
+                    Unsynced: {photos.filter(p => !p.synced).length}
+                  </Text>
+                  <Text style={styles.infoText}>
+                    Uploaded: {photos.filter(p => p.uploaded).length}
+                  </Text>
+                  <Text style={styles.infoText}>
+                    Errors: {photos.filter(p => p.sync_error).length}
+                  </Text>
+                  <TouchableOpacity onPress={handleClearLocalPhotos} style={styles.smallClearButton}>
+                    <Text style={styles.smallClearButtonText}>Clear Local Photos</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleCleanupOrphanedPhotos} style={styles.cleanupButton}>
+                    <Text style={styles.cleanupButtonText}>🧹 Cleanup Orphans</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.infoBox, styles.statsBox]}>
+                  <Text style={styles.statsLabel}>Cloud</Text>
+                  <Text style={styles.statsCount}>{cloudCounts.photos}</Text>
+                  <Text style={styles.infoText}>
+                    Diff: {cloudCounts.photos - photos.length}
                   </Text>
                 </View>
               </View>
@@ -528,6 +695,106 @@ export function DatabaseInfoScreen() {
                   <Text style={styles.categoryId}>ID: {category.category_id.slice(0, 8)}...</Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          </>
+        )}
+
+        {/* PHOTOS TAB */}
+        {activeTab === 'photos' && (
+          <>
+            {/* Filter Tabs */}
+            <View style={styles.filterContainer}>
+              <TouchableOpacity
+                style={[styles.filterTab, photoSyncFilter === 'all' && styles.filterTabActive]}
+                onPress={() => setPhotoSyncFilter('all')}
+              >
+                <Text style={[styles.filterTabText, photoSyncFilter === 'all' && styles.filterTabTextActive]}>
+                  All ({photos.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, photoSyncFilter === 'synced' && styles.filterTabActive]}
+                onPress={() => setPhotoSyncFilter('synced')}
+              >
+                <Text style={[styles.filterTabText, photoSyncFilter === 'synced' && styles.filterTabTextActive]}>
+                  Synced ({photos.filter(p => p.synced).length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, photoSyncFilter === 'unsynced' && styles.filterTabActive]}
+                onPress={() => setPhotoSyncFilter('unsynced')}
+              >
+                <Text style={[styles.filterTabText, photoSyncFilter === 'unsynced' && styles.filterTabTextActive]}>
+                  Unsynced ({photos.filter(p => !p.synced).length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, photoSyncFilter === 'errors' && styles.filterTabActive]}
+                onPress={() => setPhotoSyncFilter('errors')}
+              >
+                <Text style={[styles.filterTabText, photoSyncFilter === 'errors' && styles.filterTabTextActive]}>
+                  Errors ({photos.filter(p => p.sync_error).length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Photos List */}
+            <View style={styles.section}>
+              {filteredPhotos.length === 0 ? (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoText}>No photos found</Text>
+                </View>
+              ) : (
+                filteredPhotos.map((photo, index) => (
+                  <TouchableOpacity
+                    key={photo.photo_id}
+                    style={styles.photoCard}
+                    onLongPress={() => showJsonModal(photo, `Photo: ${photo.photo_id.slice(0, 8)}`)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.photoTitle}>
+                      {index + 1}. Photo {photo.photo_id.slice(0, 8)}...
+                    </Text>
+                    <View style={styles.photoMetaContainer}>
+                      <Text style={styles.photoMeta}>
+                        Entry: {photo.entry_id.slice(0, 8)}...
+                      </Text>
+                      <Text style={styles.photoMeta}>
+                        File: {photo.file_path}
+                      </Text>
+                      <Text style={styles.photoMeta}>
+                        MIME: {photo.mime_type}
+                      </Text>
+                      <Text style={styles.photoMeta}>
+                        Position: {photo.position}
+                      </Text>
+                      {photo.local_path && (
+                        <Text style={[styles.photoMeta, !photoFilesExist[photo.photo_id] && styles.errorText]}>
+                          Local: {photoFilesExist[photo.photo_id] ? '✓ File exists' : '⚠️ File missing'}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.entryMeta}>
+                      <Text style={[styles.badge, photo.uploaded ? styles.syncedBadge : styles.unsyncedBadge]}>
+                        {photo.uploaded ? '☁️ Uploaded' : '📱 Local Only'}
+                      </Text>
+                      <Text style={[styles.badge, photo.synced ? styles.syncedBadge : styles.unsyncedBadge]}>
+                        {photo.synced ? '✅ Synced' : '⏳ Unsynced'}
+                      </Text>
+                      {photo.sync_action && (
+                        <Text style={styles.badge}>📝 {photo.sync_action}</Text>
+                      )}
+                      {photo.sync_error && (
+                        <Text style={[styles.badge, styles.errorBadge]}>❌ Error</Text>
+                      )}
+                    </View>
+                    {photo.sync_error && (
+                      <Text style={styles.errorMessage}>{photo.sync_error}</Text>
+                    )}
+                    <Text style={styles.photoId}>ID: {photo.photo_id}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
             </View>
           </>
         )}
@@ -726,6 +993,16 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginBottom: 4,
   },
+  infoTextSmall: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  versionNumber: {
+    fontWeight: '700',
+    fontSize: 16,
+    color: '#3b82f6',
+  },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -756,6 +1033,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   smallClearButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  cleanupButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  cleanupButtonText: {
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '600',
@@ -821,6 +1111,9 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     lineHeight: 16,
   },
+  errorText: {
+    color: '#dc2626',
+  },
   entryId: {
     fontSize: 10,
     color: '#9ca3af',
@@ -849,6 +1142,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#9ca3af',
     fontFamily: 'monospace',
+  },
+  photoCard: {
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  photoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  photoMetaContainer: {
+    marginBottom: 8,
+  },
+  photoMeta: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 3,
+  },
+  photoId: {
+    fontSize: 10,
+    color: '#9ca3af',
+    fontFamily: 'monospace',
+    marginTop: 4,
   },
   dangerButton: {
     backgroundColor: '#ef4444',
