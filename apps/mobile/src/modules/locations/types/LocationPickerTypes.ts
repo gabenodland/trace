@@ -13,6 +13,7 @@ import type { Location, POIItem, MapboxReverseGeocodeResponse } from '@trace/cor
  * Privacy level options for location obfuscation
  */
 export type PrivacyLevel =
+  | 'none'           // No location information saved
   | 'exact'          // Exact coordinates
   | 'address'        // Street address level
   | 'postal_code'    // Postal code level

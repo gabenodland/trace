@@ -703,7 +703,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             />
           </Svg>
           <Text style={[styles.topBarButtonText, captureLocation && styles.topBarButtonTextActive]}>
-            {locationData?.name || (captureLocation ? "GPS" : "None")}
+            {captureLocation ? (locationData?.name || "GPS") : "None"}
           </Text>
         </TouchableOpacity>
 
@@ -1107,6 +1107,15 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             visible={showLocationPicker}
             onClose={() => setShowLocationPicker(false)}
             onSelect={(location) => {
+              // If location is null (user selected "None"), clear location data
+              if (location === null) {
+                console.log('[CaptureForm] 📍 User selected "None" - clearing location data');
+                setLocationData(null);
+                setCaptureLocation(false);
+                setShowLocationPicker(false);
+                return;
+              }
+
               console.log('[CaptureForm] 📍 Received location from LocationPicker:', {
                 name: location.name,
                 latitude: location.latitude,

@@ -32,7 +32,7 @@ import {
 interface LocationPickerProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (location: LocationType) => void;
+  onSelect: (location: LocationType | null) => void;
   initialLocation?: LocationType | null;
 }
 
@@ -649,6 +649,14 @@ export function LocationPicker({ visible, onClose, onSelect, initialLocation }: 
       console.log('[LocationPicker] 🚀 OK pressed, selecting location:', selection.location.name);
       console.log('[LocationPicker] Privacy level:', selection.privacyLevel);
 
+      // If user selected "None", clear all location data
+      if (selection.privacyLevel === 'none') {
+        console.log('[LocationPicker] Privacy level is "none" - clearing all location data');
+        onSelect(null);
+        onClose();
+        return;
+      }
+
       // Get the exact GPS coordinates (for entry_latitude/entry_longitude)
       const exactCoords = privacyLevelCoords.get('exact');
 
@@ -662,8 +670,9 @@ export function LocationPicker({ visible, onClose, onSelect, initialLocation }: 
       // Privacy level hierarchy (from most specific to least):
       // exact -> address -> postal_code -> neighborhood -> city -> subdivision -> region -> country
 
-      // Define hierarchy order (0 = most specific, 7 = least specific)
+      // Define hierarchy order (0 = most specific, 8 = least specific)
       const hierarchyOrder: Record<PrivacyLevel, number> = {
+        none: 8,
         exact: 0,
         address: 1,
         postal_code: 2,
@@ -1141,6 +1150,22 @@ export function LocationPicker({ visible, onClose, onSelect, initialLocation }: 
                       </View>
                     </TouchableOpacity>
                   )}
+
+                  {/* None - Always available */}
+                  <TouchableOpacity
+                    style={styles.privacyLevelOption}
+                    onPress={() => handlePrivacyLevelChange('none')}
+                  >
+                    <View style={styles.radioButton}>
+                      {selection.privacyLevel === 'none' && <View style={styles.radioButtonInner} />}
+                    </View>
+                    <View style={styles.privacyLevelInfo}>
+                      <Text style={styles.privacyLevelLabel}>None</Text>
+                      <Text style={styles.privacyLevelValue}>
+                        No location information saved
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
                 </View>
                 </ScrollView>
               </>
