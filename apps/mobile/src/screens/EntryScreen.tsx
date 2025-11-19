@@ -8,6 +8,7 @@ export interface ReturnContext {
   categoryName?: string;
   // For calendar
   selectedDate?: string;
+  zoomLevel?: "day" | "week" | "month" | "year";
   // For tasks
   taskFilter?: "all" | "incomplete" | "complete";
 }

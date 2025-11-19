@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from "react-native";
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Platform, StatusBar, Keyboard } from "react-native";
 import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState, generatePhotoPath, type Location as LocationType, locationFromEntry, locationToEntryFields } from "@trace/core";
@@ -8,9 +8,10 @@ import { useCategories } from "../../categories/mobileCategoryHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { CategoryPicker } from "../../categories/components/CategoryPicker";
-import { TopBar } from "../../../components/layout/TopBar";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdownContainer";
+import { NavigationMenu } from "../../../components/navigation/NavigationMenu";
+import { useNavigationMenu } from "../../../shared/hooks/useNavigationMenu";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 import { theme } from "../../../shared/theme/theme";
 import { SimpleDatePicker } from "./SimpleDatePicker";
@@ -121,6 +122,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const { user, signOut } = useAuthState();
   const { categories } = useCategories();
   const { navigate } = useNavigation();
+  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const [showMenu, setShowMenu] = useState(false);
 
   // Edit mode: new entries start in edit mode, existing entries start in read-only
   const [isEditMode, setIsEditMode] = useState(!isEditing);
@@ -671,8 +674,130 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
   return (
     <View style={styles.container}>
-      {/* Top Bar */}
-      <TopBar showBackButton={true} onBackPress={handleCancel}>
+      {/* Title Bar with Hamburger Menu */}
+      <View style={styles.titleBar}>
+        {/* Title Input - Collapsible */}
+        <View style={styles.titleBarContent}>
+          {shouldCollapse ? (
+            <TouchableOpacity
+              style={styles.titleCollapsed}
+              onPress={() => {
+                if (isEditMode) {
+                  setIsTitleExpanded(true);
+                  setTimeout(() => titleInputRef.current?.focus(), 100);
+                } else {
+                  enterEditMode();
+                  setIsTitleExpanded(true);
+                  setTimeout(() => titleInputRef.current?.focus(), 100);
+                }
+              }}
+            >
+              <Text style={styles.titlePlaceholder}>
+                {isEditMode ? "Add Title" : "Untitled"}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.titleContainer}>
+              <TextInput
+                ref={titleInputRef}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Title"
+                placeholderTextColor="#9ca3af"
+                style={styles.titleInput}
+                editable={isEditMode && !isSubmitting}
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onFocus={() => {
+                  setIsTitleExpanded(true);
+                }}
+                onPressIn={handleTitlePress}
+              />
+            </View>
+          )}
+        </View>
+
+        {/* Hamburger Menu */}
+        <View style={styles.menuContainer}>
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => setShowMenu(!showMenu)}
+          >
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
+              <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
+              <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
+              <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
+            </Svg>
+          </TouchableOpacity>
+
+          <NavigationMenu
+            visible={showMenu}
+            onClose={() => setShowMenu(false)}
+            menuItems={menuItems}
+            userEmail={userEmail}
+            onProfilePress={onProfilePress}
+          />
+        </View>
+      </View>
+
+      {/* Entry Date & Time - Below title */}
+      <View style={styles.entryDateContainer}>
+        {/* Date */}
+        <TouchableOpacity
+          onPress={() => {
+            setPickerMode("date");
+            setShowNativePicker(true);
+            if (!isEditMode) enterEditMode();
+          }}
+        >
+          <Text style={styles.entryDateText}>
+            {entryDate ? new Date(entryDate).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            }) : 'Set date'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Time or Watch Icon */}
+        {includeTime ? (
+          <TouchableOpacity
+            style={styles.timeContainer}
+            onPress={() => {
+              setShowTimeModal(true);
+              if (!isEditMode) enterEditMode();
+            }}
+          >
+            <Text style={styles.entryDateText}>
+              {entryDate ? new Date(entryDate).toLocaleTimeString(undefined, {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              }) : 'Set time'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.watchIconButton}
+            onPress={() => {
+              // Show time again by setting milliseconds to 0
+              setIncludeTime(true);
+              const date = new Date(entryDate);
+              date.setMilliseconds(0);
+              setEntryDate(date.toISOString());
+              if (!isEditMode) enterEditMode();
+            }}
+          >
+            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+              <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Button Bar */}
+      <View style={styles.buttonBar}>
         {/* Location Button */}
         <TouchableOpacity
           style={[styles.topBarButton, captureLocation && styles.topBarButtonActive]}
@@ -792,98 +917,10 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             {dueDate ? new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : "Due"}
           </Text>
         </TouchableOpacity>
-      </TopBar>
+      </View>
 
       {/* Content Area */}
       <View style={styles.contentContainer}>
-        {/* Title Input - Collapsible */}
-        {shouldCollapse ? (
-          isEditMode ? (
-            <TouchableOpacity
-              style={styles.titleCollapsed}
-              onPress={() => {
-                setIsTitleExpanded(true);
-                setTimeout(() => titleInputRef.current?.focus(), 100);
-              }}
-            >
-              <Text style={styles.titlePlaceholder}>Add Title</Text>
-            </TouchableOpacity>
-          ) : null
-        ) : (
-          <View style={styles.titleContainer}>
-            <TextInput
-              ref={titleInputRef}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Title"
-              placeholderTextColor="#9ca3af"
-              style={styles.titleInput}
-              editable={isEditMode && !isSubmitting}
-              returnKeyType="next"
-              blurOnSubmit={false}
-              onFocus={() => {
-                setIsTitleExpanded(true);
-              }}
-              onPressIn={handleTitlePress}
-            />
-          </View>
-        )}
-
-        {/* Entry Date & Time - Below title */}
-        <View style={styles.entryDateContainer}>
-          {/* Date */}
-          <TouchableOpacity
-            onPress={() => {
-              setPickerMode("date");
-              setShowNativePicker(true);
-              if (!isEditMode) enterEditMode();
-            }}
-          >
-            <Text style={styles.entryDateText}>
-              {entryDate ? new Date(entryDate).toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              }) : 'Set date'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Time or Watch Icon */}
-          {includeTime ? (
-            <TouchableOpacity
-              style={styles.timeContainer}
-              onPress={() => {
-                setShowTimeModal(true);
-                if (!isEditMode) enterEditMode();
-              }}
-            >
-              <Text style={styles.entryDateText}>
-                {entryDate ? new Date(entryDate).toLocaleTimeString(undefined, {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  hour12: true
-                }) : 'Set time'}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.watchIconButton}
-              onPress={() => {
-                // Show time again by setting milliseconds to 0
-                setIncludeTime(true);
-                const date = new Date(entryDate);
-                date.setMilliseconds(0);
-                setEntryDate(date.toISOString());
-                if (!isEditMode) enterEditMode();
-              }}
-            >
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
-                <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
-          )}
-        </View>
 
         {/* Photo Gallery */}
         <PhotoGallery
@@ -1106,7 +1143,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           <LocationPickerComponent
             visible={showLocationPicker}
             onClose={() => setShowLocationPicker(false)}
-            onSelect={(location) => {
+            onSelect={(location: LocationType | null) => {
               // If location is null (user selected "None"), clear location data
               if (location === null) {
                 console.log('[CaptureForm] 📍 User selected "None" - clearing location data');
@@ -1270,6 +1307,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  titleBar: {
+    height: 110,
+    paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
+    backgroundColor: theme.colors.background.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  titleBarContent: {
+    flex: 1,
+  },
+  menuContainer: {
+    position: "relative",
+  },
+  menuButton: {
+    padding: theme.spacing.sm,
+  },
+  buttonBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: 4,
+    paddingBottom: theme.spacing.md,
+    backgroundColor: theme.colors.background.primary,
+    gap: theme.spacing.md,
+  },
   topBarButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1310,24 +1375,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   titleContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 4,
-    paddingBottom: 2,
+    flex: 1,
   },
   titleCollapsed: {
-    paddingHorizontal: 24,
-    paddingTop: 4,
-    paddingBottom: 2,
+    flex: 1,
   },
   titlePlaceholder: {
-    fontSize: 16,
+    fontSize: 28,
     color: theme.colors.text.disabled,
-    fontWeight: "400",
+    fontWeight: theme.typography.fontWeight.bold,
   },
   titleInput: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#111827",
+    fontSize: 28,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.text.primary,
     padding: 0,
     margin: 0,
   },
@@ -1335,10 +1396,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingLeft: 40,
+    paddingLeft: 24,
     paddingRight: 24,
     paddingTop: 4,
-    paddingBottom: 12,
+    paddingBottom: 4,
   },
   entryDateText: {
     fontSize: 13,
@@ -1413,5 +1474,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginLeft: theme.spacing.sm,
+  },
+  datePickerContainer: {
+    backgroundColor: theme.colors.background.primary,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.sm,
+  },
+  datePickerButton: {
+    backgroundColor: theme.colors.background.secondary,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+  },
+  datePickerButtonText: {
+    fontSize: 16,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.text.primary,
+  },
+  datePickerButtonDanger: {
+    backgroundColor: "#fee2e2",
+  },
+  datePickerButtonDangerText: {
+    color: "#dc2626",
   },
 });
