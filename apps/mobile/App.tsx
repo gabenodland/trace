@@ -44,6 +44,7 @@ function AuthGate() {
   const [navigationHistory, setNavigationHistory] = useState<NavigationHistoryItem[]>([
     { tabId: "inbox", params: {} }
   ]);
+  const [LocationBuilderComponent, setLocationBuilderComponent] = useState<any>(null);
 
   // Initialize database and sync when authenticated
   useEffect(() => {
@@ -165,6 +166,20 @@ function AuthGate() {
         return <ProfileScreen />;
       case "debug":
         return <DatabaseInfoScreen />;
+      case "location-builder":
+        // Dynamically load LocationBuilderScreen to avoid loading MapView at startup
+        if (!LocationBuilderComponent) {
+          import('./src/modules/locations/screens/LocationBuilderScreen').then(module => {
+            setLocationBuilderComponent(() => module.LocationBuilderScreen);
+          });
+          return (
+            <View style={styles.container}>
+              <ActivityIndicator size="large" color="#007AFF" />
+              <Text style={styles.loadingText}>Loading...</Text>
+            </View>
+          );
+        }
+        return <LocationBuilderComponent />;
       default:
         return (
           <EntryListScreen

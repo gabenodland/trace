@@ -610,10 +610,23 @@ class SyncQueue {
         tags: entry.tags,
         mentions: entry.mentions,
         category_id: entry.category_id,
-        location_lat: entry.location_lat,
-        location_lng: entry.location_lng,
+        // GPS coordinates (where user was when creating entry)
+        entry_latitude: entry.entry_latitude,
+        entry_longitude: entry.entry_longitude,
+        // Tagged location coordinates (selected POI/place)
+        location_latitude: entry.location_latitude,
+        location_longitude: entry.location_longitude,
         location_accuracy: entry.location_accuracy,
+        // Location name and hierarchy
         location_name: entry.location_name,
+        location_name_source: entry.location_name_source,
+        location_neighborhood: entry.location_neighborhood,
+        location_postal_code: entry.location_postal_code,
+        location_city: entry.location_city,
+        location_subdivision: entry.location_subdivision,
+        location_region: entry.location_region,
+        location_country: entry.location_country,
+        location_address: entry.location_address,
         status: entry.status,
         due_date: entry.due_date && (typeof entry.due_date === 'number'
           ? new Date(entry.due_date).toISOString()
@@ -990,10 +1003,23 @@ class SyncQueue {
             tags: remoteEntry.tags || [],
             mentions: remoteEntry.mentions || [],
             category_id: remoteEntry.category_id,
-            location_lat: remoteEntry.location_lat,
-            location_lng: remoteEntry.location_lng,
+            // GPS coordinates (where user was when creating entry)
+            entry_latitude: (remoteEntry as any).entry_latitude || null,
+            entry_longitude: (remoteEntry as any).entry_longitude || null,
+            // Tagged location coordinates (selected POI/place)
+            location_latitude: (remoteEntry as any).location_latitude || null,
+            location_longitude: (remoteEntry as any).location_longitude || null,
             location_accuracy: (remoteEntry as any).location_accuracy || null,
-            location_name: remoteEntry.location_name,
+            // Location name and hierarchy
+            location_name: (remoteEntry as any).location_name || null,
+            location_name_source: (remoteEntry as any).location_name_source || null,
+            location_neighborhood: (remoteEntry as any).location_neighborhood || null,
+            location_postal_code: (remoteEntry as any).location_postal_code || null,
+            location_city: (remoteEntry as any).location_city || null,
+            location_subdivision: (remoteEntry as any).location_subdivision || null,
+            location_region: (remoteEntry as any).location_region || null,
+            location_country: (remoteEntry as any).location_country || null,
+            location_address: (remoteEntry as any).location_address || null,
             status: remoteEntry.status || 'none',
             due_date: remoteEntry.due_date,
             completed_at: remoteEntry.completed_at,

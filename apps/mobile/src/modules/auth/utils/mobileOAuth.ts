@@ -11,7 +11,8 @@ export interface OAuthResult {
  */
 export async function handleMobileGoogleOAuth(): Promise<OAuthResult> {
   try {
-    // Get the current Expo development URL
+    // In development with Expo Go, use the dynamic URL (tunnel/LAN/localhost)
+    // In production, this would use the custom scheme from app.json
     const redirectTo = Linking.createURL(OAUTH_CONSTANTS.CALLBACK_PATH);
     console.log("[OAuth] Redirect URL:", redirectTo);
 

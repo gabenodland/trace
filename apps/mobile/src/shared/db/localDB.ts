@@ -73,19 +73,19 @@ class LocalDatabase {
       console.log(`📊 Current schema version: ${currentVersion}`);
 
       if (currentVersion === 0) {
-        // Fresh install - all tables created in createTables() with version 9 schema
-        console.log('🆕 Fresh install - setting schema version to 9');
+        // Fresh install - all tables created in createTables() with version 11 schema
+        console.log('🆕 Fresh install - setting schema version to 11');
 
         await this.db.runAsync(
           'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
-          ['schema_version', '9', Date.now()]
+          ['schema_version', '11', Date.now()]
         );
 
         // Check if deleted_at column exists
         const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
         this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
 
-        console.log('✅ Schema initialized at version 9');
+        console.log('✅ Schema initialized at version 11');
       } else if (currentVersion < 7) {
         // Old database detected - recommend reinstall for clean migration
         console.warn('⚠️ Old schema detected (version ' + currentVersion + ')');
@@ -168,9 +168,129 @@ class LocalDatabase {
         this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
 
         console.log('✅ Migrated to schema version 9');
+      } else if (currentVersion === 9) {
+        // Migration 10: Rename location coordinates and add location hierarchy fields
+        console.log('🔄 Migrating schema from version 9 to 10: Adding location hierarchy fields');
+
+        // SQLite doesn't support RENAME COLUMN directly in old versions
+        // We need to recreate the entries table with new schema
+        await this.db.execAsync(`
+          -- Create new entries table with updated location fields
+          CREATE TABLE entries_new (
+            entry_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT,
+            content TEXT NOT NULL,
+            tags TEXT,
+            mentions TEXT,
+            category_id TEXT,
+            entry_date INTEGER,
+            entry_latitude REAL,
+            entry_longitude REAL,
+            location_latitude REAL,
+            location_longitude REAL,
+            location_accuracy REAL,
+            location_name TEXT,
+            location_name_source TEXT,
+            location_address TEXT,
+            location_neighborhood TEXT,
+            location_postal_code TEXT,
+            location_city TEXT,
+            location_subdivision TEXT,
+            location_region TEXT,
+            location_country TEXT,
+            status TEXT CHECK (status IN ('none', 'incomplete', 'complete')) DEFAULT 'none',
+            due_date INTEGER,
+            completed_at INTEGER,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            deleted_at INTEGER,
+            local_only INTEGER DEFAULT 0,
+            synced INTEGER DEFAULT 0,
+            sync_action TEXT,
+            sync_error TEXT,
+            sync_retry_count INTEGER DEFAULT 0,
+            sync_last_attempt INTEGER,
+            version INTEGER DEFAULT 1,
+            base_version INTEGER DEFAULT 1,
+            conflict_status TEXT,
+            conflict_backup TEXT,
+            last_edited_by TEXT,
+            last_edited_device TEXT
+          );
+
+          -- Copy data from old table, mapping old column names to new
+          INSERT INTO entries_new (
+            entry_id, user_id, title, content, tags, mentions,
+            category_id, entry_date,
+            entry_latitude, entry_longitude, location_accuracy, location_name,
+            status, due_date, completed_at, created_at, updated_at, deleted_at,
+            local_only, synced, sync_action, sync_error, sync_retry_count, sync_last_attempt,
+            version, base_version, conflict_status, conflict_backup, last_edited_by, last_edited_device
+          )
+          SELECT
+            entry_id, user_id, title, content, tags, mentions,
+            category_id, entry_date,
+            location_lat, location_lng, location_accuracy, location_name,
+            status, due_date, completed_at, created_at, updated_at, deleted_at,
+            local_only, synced, sync_action, sync_error, sync_retry_count, sync_last_attempt,
+            version, base_version, conflict_status, conflict_backup, last_edited_by, last_edited_device
+          FROM entries;
+
+          -- Drop old table
+          DROP TABLE entries;
+
+          -- Rename new table
+          ALTER TABLE entries_new RENAME TO entries;
+
+          -- Recreate indexes
+          CREATE INDEX idx_entries_user_id ON entries(user_id);
+          CREATE INDEX idx_entries_created_at ON entries(created_at DESC);
+          CREATE INDEX idx_entries_updated_at ON entries(updated_at DESC);
+          CREATE INDEX idx_entries_deleted_at ON entries(deleted_at);
+          CREATE INDEX idx_entries_entry_date ON entries(entry_date);
+          CREATE INDEX idx_entries_category_id ON entries(category_id);
+          CREATE INDEX idx_entries_status ON entries(status);
+          CREATE INDEX idx_entries_synced ON entries(synced);
+          CREATE INDEX idx_entries_local_only ON entries(local_only);
+        `);
+
+        await this.db.runAsync(
+          'UPDATE sync_metadata SET value = ?, updated_at = ? WHERE key = ?',
+          ['10', Date.now(), 'schema_version']
+        );
+
+        // Check if deleted_at column exists
+        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
+        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
+
+        console.log('✅ Migrated to schema version 10');
+      } else if (currentVersion === 10) {
+        // Migration 11: Replace location_mapbox_json with location_address
+        console.log('🔄 Migrating schema from version 10 to 11: Replacing location_mapbox_json with location_address');
+
+        // Add location_address column
+        await this.db.execAsync(`
+          ALTER TABLE entries ADD COLUMN location_address TEXT;
+        `);
+
+        // Note: SQLite doesn't support DROP COLUMN in older versions
+        // The old location_mapbox_json column will remain but won't be used
+        // This is fine - it will just be NULL for all rows
+
+        await this.db.runAsync(
+          'UPDATE sync_metadata SET value = ?, updated_at = ? WHERE key = ?',
+          ['11', Date.now(), 'schema_version']
+        );
+
+        // Check if deleted_at column exists
+        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
+        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
+
+        console.log('✅ Migrated to schema version 11');
       } else {
         // Already on latest version
-        console.log('✅ Schema is up to date (version 9)');
+        console.log('✅ Schema is up to date (version 11)');
 
         // Check if deleted_at column exists
         const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
@@ -203,10 +323,27 @@ class LocalDatabase {
         mentions TEXT,                -- JSON array: '["person1","person2"]'
         category_id TEXT,
         entry_date INTEGER,           -- Unix timestamp for calendar grouping (Migration 4)
-        location_lat REAL,
-        location_lng REAL,
+
+        -- GPS coordinates (where user was when creating entry) - Migration 10
+        entry_latitude REAL,
+        entry_longitude REAL,
+
+        -- Tagged location coordinates (selected POI/place) - Migration 10
+        location_latitude REAL,
+        location_longitude REAL,
         location_accuracy REAL,
+
+        -- Location name and hierarchy - Migration 10
         location_name TEXT,
+        location_name_source TEXT,
+        location_address TEXT,
+        location_neighborhood TEXT,
+        location_postal_code TEXT,
+        location_city TEXT,
+        location_subdivision TEXT,
+        location_region TEXT,
+        location_country TEXT,
+
         status TEXT CHECK (status IN ('none', 'incomplete', 'complete')) DEFAULT 'none',
         due_date INTEGER,             -- Unix timestamp
         completed_at INTEGER,         -- Unix timestamp
@@ -341,10 +478,15 @@ class LocalDatabase {
     await this.db.runAsync(
       `INSERT OR REPLACE INTO entries (
         entry_id, user_id, title, content, tags, mentions,
-        category_id, entry_date, location_lat, location_lng, location_accuracy, location_name,
+        category_id, entry_date,
+        entry_latitude, entry_longitude,
+        location_latitude, location_longitude, location_accuracy,
+        location_name, location_name_source, location_address, location_neighborhood,
+        location_postal_code, location_city, location_subdivision,
+        location_region, location_country,
         status, due_date, completed_at, created_at, updated_at,
         local_only, synced, sync_action
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -354,10 +496,23 @@ class LocalDatabase {
         JSON.stringify(entry.mentions || []),
         entry.category_id || null,
         entry.entry_date ? Date.parse(entry.entry_date) : (entry.created_at ? Date.parse(entry.created_at) : now),
-        entry.location_lat || null,
-        entry.location_lng || null,
+        // GPS coordinates (where user was when creating entry)
+        entry.entry_latitude || null,
+        entry.entry_longitude || null,
+        // Tagged location coordinates (selected POI/place)
+        entry.location_latitude || null,
+        entry.location_longitude || null,
         entry.location_accuracy || null,
+        // Location name and hierarchy
         entry.location_name || null,
+        entry.location_name_source || null,
+        entry.location_address || null,
+        entry.location_neighborhood || null,
+        entry.location_postal_code || null,
+        entry.location_city || null,
+        entry.location_subdivision || null,
+        entry.location_region || null,
+        entry.location_country || null,
         entry.status || 'none',
         entry.due_date ? Date.parse(entry.due_date) : null,
         entry.completed_at ? Date.parse(entry.completed_at) : null,
@@ -488,8 +643,13 @@ class LocalDatabase {
     await this.db.runAsync(
       `UPDATE entries SET
         title = ?, content = ?, tags = ?, mentions = ?,
-        category_id = ?, entry_date = ?, location_lat = ?, location_lng = ?, location_accuracy = ?,
-        location_name = ?, status = ?, due_date = ?, completed_at = ?,
+        category_id = ?, entry_date = ?,
+        entry_latitude = ?, entry_longitude = ?,
+        location_latitude = ?, location_longitude = ?, location_accuracy = ?,
+        location_name = ?, location_name_source = ?, location_address = ?, location_neighborhood = ?,
+        location_postal_code = ?, location_city = ?, location_subdivision = ?,
+        location_region = ?, location_country = ?,
+        status = ?, due_date = ?, completed_at = ?,
         updated_at = ?, local_only = ?, synced = ?, sync_action = ?
       WHERE entry_id = ?`,
       [
@@ -499,10 +659,23 @@ class LocalDatabase {
         JSON.stringify(updated.mentions || []),
         updated.category_id || null,
         updated.entry_date ? Date.parse(updated.entry_date) : null,
-        updated.location_lat || null,
-        updated.location_lng || null,
+        // GPS coordinates (where user was when creating entry)
+        updated.entry_latitude || null,
+        updated.entry_longitude || null,
+        // Tagged location coordinates (selected POI/place)
+        updated.location_latitude || null,
+        updated.location_longitude || null,
         updated.location_accuracy || null,
+        // Location name and hierarchy
         updated.location_name || null,
+        updated.location_name_source || null,
+        updated.location_address || null,
+        updated.location_neighborhood || null,
+        updated.location_postal_code || null,
+        updated.location_city || null,
+        updated.location_subdivision || null,
+        updated.location_region || null,
+        updated.location_country || null,
         updated.status || 'none',
         updated.due_date ? Date.parse(updated.due_date) : null,
         updated.completed_at ? Date.parse(updated.completed_at) : null,
@@ -637,10 +810,23 @@ class LocalDatabase {
       mentions: row.mentions ? JSON.parse(row.mentions) : [],
       category_id: row.category_id,
       entry_date: row.entry_date ? new Date(row.entry_date).toISOString() : null,
-      location_lat: row.location_lat,
-      location_lng: row.location_lng,
+      // GPS coordinates (where user was when creating entry)
+      entry_latitude: row.entry_latitude,
+      entry_longitude: row.entry_longitude,
+      // Tagged location coordinates (selected POI/place)
+      location_latitude: row.location_latitude,
+      location_longitude: row.location_longitude,
       location_accuracy: row.location_accuracy,
+      // Location name and hierarchy
       location_name: row.location_name,
+      location_name_source: row.location_name_source,
+      location_address: row.location_address,
+      location_neighborhood: row.location_neighborhood,
+      location_postal_code: row.location_postal_code,
+      location_city: row.location_city,
+      location_subdivision: row.location_subdivision,
+      location_region: row.location_region,
+      location_country: row.location_country,
       status: row.status || 'none',
       due_date: row.due_date ? new Date(row.due_date).toISOString() : null,
       completed_at: row.completed_at ? new Date(row.completed_at).toISOString() : null,

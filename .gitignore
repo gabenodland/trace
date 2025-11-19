@@ -87,6 +87,7 @@ supabase/.temp/
 supabase/.branches/
 supabase/logs/
 supabase/.gitignore
+supabase/supabase/
 
 # Claude settings
 .claude/settings.local.json

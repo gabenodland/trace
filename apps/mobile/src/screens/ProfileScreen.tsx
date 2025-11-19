@@ -84,6 +84,19 @@ export function ProfileScreen() {
           </Text>
         </View>
 
+        {/* Developer Tools */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Developer Tools</Text>
+          <TouchableOpacity
+            style={styles.devButton}
+            onPress={() => navigate("location-builder")}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.devButtonText}>🗺️ Location Builder</Text>
+            <Text style={styles.devButtonSubtext}>Explore Mapbox geocoding API</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Sign Out Button */}
         <TouchableOpacity
           style={[styles.signOutButton, isSigningOut && styles.signOutButtonDisabled]}
@@ -148,6 +161,23 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 16,
     color: "#1f2937",
+  },
+  devButton: {
+    backgroundColor: "#f3f4f6",
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  devButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1f2937",
+    marginBottom: 4,
+  },
+  devButtonSubtext: {
+    fontSize: 12,
+    color: "#6b7280",
   },
   signOutButton: {
     flexDirection: "row",

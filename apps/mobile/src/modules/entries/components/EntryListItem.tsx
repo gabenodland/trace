@@ -286,8 +286,10 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
         )}
 
             {/* Location indicator */}
-            {entry.location_lat && entry.location_lng && (
-              <Text style={styles.location}>GPS</Text>
+            {(entry.entry_latitude && entry.entry_longitude) && (
+              <Text style={styles.location}>
+                {entry.location_name || 'GPS'}
+              </Text>
             )}
           </View>
         </View>

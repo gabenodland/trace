@@ -1,0 +1,50 @@
+module.exports = {
+  expo: {
+    name: 'Trace',
+    slug: 'trace',
+    version: '1.0.0',
+    orientation: 'portrait',
+    icon: './assets/icon.png',
+    userInterfaceStyle: 'light',
+    newArchEnabled: true,
+    scheme: 'trace',
+    splash: {
+      image: './assets/splash-icon.png',
+      resizeMode: 'contain',
+      backgroundColor: '#ffffff',
+    },
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: 'com.trace.app',
+      infoPlist: {
+        NSLocationWhenInUseUsageDescription:
+          'Trace uses your location to add context to your captured entries.',
+      },
+    },
+    android: {
+      adaptiveIcon: {
+        foregroundImage: './assets/adaptive-icon.png',
+        backgroundColor: '#ffffff',
+      },
+      package: 'com.trace.app',
+      edgeToEdgeEnabled: true,
+      predictiveBackGestureEnabled: false,
+      permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
+      softwareKeyboardLayoutMode: 'resize',
+    },
+    web: {
+      favicon: './assets/favicon.png',
+    },
+    plugins: [
+      'expo-web-browser',
+      [
+        'expo-location',
+        {
+          locationAlwaysAndWhenInUsePermission:
+            'Allow Trace to use your location to add context to your captured entries.',
+        },
+      ],
+      'expo-sqlite',
+    ],
+  },
+};

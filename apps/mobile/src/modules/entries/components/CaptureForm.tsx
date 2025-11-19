@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from "react-native";
 import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState, generatePhotoPath } from "@trace/core";
+import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState, generatePhotoPath, type Location as LocationType, locationFromEntry, locationToEntryFields } from "@trace/core";
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useCategories } from "../../categories/mobileCategoryHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
@@ -61,6 +61,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     !isEditing && initialCategoryName && getInitialCategoryId() !== null ? initialCategoryName : null
   );
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [LocationPickerComponent, setLocationPickerComponent] = useState<any>(null);
   const [status, setStatus] = useState<"none" | "incomplete" | "complete">("none");
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -91,11 +93,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   // Store original category for cancel navigation (for edited entries)
   const [originalCategoryId, setOriginalCategoryId] = useState<string | null>(null);
   const [originalCategoryName, setOriginalCategoryName] = useState<string | null>(null);
-  const [locationData, setLocationData] = useState<{
-    lat: number | null;
-    lng: number | null;
-    accuracy: number | null;
-  }>({ lat: null, lng: null, accuracy: null });
+  const [locationData, setLocationData] = useState<LocationType | null>(null);
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const [locationIconBlink, setLocationIconBlink] = useState(true);
   const editorRef = useRef<any>(null);
@@ -166,7 +164,11 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
   // Blinking animation for location loading
   useEffect(() => {
-    if (captureLocation && !locationData.lat && !locationData.lng) {
+    // Only blink if location capture is on AND we don't have any location data yet
+    // If we have a name OR coordinates, don't blink (location is already set)
+    const hasLocationData = locationData && (locationData.name || (locationData.latitude && locationData.longitude));
+
+    if (captureLocation && !hasLocationData) {
       // Start blinking by toggling state
       const interval = setInterval(() => {
         setLocationIconBlink(prev => !prev);
@@ -175,7 +177,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     } else {
       setLocationIconBlink(true);
     }
-  }, [captureLocation, locationData.lat, locationData.lng]);
+  }, [captureLocation, locationData?.name, locationData?.latitude, locationData?.longitude]);
 
   // Auto-collapse title when user starts typing in body without a title
   useEffect(() => {
@@ -208,16 +210,13 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       }
 
       // Load location data if available, keep toggle state reflecting what's saved
-      if (entry.location_lat && entry.location_lng) {
-        setLocationData({
-          lat: entry.location_lat,
-          lng: entry.location_lng,
-          accuracy: entry.location_accuracy,
-        });
+      const location = locationFromEntry(entry);
+      if (location) {
+        setLocationData(location);
         setCaptureLocation(true);
       } else {
         // No location saved - keep toggle off and clear location data
-        setLocationData({ lat: null, lng: null, accuracy: null });
+        setLocationData(null);
         setCaptureLocation(false);
       }
 
@@ -241,9 +240,12 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   }, [entry, isEditing, categories]);
 
   // Fetch GPS location in background when location is enabled
+  // Fetches GPS coordinates immediately when creating new entry
+  // These coords are used by LocationPicker for POI search and privacy calculations
   useEffect(() => {
+    // Clear location when toggled off
     if (!captureLocation) {
-      setLocationData({ lat: null, lng: null, accuracy: null });
+      setLocationData(null);
       return;
     }
 
@@ -253,9 +255,11 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     }
 
     // Skip fetching if we already have location data loaded
-    if (locationData.lat && locationData.lng) {
+    if (locationData?.latitude && locationData?.longitude) {
       return;
     }
+
+    console.log('[CaptureForm] 📍 Starting GPS fetch for new entry...');
 
     let timeoutId: NodeJS.Timeout;
     let isCancelled = false;
@@ -264,6 +268,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     const fetchLocation = async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
+        console.log('[CaptureForm] GPS permission status:', status);
         if (status === "granted" && !isCancelled) {
           // Set timeout to give up after 15 seconds
           timeoutId = setTimeout(() => {
@@ -290,10 +295,17 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
           if (location && !isCancelled) {
             hasLocation = true;
+            console.log('[CaptureForm] ✅ GPS acquired:', {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              accuracy: location.coords.accuracy
+            });
             setLocationData({
-              lat: location.coords.latitude,
-              lng: location.coords.longitude,
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
               accuracy: location.coords.accuracy,
+              name: null,
+              source: 'user_custom', // Will be updated when user selects a location
             });
             clearTimeout(timeoutId);
           }
@@ -397,9 +409,12 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
     try {
       const { tags, mentions } = extractTagsAndMentions(content);
+      const locationFields = locationToEntryFields(locationData);
 
       if (isEditing) {
         // Update existing entry
+        console.log('[CaptureForm] 💾 Updating entry with location data:', locationFields);
+
         await singleEntryMutations.updateEntry({
           title: title.trim() || null,
           content,
@@ -409,22 +424,27 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           entry_date: entryDate,
           status,
           due_date: dueDate,
+          ...locationFields,
         });
+
+        console.log('[CaptureForm] ✅ Entry updated successfully');
       } else {
         // Create new entry
+        console.log('[CaptureForm] 💾 Saving entry with location data:', locationFields);
+
         const newEntry = await entryMutations.createEntry({
           title: title.trim() || null,
           content,
           tags,
           mentions,
           entry_date: entryDate,
-          location_lat: locationData.lat,
-          location_lng: locationData.lng,
-          location_accuracy: locationData.accuracy,
           category_id: categoryId,
           status,
           due_date: dueDate,
+          ...locationFields,
         });
+
+        console.log('[CaptureForm] ✅ Entry saved successfully with ID:', newEntry.entry_id);
 
         // CRITICAL: Save all pending photos to DB with the real entry_id
         if (pendingPhotos.length > 0) {
@@ -466,7 +486,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         setContent("");
         setCategoryId(null);
         setCategoryName(null);
-        setLocationData({ lat: null, lng: null, accuracy: null });
+        setLocationData(null);
         setStatus("none");
         setDueDate(null);
       }
@@ -653,14 +673,20 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     <View style={styles.container}>
       {/* Top Bar */}
       <TopBar showBackButton={true} onBackPress={handleCancel}>
-        {/* Location Toggle */}
+        {/* Location Button */}
         <TouchableOpacity
           style={[styles.topBarButton, captureLocation && styles.topBarButtonActive]}
-          onPress={() => {
-            setCaptureLocation(!captureLocation);
-            if (!isEditMode) {
-              enterEditMode();
+          onPress={async () => {
+            editorRef.current?.blur();
+            Keyboard.dismiss();
+
+            // Dynamically load LocationPicker only when needed
+            if (!LocationPickerComponent) {
+              const { LocationPicker } = await import('../../locations/components/LocationPicker');
+              setLocationPickerComponent(() => LocationPicker);
             }
+
+            setTimeout(() => setShowLocationPicker(!showLocationPicker), 100);
           }}
         >
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={captureLocation ? theme.colors.text.primary : theme.colors.text.disabled} strokeWidth={2}>
@@ -670,14 +696,14 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               cy={10}
               r={3}
               fill={
-                locationData.lat && locationData.lng
+                locationData?.latitude && locationData?.longitude
                   ? (captureLocation ? theme.colors.text.primary : theme.colors.text.disabled)  // Has location: solid
                   : (captureLocation && locationIconBlink ? theme.colors.text.primary : "none")  // Loading: blinking
               }
             />
           </Svg>
           <Text style={[styles.topBarButtonText, captureLocation && styles.topBarButtonTextActive]}>
-            {captureLocation ? "GPS" : "None"}
+            {locationData?.name || (captureLocation ? "GPS" : "None")}
           </Text>
         </TouchableOpacity>
 
@@ -1070,6 +1096,40 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           selectedCategoryId={categoryId}
         />
       </TopBarDropdownContainer>
+
+      {/* Location Picker Dropdown */}
+      {LocationPickerComponent && (
+        <TopBarDropdownContainer
+          visible={showLocationPicker}
+          onClose={() => setShowLocationPicker(false)}
+        >
+          <LocationPickerComponent
+            visible={showLocationPicker}
+            onClose={() => setShowLocationPicker(false)}
+            onSelect={(location) => {
+              console.log('[CaptureForm] 📍 Received location from LocationPicker:', {
+                name: location.name,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                city: location.city,
+                region: location.region,
+                country: location.country,
+                neighborhood: location.neighborhood,
+                postalCode: location.postalCode,
+                subdivision: location.subdivision,
+              });
+
+              setLocationData(location);
+              setCaptureLocation(true);
+              setShowLocationPicker(false);
+              if (!isEditMode) {
+                enterEditMode();
+              }
+            }}
+            initialLocation={locationData}
+          />
+        </TopBarDropdownContainer>
+      )}
 
       {/* Date Picker Dropdown */}
       <TopBarDropdownContainer

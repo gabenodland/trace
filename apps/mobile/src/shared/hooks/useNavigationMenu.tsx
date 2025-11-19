@@ -1,4 +1,4 @@
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Circle } from "react-native-svg";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigation } from "../contexts/NavigationContext";
 
@@ -47,6 +47,16 @@ export function useNavigationMenu() {
       ),
     },
     { isDivider: true },
+    {
+      label: "Location Builder",
+      onPress: () => navigate("location-builder"),
+      icon: (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+          <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      ),
+    },
     {
       label: "Database Info",
       onPress: () => navigate("debug"),

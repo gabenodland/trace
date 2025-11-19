@@ -14,10 +14,29 @@ export interface Entry {
   updated_at: string;
   entry_date: string | null; // When the memory/event actually happened (can be backdated)
   deleted_at?: string | null; // Soft delete timestamp
-  location_lat: number | null;
-  location_lng: number | null;
+  // GPS coordinates captured when entry was created (private, exact, never changes)
+  entry_latitude: number | null;
+  entry_longitude: number | null;
   location_accuracy: number | null; // GPS accuracy in meters
+  // Display coordinates (public, respects privacy)
+  location_latitude?: number | null;
+  location_longitude?: number | null;
+  // Location name
   location_name: string | null;
+  location_name_original?: string | null;
+  location_name_source?: string | null;
+  // Location hierarchy
+  location_address?: string | null;
+  location_neighborhood?: string | null;
+  location_postal_code?: string | null;
+  location_city?: string | null;
+  location_subdivision?: string | null;
+  location_region?: string | null;
+  location_country?: string | null;
+  // Privacy and metadata
+  location_precision?: string | null;
+  location_mapbox_place_id?: string | null;
+  location_foursquare_fsq_id?: string | null;
   status: "none" | "incomplete" | "complete";
   due_date: string | null;
   completed_at: string | null;
@@ -43,10 +62,20 @@ export interface CreateEntryInput {
   mentions?: string[];
   category_id?: string | null;
   entry_date?: string | null; // When the memory/event actually happened
-  location_lat?: number | null;
-  location_lng?: number | null;
+  entry_latitude?: number | null;
+  entry_longitude?: number | null;
+  location_latitude?: number | null;
+  location_longitude?: number | null;
   location_accuracy?: number | null;
   location_name?: string | null;
+  location_name_source?: string | null;
+  location_address?: string | null;
+  location_neighborhood?: string | null;
+  location_postal_code?: string | null;
+  location_city?: string | null;
+  location_subdivision?: string | null;
+  location_region?: string | null;
+  location_country?: string | null;
   status?: "none" | "incomplete" | "complete";
   due_date?: string | null;
   local_only?: number; // 0 = sync enabled (default), 1 = local only
@@ -59,9 +88,20 @@ export interface UpdateEntryInput {
   mentions?: string[];
   category_id?: string | null;
   entry_date?: string | null; // When the memory/event actually happened
-  location_lat?: number | null;
-  location_lng?: number | null;
+  entry_latitude?: number | null;
+  entry_longitude?: number | null;
+  location_latitude?: number | null;
+  location_longitude?: number | null;
   location_accuracy?: number | null;
+  location_name?: string | null;
+  location_name_source?: string | null;
+  location_address?: string | null;
+  location_neighborhood?: string | null;
+  location_postal_code?: string | null;
+  location_city?: string | null;
+  location_subdivision?: string | null;
+  location_region?: string | null;
+  location_country?: string | null;
   status?: "none" | "incomplete" | "complete";
   due_date?: string | null;
   completed_at?: string | null;
