@@ -147,7 +147,34 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
                 {entry.title}
               </Text>
               {displayMode === 'flow' && (
-                <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                <View style={styles.flowDateRow}>
+                  <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                  {entry.status !== "none" && (
+                    <View style={styles.statusBadge}>
+                      <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                        <Circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke={entry.status === "complete" ? theme.colors.text.primary : theme.colors.text.tertiary}
+                          strokeWidth={2}
+                          fill={entry.status === "complete" ? theme.colors.text.primary : "none"}
+                        />
+                        {entry.status === "complete" && (
+                          <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                        )}
+                        {entry.status === "in_progress" && (
+                          <Circle cx="12" cy="12" r="4" fill={theme.colors.text.tertiary} />
+                        )}
+                      </Svg>
+                      <Text style={styles.statusText}>
+                        {entry.status === "incomplete" ? "Not Started" :
+                         entry.status === "in_progress" ? "In Progress" :
+                         "Completed"}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               )}
               {displayMode === 'flow' && (
                 <PhotoGallery entryId={entry.entry_id} />
@@ -174,7 +201,34 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
             displayMode === 'flow' ? (
               <>
                 {displayMode === 'flow' && (
-                  <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                  <View style={styles.flowDateRow}>
+                    <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                    {entry.status !== "none" && (
+                      <View style={styles.statusBadge}>
+                        <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                          <Circle
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke={entry.status === "complete" ? theme.colors.text.primary : theme.colors.text.tertiary}
+                            strokeWidth={2}
+                            fill={entry.status === "complete" ? theme.colors.text.primary : "none"}
+                          />
+                          {entry.status === "complete" && (
+                            <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                          )}
+                          {entry.status === "in_progress" && (
+                            <Circle cx="12" cy="12" r="4" fill={theme.colors.text.tertiary} />
+                          )}
+                        </Svg>
+                        <Text style={styles.statusText}>
+                          {entry.status === "incomplete" ? "Not Started" :
+                           entry.status === "in_progress" ? "In Progress" :
+                           "Completed"}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 )}
                 {displayMode === 'flow' && (
                   <PhotoGallery entryId={entry.entry_id} />
@@ -341,7 +395,21 @@ const styles = StyleSheet.create({
   dateSmall: {
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.text.tertiary,
+  },
+  flowDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
     marginBottom: theme.spacing.md,
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  statusText: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
   },
   strikethrough: {
     textDecorationLine: "line-through",

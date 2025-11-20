@@ -1020,7 +1020,7 @@ class SyncQueue {
             location_region: (remoteEntry as any).location_region || null,
             location_country: (remoteEntry as any).location_country || null,
             location_address: (remoteEntry as any).location_address || null,
-            status: remoteEntry.status || 'none',
+            status: (remoteEntry.status as "none" | "incomplete" | "in_progress" | "complete") || 'none',
             due_date: remoteEntry.due_date,
             completed_at: remoteEntry.completed_at,
             entry_date: (remoteEntry as any).entry_date || remoteEntry.created_at, // Fallback to created_at if entry_date not set

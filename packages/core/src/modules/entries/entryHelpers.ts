@@ -210,18 +210,18 @@ export function formatEntryDateTime(dateString: string): string {
 /**
  * Check if an entry is a task (has incomplete or complete status)
  */
-export function isTask(status: "none" | "incomplete" | "complete"): boolean {
-  return status === "incomplete" || status === "complete";
+export function isTask(status: "none" | "incomplete" | "in_progress" | "complete"): boolean {
+  return status === "incomplete" || status === "in_progress" || status === "complete";
 }
 
 /**
  * Check if a task is overdue (has due_date in the past and status is incomplete)
  */
 export function isTaskOverdue(
-  status: "none" | "incomplete" | "complete",
+  status: "none" | "incomplete" | "in_progress" | "complete",
   dueDate: string | null
 ): boolean {
-  if (status !== "incomplete" || !dueDate) return false;
+  if ((status !== "incomplete" && status !== "in_progress") || !dueDate) return false;
 
   const due = new Date(dueDate);
   const now = new Date();
@@ -270,7 +270,7 @@ export function isDueThisWeek(dueDate: string | null): boolean {
  */
 export function formatDueDate(
   dueDate: string | null,
-  status: "none" | "incomplete" | "complete"
+  status: "none" | "incomplete" | "in_progress" | "complete"
 ): string {
   if (!dueDate) return "";
 
@@ -283,7 +283,7 @@ export function formatDueDate(
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
   // Overdue
-  if (status === "incomplete" && diffDays < 0) {
+  if ((status === "incomplete" || status === "in_progress") && diffDays < 0) {
     const daysOverdue = Math.abs(diffDays);
     return `Overdue by ${daysOverdue} day${daysOverdue !== 1 ? "s" : ""}`;
   }
@@ -315,10 +315,11 @@ export function formatDueDate(
  * Get task statistics (completed vs incomplete)
  */
 export function getTaskStats(
-  entries: Array<{ status: "none" | "incomplete" | "complete" }>
+  entries: Array<{ status: "none" | "incomplete" | "in_progress" | "complete" }>
 ): {
   total: number;
   incomplete: number;
+  inProgress: number;
   complete: number;
 } {
   const tasks = entries.filter((e) => isTask(e.status));
@@ -326,6 +327,7 @@ export function getTaskStats(
   return {
     total: tasks.length,
     incomplete: tasks.filter((t) => t.status === "incomplete").length,
+    inProgress: tasks.filter((t) => t.status === "in_progress").length,
     complete: tasks.filter((t) => t.status === "complete").length,
   };
 }

@@ -73,19 +73,19 @@ class LocalDatabase {
       console.log(`📊 Current schema version: ${currentVersion}`);
 
       if (currentVersion === 0) {
-        // Fresh install - all tables created in createTables() with version 11 schema
-        console.log('🆕 Fresh install - setting schema version to 11');
+        // Fresh install - all tables created in createTables() with version 12 schema
+        console.log('🆕 Fresh install - setting schema version to 12');
 
         await this.db.runAsync(
           'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
-          ['schema_version', '11', Date.now()]
+          ['schema_version', '12', Date.now()]
         );
 
         // Check if deleted_at column exists
         const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
         this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
 
-        console.log('✅ Schema initialized at version 11');
+        console.log('✅ Schema initialized at version 12');
       } else if (currentVersion < 7) {
         // Old database detected - recommend reinstall for clean migration
         console.warn('⚠️ Old schema detected (version ' + currentVersion + ')');
@@ -199,7 +199,7 @@ class LocalDatabase {
             location_subdivision TEXT,
             location_region TEXT,
             location_country TEXT,
-            status TEXT CHECK (status IN ('none', 'incomplete', 'complete')) DEFAULT 'none',
+            status TEXT CHECK (status IN ('none', 'incomplete', 'in_progress', 'complete')) DEFAULT 'none',
             due_date INTEGER,
             completed_at INTEGER,
             created_at INTEGER NOT NULL,
@@ -288,9 +288,90 @@ class LocalDatabase {
         this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
 
         console.log('✅ Migrated to schema version 11');
+      } else if (currentVersion === 11) {
+        // Migration 12: Update status CHECK constraint to include 'in_progress'
+        console.log('🔄 Migrating schema from version 11 to 12: Adding in_progress status');
+
+        // SQLite doesn't allow modifying CHECK constraints, so we need to recreate the table
+        await this.db.execAsync(`
+          -- Create new entries table with updated status CHECK constraint
+          CREATE TABLE entries_new (
+            entry_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT,
+            content TEXT NOT NULL,
+            tags TEXT,
+            mentions TEXT,
+            category_id TEXT,
+            entry_date INTEGER,
+            entry_latitude REAL,
+            entry_longitude REAL,
+            location_latitude REAL,
+            location_longitude REAL,
+            location_accuracy REAL,
+            location_name TEXT,
+            location_name_source TEXT,
+            location_address TEXT,
+            location_neighborhood TEXT,
+            location_postal_code TEXT,
+            location_city TEXT,
+            location_subdivision TEXT,
+            location_region TEXT,
+            location_country TEXT,
+            status TEXT CHECK (status IN ('none', 'incomplete', 'in_progress', 'complete')) DEFAULT 'none',
+            due_date INTEGER,
+            completed_at INTEGER,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            deleted_at INTEGER,
+            local_only INTEGER DEFAULT 0,
+            synced INTEGER DEFAULT 0,
+            sync_action TEXT,
+            sync_error TEXT,
+            sync_retry_count INTEGER DEFAULT 0,
+            sync_last_attempt INTEGER,
+            version INTEGER DEFAULT 1,
+            base_version INTEGER DEFAULT 1,
+            conflict_status TEXT,
+            conflict_backup TEXT,
+            last_edited_by TEXT,
+            last_edited_device TEXT
+          );
+
+          -- Copy data from old table
+          INSERT INTO entries_new SELECT * FROM entries;
+
+          -- Drop old table
+          DROP TABLE entries;
+
+          -- Rename new table
+          ALTER TABLE entries_new RENAME TO entries;
+
+          -- Recreate indexes
+          CREATE INDEX idx_entries_user_id ON entries(user_id);
+          CREATE INDEX idx_entries_created_at ON entries(created_at DESC);
+          CREATE INDEX idx_entries_updated_at ON entries(updated_at DESC);
+          CREATE INDEX idx_entries_deleted_at ON entries(deleted_at);
+          CREATE INDEX idx_entries_entry_date ON entries(entry_date);
+          CREATE INDEX idx_entries_category_id ON entries(category_id);
+          CREATE INDEX idx_entries_status ON entries(status);
+          CREATE INDEX idx_entries_synced ON entries(synced);
+          CREATE INDEX idx_entries_local_only ON entries(local_only);
+        `);
+
+        await this.db.runAsync(
+          'UPDATE sync_metadata SET value = ?, updated_at = ? WHERE key = ?',
+          ['12', Date.now(), 'schema_version']
+        );
+
+        // Check if deleted_at column exists
+        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
+        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
+
+        console.log('✅ Migrated to schema version 12');
       } else {
         // Already on latest version
-        console.log('✅ Schema is up to date (version 11)');
+        console.log('✅ Schema is up to date (version 12)');
 
         // Check if deleted_at column exists
         const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
@@ -344,7 +425,7 @@ class LocalDatabase {
         location_region TEXT,
         location_country TEXT,
 
-        status TEXT CHECK (status IN ('none', 'incomplete', 'complete')) DEFAULT 'none',
+        status TEXT CHECK (status IN ('none', 'incomplete', 'in_progress', 'complete')) DEFAULT 'none',
         due_date INTEGER,             -- Unix timestamp
         completed_at INTEGER,         -- Unix timestamp
         created_at INTEGER NOT NULL,  -- Unix timestamp

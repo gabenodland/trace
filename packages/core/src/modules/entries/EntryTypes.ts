@@ -37,7 +37,7 @@ export interface Entry {
   location_precision?: string | null;
   location_mapbox_place_id?: string | null;
   location_foursquare_fsq_id?: string | null;
-  status: "none" | "incomplete" | "complete";
+  status: "none" | "incomplete" | "in_progress" | "complete";
   due_date: string | null;
   completed_at: string | null;
   attachments: Json;
@@ -76,7 +76,7 @@ export interface CreateEntryInput {
   location_subdivision?: string | null;
   location_region?: string | null;
   location_country?: string | null;
-  status?: "none" | "incomplete" | "complete";
+  status?: "none" | "incomplete" | "in_progress" | "complete";
   due_date?: string | null;
   local_only?: number; // 0 = sync enabled (default), 1 = local only
 }
@@ -102,7 +102,7 @@ export interface UpdateEntryInput {
   location_subdivision?: string | null;
   location_region?: string | null;
   location_country?: string | null;
-  status?: "none" | "incomplete" | "complete";
+  status?: "none" | "incomplete" | "in_progress" | "complete";
   due_date?: string | null;
   completed_at?: string | null;
 }
@@ -114,5 +114,5 @@ export interface EntryFilter {
   mention?: string; // Filter by single mention
   start_date?: string;
   end_date?: string;
-  status?: "none" | "incomplete" | "complete";
+  status?: "none" | "incomplete" | "in_progress" | "complete";
 }

@@ -64,7 +64,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [LocationPickerComponent, setLocationPickerComponent] = useState<any>(null);
-  const [status, setStatus] = useState<"none" | "incomplete" | "complete">("none");
+  const [status, setStatus] = useState<"none" | "incomplete" | "in_progress" | "complete">("none");
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [entryDate, setEntryDate] = useState<string>(() => {
@@ -794,13 +794,53 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             </Svg>
           </TouchableOpacity>
         )}
+
+        {/* Status - Right aligned */}
+        <TouchableOpacity
+          style={styles.statusButton}
+          onPress={() => {
+            // Cycle through: none -> incomplete -> in_progress -> complete -> none
+            if (status === "none") setStatus("incomplete");
+            else if (status === "incomplete") setStatus("in_progress");
+            else if (status === "in_progress") setStatus("complete");
+            else setStatus("none");
+            if (!isEditMode) enterEditMode();
+          }}
+        >
+          <View style={styles.statusContent}>
+            {status !== "none" && (
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                <Circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke={status === "complete" ? theme.colors.text.primary : "#6b7280"}
+                  strokeWidth={2}
+                  fill={status === "complete" ? theme.colors.text.primary : "none"}
+                />
+                {status === "complete" && (
+                  <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                )}
+                {status === "in_progress" && (
+                  <Circle cx="12" cy="12" r="4" fill="#6b7280" />
+                )}
+              </Svg>
+            )}
+            <Text style={styles.statusText}>
+              {status === "none" ? "Add Status" :
+               status === "incomplete" ? "Not Started" :
+               status === "in_progress" ? "In Progress" :
+               "Completed"}
+            </Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
-      {/* Button Bar */}
-      <View style={styles.buttonBar}>
-        {/* Location Button */}
+      {/* Metadata Bar - Text links with dividers */}
+      <View style={styles.metadataBar}>
+        {/* Location */}
         <TouchableOpacity
-          style={[styles.topBarButton, captureLocation && styles.topBarButtonActive]}
+          style={styles.metadataLink}
           onPress={async () => {
             editorRef.current?.blur();
             Keyboard.dismiss();
@@ -814,108 +854,69 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             setTimeout(() => setShowLocationPicker(!showLocationPicker), 100);
           }}
         >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={captureLocation ? theme.colors.text.primary : theme.colors.text.disabled} strokeWidth={2}>
-            <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-            <Circle
-              cx={12}
-              cy={10}
-              r={3}
-              fill={
-                locationData?.latitude && locationData?.longitude
-                  ? (captureLocation ? theme.colors.text.primary : theme.colors.text.disabled)  // Has location: solid
-                  : (captureLocation && locationIconBlink ? theme.colors.text.primary : "none")  // Loading: blinking
-              }
-            />
-          </Svg>
-          <Text style={[styles.topBarButtonText, captureLocation && styles.topBarButtonTextActive]}>
-            {captureLocation ? (locationData?.name || "GPS") : "None"}
-          </Text>
+          <View style={styles.metadataLinkContent}>
+            {captureLocation && (
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+                <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+                <Circle cx={12} cy={10} r={3} fill={theme.colors.text.primary} />
+              </Svg>
+            )}
+            <Text style={[styles.metadataText, captureLocation && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+              {captureLocation ? (locationData?.name || "GPS") : "Add Location"}
+            </Text>
+          </View>
         </TouchableOpacity>
 
-        {/* Category Button */}
+        <Text style={styles.metadataDivider}>|</Text>
+
+        {/* Category */}
         <TouchableOpacity
-          style={[styles.topBarButton, styles.topBarButtonActive]}
+          style={styles.metadataLink}
           onPress={() => {
-            editorRef.current?.blur(); // Blur editor first
-            Keyboard.dismiss(); // Dismiss keyboard before opening picker
-            setTimeout(() => setShowCategoryPicker(!showCategoryPicker), 100); // Small delay to ensure keyboard is dismissed
+            editorRef.current?.blur();
+            Keyboard.dismiss();
+            setTimeout(() => setShowCategoryPicker(!showCategoryPicker), 100);
           }}
         >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-            <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-          <Text style={[styles.topBarButtonText, styles.topBarButtonTextActive]}>
-            {categoryName || "Uncategorized"}
-          </Text>
+          <View style={styles.metadataLinkContent}>
+            {categoryName && (
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+                <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            )}
+            <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+              {categoryName || "Add Category"}
+            </Text>
+          </View>
         </TouchableOpacity>
 
-        {/* Task Status Button */}
-        <TouchableOpacity
-          style={[
-            styles.topBarButton,
-            status === "incomplete" && styles.topBarButtonTask,
-            status === "complete" && styles.topBarButtonComplete
-          ]}
-          onPress={() => {
-            // Cycle through: none -> incomplete -> complete -> none
-            if (status === "none") setStatus("incomplete");
-            else if (status === "incomplete") setStatus("complete");
-            else setStatus("none");
-            if (!isEditMode) enterEditMode();
-          }}
-        >
-          {status === "incomplete" || status === "complete" ? (
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-              <Circle
-                cx="12"
-                cy="12"
-                r="10"
-                stroke={theme.colors.text.primary}
-                strokeWidth={2}
-                fill={status === "complete" ? theme.colors.text.primary : "none"}
-              />
-              {status === "complete" && (
-                <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-              )}
-            </Svg>
-          ) : (
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-              <Path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          )}
-          <Text
-            style={[
-              styles.topBarButtonText,
-              status === "none" && styles.topBarButtonTextActive,
-              status === "incomplete" && styles.topBarButtonTaskText,
-              status === "complete" && styles.topBarButtonCompleteText
-            ]}
-          >
-            {status === "none" ? "Note" : status === "incomplete" ? "Task" : "Done"}
-          </Text>
-        </TouchableOpacity>
+        <Text style={styles.metadataDivider}>|</Text>
 
-        {/* Due Date Button - Always visible (makes notes into events) */}
+        {/* Due Date */}
         <TouchableOpacity
-          style={[styles.topBarButton, dueDate && styles.topBarButtonDue]}
+          style={styles.metadataLink}
           onPress={() => {
-            editorRef.current?.blur(); // Blur editor first
-            Keyboard.dismiss(); // Dismiss keyboard before opening picker
+            editorRef.current?.blur();
+            Keyboard.dismiss();
             setTimeout(() => {
               setShowDatePicker(!showDatePicker);
               if (!isEditMode) enterEditMode();
-            }, 100); // Small delay to ensure keyboard is dismissed
+            }, 100);
           }}
         >
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dueDate ? theme.colors.text.primary : theme.colors.text.disabled} strokeWidth={2}>
-            <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
-            <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-            <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-            <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-          <Text style={[styles.topBarButtonText, dueDate && styles.topBarButtonDueText]}>
-            {dueDate ? new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : "Due"}
-          </Text>
+          <View style={styles.metadataLinkContent}>
+            {dueDate && (
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+                <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
+                <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
+                <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
+                <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            )}
+            <Text style={[styles.metadataText, dueDate && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+              {dueDate ? `Due: ${new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : "Add Due Date"}
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -1326,32 +1327,42 @@ const styles = StyleSheet.create({
   menuButton: {
     padding: theme.spacing.sm,
   },
-  buttonBar: {
+  metadataBar: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: 4,
-    paddingBottom: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
     backgroundColor: theme.colors.background.primary,
-    gap: theme.spacing.md,
+    rowGap: 4,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: theme.colors.border.light,
   },
-  topBarButton: {
+  metadataLink: {
+    paddingVertical: 4,
+    maxWidth: 120,
+  },
+  metadataLinkContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    gap: 4,
   },
-  topBarButtonActive: {
-    // No background color - active state shown via icon/text color
-  },
-  topBarButtonText: {
+  metadataText: {
     fontSize: 14,
-    color: theme.colors.text.disabled,
+    color: theme.colors.text.secondary,
     fontWeight: "500",
   },
-  topBarButtonTextActive: {
+  metadataTextActive: {
     color: theme.colors.text.primary,
+    fontWeight: "600",
+  },
+  metadataDivider: {
+    fontSize: 14,
+    color: theme.colors.text.disabled,
+    paddingHorizontal: 6,
   },
   topBarButtonTask: {
     // No background color
@@ -1402,7 +1413,20 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   entryDateText: {
-    fontSize: 13,
+    fontSize: 19,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  statusButton: {
+    marginLeft: "auto",
+  },
+  statusContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  statusText: {
+    fontSize: 14,
     color: "#6b7280",
     fontWeight: "500",
   },
