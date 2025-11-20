@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View, ActivityIndicator, Platform, StatusBar, BackHandler } from "react-native";
+import { useFonts, MavenPro_400Regular, MavenPro_500Medium, MavenPro_600SemiBold, MavenPro_700Bold } from "@expo-google-fonts/maven-pro";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
 import { NavigationProvider } from "./src/shared/contexts/NavigationContext";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
@@ -207,6 +208,24 @@ function AuthGate() {
  * Root App Component
  */
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    MavenPro_400Regular,
+    MavenPro_500Medium,
+    MavenPro_600SemiBold,
+    MavenPro_700Bold,
+  });
+
+  // Show loading while fonts are loading
+  if (!fontsLoaded) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading...</Text>
+        <ExpoStatusBar style="dark" />
+      </View>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

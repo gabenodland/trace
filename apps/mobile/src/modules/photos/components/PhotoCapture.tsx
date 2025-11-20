@@ -4,7 +4,7 @@
  * Allows users to capture photos from camera or pick from gallery
  */
 
-import React, { useState } from 'react';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import {  capturePhoto, pickPhotoFromGallery } from '../mobilePhotoApi';
@@ -12,11 +12,21 @@ import {  capturePhoto, pickPhotoFromGallery } from '../mobilePhotoApi';
 interface PhotoCaptureProps {
   onPhotoSelected: (uri: string, width: number, height: number) => void;
   disabled?: boolean;
+  showButton?: boolean; // Whether to show the camera button (default true)
 }
 
-export function PhotoCapture({ onPhotoSelected, disabled = false }: PhotoCaptureProps) {
+export interface PhotoCaptureRef {
+  openMenu: () => void;
+}
+
+export const PhotoCapture = forwardRef<PhotoCaptureRef, PhotoCaptureProps>(function PhotoCapture({ onPhotoSelected, disabled = false, showButton = true }, ref) {
   const [showMenu, setShowMenu] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+
+  // Expose openMenu method to parent
+  useImperativeHandle(ref, () => ({
+    openMenu: () => setShowMenu(true),
+  }));
 
   const handleCameraPress = async () => {
     setShowMenu(false);
@@ -52,17 +62,19 @@ export function PhotoCapture({ onPhotoSelected, disabled = false }: PhotoCapture
 
   return (
     <>
-      <TouchableOpacity
-        style={[styles.button, disabled && styles.buttonDisabled]}
-        onPress={() => setShowMenu(true)}
-        disabled={disabled || isCapturing}
-        activeOpacity={0.7}
-      >
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-          <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" strokeLinecap="round" strokeLinejoin="round" />
-          <Circle cx={12} cy={13} r={3} strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      </TouchableOpacity>
+      {showButton && (
+        <TouchableOpacity
+          style={[styles.button, disabled && styles.buttonDisabled]}
+          onPress={() => setShowMenu(true)}
+          disabled={disabled || isCapturing}
+          activeOpacity={0.7}
+        >
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" strokeLinecap="round" strokeLinejoin="round" />
+            <Circle cx={12} cy={13} r={3} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
+      )}
 
       {/* Photo Source Selection Modal */}
       <Modal
@@ -112,7 +124,7 @@ export function PhotoCapture({ onPhotoSelected, disabled = false }: PhotoCapture
       </Modal>
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   button: {

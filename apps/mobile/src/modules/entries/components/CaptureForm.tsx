@@ -15,7 +15,7 @@ import { useNavigationMenu } from "../../../shared/hooks/useNavigationMenu";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 import { theme } from "../../../shared/theme/theme";
 import { SimpleDatePicker } from "./SimpleDatePicker";
-import { PhotoCapture } from "../../photos/components/PhotoCapture";
+import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { compressPhoto, savePhotoToLocalStorage, deletePhoto } from "../../photos/mobilePhotoApi";
 import { localDB } from "../../../shared/db/localDB";
@@ -99,9 +99,11 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const [locationIconBlink, setLocationIconBlink] = useState(true);
   const editorRef = useRef<any>(null);
   const titleInputRef = useRef<TextInput>(null);
+  const photoCaptureRef = useRef<PhotoCaptureRef>(null);
   const isInitialLoad = useRef(true); // Track if this is first load
   const lastTitleTap = useRef<number | null>(null); // Track last tap time for double-tap detection
   const [photoCount, setPhotoCount] = useState(0); // Track photo position for ordering
+  const [photosCollapsed, setPhotosCollapsed] = useState(false); // Start expanded
   const [tempEntryId] = useState(() => entryId || Crypto.randomUUID()); // Temp ID for new entries
 
   // Pending photos for NEW entries only (not saved to DB yet)
@@ -401,12 +403,16 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
     setIsSubmitting(true);
 
-    // Check if there's actual content (strip HTML tags to check)
+    // Check if there's something to save (title, content, photos, or location)
     const textContent = content.replace(/<[^>]*>/g, '').trim();
+    const hasTitle = title.trim().length > 0;
+    const hasContent = textContent.length > 0;
+    const hasPhotos = isEditing ? photoCount > 0 : pendingPhotos.length > 0;
+    const hasLocation = captureLocation && locationData;
 
-    if (!textContent || textContent.length === 0) {
+    if (!hasTitle && !hasContent && !hasPhotos && !hasLocation) {
       setIsSubmitting(false);
-      Alert.alert("Empty Entry", "Please add some content before saving");
+      Alert.alert("Empty Entry", "Please add a title, content, photo, or location before saving");
       return;
     }
 
@@ -918,6 +924,39 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             </Text>
           </View>
         </TouchableOpacity>
+
+        {/* Photos - only show when collapsed or no photos */}
+        {(photosCollapsed || photoCount === 0) && (
+          <>
+            <Text style={styles.metadataDivider}>|</Text>
+
+            <TouchableOpacity
+              style={styles.metadataLink}
+              onPress={() => {
+                if (photoCount > 0) {
+                  // Toggle collapse if there are photos
+                  setPhotosCollapsed(!photosCollapsed);
+                } else {
+                  // No photos - launch photo capture and enter edit mode
+                  if (!isEditMode) enterEditMode();
+                  photoCaptureRef.current?.openMenu();
+                }
+              }}
+            >
+              <View style={styles.metadataLinkContent}>
+                {photoCount > 0 && (
+                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+                    <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+                    <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                )}
+                <Text style={[styles.metadataText, photoCount > 0 && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                  {photoCount > 0 ? `${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}` : "Add Photos"}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       {/* Content Area */}
@@ -927,8 +966,16 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         <PhotoGallery
           entryId={entryId || tempEntryId}
           refreshKey={photoCount}
+          onPhotoCountChange={setPhotoCount}
           onPhotoDelete={handlePhotoDelete}
           pendingPhotos={isEditing ? undefined : pendingPhotos}
+          collapsible={true}
+          isCollapsed={photosCollapsed}
+          onCollapsedChange={setPhotosCollapsed}
+          onAddPhoto={() => {
+            if (!isEditMode) enterEditMode();
+            photoCaptureRef.current?.openMenu();
+          }}
         />
 
         {/* Editor */}
@@ -1020,6 +1067,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
             {/* Photo Capture Button */}
             <PhotoCapture
+              ref={photoCaptureRef}
               onPhotoSelected={handlePhotoSelected}
               disabled={isSubmitting}
             />
@@ -1027,8 +1075,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         )}
 
         <View style={styles.actionButtons}>
-          {/* Delete Button (only when editing and in edit mode) */}
-          {isEditing && isEditMode && (
+          {/* Delete Button (shown when viewing existing entry) */}
+          {isEditing && (
             <TouchableOpacity
               onPress={handleDelete}
               disabled={isSubmitting}

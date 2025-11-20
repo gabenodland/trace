@@ -53,6 +53,14 @@ export const theme = {
 
   // Typography
   typography: {
+    // Font family
+    fontFamily: {
+      regular: 'MavenPro_400Regular',
+      medium: 'MavenPro_500Medium',
+      semibold: 'MavenPro_600SemiBold',
+      bold: 'MavenPro_700Bold',
+    },
+
     // Font sizes
     fontSize: {
       xs: 11,

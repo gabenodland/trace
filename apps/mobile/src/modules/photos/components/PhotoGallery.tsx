@@ -7,11 +7,13 @@
 
 import { useState, useEffect } from 'react';
 import { View, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Text } from 'react-native';
+import Svg, { Path, Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import { localDB } from '../../../shared/db/localDB';
 import { getPhotoUri, ensurePhotoDownloaded } from '../mobilePhotoApi';
 import { PhotoViewer } from './PhotoViewer';
 import type { Photo } from '@trace/core';
+import { theme } from '../../../shared/theme/theme';
 
 interface PendingPhoto {
   photoId: string;
@@ -30,9 +32,13 @@ interface PhotoGalleryProps {
   onPhotoCountChange?: (count: number) => void;
   onPhotoDelete?: (photoId: string) => void;
   pendingPhotos?: PendingPhoto[]; // For new entries: photos stored in state (not DB yet)
+  collapsible?: boolean; // Enable collapse/expand functionality
+  isCollapsed?: boolean; // Controlled collapsed state
+  onCollapsedChange?: (collapsed: boolean) => void; // Callback when collapsed state changes
+  onAddPhoto?: () => void; // Callback to trigger photo capture
 }
 
-export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoDelete, pendingPhotos }: PhotoGalleryProps) {
+export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoDelete, pendingPhotos, collapsible, isCollapsed, onCollapsedChange, onAddPhoto }: PhotoGalleryProps) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [photoUris, setPhotoUris] = useState<Record<string, string>>({});
   const [photoDownloadStatus, setPhotoDownloadStatus] = useState<Record<string, boolean>>({}); // true = downloaded locally
@@ -196,39 +202,89 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
     );
   }
 
+  // If collapsed, don't render anything (the parent will show the photo count in metadata)
+  if (collapsible && isCollapsed) {
+    return null;
+  }
+
   return (
     <>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-      >
-        {displayPhotos.map((photo, index) => {
-          const uri = photoUris[photo.photoId];
+      <View style={styles.galleryWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.container}
+          contentContainerStyle={styles.contentContainer}
+        >
+          {displayPhotos.map((photo, index) => {
+            const uri = photoUris[photo.photoId];
 
-          return (
-            <TouchableOpacity
-              key={photo.photoId}
-              style={styles.photoContainer}
-              onPress={() => handlePhotoPress(index)}
-              activeOpacity={0.8}
-            >
-              {uri ? (
-                <Image
-                  source={{ uri }}
-                  style={styles.photo}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.photoPlaceholder}>
-                  <ActivityIndicator size="small" color="#6b7280" />
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+            return (
+              <TouchableOpacity
+                key={photo.photoId}
+                style={styles.photoContainer}
+                onPress={() => handlePhotoPress(index)}
+                activeOpacity={0.8}
+              >
+                {uri ? (
+                  <Image
+                    source={{ uri }}
+                    style={styles.photo}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <ActivityIndicator size="small" color="#6b7280" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Vertical toolbar on right side */}
+        {collapsible && (
+          <View style={styles.toolbarContainer}>
+            {/* Add Photo button */}
+            {onAddPhoto && (
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={onAddPhoto}
+                activeOpacity={0.7}
+              >
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"
+                    stroke={theme.colors.text.tertiary}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Circle cx={12} cy={13} r={3} stroke={theme.colors.text.tertiary} strokeWidth={2} />
+                </Svg>
+              </TouchableOpacity>
+            )}
+            {/* Collapse button */}
+            {onCollapsedChange && (
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={() => onCollapsedChange(true)}
+                activeOpacity={0.7}
+              >
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M18 15l-6-6-6 6"
+                    stroke={theme.colors.text.tertiary}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
 
       <PhotoViewer
         visible={viewerVisible}
@@ -251,13 +307,20 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
 }
 
 const styles = StyleSheet.create({
+  galleryWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
   container: {
     marginBottom: 8,
     maxHeight: 88, // Fixed height to prevent layout issues
+    flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
+    paddingLeft: 16,
+    paddingRight: 8,
     gap: 8,
+    // Left-align photos (no flexGrow or justifyContent)
   },
   loadingContainer: {
     padding: 8,
@@ -280,5 +343,18 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  toolbarContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingRight: 8,
+    paddingTop: 4,
+    gap: 4,
+  },
+  toolbarButton: {
+    padding: 8,
+    backgroundColor: theme.colors.background.tertiary,
+    borderRadius: 8,
   },
 });

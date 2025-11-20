@@ -27,6 +27,8 @@ interface EntryListItemProps {
 
 export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, categoryName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
+  const [photoCount, setPhotoCount] = React.useState(0);
+  const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
 
   // Format content based on display mode
   const formattedContent = getFormattedContent(entry.content, displayMode);
@@ -177,7 +179,13 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
                 </View>
               )}
               {displayMode === 'flow' && (
-                <PhotoGallery entryId={entry.entry_id} />
+                <PhotoGallery
+                  entryId={entry.entry_id}
+                  collapsible={true}
+                  isCollapsed={photosCollapsed}
+                  onCollapsedChange={setPhotosCollapsed}
+                  onPhotoCountChange={setPhotoCount}
+                />
               )}
               {displayMode === 'flow' ? (
                 <HtmlRenderer
@@ -231,7 +239,13 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
                   </View>
                 )}
                 {displayMode === 'flow' && (
-                  <PhotoGallery entryId={entry.entry_id} />
+                  <PhotoGallery
+                    entryId={entry.entry_id}
+                    collapsible={true}
+                    isCollapsed={photosCollapsed}
+                    onCollapsedChange={setPhotosCollapsed}
+                    onPhotoCountChange={setPhotoCount}
+                  />
                 )}
                 <HtmlRenderer
                   html={entry.content || ''}
@@ -255,6 +269,22 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
           {/* Metadata */}
           <View style={styles.metadata}>
             <Text style={styles.date}>Updated {updatedDateStr}</Text>
+
+            {/* Photo Count Badge (when collapsed) */}
+            {displayMode === 'flow' && photosCollapsed && photoCount > 0 && (
+              <TouchableOpacity
+                style={styles.photoBadge}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setPhotosCollapsed(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.photoBadgeText}>
+                  {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Category Badge */}
             <TouchableOpacity
@@ -443,6 +473,17 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full,
   },
   categoryText: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  photoBadge: {
+    backgroundColor: theme.colors.background.tertiary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs - 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  photoBadgeText: {
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.text.tertiary,
     fontWeight: theme.typography.fontWeight.medium,

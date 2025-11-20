@@ -5,10 +5,10 @@
  */
 
 import React from 'react';
-import { Alert, View, StyleSheet } from 'react-native';
+import { Alert, View, StyleSheet, TouchableOpacity } from 'react-native';
 import ImageViewing from 'react-native-image-viewing';
 import { ImageSource } from 'react-native-image-viewing/dist/@types';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 interface PhotoItem {
   photoId: string;
@@ -58,6 +58,49 @@ export function PhotoViewer({ visible, photos, initialIndex = 0, onClose, onDele
   // Don't render if no valid photos
   if (images.length === 0) return null;
 
+  // Header with close and delete buttons
+  const HeaderComponent = ({ imageIndex }: { imageIndex: number }) => {
+    return (
+      <View style={styles.headerContainer}>
+        {/* Close button on left */}
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={onClose}
+          activeOpacity={0.7}
+        >
+          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+            <Path
+              d="M18 6L6 18M6 6l12 12"
+              stroke="#ffffff"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+        </TouchableOpacity>
+
+        {/* Delete button on right */}
+        {onDelete && (
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => handleDelete(imageIndex)}
+            activeOpacity={0.7}
+          >
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
+                stroke="#ffffff"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   // Pagination dots footer (only show if multiple photos)
   const PaginationFooter = ({ imageIndex }: { imageIndex: number }) => {
     if (images.length <= 1) return null;
@@ -86,12 +129,27 @@ export function PhotoViewer({ visible, photos, initialIndex = 0, onClose, onDele
       visible={visible}
       onRequestClose={onClose}
       onLongPress={onDelete ? (_, index) => handleDelete(index) : undefined}
+      HeaderComponent={HeaderComponent}
       FooterComponent={PaginationFooter}
     />
   );
 }
 
 const styles = StyleSheet.create({
+  headerContainer: {
+    position: 'absolute',
+    top: 50,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
+  headerButton: {
+    padding: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 8,
+  },
   paginationContainer: {
     position: 'absolute',
     bottom: 80,
