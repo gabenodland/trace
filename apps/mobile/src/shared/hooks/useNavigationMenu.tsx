@@ -27,6 +27,26 @@ export function useNavigationMenu() {
       ),
     },
     {
+      label: "Locations",
+      onPress: () => navigate("locations"),
+      icon: (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+          <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      ),
+    },
+    {
+      label: "Map",
+      onPress: () => navigate("map"),
+      icon: (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M8 2v16M16 6v16" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      ),
+    },
+    {
       label: "Calendar",
       onPress: () => navigate("calendar"),
       icon: (

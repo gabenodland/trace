@@ -743,14 +743,23 @@ export function LocationPicker({ visible, onClose, onSelect, initialLocation }: 
       <View style={styles.content}>
         {/* Map - Always visible */}
         {mapState.region && (
+          <View style={styles.mapContainer}>
           <MapView
               ref={mapRef}
               style={styles.map}
               initialRegion={mapState.region}
               onPress={handleMapPress}
               onRegionChangeComplete={handleRegionChangeComplete}
-              showsUserLocation
-              showsMyLocationButton
+              mapType="standard"
+              userInterfaceStyle="light"
+              showsUserLocation={false}
+              showsMyLocationButton={false}
+              showsCompass={false}
+              showsScale={false}
+              showsTraffic={false}
+              showsBuildings={false}
+              showsIndoors={false}
+              toolbarEnabled={false}
               onPoiClick={handleGooglePOIClick}
             >
               {/* Selected Location Marker - only show for exact and address levels */}
@@ -793,6 +802,61 @@ export function LocationPicker({ visible, onClose, onSelect, initialLocation }: 
                 })()
               )}
             </MapView>
+
+            {/* My Location Button */}
+            <TouchableOpacity
+              style={styles.mapLocationButton}
+              onPress={async () => {
+                try {
+                  const { status } = await Location.requestForegroundPermissionsAsync();
+                  if (status !== 'granted') {
+                    return;
+                  }
+                  let location = await Location.getLastKnownPositionAsync({});
+                  if (!location) {
+                    location = await Location.getCurrentPositionAsync({
+                      accuracy: Location.Accuracy.Balanced,
+                    });
+                  }
+                  if (location && mapRef.current) {
+                    const coords = {
+                      latitude: location.coords.latitude,
+                      longitude: location.coords.longitude,
+                    };
+                    const newRegion = {
+                      ...coords,
+                      latitudeDelta: 0.01,
+                      longitudeDelta: 0.01,
+                    };
+
+                    // Animate map to location
+                    mapRef.current.animateToRegion(newRegion, 500);
+
+                    // Move marker to current location
+                    setMapState(prev => ({
+                      ...prev,
+                      region: newRegion,
+                      markerPosition: coords,
+                    }));
+
+                    // Create selection from current location (like map tap)
+                    const newSelection = createSelectionFromMapTap(coords.latitude, coords.longitude);
+                    setSelection(newSelection);
+
+                    // Trigger reverse geocoding
+                    setReverseGeocodeRequest(coords);
+                  }
+                } catch (error) {
+                  console.error('Error getting location:', error);
+                }
+              }}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth={2}>
+                <Circle cx="12" cy="12" r="10" />
+                <Path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+              </Svg>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Switchable Content Below Map */}
@@ -1213,8 +1277,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   // Map - Always visible
+  mapContainer: {
+    position: 'relative',
+    height: 250,
+  },
   map: {
-    height: 250, // Map takes fixed height at top
+    flex: 1,
+  },
+  mapLocationButton: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   // List Container (POI list below map)
   listContainer: {

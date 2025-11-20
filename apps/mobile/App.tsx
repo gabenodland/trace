@@ -14,6 +14,8 @@ import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { TasksScreen } from "./src/screens/TasksScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { DatabaseInfoScreen } from "./src/screens/DatabaseInfoScreen";
+import { LocationsScreen } from "./src/screens/LocationsScreen";
+import { MapScreen } from "./src/screens/MapScreen";
 import { localDB } from "./src/shared/db/localDB";
 import { syncQueue } from "./src/shared/sync/syncQueue";
 import "./src/shared/db/dbDebug"; // Global debug utilities
@@ -167,6 +169,10 @@ function AuthGate() {
         return <ProfileScreen />;
       case "debug":
         return <DatabaseInfoScreen />;
+      case "locations":
+        return <LocationsScreen />;
+      case "map":
+        return <MapScreen />;
       case "location-builder":
         // Dynamically load LocationBuilderScreen to avoid loading MapView at startup
         if (!LocationBuilderComponent) {
