@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View, ActivityIndicator, Platform, StatusBar, BackHandler } from "react-native";
 import { useFonts, MavenPro_400Regular, MavenPro_500Medium, MavenPro_600SemiBold, MavenPro_700Bold } from "@expo-google-fonts/maven-pro";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
-import { NavigationProvider } from "./src/shared/contexts/NavigationContext";
+import { NavigationProvider, BeforeBackHandler } from "./src/shared/contexts/NavigationContext";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { EntryScreen } from "./src/screens/EntryScreen";
@@ -49,6 +49,20 @@ function AuthGate() {
   ]);
   const [LocationBuilderComponent, setLocationBuilderComponent] = useState<any>(null);
 
+  // Before back handler for screens to intercept back navigation
+  const beforeBackHandlerRef = useRef<BeforeBackHandler | null>(null);
+
+  const setBeforeBackHandler = useCallback((handler: BeforeBackHandler | null) => {
+    beforeBackHandlerRef.current = handler;
+  }, []);
+
+  const checkBeforeBack = useCallback(async (): Promise<boolean> => {
+    if (beforeBackHandlerRef.current) {
+      return await beforeBackHandlerRef.current();
+    }
+    return true; // No handler, proceed with back
+  }, []);
+
   // Initialize database and sync when authenticated
   useEffect(() => {
     if (isAuthenticated && !dbInitialized) {
@@ -82,12 +96,19 @@ function AuthGate() {
     };
   }, [isAuthenticated, dbInitialized, queryClient]);
 
-  // Handle Android back button
+  // Handle Android back button and iOS swipe-back gesture
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      return handleBack();
+      // Check if we can go back
+      if (navigationHistory.length <= 1) {
+        return false; // Allow default behavior (exit app)
+      }
+
+      // Always return true to prevent default, then handle async
+      handleBackAsync();
+      return true;
     });
 
     return () => backHandler.remove();
@@ -121,9 +142,15 @@ function AuthGate() {
     setNavigationHistory(prev => [...prev, { tabId, params: params || {} }]);
   };
 
-  // Handle back navigation
-  const handleBack = () => {
+  // Handle back navigation (async version that checks beforeBack handler)
+  const handleBackAsync = async () => {
     if (navigationHistory.length > 1) {
+      // Check if screen allows back navigation
+      const canGoBack = await checkBeforeBack();
+      if (!canGoBack) {
+        return; // Screen blocked back navigation
+      }
+
       // Remove current screen
       const newHistory = navigationHistory.slice(0, -1);
       setNavigationHistory(newHistory);
@@ -132,10 +159,7 @@ function AuthGate() {
       const previous = newHistory[newHistory.length - 1];
       setActiveTab(previous.tabId);
       setNavParams(previous.params);
-
-      return true; // Handled
     }
-    return false; // Not handled, allow default behavior (exit app)
   };
 
   // Render the active screen
@@ -149,6 +173,7 @@ function AuthGate() {
             initialCategoryName={navParams.initialCategoryName}
             initialContent={navParams.initialContent}
             initialDate={navParams.initialDate}
+            initialLocation={navParams.initialLocation}
             returnContext={navParams.returnContext}
           />
         );
@@ -199,7 +224,11 @@ function AuthGate() {
 
   // User is authenticated - show main app with new navigation
   return (
-    <NavigationProvider navigate={handleNavigate}>
+    <NavigationProvider
+      navigate={handleNavigate}
+      setBeforeBackHandler={setBeforeBackHandler}
+      checkBeforeBack={checkBeforeBack}
+    >
       <View style={styles.appContainer}>
         {/* Active Screen */}
         {renderScreen()}

@@ -3,11 +3,20 @@
  * Writes to SQLite first (offline-capable), then syncs to Supabase
  */
 
-import { Entry, CreateEntryInput } from '@trace/core';
+import { Entry, CreateEntryInput, EntryFilter } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
+
+/**
+ * Mobile-specific entry filter that extends core EntryFilter
+ * Adds mobile-only fields for category hierarchy filtering
+ */
+export interface MobileEntryFilter extends EntryFilter {
+  includeChildren?: boolean;
+  childCategoryIds?: string[];
+}
 
 /**
  * Get device identifier for attribution
@@ -85,14 +94,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
 /**
  * Get entries from local database
  */
-export async function getEntries(filter?: {
-  category_id?: string | null;
-  status?: string;
-  tag?: string;
-  mention?: string;
-  includeChildren?: boolean;
-  childCategoryIds?: string[];
-}): Promise<Entry[]> {
+export async function getEntries(filter?: MobileEntryFilter): Promise<Entry[]> {
   return await localDB.getAllEntries(filter);
 }
 
@@ -188,4 +190,42 @@ export async function getTags(): Promise<Array<{ tag: string; count: number }>> 
  */
 export async function getMentions(): Promise<Array<{ mention: string; count: number }>> {
   return await localDB.getAllMentions();
+}
+
+/**
+ * Get location data from an entry by location name
+ * Returns the first entry found with that location_name
+ */
+export async function getEntryLocationByName(locationName: string): Promise<{
+  location_latitude: number | null;
+  location_longitude: number | null;
+  location_accuracy: number | null;
+  location_name: string | null;
+  location_name_source: string | null;
+  location_address: string | null;
+  location_neighborhood: string | null;
+  location_postal_code: string | null;
+  location_city: string | null;
+  location_subdivision: string | null;
+  location_region: string | null;
+  location_country: string | null;
+} | null> {
+  const entries = await localDB.getAllEntries({ location_name: locationName });
+  if (entries.length === 0) return null;
+
+  const entry = entries[0];
+  return {
+    location_latitude: entry.location_latitude || null,
+    location_longitude: entry.location_longitude || null,
+    location_accuracy: entry.location_accuracy || null,
+    location_name: entry.location_name || null,
+    location_name_source: entry.location_name_source || null,
+    location_address: entry.location_address || null,
+    location_neighborhood: entry.location_neighborhood || null,
+    location_postal_code: entry.location_postal_code || null,
+    location_city: entry.location_city || null,
+    location_subdivision: entry.location_subdivision || null,
+    location_region: entry.location_region || null,
+    location_country: entry.location_country || null,
+  };
 }

@@ -640,6 +640,7 @@ class LocalDatabase {
     status?: string;
     tag?: string; // Filter by single tag
     mention?: string; // Filter by single mention
+    location_name?: string; // Filter by location name
     includeDeleted?: boolean; // For sync operations
     includeChildren?: boolean; // Include entries in child categories
     childCategoryIds?: string[]; // List of child category IDs to include
@@ -692,6 +693,12 @@ class LocalDatabase {
       if (filter.mention) {
         query += ' AND mentions LIKE ?';
         params.push(`%"${filter.mention.toLowerCase()}"%`);
+      }
+
+      // Filter by location name
+      if (filter.location_name) {
+        query += ' AND location_name = ?';
+        params.push(filter.location_name);
       }
     }
 

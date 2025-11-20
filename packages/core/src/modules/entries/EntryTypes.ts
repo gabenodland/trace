@@ -112,6 +112,7 @@ export interface EntryFilter {
   tags?: string[];
   tag?: string; // Filter by single tag
   mention?: string; // Filter by single mention
+  location_name?: string; // Filter by location name
   start_date?: string;
   end_date?: string;
   status?: "none" | "incomplete" | "in_progress" | "complete";

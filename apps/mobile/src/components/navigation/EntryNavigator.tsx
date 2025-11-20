@@ -2,11 +2,13 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { useEntries, useTags, useMentions } from "../../modules/entries/mobileEntryHooks";
 import { useCategories } from "../../modules/categories/mobileCategoryHooks";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Circle } from "react-native-svg";
 import { CategoryTree as CategoryTreeComponent } from "../../modules/categories/components/CategoryTree";
 import { TagList } from "../../modules/entries/components/TagList";
 import { PeopleList } from "../../modules/entries/components/PeopleList";
 import { theme } from "../../shared/theme/theme";
+import { localDB } from "../../shared/db/localDB";
+import type { Entry } from "@trace/core";
 
 interface EntryNavigatorProps {
   visible: boolean;
@@ -15,7 +17,14 @@ interface EntryNavigatorProps {
   selectedCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
 }
 
-type SegmentType = "categories" | "tags" | "mentions";
+type SegmentType = "categories" | "locations" | "tags" | "mentions";
+
+// Location data structure for grouping
+interface LocationItem {
+  name: string;
+  entryCount: number;
+  locationId: string; // Unique identifier for filtering
+}
 
 export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId }: EntryNavigatorProps) {
   const { categories, categoryTree, isLoading } = useCategories();
@@ -24,6 +33,66 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSegment, setSelectedSegment] = useState<SegmentType>("categories");
   const scrollViewRef = useRef<ScrollView>(null);
+  const [locationEntries, setLocationEntries] = useState<Entry[]>([]);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+
+  // Load entries with locations when locations tab is selected
+  useEffect(() => {
+    if (visible && selectedSegment === "locations") {
+      const loadLocations = async () => {
+        setIsLoadingLocations(true);
+        try {
+          const allEntries = await localDB.getAllEntries();
+          const entriesWithLocation = allEntries.filter(
+            (entry) => entry.location_name
+          );
+          setLocationEntries(entriesWithLocation);
+        } catch (error) {
+          console.error("Error loading locations:", error);
+        } finally {
+          setIsLoadingLocations(false);
+        }
+      };
+      loadLocations();
+    }
+  }, [visible, selectedSegment]);
+
+  // Build location list from entries
+  const locations = useMemo(() => {
+    const locationMap = new Map<string, LocationItem>();
+
+    for (const entry of locationEntries) {
+      const name = entry.location_name;
+      if (!name) continue;
+
+      // Use location_name as the unique identifier
+      const locationId = `location:${name}`;
+
+      const existing = locationMap.get(name);
+      if (existing) {
+        existing.entryCount++;
+      } else {
+        locationMap.set(name, {
+          name,
+          entryCount: 1,
+          locationId,
+        });
+      }
+    }
+
+    // Sort by name
+    return Array.from(locationMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+  }, [locationEntries]);
+
+  // Filter locations by search
+  const filteredLocations = useMemo(() => {
+    if (!searchQuery) return [];
+    return locations.filter((loc) =>
+      loc.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [locations, searchQuery]);
 
   // Get entry counts
   const { entries: uncategorizedEntries } = useEntries({ category_id: null });
@@ -40,6 +109,8 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
           setSelectedSegment('tags');
         } else if (selectedCategoryId.startsWith('mention:')) {
           setSelectedSegment('mentions');
+        } else if (selectedCategoryId.startsWith('location:')) {
+          setSelectedSegment('locations');
         } else {
           setSelectedSegment('categories');
         }
@@ -148,63 +219,81 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
         )}
       </View>
 
-      {/* Segmented Control - Hide when searching */}
+      {/* Tab Bar - Hide when searching */}
       {!searchQuery && (
-        <View style={styles.segmentedControl}>
-        <TouchableOpacity
-          style={[
-            styles.segment,
-            selectedSegment === "categories" && styles.segmentActive
-          ]}
-          onPress={() => {
-            setSelectedSegment("categories");
-            setSearchQuery("");
-          }}
-        >
-          <Text style={[
-            styles.segmentText,
-            selectedSegment === "categories" && styles.segmentTextActive
-          ]}>
-            Categories
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              selectedSegment === "categories" && styles.tabActive
+            ]}
+            onPress={() => {
+              setSelectedSegment("categories");
+              setSearchQuery("");
+            }}
+          >
+            <Text style={[
+              styles.tabText,
+              selectedSegment === "categories" && styles.tabTextActive
+            ]}>
+              Cat
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.segment,
-            selectedSegment === "tags" && styles.segmentActive
-          ]}
-          onPress={() => {
-            setSelectedSegment("tags");
-            setSearchQuery("");
-          }}
-        >
-          <Text style={[
-            styles.segmentText,
-            selectedSegment === "tags" && styles.segmentTextActive
-          ]}>
-            Tags
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              selectedSegment === "locations" && styles.tabActive
+            ]}
+            onPress={() => {
+              setSelectedSegment("locations");
+              setSearchQuery("");
+            }}
+          >
+            <Text style={[
+              styles.tabText,
+              selectedSegment === "locations" && styles.tabTextActive
+            ]}>
+              Loc
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.segment,
-            selectedSegment === "mentions" && styles.segmentActive
-          ]}
-          onPress={() => {
-            setSelectedSegment("mentions");
-            setSearchQuery("");
-          }}
-        >
-          <Text style={[
-            styles.segmentText,
-            selectedSegment === "mentions" && styles.segmentTextActive
-          ]}>
-            Mentions
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              selectedSegment === "tags" && styles.tabActive
+            ]}
+            onPress={() => {
+              setSelectedSegment("tags");
+              setSearchQuery("");
+            }}
+          >
+            <Text style={[
+              styles.tabText,
+              selectedSegment === "tags" && styles.tabTextActive
+            ]}>
+              Tag
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              selectedSegment === "mentions" && styles.tabActive
+            ]}
+            onPress={() => {
+              setSelectedSegment("mentions");
+              setSearchQuery("");
+            }}
+          >
+            <Text style={[
+              styles.tabText,
+              selectedSegment === "mentions" && styles.tabTextActive
+            ]}>
+              @
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Content */}
@@ -296,6 +385,51 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
               </>
             )}
 
+            {/* Locations View */}
+            {selectedSegment === "locations" && (
+              <>
+                {!isLoadingLocations && locations.length > 0 ? (
+                  <View style={styles.listWrapper}>
+                    {locations.map((location) => {
+                      const isSelected = selectedCategoryId === location.locationId;
+                      return (
+                        <TouchableOpacity
+                          key={location.locationId}
+                          style={[
+                            styles.categoryItem,
+                            isSelected && styles.categoryItemSelected,
+                          ]}
+                          onPress={() => handleSelect(location.locationId, location.name)}
+                        >
+                          <View style={styles.categoryContent}>
+                            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
+                              <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+                              <Circle cx={12} cy={10} r={3} />
+                            </Svg>
+                            <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
+                              {location.name}
+                            </Text>
+                          </View>
+                          <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{location.entryCount}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : isLoadingLocations ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>Loading locations...</Text>
+                  </View>
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No locations yet</Text>
+                    <Text style={styles.emptySubtext}>Locations will appear when you add locations to your entries</Text>
+                  </View>
+                )}
+              </>
+            )}
+
             {/* Tags View */}
             {selectedSegment === "tags" && (
               <>
@@ -375,6 +509,34 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
               </TouchableOpacity>
             ))}
 
+            {/* Locations */}
+            {filteredLocations.map((location) => {
+              const isSelected = selectedCategoryId === location.locationId;
+              return (
+                <TouchableOpacity
+                  key={location.locationId}
+                  style={[
+                    styles.categoryItem,
+                    isSelected && styles.categoryItemSelected,
+                  ]}
+                  onPress={() => handleSelect(location.locationId, location.name)}
+                >
+                  <View style={styles.categoryContent}>
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
+                      <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+                      <Circle cx={12} cy={10} r={3} />
+                    </Svg>
+                    <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
+                      {location.name}
+                    </Text>
+                  </View>
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{location.entryCount}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
             {/* Tags */}
             {filteredTags.map((tag) => {
               const tagId = `tag:${tag.tag}`;
@@ -432,7 +594,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
             })}
 
             {/* No results */}
-            {filteredCategories.length === 0 && filteredTags.length === 0 && filteredMentions.length === 0 && (
+            {filteredCategories.length === 0 && filteredLocations.length === 0 && filteredTags.length === 0 && filteredMentions.length === 0 && (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No results found</Text>
                 <Text style={styles.emptySubtext}>Try a different search term</Text>
@@ -472,32 +634,31 @@ const styles = StyleSheet.create({
   clearSearch: {
     padding: theme.spacing.xs,
   },
-  segmentedControl: {
+  tabContainer: {
     flexDirection: "row",
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    backgroundColor: theme.colors.background.primary,
+    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border.light,
-    gap: theme.spacing.sm,
+    borderBottomColor: "#e5e7eb",
   },
-  segment: {
+  tab: {
     flex: 1,
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: "center",
-    borderRadius: theme.borderRadius.md,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
-  segmentActive: {
-    backgroundColor: theme.colors.background.tertiary,
+  tabActive: {
+    borderBottomColor: "#3b82f6",
   },
-  segmentText: {
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+  tabText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6b7280",
   },
-  segmentTextActive: {
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeight.semibold,
+  tabTextActive: {
+    color: "#3b82f6",
+    fontWeight: "600",
   },
   content: {
     flex: 1,

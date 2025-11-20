@@ -6,6 +6,7 @@ import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState, 
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useCategories } from "../../categories/mobileCategoryHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
+import { usePersistedState } from "../../../shared/hooks/usePersistedState";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { CategoryPicker } from "../../categories/components/CategoryPicker";
 import { BottomBar } from "../../../components/layout/BottomBar";
@@ -21,6 +22,8 @@ import { compressPhoto, savePhotoToLocalStorage, deletePhoto } from "../../photo
 import { localDB } from "../../../shared/db/localDB";
 import { syncQueue } from "../../../shared/sync/syncQueue";
 import * as Crypto from "expo-crypto";
+import type { UnsavedChangesBehavior } from "../../../shared/types/UnsavedChangesBehavior";
+import { DEFAULT_UNSAVED_CHANGES_BEHAVIOR } from "../../../shared/types/UnsavedChangesBehavior";
 
 import type { ReturnContext } from "../../../screens/EntryScreen";
 
@@ -30,10 +33,11 @@ interface CaptureFormProps {
   initialCategoryName?: string;
   initialContent?: string;
   initialDate?: string;
+  initialLocation?: LocationType;
   returnContext?: ReturnContext;
 }
 
-export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, initialContent, initialDate, returnContext }: CaptureFormProps = {}) {
+export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, initialContent, initialDate, initialLocation, returnContext }: CaptureFormProps = {}) {
   // Determine if we're editing an existing entry or creating a new one
   const isEditing = !!entryId;
 
@@ -41,7 +45,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const [content, setContent] = useState(initialContent || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [captureLocation, setCaptureLocation] = useState(!isEditing); // Default ON for new entries, OFF for editing
+  const [captureLocation, setCaptureLocation] = useState(!isEditing || !!initialLocation); // Default ON for new entries or when initialLocation provided, OFF for editing
 
   // Initialize category from props for new entries, or null for editing (will be loaded from entry)
   const getInitialCategoryId = (): string | null => {
@@ -51,7 +55,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         initialCategoryId === "all" || initialCategoryId === "tasks" ||
         initialCategoryId === "events" || initialCategoryId === "categories" ||
         initialCategoryId === "tags" || initialCategoryId === "people" ||
-        initialCategoryId.startsWith("tag:") || initialCategoryId.startsWith("mention:")) {
+        initialCategoryId.startsWith("tag:") || initialCategoryId.startsWith("mention:") || initialCategoryId.startsWith("location:")) {
       return null; // Default to Uncategorized for filters
     }
     return initialCategoryId;
@@ -94,7 +98,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   // Store original category for cancel navigation (for edited entries)
   const [originalCategoryId, setOriginalCategoryId] = useState<string | null>(null);
   const [originalCategoryName, setOriginalCategoryName] = useState<string | null>(null);
-  const [locationData, setLocationData] = useState<LocationType | null>(null);
+  const [locationData, setLocationData] = useState<LocationType | null>(initialLocation || null);
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const [locationIconBlink, setLocationIconBlink] = useState(true);
   const editorRef = useRef<any>(null);
@@ -123,12 +127,214 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
   const { user, signOut } = useAuthState();
   const { categories } = useCategories();
-  const { navigate } = useNavigation();
+  const { navigate, setBeforeBackHandler } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [showMenu, setShowMenu] = useState(false);
 
+  // Unsaved changes behavior setting
+  const [unsavedChangesBehavior] = usePersistedState<UnsavedChangesBehavior>(
+    'unsaved_changes_behavior',
+    DEFAULT_UNSAVED_CHANGES_BEHAVIOR
+  );
+
+  // Track original values for change detection
+  const originalValues = useRef<{
+    title: string;
+    content: string;
+    categoryId: string | null;
+    status: "none" | "incomplete" | "in_progress" | "complete";
+    dueDate: string | null;
+    entryDate: string;
+    locationData: LocationType | null;
+    photoCount: number;
+  } | null>(null);
+
   // Edit mode: new entries start in edit mode, existing entries start in read-only
   const [isEditMode, setIsEditMode] = useState(!isEditing);
+
+  // Initialize original values for new entries
+  useEffect(() => {
+    if (!isEditing && !originalValues.current) {
+      originalValues.current = {
+        title: "",
+        content: initialContent || "",
+        categoryId: getInitialCategoryId(),
+        status: "none",
+        dueDate: null,
+        entryDate: entryDate,
+        locationData: initialLocation || null,
+        photoCount: 0,
+      };
+    }
+  }, []);
+
+  // Register beforeBack handler for gesture/hardware back interception
+  useEffect(() => {
+    const beforeBackHandler = async (): Promise<boolean> => {
+      // Check if there are unsaved changes
+      if (!hasUnsavedChanges()) {
+        return true; // No changes, proceed with back
+      }
+
+      // Handle based on behavior setting
+      switch (unsavedChangesBehavior) {
+        case 'save':
+          // Automatically save and proceed
+          await handleSave();
+          return true;
+
+        case 'discard':
+          // Discard changes and proceed
+          return true;
+
+        case 'ask':
+        default:
+          // Show confirmation dialog and wait for user response
+          return new Promise<boolean>((resolve) => {
+            Alert.alert(
+              'Unsaved Changes',
+              'Do you want to save the changes you made to this entry?',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                  onPress: () => resolve(false), // Block back navigation
+                },
+                {
+                  text: 'Discard',
+                  style: 'destructive',
+                  onPress: () => resolve(true), // Allow back navigation
+                },
+                {
+                  text: 'Save',
+                  onPress: async () => {
+                    await handleSave();
+                    resolve(true); // Allow back navigation after save
+                  },
+                },
+              ]
+            );
+          });
+      }
+    };
+
+    // Register the handler
+    setBeforeBackHandler(beforeBackHandler);
+
+    // Cleanup: unregister handler when component unmounts
+    return () => {
+      setBeforeBackHandler(null);
+    };
+  }, [unsavedChangesBehavior, title, content, categoryId, status, dueDate, entryDate, locationData, photoCount, pendingPhotos, isEditMode]);
+
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = (): boolean => {
+    // If not in edit mode, no changes are possible
+    if (!isEditMode) return false;
+
+    if (!originalValues.current) return false;
+
+    const orig = originalValues.current;
+
+    // Compare current values with original
+    if (title !== orig.title) return true;
+    if (content !== orig.content) return true;
+    if (categoryId !== orig.categoryId) return true;
+    if (status !== orig.status) return true;
+    if (dueDate !== orig.dueDate) return true;
+    if (entryDate !== orig.entryDate) return true;
+
+    // Compare photo count
+    const currentPhotoCount = isEditing ? photoCount : pendingPhotos.length;
+    if (currentPhotoCount !== orig.photoCount) return true;
+
+    // Compare location data
+    const origLoc = orig.locationData;
+    if (!locationData && !origLoc) {
+      // Both null, no change
+    } else if (!locationData || !origLoc) {
+      return true; // One is null, other is not
+    } else {
+      // Compare location fields
+      if (locationData.name !== origLoc.name) return true;
+      if (locationData.latitude !== origLoc.latitude) return true;
+      if (locationData.longitude !== origLoc.longitude) return true;
+    }
+
+    return false;
+  };
+
+  // Handle navigation with unsaved changes check
+  const handleNavigationWithUnsavedCheck = (navigateCallback: () => void) => {
+    if (!hasUnsavedChanges()) {
+      navigateCallback();
+      return;
+    }
+
+    // Check the behavior setting
+    switch (unsavedChangesBehavior) {
+      case 'save':
+        // Automatically save and navigate
+        handleSave().then(() => {
+          // Navigation happens in handleSave
+        });
+        break;
+
+      case 'discard':
+        // Discard changes and navigate
+        navigateCallback();
+        break;
+
+      case 'ask':
+      default:
+        // Show confirmation dialog
+        Alert.alert(
+          'Unsaved Changes',
+          'Do you want to save the changes you made to this entry?',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+            {
+              text: 'Discard',
+              style: 'destructive',
+              onPress: navigateCallback,
+            },
+            {
+              text: 'Save',
+              onPress: () => {
+                handleSave();
+              },
+            },
+          ]
+        );
+        break;
+    }
+  };
+
+  // Wrap menu items to check for unsaved changes before navigation
+  const wrappedMenuItems = menuItems.map(item => {
+    if (item.isDivider || !item.onPress) {
+      return item; // Don't wrap dividers or items without onPress
+    }
+
+    return {
+      ...item,
+      onPress: () => {
+        handleNavigationWithUnsavedCheck(() => {
+          item.onPress?.();
+        });
+      },
+    };
+  });
+
+  // Wrap profile press to check for unsaved changes
+  const wrappedOnProfilePress = () => {
+    if (onProfilePress) {
+      handleNavigationWithUnsavedCheck(onProfilePress);
+    }
+  };
 
   // Enter edit mode
   const enterEditMode = () => {
@@ -239,10 +445,30 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         setOriginalCategoryName(null);
       }
 
+      // Store original values for change detection (after all state is set)
+      const origLocation = locationFromEntry(entry);
+      originalValues.current = {
+        title: entry.title || "",
+        content: entry.content,
+        categoryId: entry.category_id || null,
+        status: entry.status,
+        dueDate: entry.due_date,
+        entryDate: entry.entry_date || entry.created_at || entryDate,
+        locationData: origLocation,
+        photoCount: 0, // Will be updated when photos load
+      };
+
       // Mark that initial load is complete
       isInitialLoad.current = false;
     }
   }, [entry, isEditing, categories]);
+
+  // Update original photo count when photos load
+  useEffect(() => {
+    if (isEditing && originalValues.current && photoCount > 0 && originalValues.current.photoCount === 0) {
+      originalValues.current.photoCount = photoCount;
+    }
+  }, [photoCount, isEditing]);
 
   // Fetch GPS location in background when location is enabled
   // Fetches GPS coordinates immediately when creating new entry
@@ -739,9 +965,9 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           <NavigationMenu
             visible={showMenu}
             onClose={() => setShowMenu(false)}
-            menuItems={menuItems}
+            menuItems={wrappedMenuItems}
             userEmail={userEmail}
-            onProfilePress={onProfilePress}
+            onProfilePress={wrappedOnProfilePress}
           />
         </View>
       </View>
@@ -1091,41 +1317,47 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           {/* Cancel/Back Button - Back arrow in view mode, X in edit mode */}
           <TouchableOpacity
             onPress={() => {
-              // Navigate back to the appropriate category (or filter view like tag:xxx, mention:xxx)
-              let returnCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
-              let returnCategoryName: string;
+              // Define the navigation callback
+              const doNavigation = () => {
+                // Navigate back to the appropriate category (or filter view like tag:xxx, mention:xxx)
+                let returnCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
+                let returnCategoryName: string;
 
-              // Navigate back based on returnContext
-              if (returnContext) {
-                if (returnContext.screen === "calendar") {
-                  navigate("calendar", {
-                    returnDate: entryDate,
-                    returnZoomLevel: returnContext.zoomLevel
-                  });
-                  return;
-                } else if (returnContext.screen === "tasks") {
-                  navigate("tasks");
-                  return;
-                } else if (returnContext.screen === "inbox") {
-                  navigate("inbox", {
-                    returnCategoryId: returnContext.categoryId || null,
-                    returnCategoryName: returnContext.categoryName || "Uncategorized"
-                  });
-                  return;
+                // Navigate back based on returnContext
+                if (returnContext) {
+                  if (returnContext.screen === "calendar") {
+                    navigate("calendar", {
+                      returnDate: entryDate,
+                      returnZoomLevel: returnContext.zoomLevel
+                    });
+                    return;
+                  } else if (returnContext.screen === "tasks") {
+                    navigate("tasks");
+                    return;
+                  } else if (returnContext.screen === "inbox") {
+                    navigate("inbox", {
+                      returnCategoryId: returnContext.categoryId || null,
+                      returnCategoryName: returnContext.categoryName || "Uncategorized"
+                    });
+                    return;
+                  }
                 }
-              }
 
-              if (isEditing) {
-                // For editing: return to entry's original category
-                returnCategoryId = originalCategoryId;
-                returnCategoryName = originalCategoryName || "Uncategorized";
-              } else {
-                // For new entries: return to the list category/filter we came from
-                returnCategoryId = initialCategoryId || null;
-                returnCategoryName = initialCategoryName || "Uncategorized";
-              }
+                if (isEditing) {
+                  // For editing: return to entry's original category
+                  returnCategoryId = originalCategoryId;
+                  returnCategoryName = originalCategoryName || "Uncategorized";
+                } else {
+                  // For new entries: return to the list category/filter we came from
+                  returnCategoryId = initialCategoryId || null;
+                  returnCategoryName = initialCategoryName || "Uncategorized";
+                }
 
-              navigate("inbox", { returnCategoryId, returnCategoryName });
+                navigate("inbox", { returnCategoryId, returnCategoryName });
+              };
+
+              // X button always discards - just navigate directly
+              doNavigation();
             }}
             style={styles.cancelButton}
           >

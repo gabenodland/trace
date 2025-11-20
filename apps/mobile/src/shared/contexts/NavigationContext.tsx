@@ -1,7 +1,16 @@
 import { createContext, useContext, ReactNode } from "react";
 
+/**
+ * BeforeBackHandler returns a Promise that resolves to:
+ * - true: proceed with back navigation
+ * - false: block back navigation (e.g., user cancelled)
+ */
+export type BeforeBackHandler = () => Promise<boolean>;
+
 interface NavigationContextValue {
   navigate: (tabId: string, params?: Record<string, any>) => void;
+  setBeforeBackHandler: (handler: BeforeBackHandler | null) => void;
+  checkBeforeBack: () => Promise<boolean>;
 }
 
 const NavigationContext = createContext<NavigationContextValue | undefined>(undefined);
@@ -9,11 +18,18 @@ const NavigationContext = createContext<NavigationContextValue | undefined>(unde
 interface NavigationProviderProps {
   children: ReactNode;
   navigate: (tabId: string, params?: Record<string, any>) => void;
+  setBeforeBackHandler: (handler: BeforeBackHandler | null) => void;
+  checkBeforeBack: () => Promise<boolean>;
 }
 
-export function NavigationProvider({ children, navigate }: NavigationProviderProps) {
+export function NavigationProvider({
+  children,
+  navigate,
+  setBeforeBackHandler,
+  checkBeforeBack
+}: NavigationProviderProps) {
   return (
-    <NavigationContext.Provider value={{ navigate }}>
+    <NavigationContext.Provider value={{ navigate, setBeforeBackHandler, checkBeforeBack }}>
       {children}
     </NavigationContext.Provider>
   );

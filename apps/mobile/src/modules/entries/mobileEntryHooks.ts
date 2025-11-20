@@ -13,14 +13,18 @@ import {
   getUnsyncedCount,
   getTags,
   getMentions,
+  MobileEntryFilter,
 } from './mobileEntryApi';
-import { CreateEntryInput, EntryFilter } from '@trace/core';
+import { CreateEntryInput } from '@trace/core';
 import * as entryHelpers from '@trace/core/src/modules/entries/entryHelpers';
+
+// Re-export MobileEntryFilter for consumers
+export type { MobileEntryFilter } from './mobileEntryApi';
 
 /**
  * Internal: Query hook for fetching entries from local SQLite
  */
-function useEntriesQuery(filter?: EntryFilter) {
+function useEntriesQuery(filter?: MobileEntryFilter) {
   return useQuery({
     queryKey: ['entries', filter],
     queryFn: () => getEntries(filter),
@@ -99,7 +103,7 @@ function useDeleteEntryMutation() {
  * SINGLE SOURCE OF TRUTH: Main hook for entry operations (mobile version)
  * Uses local SQLite database for offline-first functionality
  */
-export function useEntries(filter?: EntryFilter) {
+export function useEntries(filter?: MobileEntryFilter) {
   const entriesQuery = useEntriesQuery(filter);
   const createMutation = useCreateEntryMutation();
   const updateMutation = useUpdateEntryMutation();

@@ -2,16 +2,28 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "rea
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
+import { usePersistedState } from "../shared/hooks/usePersistedState";
 import { TopBar } from "../components/layout/TopBar";
+import { UnsavedChangesBehaviorSelector } from "../components/settings/UnsavedChangesBehaviorSelector";
 import Svg, { Path } from "react-native-svg";
 import { syncQueue } from "../shared/sync/syncQueue";
 import { useState } from "react";
+import type { UnsavedChangesBehavior } from "../shared/types/UnsavedChangesBehavior";
+import { UNSAVED_CHANGES_BEHAVIORS, DEFAULT_UNSAVED_CHANGES_BEHAVIOR } from "../shared/types/UnsavedChangesBehavior";
 
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [showBehaviorSelector, setShowBehaviorSelector] = useState(false);
+  const [unsavedChangesBehavior, setUnsavedChangesBehavior] = usePersistedState<UnsavedChangesBehavior>(
+    'unsaved_changes_behavior',
+    DEFAULT_UNSAVED_CHANGES_BEHAVIOR
+  );
+
+  // Get the label for the current behavior
+  const behaviorLabel = UNSAVED_CHANGES_BEHAVIORS.find(b => b.value === unsavedChangesBehavior)?.label || 'Ask';
 
   const handleSignOut = async () => {
     try {
@@ -76,24 +88,33 @@ export function ProfileScreen() {
           </View>
         </View>
 
-        {/* Settings Placeholder */}
+        {/* Settings */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Settings</Text>
-          <Text style={styles.cardDescription}>
-            Settings and preferences will be available here soon.
-          </Text>
-        </View>
 
-        {/* Developer Tools */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Developer Tools</Text>
           <TouchableOpacity
-            style={styles.devButton}
-            onPress={() => navigate("location-builder")}
+            style={styles.settingRow}
+            onPress={() => setShowBehaviorSelector(true)}
             activeOpacity={0.7}
           >
-            <Text style={styles.devButtonText}>🗺️ Location Builder</Text>
-            <Text style={styles.devButtonSubtext}>Explore Mapbox geocoding API</Text>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Unsaved Changes</Text>
+              <Text style={styles.settingDescription}>
+                What to do when leaving an entry with unsaved changes
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Text style={styles.settingValueText}>{behaviorLabel}</Text>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M9 18l6-6-6-6"
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -113,6 +134,14 @@ export function ProfileScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Unsaved Changes Behavior Selector */}
+      <UnsavedChangesBehaviorSelector
+        visible={showBehaviorSelector}
+        selectedBehavior={unsavedChangesBehavior}
+        onSelect={setUnsavedChangesBehavior}
+        onClose={() => setShowBehaviorSelector(false)}
+      />
     </View>
   );
 }
@@ -148,6 +177,38 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     lineHeight: 20,
   },
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  settingContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#1f2937",
+    marginBottom: 4,
+  },
+  settingDescription: {
+    fontSize: 13,
+    color: "#6b7280",
+    lineHeight: 18,
+  },
+  settingValue: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  settingValueText: {
+    fontSize: 14,
+    color: "#6b7280",
+  },
   infoRow: {
     marginBottom: 16,
   },
@@ -161,23 +222,6 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 16,
     color: "#1f2937",
-  },
-  devButton: {
-    backgroundColor: "#f3f4f6",
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  devButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1f2937",
-    marginBottom: 4,
-  },
-  devButtonSubtext: {
-    fontSize: 12,
-    color: "#6b7280",
   },
   signOutButton: {
     flexDirection: "row",

@@ -1,10 +1,12 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { theme } from "../../shared/theme/theme";
+import { ReactNode } from "react";
 
 export interface BreadcrumbSegment {
   id: string | null; // null for "Uncategorized", "all" for "Home"
   label: string;
+  icon?: ReactNode; // Optional icon to display before the label
 }
 
 interface BreadcrumbProps {
@@ -44,12 +46,16 @@ export function Breadcrumb({ segments, onSegmentPress, badge, onDropdownPress }:
                   <Path d="M9 22V12h6v10" strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
               ) : (
-                <Text style={[
-                  styles.segmentText,
-                  index === segments.length - 1 && styles.segmentTextLast
-                ]}>
-                  {segment.label}
-                </Text>
+                <>
+                  {/* Icon for last segment (if provided) */}
+                  {index === segments.length - 1 && segment.icon}
+                  <Text style={[
+                    styles.segmentText,
+                    index === segments.length - 1 && styles.segmentTextLast
+                  ]}>
+                    {segment.label}
+                  </Text>
+                </>
               )}
 
               {/* Badge on last segment */}
