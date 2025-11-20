@@ -2,7 +2,8 @@ import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'rea
 import { useRef, useEffect } from 'react';
 import type { EntrySortMode } from '../types/EntrySortMode';
 import { ENTRY_SORT_MODES } from '../types/EntrySortMode';
-import Svg, { Path } from 'react-native-svg';
+import type { EntrySortOrder } from '../types/EntrySortOrder';
+import Svg, { Path, Rect } from 'react-native-svg';
 import { theme } from '../../../shared/theme/theme';
 
 interface SortModeSelectorProps {
@@ -10,6 +11,8 @@ interface SortModeSelectorProps {
   selectedMode: EntrySortMode;
   onSelect: (mode: EntrySortMode) => void;
   onClose: () => void;
+  sortOrder?: EntrySortOrder;
+  onSortOrderChange?: (order: EntrySortOrder) => void;
 }
 
 export function SortModeSelector({
@@ -17,12 +20,21 @@ export function SortModeSelector({
   selectedMode,
   onSelect,
   onClose,
+  sortOrder = 'desc',
+  onSortOrderChange,
 }: SortModeSelectorProps) {
   const scrollViewRef = useRef<ScrollView>(null);
+  const isDescending = sortOrder === 'desc';
 
   const handleSelect = (mode: EntrySortMode) => {
     onSelect(mode);
     onClose();
+  };
+
+  const handleToggleOrder = () => {
+    if (onSortOrderChange) {
+      onSortOrderChange(isDescending ? 'asc' : 'desc');
+    }
   };
 
   // Scroll to selected item when modal opens
@@ -56,6 +68,30 @@ export function SortModeSelector({
           <View style={styles.header}>
             <Text style={styles.title}>Sort By</Text>
           </View>
+
+          {/* Descending checkbox */}
+          {onSortOrderChange && (
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              onPress={handleToggleOrder}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, isDescending && styles.checkboxChecked]}>
+                {isDescending && (
+                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M5 13l4 4L19 7"
+                      stroke="#ffffff"
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </Svg>
+                )}
+              </View>
+              <Text style={styles.checkboxLabel}>Descending</Text>
+            </TouchableOpacity>
+          )}
 
           <ScrollView ref={scrollViewRef} style={styles.scrollView}>
             {ENTRY_SORT_MODES.map((mode) => {
@@ -115,6 +151,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     maxHeight: 400,
+    paddingBottom: 10,
   },
   header: {
     padding: 16,
@@ -125,6 +162,33 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  checkboxChecked: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
   },
   option: {
     flexDirection: 'row',

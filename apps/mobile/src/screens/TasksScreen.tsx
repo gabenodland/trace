@@ -250,25 +250,21 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     flexDirection: "row",
-    backgroundColor: "#e5e7eb",
-    borderRadius: 8,
-    padding: 4,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
     marginBottom: 20,
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: "center",
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
   filterTabActive: {
-    backgroundColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 1,
+    borderBottomColor: "#3b82f6",
   },
   filterTabText: {
     fontSize: 14,
@@ -276,7 +272,8 @@ const styles = StyleSheet.create({
     color: "#6b7280",
   },
   filterTabTextActive: {
-    color: "#111827",
+    color: "#3b82f6",
+    fontWeight: "600",
   },
   groupsContainer: {
     paddingBottom: 20,

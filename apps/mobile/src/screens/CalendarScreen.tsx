@@ -263,9 +263,9 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     day: 'numeric',
   });
 
-  // Render calendar header component
-  const renderCalendarHeader = () => (
-    <>
+  // Render day view
+  const renderDayView = () => (
+    <ScrollView style={styles.content}>
       {/* Calendar */}
       <View style={styles.calendarContainer}>
         {/* Month navigation */}
@@ -307,14 +307,21 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
         </View>
       </View>
 
-      {/* Selected date header */}
-      <View style={styles.dateHeader}>
-        <Text style={styles.dateHeaderText}>{formattedSelectedDate}</Text>
-        <Text style={styles.dateHeaderCount}>
-          {filteredEntries.length} {filteredEntries.length === 1 ? 'entry' : 'entries'}
+      {/* Entries for selected date */}
+      <View style={styles.entriesSection}>
+        <Text style={styles.entriesSectionTitle}>
+          {formattedSelectedDate} • {filteredEntries.length} {filteredEntries.length === 1 ? 'entry' : 'entries'}
         </Text>
+        <EntryList
+          entries={filteredEntries}
+          isLoading={isLoading}
+          onEntryPress={handleEntryPress}
+          onTagPress={handleTagPress}
+          onMentionPress={handleMentionPress}
+          categories={categories}
+        />
       </View>
-    </>
+    </ScrollView>
   );
 
   const handleAddEntry = () => {
@@ -557,17 +564,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
       </View>
 
       {/* Render appropriate view based on zoom level */}
-      {zoomLevel === "day" && (
-        <EntryList
-          entries={filteredEntries}
-          isLoading={isLoading}
-          onEntryPress={handleEntryPress}
-          onTagPress={handleTagPress}
-          onMentionPress={handleMentionPress}
-          ListHeaderComponent={renderCalendarHeader}
-          categories={categories}
-        />
-      )}
+      {zoomLevel === "day" && renderDayView()}
 
       {zoomLevel === "month" && renderMonthView()}
 
@@ -718,26 +715,20 @@ const styles = StyleSheet.create({
   // Tab styles
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "#e5e7eb",
-    borderRadius: 8,
-    padding: 4,
-    margin: 16,
-    marginBottom: 0,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
   },
   tab: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: "center",
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
   tabActive: {
-    backgroundColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 1,
+    borderBottomColor: "#3b82f6",
   },
   tabText: {
     fontSize: 14,
@@ -745,7 +736,8 @@ const styles = StyleSheet.create({
     color: "#6b7280",
   },
   tabTextActive: {
-    color: "#111827",
+    color: "#3b82f6",
+    fontWeight: "600",
   },
   // List view styles
   content: {
@@ -827,18 +819,21 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 12,
     paddingHorizontal: 16,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   yearCell: {
     width: "47%",
-    aspectRatio: 2,
+    minHeight: 56,
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#e5e7eb",
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "flex-start",
-    padding: 16,
-    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   yearCellSelected: {
     backgroundColor: "#2563eb",
@@ -875,15 +870,16 @@ const styles = StyleSheet.create({
   },
   monthCell: {
     width: "30%",
-    aspectRatio: 1.5,
+    minHeight: 56,
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#e5e7eb",
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "flex-start",
-    padding: 12,
+    paddingHorizontal: 12,
     paddingTop: 8,
+    paddingBottom: 8,
   },
   monthCellSelected: {
     backgroundColor: "#2563eb",
@@ -899,7 +895,7 @@ const styles = StyleSheet.create({
   },
   // Entries section styles
   entriesSection: {
-    marginTop: 24,
+    marginTop: 12,
     flex: 1,
   },
   entriesSectionTitle: {

@@ -15,14 +15,13 @@ import { EntryNavigator } from "../components/navigation/EntryNavigator";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
 import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
 import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
-import { OrderModeSelector } from "../modules/entries/components/OrderModeSelector";
 import { CategoryPicker } from "../modules/categories/components/CategoryPicker";
 import type { EntryDisplayMode } from "../modules/entries/types/EntryDisplayMode";
 import { DEFAULT_DISPLAY_MODE, ENTRY_DISPLAY_MODES } from "../modules/entries/types/EntryDisplayMode";
 import type { EntrySortMode } from "../modules/entries/types/EntrySortMode";
 import { DEFAULT_SORT_MODE, ENTRY_SORT_MODES } from "../modules/entries/types/EntrySortMode";
 import type { EntrySortOrder } from "../modules/entries/types/EntrySortOrder";
-import { DEFAULT_SORT_ORDER, ENTRY_SORT_ORDERS } from "../modules/entries/types/EntrySortOrder";
+import { DEFAULT_SORT_ORDER } from "../modules/entries/types/EntrySortOrder";
 import { sortEntries } from "../modules/entries/helpers/entrySortHelpers";
 import { theme } from "../shared/theme/theme";
 
@@ -39,7 +38,6 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
   const [showSortModeSelector, setShowSortModeSelector] = useState(false);
-  const [showOrderModeSelector, setShowOrderModeSelector] = useState(false);
   const [showMoveCategoryPicker, setShowMoveCategoryPicker] = useState(false);
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people">("all");
@@ -180,8 +178,8 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
 
   // Get display labels
   const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Smashed';
-  const sortModeLabel = ENTRY_SORT_MODES.find(m => m.value === sortMode)?.label || 'Entry Date';
-  const orderModeLabel = ENTRY_SORT_ORDERS.find(o => o.value === orderMode)?.label || 'Descending';
+  const baseSortLabel = ENTRY_SORT_MODES.find(m => m.value === sortMode)?.label || 'Entry Date';
+  const sortModeLabel = orderMode === 'desc' ? `${baseSortLabel} (desc)` : baseSortLabel;
 
   const handleEntryPress = (entryId: string) => {
     navigate("capture", {
@@ -343,11 +341,6 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
           value={sortModeLabel}
           onPress={() => setShowSortModeSelector(true)}
         />
-        <SubBarSelector
-          label="Order"
-          value={orderModeLabel}
-          onPress={() => setShowOrderModeSelector(true)}
-        />
       </SubBar>
 
       <EntryList
@@ -390,14 +383,8 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         selectedMode={sortMode}
         onSelect={setSortMode}
         onClose={() => setShowSortModeSelector(false)}
-      />
-
-      {/* Order Mode Selector */}
-      <OrderModeSelector
-        visible={showOrderModeSelector}
-        selectedOrder={orderMode}
-        onSelect={setOrderMode}
-        onClose={() => setShowOrderModeSelector(false)}
+        sortOrder={orderMode}
+        onSortOrderChange={setOrderMode}
       />
 
       {/* Move Category Picker */}
