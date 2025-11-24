@@ -18,25 +18,8 @@ export interface Entry {
   entry_latitude: number | null;
   entry_longitude: number | null;
   location_accuracy: number | null; // GPS accuracy in meters
-  // Display coordinates (public, respects privacy)
-  location_latitude?: number | null;
-  location_longitude?: number | null;
-  // Location name
-  location_name: string | null;
-  location_name_original?: string | null;
-  location_name_source?: string | null;
-  // Location hierarchy
-  location_address?: string | null;
-  location_neighborhood?: string | null;
-  location_postal_code?: string | null;
-  location_city?: string | null;
-  location_subdivision?: string | null;
-  location_region?: string | null;
-  location_country?: string | null;
-  // Privacy and metadata
-  location_precision?: string | null;
-  location_mapbox_place_id?: string | null;
-  location_foursquare_fsq_id?: string | null;
+  // Location reference (points to locations table)
+  location_id: string | null;
   status: "none" | "incomplete" | "in_progress" | "complete";
   due_date: string | null;
   completed_at: string | null;
@@ -64,18 +47,8 @@ export interface CreateEntryInput {
   entry_date?: string | null; // When the memory/event actually happened
   entry_latitude?: number | null;
   entry_longitude?: number | null;
-  location_latitude?: number | null;
-  location_longitude?: number | null;
   location_accuracy?: number | null;
-  location_name?: string | null;
-  location_name_source?: string | null;
-  location_address?: string | null;
-  location_neighborhood?: string | null;
-  location_postal_code?: string | null;
-  location_city?: string | null;
-  location_subdivision?: string | null;
-  location_region?: string | null;
-  location_country?: string | null;
+  location_id?: string | null;
   status?: "none" | "incomplete" | "in_progress" | "complete";
   due_date?: string | null;
   local_only?: number; // 0 = sync enabled (default), 1 = local only
@@ -90,18 +63,8 @@ export interface UpdateEntryInput {
   entry_date?: string | null; // When the memory/event actually happened
   entry_latitude?: number | null;
   entry_longitude?: number | null;
-  location_latitude?: number | null;
-  location_longitude?: number | null;
   location_accuracy?: number | null;
-  location_name?: string | null;
-  location_name_source?: string | null;
-  location_address?: string | null;
-  location_neighborhood?: string | null;
-  location_postal_code?: string | null;
-  location_city?: string | null;
-  location_subdivision?: string | null;
-  location_region?: string | null;
-  location_country?: string | null;
+  location_id?: string | null;
   status?: "none" | "incomplete" | "in_progress" | "complete";
   due_date?: string | null;
   completed_at?: string | null;
@@ -112,7 +75,7 @@ export interface EntryFilter {
   tags?: string[];
   tag?: string; // Filter by single tag
   mention?: string; // Filter by single mention
-  location_name?: string; // Filter by location name
+  location_id?: string; // Filter by location ID
   start_date?: string;
   end_date?: string;
   status?: "none" | "incomplete" | "in_progress" | "complete";

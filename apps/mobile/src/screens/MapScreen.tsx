@@ -66,6 +66,7 @@ export function MapScreen() {
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
 
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [locationNames, setLocationNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [region, setRegion] = useState<Region>({
     latitude: 39.0997,
@@ -85,9 +86,25 @@ export function MapScreen() {
         const allEntries = await localDB.getAllEntries();
         // Filter entries that have GPS coordinates
         const entriesWithGPS = allEntries.filter(
-          (entry) => entry.location_latitude && entry.location_longitude
+          (entry) => entry.entry_latitude && entry.entry_longitude
         );
         setEntries(entriesWithGPS);
+
+        // Fetch location names for entries with location_id
+        const locationIds = [...new Set(
+          entriesWithGPS
+            .filter(e => e.location_id)
+            .map(e => e.location_id!)
+        )];
+
+        if (locationIds.length > 0) {
+          const locations = await localDB.getAllLocations();
+          const nameMap: Record<string, string> = {};
+          locations.forEach(loc => {
+            nameMap[loc.location_id] = loc.name;
+          });
+          setLocationNames(nameMap);
+        }
 
         // If we have entries, center on them
         if (entriesWithGPS.length > 0) {
@@ -114,8 +131,8 @@ export function MapScreen() {
     let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
 
     entries.forEach(entry => {
-      const lat = entry.location_latitude!;
-      const lng = entry.location_longitude!;
+      const lat = entry.entry_latitude!;
+      const lng = entry.entry_longitude!;
       minLat = Math.min(minLat, lat);
       maxLat = Math.max(maxLat, lat);
       minLng = Math.min(minLng, lng);
@@ -147,14 +164,14 @@ export function MapScreen() {
     entries.forEach(entry => {
       if (processed.has(entry.entry_id)) return;
 
-      const lat = entry.location_latitude!;
-      const lng = entry.location_longitude!;
+      const lat = entry.entry_latitude!;
+      const lng = entry.entry_longitude!;
 
       // Find nearby entries to cluster
       const nearby = entries.filter(e => {
         if (processed.has(e.entry_id)) return false;
-        const eLat = e.location_latitude!;
-        const eLng = e.location_longitude!;
+        const eLat = e.entry_latitude!;
+        const eLng = e.entry_longitude!;
         const distance = Math.sqrt(
           Math.pow(lat - eLat, 2) + Math.pow(lng - eLng, 2)
         );
@@ -165,8 +182,8 @@ export function MapScreen() {
       nearby.forEach(e => processed.add(e.entry_id));
 
       // Calculate cluster center
-      const avgLat = nearby.reduce((sum, e) => sum + e.location_latitude!, 0) / nearby.length;
-      const avgLng = nearby.reduce((sum, e) => sum + e.location_longitude!, 0) / nearby.length;
+      const avgLat = nearby.reduce((sum, e) => sum + e.entry_latitude!, 0) / nearby.length;
+      const avgLng = nearby.reduce((sum, e) => sum + e.entry_longitude!, 0) / nearby.length;
 
       clustered.push({
         id: `cluster-${entry.entry_id}`,
@@ -198,8 +215,8 @@ export function MapScreen() {
 
     // Filter entries within the visible region
     const visible = entries.filter(entry => {
-      const lat = entry.location_latitude!;
-      const lng = entry.location_longitude!;
+      const lat = entry.entry_latitude!;
+      const lng = entry.entry_longitude!;
       const latDelta = newRegion.latitudeDelta / 2;
       const lngDelta = newRegion.longitudeDelta / 2;
 
@@ -291,7 +308,10 @@ export function MapScreen() {
   // Render entry item in list
   const renderEntryItem = ({ item }: { item: Entry }) => {
     const dateStr = formatRelativeTime(item.entry_date || item.created_at);
-    const locationName = item.location_name || item.location_city || item.location_country || "Unknown";
+    // Get location name from map, or show GPS Location if no saved location
+    const locationName = item.location_id && locationNames[item.location_id]
+      ? locationNames[item.location_id]
+      : "GPS Location";
 
     return (
       <TouchableOpacity

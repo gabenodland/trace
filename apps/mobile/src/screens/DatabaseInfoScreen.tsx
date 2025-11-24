@@ -14,12 +14,13 @@ import { syncQueue } from '../shared/sync/syncQueue';
 import { deletePhotoFromLocalStorage } from '../modules/photos/mobilePhotoApi';
 import Svg, { Path } from 'react-native-svg';
 
-type TabType = 'status' | 'entries' | 'categories' | 'photos' | 'logs';
+type TabType = 'status' | 'entries' | 'categories' | 'locations' | 'photos' | 'logs';
 type SyncFilter = 'all' | 'synced' | 'unsynced' | 'errors';
 
 interface CloudCounts {
   entries: number;
   categories: number;
+  locations: number;
   photos: number;
 }
 
@@ -31,10 +32,12 @@ export function DatabaseInfoScreen() {
   const [categories, setCategories] = useState<any[]>([]);
   const [photos, setPhotos] = useState<any[]>([]);
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
-  const [cloudCounts, setCloudCounts] = useState<CloudCounts>({ entries: 0, categories: 0, photos: 0 });
+  const [locations, setLocations] = useState<any[]>([]);
+  const [cloudCounts, setCloudCounts] = useState<CloudCounts>({ entries: 0, categories: 0, locations: 0, photos: 0 });
   const [syncStatus, setSyncStatus] = useState<any>(null);
   const [entrySyncFilter, setEntrySyncFilter] = useState<SyncFilter>('all');
   const [categorySyncFilter, setCategorySyncFilter] = useState<SyncFilter>('all');
+  const [locationSyncFilter, setLocationSyncFilter] = useState<SyncFilter>('all');
   const [photoSyncFilter, setPhotoSyncFilter] = useState<SyncFilter>('all');
   const [refreshKey, setRefreshKey] = useState(0);
   const [jsonModalVisible, setJsonModalVisible] = useState(false);
@@ -60,6 +63,10 @@ export function DatabaseInfoScreen() {
       // Get all photos from SQLite
       const allPhotos = await localDB.runCustomQuery('SELECT * FROM photos ORDER BY created_at DESC');
       setPhotos(allPhotos);
+
+      // Get all locations from SQLite
+      const allLocations = await localDB.runCustomQuery('SELECT * FROM locations ORDER BY name');
+      setLocations(allLocations);
 
       // Check which photo files exist locally
       const fileExistenceMap: Record<string, boolean> = {};
@@ -95,13 +102,17 @@ export function DatabaseInfoScreen() {
       // Get counts from Cloud
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const [entriesCount, categoriesCount, photosCount] = await Promise.all([
+        const [entriesCount, categoriesCount, locationsCount, photosCount] = await Promise.all([
           supabase
             .from('entries')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', user.id),
           supabase
             .from('categories')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id),
+          supabase
+            .from('locations')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', user.id),
           supabase
@@ -113,6 +124,7 @@ export function DatabaseInfoScreen() {
         setCloudCounts({
           entries: entriesCount.count || 0,
           categories: categoriesCount.count || 0,
+          locations: locationsCount.count || 0,
           photos: photosCount.count || 0,
         });
       }
@@ -158,6 +170,20 @@ export function DatabaseInfoScreen() {
         return !photo.synced;
       case 'errors':
         return photo.sync_error;
+      default:
+        return true;
+    }
+  });
+
+  // Filter locations based on sync filter
+  const filteredLocations = locations.filter(location => {
+    switch (locationSyncFilter) {
+      case 'synced':
+        return location.synced;
+      case 'unsynced':
+        return !location.synced;
+      case 'errors':
+        return location.sync_error;
       default:
         return true;
     }
@@ -248,6 +274,163 @@ export function DatabaseInfoScreen() {
         },
       ]
     );
+  };
+
+  const handleClearLocalLocations = () => {
+    Alert.alert(
+      'Clear Local Locations',
+      'This will delete all locations from local SQLite. They will automatically re-sync on next sync.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Locations',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await localDB.runCustomQuery('DELETE FROM locations');
+              setRefreshKey(prev => prev + 1);
+              Alert.alert('Success', 'All local locations cleared. Next sync will re-download from Cloud.');
+            } catch (error) {
+              Alert.alert('Error', `Failed to clear locations: ${error}`);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteUnusedLocations = async () => {
+    try {
+      // Find locations that are not referenced by any entry
+      const unusedLocations = await localDB.runCustomQuery(`
+        SELECT l.location_id, l.name
+        FROM locations l
+        LEFT JOIN entries e ON l.location_id = e.location_id
+        WHERE e.entry_id IS NULL
+      `);
+
+      if (unusedLocations.length === 0) {
+        Alert.alert('All Good', 'No unused locations found. All locations are referenced by entries.');
+        return;
+      }
+
+      Alert.alert(
+        'Delete Unused Locations',
+        `Found ${unusedLocations.length} location${unusedLocations.length === 1 ? '' : 's'} not referenced by any entry. Delete them?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Delete unused locations and mark for sync deletion
+                for (const loc of unusedLocations) {
+                  await localDB.runCustomQuery(
+                    'UPDATE locations SET deleted_at = ?, synced = 0, sync_action = ? WHERE location_id = ?',
+                    [new Date().toISOString(), 'delete', loc.location_id]
+                  );
+                }
+
+                setRefreshKey(prev => prev + 1);
+                Alert.alert('Success', `Marked ${unusedLocations.length} unused location${unusedLocations.length === 1 ? '' : 's'} for deletion.`);
+              } catch (error) {
+                Alert.alert('Error', `Failed to delete unused locations: ${error}`);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', `Failed to find unused locations: ${error}`);
+    }
+  };
+
+  const handleMergeDuplicateLocations = async () => {
+    try {
+      // Find duplicate locations (same name AND address, case insensitive)
+      // Only consider locations with an address
+      const duplicates = await localDB.runCustomQuery(`
+        SELECT
+          LOWER(name) as name_lower,
+          LOWER(address) as address_lower,
+          COUNT(*) as count
+        FROM locations
+        WHERE address IS NOT NULL AND address != '' AND deleted_at IS NULL
+        GROUP BY LOWER(name), LOWER(address)
+        HAVING COUNT(*) > 1
+        LIMIT 1
+      `);
+
+      if (duplicates.length === 0) {
+        Alert.alert('All Good', 'No duplicate locations found.');
+        return;
+      }
+
+      const duplicate = duplicates[0];
+
+      // Get all locations matching this name/address
+      const matchingLocations = await localDB.runCustomQuery(`
+        SELECT l.location_id, l.name, l.address,
+          (SELECT COUNT(*) FROM entries e WHERE e.location_id = l.location_id) as entry_count
+        FROM locations l
+        WHERE LOWER(l.name) = ? AND LOWER(l.address) = ? AND l.deleted_at IS NULL
+        ORDER BY entry_count DESC
+      `, [duplicate.name_lower, duplicate.address_lower]);
+
+      if (matchingLocations.length < 2) {
+        Alert.alert('All Good', 'No duplicate locations found.');
+        return;
+      }
+
+      // Winner is the one with most entries
+      const winner = matchingLocations[0];
+      const losers = matchingLocations.slice(1);
+      const totalEntriesToMove = losers.reduce((sum: number, loc: any) => sum + loc.entry_count, 0);
+
+      Alert.alert(
+        'Merge Duplicate Locations',
+        `Found ${matchingLocations.length} locations named "${winner.name}" at "${winner.address}".\n\n` +
+        `Winner: ${winner.entry_count} entries\n` +
+        `Losers: ${losers.length} location(s) with ${totalEntriesToMove} entries\n\n` +
+        `Merge all entries to the winner and delete the duplicates?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Merge',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Move all entries from losers to winner
+                for (const loser of losers) {
+                  // Update entries to point to winner
+                  await localDB.runCustomQuery(
+                    'UPDATE entries SET location_id = ?, synced = 0, sync_action = CASE WHEN sync_action = "create" THEN "create" ELSE "update" END WHERE location_id = ?',
+                    [winner.location_id, loser.location_id]
+                  );
+
+                  // Mark loser location for deletion
+                  await localDB.runCustomQuery(
+                    'UPDATE locations SET deleted_at = ?, synced = 0, sync_action = ? WHERE location_id = ?',
+                    [new Date().toISOString(), 'delete', loser.location_id]
+                  );
+                }
+
+                setRefreshKey(prev => prev + 1);
+                Alert.alert(
+                  'Success',
+                  `Merged ${losers.length} duplicate location(s). ${totalEntriesToMove} entries moved to "${winner.name}".`
+                );
+              } catch (error) {
+                Alert.alert('Error', `Failed to merge locations: ${error}`);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', `Failed to find duplicate locations: ${error}`);
+    }
   };
 
   const handleClearLocalPhotos = () => {
@@ -352,7 +535,12 @@ export function DatabaseInfoScreen() {
       </TopBar>
 
       {/* Tab Menu */}
-      <View style={styles.tabContainer}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabScrollContainer}
+        contentContainerStyle={styles.tabContainer}
+      >
         <TouchableOpacity
           style={[styles.tab, activeTab === 'status' && styles.tabActive]}
           onPress={() => setActiveTab('status')}
@@ -378,6 +566,14 @@ export function DatabaseInfoScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={[styles.tab, activeTab === 'locations' && styles.tabActive]}
+          onPress={() => setActiveTab('locations')}
+        >
+          <Text style={[styles.tabText, activeTab === 'locations' && styles.tabTextActive]}>
+            Locations
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.tab, activeTab === 'photos' && styles.tabActive]}
           onPress={() => setActiveTab('photos')}
         >
@@ -393,7 +589,7 @@ export function DatabaseInfoScreen() {
             Logs
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
 
       <ScrollView style={styles.content}>
         {/* STATUS TAB */}
@@ -491,6 +687,35 @@ export function DatabaseInfoScreen() {
                   <Text style={styles.statsCount}>{cloudCounts.categories}</Text>
                   <Text style={styles.infoText}>
                     Diff: {cloudCounts.categories - categories.length}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Locations</Text>
+              <View style={styles.statsRow}>
+                <View style={[styles.infoBox, styles.statsBox]}>
+                  <Text style={styles.statsLabel}>Local</Text>
+                  <Text style={styles.statsCount}>{locations.length}</Text>
+                  <Text style={styles.infoText}>
+                    Synced: {locations.filter(l => l.synced).length}
+                  </Text>
+                  <Text style={styles.infoText}>
+                    Unsynced: {locations.filter(l => !l.synced).length}
+                  </Text>
+                  <Text style={styles.infoText}>
+                    Errors: {locations.filter(l => l.sync_error).length}
+                  </Text>
+                  <TouchableOpacity onPress={handleClearLocalLocations} style={styles.smallClearButton}>
+                    <Text style={styles.smallClearButtonText}>Clear Local</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.infoBox, styles.statsBox]}>
+                  <Text style={styles.statsLabel}>Cloud</Text>
+                  <Text style={styles.statsCount}>{cloudCounts.locations}</Text>
+                  <Text style={styles.infoText}>
+                    Diff: {cloudCounts.locations - locations.length}
                   </Text>
                 </View>
               </View>
@@ -699,6 +924,115 @@ export function DatabaseInfoScreen() {
           </>
         )}
 
+        {/* LOCATIONS TAB */}
+        {activeTab === 'locations' && (
+          <>
+            {/* Filter Tabs */}
+            <View style={styles.filterContainer}>
+              <TouchableOpacity
+                style={[styles.filterTab, locationSyncFilter === 'all' && styles.filterTabActive]}
+                onPress={() => setLocationSyncFilter('all')}
+              >
+                <Text style={[styles.filterTabText, locationSyncFilter === 'all' && styles.filterTabTextActive]}>
+                  All ({locations.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, locationSyncFilter === 'synced' && styles.filterTabActive]}
+                onPress={() => setLocationSyncFilter('synced')}
+              >
+                <Text style={[styles.filterTabText, locationSyncFilter === 'synced' && styles.filterTabTextActive]}>
+                  Synced ({locations.filter(l => l.synced).length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, locationSyncFilter === 'unsynced' && styles.filterTabActive]}
+                onPress={() => setLocationSyncFilter('unsynced')}
+              >
+                <Text style={[styles.filterTabText, locationSyncFilter === 'unsynced' && styles.filterTabTextActive]}>
+                  Unsynced ({locations.filter(l => !l.synced).length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, locationSyncFilter === 'errors' && styles.filterTabActive]}
+                onPress={() => setLocationSyncFilter('errors')}
+              >
+                <Text style={[styles.filterTabText, locationSyncFilter === 'errors' && styles.filterTabTextActive]}>
+                  Errors ({locations.filter(l => l.sync_error).length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.section}>
+              <TouchableOpacity style={styles.dangerButton} onPress={handleMergeDuplicateLocations}>
+                <Text style={styles.dangerButtonText}>🔀 Merge Duplicate Locations</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.dangerButton, { marginTop: 8 }]} onPress={handleDeleteUnusedLocations}>
+                <Text style={styles.dangerButtonText}>🗑️ Delete Unused Locations</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Locations List */}
+            <View style={styles.section}>
+              {filteredLocations.length === 0 ? (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoText}>No locations found</Text>
+                </View>
+              ) : (
+                filteredLocations.map((location, index) => (
+                  <TouchableOpacity
+                    key={location.location_id}
+                    style={styles.locationCard}
+                    onLongPress={() => showJsonModal(location, `Location: ${location.name}`)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.locationTitle}>
+                      {index + 1}. {location.name}
+                    </Text>
+                    <View style={styles.locationMetaContainer}>
+                      {location.city && (
+                        <Text style={styles.locationMeta}>
+                          City: {location.city}
+                        </Text>
+                      )}
+                      {location.region && (
+                        <Text style={styles.locationMeta}>
+                          Region: {location.region}
+                        </Text>
+                      )}
+                      {/* Country hidden for now but still captured in data */}
+                      <Text style={styles.locationMeta}>
+                        Coords: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+                      </Text>
+                      {location.source && (
+                        <Text style={styles.locationMeta}>
+                          Source: {location.source}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.entryMeta}>
+                      <Text style={[styles.badge, location.synced ? styles.syncedBadge : styles.unsyncedBadge]}>
+                        {location.synced ? '✅ Synced' : '⏳ Unsynced'}
+                      </Text>
+                      {location.sync_action && (
+                        <Text style={styles.badge}>📝 {location.sync_action}</Text>
+                      )}
+                      {location.sync_error && (
+                        <Text style={[styles.badge, styles.errorBadge]}>❌ Error</Text>
+                      )}
+                    </View>
+                    {location.sync_error && (
+                      <Text style={styles.errorMessage}>{location.sync_error}</Text>
+                    )}
+                    <Text style={styles.locationId}>ID: {location.location_id.slice(0, 8)}...</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          </>
+        )}
+
         {/* PHOTOS TAB */}
         {activeTab === 'photos' && (
           <>
@@ -895,14 +1229,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f9fafb',
   },
-  tabContainer: {
-    flexDirection: 'row',
+  tabScrollContainer: {
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+    flexGrow: 0,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 4,
   },
   tab: {
-    flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -1142,6 +1479,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#9ca3af',
     fontFamily: 'monospace',
+  },
+  locationCard: {
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  locationTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  locationMetaContainer: {
+    marginBottom: 8,
+  },
+  locationMeta: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 3,
+  },
+  locationId: {
+    fontSize: 10,
+    color: '#9ca3af',
+    fontFamily: 'monospace',
+    marginTop: 4,
   },
   photoCard: {
     backgroundColor: '#ffffff',

@@ -199,7 +199,7 @@ export async function searchNearbyPOIs(
     throw new Error('Foursquare API key not configured. Call configureLocationAPI() first.');
   }
 
-  const { latitude, longitude, radius = 500, limit = 20 } = request;
+  const { latitude, longitude, radius = 500, limit = 50 } = request;
 
   // Check cache first
   const cacheKey = poiCacheKey(latitude, longitude, radius);
@@ -210,6 +210,7 @@ export async function searchNearbyPOIs(
   }
 
   // Make API request - Use new Places API endpoint
+  // Note: Premium fields (stats, popularity, rating) require paid tier - using default fields only
   const url = `https://places-api.foursquare.com/places/search?ll=${latitude},${longitude}&sort=DISTANCE&radius=${radius}&limit=${limit}`;
 
   console.log('[LocationAPI] 🌐 Fetching nearby POIs from Foursquare...');

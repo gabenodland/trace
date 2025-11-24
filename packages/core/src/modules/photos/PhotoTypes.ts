@@ -15,6 +15,9 @@ export interface Photo {
 
   // File metadata
   mime_type: string;          // image/jpeg, image/png, etc.
+  file_size?: number | null;  // File size in bytes
+  width?: number | null;      // Image width in pixels
+  height?: number | null;     // Image height in pixels
 
   // Positioning
   position: number;           // Order within entry (0, 1, 2...)
@@ -36,6 +39,7 @@ export interface CreatePhotoInput {
   entry_id: string;
   user_id: string;
   file_path: string;
+  file_size: number;
   local_path?: string;
   mime_type: string;
   position: number;

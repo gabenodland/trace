@@ -1,29 +1,31 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch } from "react-native";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
-import { usePersistedState } from "../shared/hooks/usePersistedState";
+import { useSettings } from "../shared/contexts/SettingsContext";
 import { TopBar } from "../components/layout/TopBar";
 import { UnsavedChangesBehaviorSelector } from "../components/settings/UnsavedChangesBehaviorSelector";
+import { UnitSystemSelector } from "../components/settings/UnitSystemSelector";
+import { ImageQualitySelector } from "../components/settings/ImageQualitySelector";
 import Svg, { Path } from "react-native-svg";
 import { syncQueue } from "../shared/sync/syncQueue";
 import { useState } from "react";
-import type { UnsavedChangesBehavior } from "../shared/types/UnsavedChangesBehavior";
-import { UNSAVED_CHANGES_BEHAVIORS, DEFAULT_UNSAVED_CHANGES_BEHAVIOR } from "../shared/types/UnsavedChangesBehavior";
+import { UNSAVED_CHANGES_BEHAVIOR_OPTIONS, UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
 
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { settings, updateSettings } = useSettings();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [showBehaviorSelector, setShowBehaviorSelector] = useState(false);
-  const [unsavedChangesBehavior, setUnsavedChangesBehavior] = usePersistedState<UnsavedChangesBehavior>(
-    'unsaved_changes_behavior',
-    DEFAULT_UNSAVED_CHANGES_BEHAVIOR
-  );
+  const [showUnitSelector, setShowUnitSelector] = useState(false);
+  const [showImageQualitySelector, setShowImageQualitySelector] = useState(false);
 
-  // Get the label for the current behavior
-  const behaviorLabel = UNSAVED_CHANGES_BEHAVIORS.find(b => b.value === unsavedChangesBehavior)?.label || 'Ask';
+  // Get labels for current settings
+  const behaviorLabel = UNSAVED_CHANGES_BEHAVIOR_OPTIONS.find(b => b.value === settings.unsavedChangesBehavior)?.label || 'Ask';
+  const unitLabel = UNIT_OPTIONS.find(u => u.value === settings.units)?.label || 'Metric';
+  const imageQualityLabel = IMAGE_QUALITY_OPTIONS.find(q => q.value === settings.imageQuality)?.label || 'Standard';
 
   const handleSignOut = async () => {
     try {
@@ -31,7 +33,7 @@ export function ProfileScreen() {
       console.log('🔄 Syncing before sign out...');
 
       // Try to sync all unsaved changes before signing out
-      await syncQueue.sync();
+      await syncQueue.syncNow();
 
       console.log('✅ Sync complete, signing out...');
       await signOut();
@@ -116,6 +118,71 @@ export function ProfileScreen() {
               </Svg>
             </View>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setShowUnitSelector(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Distance Units</Text>
+              <Text style={styles.settingDescription}>
+                Display distances in metric or imperial
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Text style={styles.settingValueText}>{unitLabel}</Text>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M9 18l6-6-6-6"
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setShowImageQualitySelector(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Photo Quality</Text>
+              <Text style={styles.settingDescription}>
+                Compression level for photos. Higher quality uses more storage.
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Text style={styles.settingValueText}>{imageQualityLabel}</Text>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M9 18l6-6-6-6"
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </TouchableOpacity>
+
+          <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Capture GPS Location</Text>
+              <Text style={styles.settingDescription}>
+                Automatically capture your GPS coordinates when creating new entries
+              </Text>
+            </View>
+            <Switch
+              value={settings.captureGpsLocation}
+              onValueChange={(value) => updateSettings({ captureGpsLocation: value })}
+              trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
+              thumbColor="#ffffff"
+            />
+          </View>
         </View>
 
         {/* Sign Out Button */}
@@ -138,9 +205,25 @@ export function ProfileScreen() {
       {/* Unsaved Changes Behavior Selector */}
       <UnsavedChangesBehaviorSelector
         visible={showBehaviorSelector}
-        selectedBehavior={unsavedChangesBehavior}
-        onSelect={setUnsavedChangesBehavior}
+        selectedBehavior={settings.unsavedChangesBehavior}
+        onSelect={(behavior) => updateSettings({ unsavedChangesBehavior: behavior })}
         onClose={() => setShowBehaviorSelector(false)}
+      />
+
+      {/* Unit System Selector */}
+      <UnitSystemSelector
+        visible={showUnitSelector}
+        selectedUnit={settings.units}
+        onSelect={(units) => updateSettings({ units })}
+        onClose={() => setShowUnitSelector(false)}
+      />
+
+      {/* Image Quality Selector */}
+      <ImageQualitySelector
+        visible={showImageQualitySelector}
+        selectedQuality={settings.imageQuality}
+        onSelect={(imageQuality) => updateSettings({ imageQuality })}
+        onClose={() => setShowImageQualitySelector(false)}
       />
     </View>
   );

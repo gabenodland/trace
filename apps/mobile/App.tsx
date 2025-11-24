@@ -5,6 +5,7 @@ import { StyleSheet, Text, View, ActivityIndicator, Platform, StatusBar, BackHan
 import { useFonts, MavenPro_400Regular, MavenPro_500Medium, MavenPro_600SemiBold, MavenPro_700Bold } from "@expo-google-fonts/maven-pro";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
 import { NavigationProvider, BeforeBackHandler } from "./src/shared/contexts/NavigationContext";
+import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { EntryScreen } from "./src/screens/EntryScreen";
@@ -263,9 +264,11 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AuthGate />
-      </AuthProvider>
+      <SettingsProvider>
+        <AuthProvider>
+          <AuthGate />
+        </AuthProvider>
+      </SettingsProvider>
     </QueryClientProvider>
   );
 }

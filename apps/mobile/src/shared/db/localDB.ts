@@ -1,15 +1,17 @@
 /**
  * Local SQLite database for mobile app
  * Provides offline-first storage with background sync to Supabase
+ *
+ * SIMPLIFIED VERSION - No migrations, single createTables schema
+ * Uses the new normalized location model with locations table
  */
 
 import * as SQLite from 'expo-sqlite';
-import { Entry, CreateEntryInput } from '@trace/core';
+import { Entry, CreateEntryInput, LocationEntity, CreateLocationInput } from '@trace/core';
 
 class LocalDatabase {
   private db: SQLite.SQLiteDatabase | null = null;
   private initPromise: Promise<void> | null = null;
-  private hasDeletedAtColumn: boolean = false;
   private currentUserId: string | null = null;
 
   /**
@@ -34,13 +36,16 @@ class LocalDatabase {
       // Log database opened
       console.log('📦 SQLite database opened: trace.db');
 
-      // Create tables
+      // Create tables (without indexes that depend on migrated columns)
       await this.createTables();
 
-      // Run migrations for existing databases
+      // Run migrations for existing databases (adds missing columns)
       await this.runMigrations();
 
-      console.log('✅ SQLite tables created and migrated');
+      // Create indexes (after migrations have added any missing columns)
+      await this.createIndexes();
+
+      console.log('✅ SQLite tables and indexes created');
     } catch (error) {
       console.error('❌ Failed to initialize database:', error);
       throw error;
@@ -48,345 +53,72 @@ class LocalDatabase {
   }
 
   /**
-   * Run database migrations
-   *
-   * Migrations 1-7 have been consolidated into the createTables() schema.
-   * This method now only sets the version for fresh installs.
+   * Run migrations to update existing database schemas
+   * Uses ALTER TABLE ADD COLUMN for columns that may not exist
    */
   private async runMigrations(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 
+    // Migration: Add location_id column to entries table if it doesn't exist
     try {
-      // Check current schema version
-      let currentVersion = 0;
-      try {
-        const result = await this.db.getAllAsync<{ value: string }>(
-          'SELECT value FROM sync_metadata WHERE key = ?',
-          ['schema_version']
-        );
-        currentVersion = result.length > 0 ? parseInt(result[0].value) : 0;
-      } catch (error) {
-        // sync_metadata table might not exist yet, start from version 0
-        console.log('ℹ️ No schema version found, starting from 0');
-      }
+      // Check if location_id column exists in entries table
+      const result = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('entries') WHERE name = 'location_id'`
+      );
 
-      console.log(`📊 Current schema version: ${currentVersion}`);
-
-      if (currentVersion === 0) {
-        // Fresh install - all tables created in createTables() with version 12 schema
-        console.log('🆕 Fresh install - setting schema version to 12');
-
-        await this.db.runAsync(
-          'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
-          ['schema_version', '12', Date.now()]
-        );
-
-        // Check if deleted_at column exists
-        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
-
-        console.log('✅ Schema initialized at version 12');
-      } else if (currentVersion < 7) {
-        // Old database detected - recommend reinstall for clean migration
-        console.warn('⚠️ Old schema detected (version ' + currentVersion + ')');
-        console.warn('⚠️ For photo support, clear Expo Go app data and restart the app');
-        console.warn('⚠️ Settings > Apps > Expo Go > Storage > Clear Data');
-
-        // Check if deleted_at column exists
-        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
-      } else if (currentVersion === 7) {
-        // Migration 8: Simplify photos table schema
-        console.log('🔄 Migrating schema from version 7 to 8: Simplifying photos table');
-
-        // SQLite doesn't support DROP COLUMN directly, need to recreate table
-        await this.db.execAsync(`
-          -- Create new photos table with simplified schema
-          CREATE TABLE IF NOT EXISTS photos_new (
-            photo_id TEXT PRIMARY KEY,
-            entry_id TEXT NOT NULL,
-            user_id TEXT NOT NULL,
-            file_path TEXT NOT NULL,
-            local_path TEXT,
-            mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
-            position INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            uploaded INTEGER DEFAULT 0,
-            synced INTEGER DEFAULT 0,
-            sync_action TEXT,
-            FOREIGN KEY (entry_id) REFERENCES entries(entry_id) ON DELETE CASCADE
-          );
-
-          -- Copy data from old table (only the columns we're keeping)
-          INSERT INTO photos_new (photo_id, entry_id, user_id, file_path, local_path, mime_type, position, created_at, updated_at, uploaded, synced, sync_action)
-          SELECT photo_id, entry_id, user_id, file_path, local_path, mime_type, position, created_at, updated_at, uploaded, synced, sync_action
-          FROM photos;
-
-          -- Drop old table
-          DROP TABLE photos;
-
-          -- Rename new table
-          ALTER TABLE photos_new RENAME TO photos;
-
-          -- Recreate indexes
-          CREATE INDEX idx_photos_entry_id ON photos(entry_id);
-          CREATE INDEX idx_photos_user_id ON photos(user_id);
-          CREATE INDEX idx_photos_position ON photos(entry_id, position);
-          CREATE INDEX idx_photos_uploaded ON photos(uploaded);
-          CREATE INDEX idx_photos_synced ON photos(synced);
-        `);
-
-        await this.db.runAsync(
-          'UPDATE sync_metadata SET value = ?, updated_at = ? WHERE key = ?',
-          ['8', Date.now(), 'schema_version']
-        );
-
-        // Check if deleted_at column exists
-        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
-
-        console.log('✅ Migrated to schema version 8');
-      } else if (currentVersion === 8) {
-        // Migration 9: Add optional metadata columns to photos
-        console.log('🔄 Migrating schema from version 8 to 9: Adding optional photo metadata');
-
-        await this.db.execAsync(`
-          -- Add optional metadata columns
-          ALTER TABLE photos ADD COLUMN file_size INTEGER;
-          ALTER TABLE photos ADD COLUMN width INTEGER;
-          ALTER TABLE photos ADD COLUMN height INTEGER;
-        `);
-
-        await this.db.runAsync(
-          'UPDATE sync_metadata SET value = ?, updated_at = ? WHERE key = ?',
-          ['9', Date.now(), 'schema_version']
-        );
-
-        // Check if deleted_at column exists
-        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
-
-        console.log('✅ Migrated to schema version 9');
-      } else if (currentVersion === 9) {
-        // Migration 10: Rename location coordinates and add location hierarchy fields
-        console.log('🔄 Migrating schema from version 9 to 10: Adding location hierarchy fields');
-
-        // SQLite doesn't support RENAME COLUMN directly in old versions
-        // We need to recreate the entries table with new schema
-        await this.db.execAsync(`
-          -- Create new entries table with updated location fields
-          CREATE TABLE entries_new (
-            entry_id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            title TEXT,
-            content TEXT NOT NULL,
-            tags TEXT,
-            mentions TEXT,
-            category_id TEXT,
-            entry_date INTEGER,
-            entry_latitude REAL,
-            entry_longitude REAL,
-            location_latitude REAL,
-            location_longitude REAL,
-            location_accuracy REAL,
-            location_name TEXT,
-            location_name_source TEXT,
-            location_address TEXT,
-            location_neighborhood TEXT,
-            location_postal_code TEXT,
-            location_city TEXT,
-            location_subdivision TEXT,
-            location_region TEXT,
-            location_country TEXT,
-            status TEXT CHECK (status IN ('none', 'incomplete', 'in_progress', 'complete')) DEFAULT 'none',
-            due_date INTEGER,
-            completed_at INTEGER,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            deleted_at INTEGER,
-            local_only INTEGER DEFAULT 0,
-            synced INTEGER DEFAULT 0,
-            sync_action TEXT,
-            sync_error TEXT,
-            sync_retry_count INTEGER DEFAULT 0,
-            sync_last_attempt INTEGER,
-            version INTEGER DEFAULT 1,
-            base_version INTEGER DEFAULT 1,
-            conflict_status TEXT,
-            conflict_backup TEXT,
-            last_edited_by TEXT,
-            last_edited_device TEXT
-          );
-
-          -- Copy data from old table, mapping old column names to new
-          INSERT INTO entries_new (
-            entry_id, user_id, title, content, tags, mentions,
-            category_id, entry_date,
-            entry_latitude, entry_longitude, location_accuracy, location_name,
-            status, due_date, completed_at, created_at, updated_at, deleted_at,
-            local_only, synced, sync_action, sync_error, sync_retry_count, sync_last_attempt,
-            version, base_version, conflict_status, conflict_backup, last_edited_by, last_edited_device
-          )
-          SELECT
-            entry_id, user_id, title, content, tags, mentions,
-            category_id, entry_date,
-            location_lat, location_lng, location_accuracy, location_name,
-            status, due_date, completed_at, created_at, updated_at, deleted_at,
-            local_only, synced, sync_action, sync_error, sync_retry_count, sync_last_attempt,
-            version, base_version, conflict_status, conflict_backup, last_edited_by, last_edited_device
-          FROM entries;
-
-          -- Drop old table
-          DROP TABLE entries;
-
-          -- Rename new table
-          ALTER TABLE entries_new RENAME TO entries;
-
-          -- Recreate indexes
-          CREATE INDEX idx_entries_user_id ON entries(user_id);
-          CREATE INDEX idx_entries_created_at ON entries(created_at DESC);
-          CREATE INDEX idx_entries_updated_at ON entries(updated_at DESC);
-          CREATE INDEX idx_entries_deleted_at ON entries(deleted_at);
-          CREATE INDEX idx_entries_entry_date ON entries(entry_date);
-          CREATE INDEX idx_entries_category_id ON entries(category_id);
-          CREATE INDEX idx_entries_status ON entries(status);
-          CREATE INDEX idx_entries_synced ON entries(synced);
-          CREATE INDEX idx_entries_local_only ON entries(local_only);
-        `);
-
-        await this.db.runAsync(
-          'UPDATE sync_metadata SET value = ?, updated_at = ? WHERE key = ?',
-          ['10', Date.now(), 'schema_version']
-        );
-
-        // Check if deleted_at column exists
-        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
-
-        console.log('✅ Migrated to schema version 10');
-      } else if (currentVersion === 10) {
-        // Migration 11: Replace location_mapbox_json with location_address
-        console.log('🔄 Migrating schema from version 10 to 11: Replacing location_mapbox_json with location_address');
-
-        // Add location_address column
-        await this.db.execAsync(`
-          ALTER TABLE entries ADD COLUMN location_address TEXT;
-        `);
-
-        // Note: SQLite doesn't support DROP COLUMN in older versions
-        // The old location_mapbox_json column will remain but won't be used
-        // This is fine - it will just be NULL for all rows
-
-        await this.db.runAsync(
-          'UPDATE sync_metadata SET value = ?, updated_at = ? WHERE key = ?',
-          ['11', Date.now(), 'schema_version']
-        );
-
-        // Check if deleted_at column exists
-        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
-
-        console.log('✅ Migrated to schema version 11');
-      } else if (currentVersion === 11) {
-        // Migration 12: Update status CHECK constraint to include 'in_progress'
-        console.log('🔄 Migrating schema from version 11 to 12: Adding in_progress status');
-
-        // SQLite doesn't allow modifying CHECK constraints, so we need to recreate the table
-        await this.db.execAsync(`
-          -- Create new entries table with updated status CHECK constraint
-          CREATE TABLE entries_new (
-            entry_id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            title TEXT,
-            content TEXT NOT NULL,
-            tags TEXT,
-            mentions TEXT,
-            category_id TEXT,
-            entry_date INTEGER,
-            entry_latitude REAL,
-            entry_longitude REAL,
-            location_latitude REAL,
-            location_longitude REAL,
-            location_accuracy REAL,
-            location_name TEXT,
-            location_name_source TEXT,
-            location_address TEXT,
-            location_neighborhood TEXT,
-            location_postal_code TEXT,
-            location_city TEXT,
-            location_subdivision TEXT,
-            location_region TEXT,
-            location_country TEXT,
-            status TEXT CHECK (status IN ('none', 'incomplete', 'in_progress', 'complete')) DEFAULT 'none',
-            due_date INTEGER,
-            completed_at INTEGER,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            deleted_at INTEGER,
-            local_only INTEGER DEFAULT 0,
-            synced INTEGER DEFAULT 0,
-            sync_action TEXT,
-            sync_error TEXT,
-            sync_retry_count INTEGER DEFAULT 0,
-            sync_last_attempt INTEGER,
-            version INTEGER DEFAULT 1,
-            base_version INTEGER DEFAULT 1,
-            conflict_status TEXT,
-            conflict_backup TEXT,
-            last_edited_by TEXT,
-            last_edited_device TEXT
-          );
-
-          -- Copy data from old table
-          INSERT INTO entries_new SELECT * FROM entries;
-
-          -- Drop old table
-          DROP TABLE entries;
-
-          -- Rename new table
-          ALTER TABLE entries_new RENAME TO entries;
-
-          -- Recreate indexes
-          CREATE INDEX idx_entries_user_id ON entries(user_id);
-          CREATE INDEX idx_entries_created_at ON entries(created_at DESC);
-          CREATE INDEX idx_entries_updated_at ON entries(updated_at DESC);
-          CREATE INDEX idx_entries_deleted_at ON entries(deleted_at);
-          CREATE INDEX idx_entries_entry_date ON entries(entry_date);
-          CREATE INDEX idx_entries_category_id ON entries(category_id);
-          CREATE INDEX idx_entries_status ON entries(status);
-          CREATE INDEX idx_entries_synced ON entries(synced);
-          CREATE INDEX idx_entries_local_only ON entries(local_only);
-        `);
-
-        await this.db.runAsync(
-          'UPDATE sync_metadata SET value = ?, updated_at = ? WHERE key = ?',
-          ['12', Date.now(), 'schema_version']
-        );
-
-        // Check if deleted_at column exists
-        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
-
-        console.log('✅ Migrated to schema version 12');
-      } else {
-        // Already on latest version
-        console.log('✅ Schema is up to date (version 12)');
-
-        // Check if deleted_at column exists
-        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
+      if (!result) {
+        console.log('📦 Running migration: Adding location_id to entries table...');
+        await this.db.execAsync(`ALTER TABLE entries ADD COLUMN location_id TEXT`);
+        // Create index for the new column
+        await this.db.execAsync(`CREATE INDEX IF NOT EXISTS idx_entries_location_id ON entries(location_id)`);
+        console.log('✅ Migration complete: location_id added to entries');
       }
     } catch (error) {
-      console.error('❌ Migration check failed:', error);
-      // Check if column exists despite error
-      try {
-        const tableInfo = await this.db.getAllAsync<any>('PRAGMA table_info(entries)');
-        this.hasDeletedAtColumn = tableInfo.some((col: any) => col.name === 'deleted_at');
-      } catch (e) {
-        // Ignore
+      console.error('Migration error (location_id):', error);
+      // Don't throw - the column might already exist or there could be other reasons
+    }
+
+    // Migration: Add locations table if it doesn't exist (should be handled by CREATE TABLE IF NOT EXISTS, but just in case)
+    try {
+      const result = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='locations'`
+      );
+
+      if (!result) {
+        console.log('📦 Running migration: Creating locations table...');
+        await this.db.execAsync(`
+          CREATE TABLE IF NOT EXISTS locations (
+            location_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            source TEXT,
+            address TEXT,
+            neighborhood TEXT,
+            postal_code TEXT,
+            city TEXT,
+            subdivision TEXT,
+            region TEXT,
+            country TEXT,
+            mapbox_place_id TEXT,
+            foursquare_fsq_id TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            deleted_at INTEGER,
+            synced INTEGER DEFAULT 0,
+            sync_action TEXT
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_locations_user_id ON locations(user_id);
+          CREATE INDEX IF NOT EXISTS idx_locations_name ON locations(name);
+          CREATE INDEX IF NOT EXISTS idx_locations_city ON locations(city);
+          CREATE INDEX IF NOT EXISTS idx_locations_synced ON locations(synced);
+        `);
+        console.log('✅ Migration complete: locations table created');
       }
-      // Don't throw - allow app to continue even if migration fails
+    } catch (error) {
+      console.error('Migration error (locations table):', error);
     }
   }
 
@@ -394,6 +126,32 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.execAsync(`
+      -- Locations table (stores unique locations)
+      CREATE TABLE IF NOT EXISTS locations (
+        location_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL,
+        source TEXT,                  -- 'mapbox_poi', 'foursquare', 'user_custom', 'gps'
+        address TEXT,
+        neighborhood TEXT,
+        postal_code TEXT,
+        city TEXT,
+        subdivision TEXT,
+        region TEXT,
+        country TEXT,
+        mapbox_place_id TEXT,
+        foursquare_fsq_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        deleted_at INTEGER,           -- Soft delete
+        synced INTEGER DEFAULT 0,
+        sync_action TEXT
+      );
+
+      -- Indexes for locations are created in createIndexes() after migrations
+
       -- Entries table (mirrors Supabase schema + sync fields)
       CREATE TABLE IF NOT EXISTS entries (
         entry_id TEXT PRIMARY KEY,
@@ -403,34 +161,22 @@ class LocalDatabase {
         tags TEXT,                    -- JSON array: '["tag1","tag2"]'
         mentions TEXT,                -- JSON array: '["person1","person2"]'
         category_id TEXT,
-        entry_date INTEGER,           -- Unix timestamp for calendar grouping (Migration 4)
+        entry_date INTEGER,           -- Unix timestamp for calendar grouping
 
-        -- GPS coordinates (where user was when creating entry) - Migration 10
+        -- GPS coordinates (where user was when creating entry)
         entry_latitude REAL,
         entry_longitude REAL,
-
-        -- Tagged location coordinates (selected POI/place) - Migration 10
-        location_latitude REAL,
-        location_longitude REAL,
         location_accuracy REAL,
 
-        -- Location name and hierarchy - Migration 10
-        location_name TEXT,
-        location_name_source TEXT,
-        location_address TEXT,
-        location_neighborhood TEXT,
-        location_postal_code TEXT,
-        location_city TEXT,
-        location_subdivision TEXT,
-        location_region TEXT,
-        location_country TEXT,
+        -- Location reference (FK to locations table)
+        location_id TEXT,
 
         status TEXT CHECK (status IN ('none', 'incomplete', 'in_progress', 'complete')) DEFAULT 'none',
         due_date INTEGER,             -- Unix timestamp
         completed_at INTEGER,         -- Unix timestamp
         created_at INTEGER NOT NULL,  -- Unix timestamp
         updated_at INTEGER NOT NULL,  -- Unix timestamp
-        deleted_at INTEGER,           -- Unix timestamp (soft delete - Migration 1)
+        deleted_at INTEGER,           -- Unix timestamp (soft delete)
 
         -- Sync tracking fields
         local_only INTEGER DEFAULT 0,     -- 0 = sync enabled, 1 = local only
@@ -440,7 +186,7 @@ class LocalDatabase {
         sync_retry_count INTEGER DEFAULT 0,
         sync_last_attempt INTEGER,        -- Unix timestamp of last sync attempt
 
-        -- Conflict resolution fields (Migration 6)
+        -- Conflict resolution fields
         version INTEGER DEFAULT 1,        -- Increments with each local edit
         base_version INTEGER DEFAULT 1,   -- Server version this edit is based on
         conflict_status TEXT,             -- null, 'conflicted', 'resolved'
@@ -449,18 +195,9 @@ class LocalDatabase {
         last_edited_device TEXT           -- Device name that last edited
       );
 
-      -- Indexes for performance
-      CREATE INDEX IF NOT EXISTS idx_entries_user_id ON entries(user_id);
-      CREATE INDEX IF NOT EXISTS idx_entries_created_at ON entries(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_entries_updated_at ON entries(updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_entries_deleted_at ON entries(deleted_at);
-      CREATE INDEX IF NOT EXISTS idx_entries_entry_date ON entries(entry_date);
-      CREATE INDEX IF NOT EXISTS idx_entries_category_id ON entries(category_id);
-      CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status);
-      CREATE INDEX IF NOT EXISTS idx_entries_synced ON entries(synced);
-      CREATE INDEX IF NOT EXISTS idx_entries_local_only ON entries(local_only);
+      -- Indexes for entries are created in createIndexes() after migrations
 
-      -- Categories table (with sync support)
+      -- Categories table
       CREATE TABLE IF NOT EXISTS categories (
         category_id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -472,27 +209,21 @@ class LocalDatabase {
         color TEXT,
         icon TEXT,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,   -- Migration 3
-
-        -- Sync tracking fields (Migration 2)
-        synced INTEGER DEFAULT 0,         -- 0 = needs sync, 1 = synced
-        sync_action TEXT,                 -- 'create', 'update', 'delete', or NULL
+        updated_at INTEGER NOT NULL,
+        synced INTEGER DEFAULT 0,
+        sync_action TEXT,
         sync_error TEXT,
-
-        -- Conflict resolution fields (Migration 6)
-        version INTEGER DEFAULT 1,        -- Increments with each local edit
-        base_version INTEGER DEFAULT 1,   -- Server version this edit is based on
-        conflict_status TEXT,             -- null, 'conflicted', 'resolved'
-        conflict_backup TEXT,             -- JSON backup of losing version
-        last_edited_by TEXT,              -- User email who last edited
-        last_edited_device TEXT           -- Device name that last edited
+        version INTEGER DEFAULT 1,
+        base_version INTEGER DEFAULT 1,
+        conflict_status TEXT,
+        conflict_backup TEXT,
+        last_edited_by TEXT,
+        last_edited_device TEXT
       );
 
-      CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
-      CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_category_id);
-      CREATE INDEX IF NOT EXISTS idx_categories_synced ON categories(synced);
+      -- Indexes for categories are created in createIndexes() after migrations
 
-      -- Photos table (Migration 7, simplified in Migration 8, updated in Migration 9)
+      -- Photos table
       CREATE TABLE IF NOT EXISTS photos (
         photo_id TEXT PRIMARY KEY,
         entry_id TEXT NOT NULL,
@@ -512,11 +243,7 @@ class LocalDatabase {
         FOREIGN KEY (entry_id) REFERENCES entries(entry_id) ON DELETE CASCADE
       );
 
-      CREATE INDEX IF NOT EXISTS idx_photos_entry_id ON photos(entry_id);
-      CREATE INDEX IF NOT EXISTS idx_photos_user_id ON photos(user_id);
-      CREATE INDEX IF NOT EXISTS idx_photos_position ON photos(entry_id, position);
-      CREATE INDEX IF NOT EXISTS idx_photos_uploaded ON photos(uploaded);
-      CREATE INDEX IF NOT EXISTS idx_photos_synced ON photos(synced);
+      -- Indexes for photos are created in createIndexes() after migrations
 
       -- Sync metadata table
       CREATE TABLE IF NOT EXISTS sync_metadata (
@@ -525,7 +252,7 @@ class LocalDatabase {
         updated_at INTEGER NOT NULL
       );
 
-      -- Sync logs table (Migration 5)
+      -- Sync logs table
       CREATE TABLE IF NOT EXISTS sync_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp INTEGER NOT NULL,
@@ -542,10 +269,57 @@ class LocalDatabase {
         entries_pulled INTEGER DEFAULT 0
       );
 
+      -- Indexes for sync_logs are created in createIndexes() after migrations
+    `);
+  }
+
+  /**
+   * Create all database indexes
+   * Called after migrations to ensure all columns exist
+   */
+  private async createIndexes(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execAsync(`
+      -- Indexes for locations
+      CREATE INDEX IF NOT EXISTS idx_locations_user_id ON locations(user_id);
+      CREATE INDEX IF NOT EXISTS idx_locations_name ON locations(name);
+      CREATE INDEX IF NOT EXISTS idx_locations_city ON locations(city);
+      CREATE INDEX IF NOT EXISTS idx_locations_synced ON locations(synced);
+
+      -- Indexes for entries
+      CREATE INDEX IF NOT EXISTS idx_entries_user_id ON entries(user_id);
+      CREATE INDEX IF NOT EXISTS idx_entries_created_at ON entries(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_entries_updated_at ON entries(updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_entries_deleted_at ON entries(deleted_at);
+      CREATE INDEX IF NOT EXISTS idx_entries_entry_date ON entries(entry_date);
+      CREATE INDEX IF NOT EXISTS idx_entries_category_id ON entries(category_id);
+      CREATE INDEX IF NOT EXISTS idx_entries_location_id ON entries(location_id);
+      CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status);
+      CREATE INDEX IF NOT EXISTS idx_entries_synced ON entries(synced);
+      CREATE INDEX IF NOT EXISTS idx_entries_local_only ON entries(local_only);
+
+      -- Indexes for categories
+      CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
+      CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_category_id);
+      CREATE INDEX IF NOT EXISTS idx_categories_synced ON categories(synced);
+
+      -- Indexes for photos
+      CREATE INDEX IF NOT EXISTS idx_photos_entry_id ON photos(entry_id);
+      CREATE INDEX IF NOT EXISTS idx_photos_user_id ON photos(user_id);
+      CREATE INDEX IF NOT EXISTS idx_photos_position ON photos(entry_id, position);
+      CREATE INDEX IF NOT EXISTS idx_photos_uploaded ON photos(uploaded);
+      CREATE INDEX IF NOT EXISTS idx_photos_synced ON photos(synced);
+
+      -- Indexes for sync_logs
       CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp DESC);
       CREATE INDEX IF NOT EXISTS idx_sync_logs_level ON sync_logs(log_level);
     `);
   }
+
+  // ========================================
+  // ENTRY OPERATIONS
+  // ========================================
 
   /**
    * Save an entry to local database
@@ -560,14 +334,11 @@ class LocalDatabase {
       `INSERT OR REPLACE INTO entries (
         entry_id, user_id, title, content, tags, mentions,
         category_id, entry_date,
-        entry_latitude, entry_longitude,
-        location_latitude, location_longitude, location_accuracy,
-        location_name, location_name_source, location_address, location_neighborhood,
-        location_postal_code, location_city, location_subdivision,
-        location_region, location_country,
+        entry_latitude, entry_longitude, location_accuracy,
+        location_id,
         status, due_date, completed_at, created_at, updated_at,
         local_only, synced, sync_action
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -577,31 +348,18 @@ class LocalDatabase {
         JSON.stringify(entry.mentions || []),
         entry.category_id || null,
         entry.entry_date ? Date.parse(entry.entry_date) : (entry.created_at ? Date.parse(entry.created_at) : now),
-        // GPS coordinates (where user was when creating entry)
         entry.entry_latitude || null,
         entry.entry_longitude || null,
-        // Tagged location coordinates (selected POI/place)
-        entry.location_latitude || null,
-        entry.location_longitude || null,
         entry.location_accuracy || null,
-        // Location name and hierarchy
-        entry.location_name || null,
-        entry.location_name_source || null,
-        entry.location_address || null,
-        entry.location_neighborhood || null,
-        entry.location_postal_code || null,
-        entry.location_city || null,
-        entry.location_subdivision || null,
-        entry.location_region || null,
-        entry.location_country || null,
+        entry.location_id || null,
         entry.status || 'none',
         entry.due_date ? Date.parse(entry.due_date) : null,
         entry.completed_at ? Date.parse(entry.completed_at) : null,
         entry.created_at ? Date.parse(entry.created_at) : now,
-        entry.updated_at ? Date.parse(entry.updated_at) : now, // Preserve server timestamp if provided
+        entry.updated_at ? Date.parse(entry.updated_at) : now,
         entry.local_only !== undefined ? entry.local_only : 0,
-        entry.synced !== undefined ? entry.synced : 0, // Preserve sync status if provided
-        entry.sync_action !== undefined ? entry.sync_action : 'create' // Preserve sync action if provided
+        entry.synced !== undefined ? entry.synced : 0,
+        entry.sync_action !== undefined ? entry.sync_action : 'create'
       ]
     );
 
@@ -615,7 +373,6 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Filter by user_id if set (for multi-user support)
     let query = 'SELECT * FROM entries WHERE entry_id = ?';
     const params: any[] = [entryId];
 
@@ -638,12 +395,12 @@ class LocalDatabase {
   async getAllEntries(filter?: {
     category_id?: string | null;
     status?: string;
-    tag?: string; // Filter by single tag
-    mention?: string; // Filter by single mention
-    location_name?: string; // Filter by location name
-    includeDeleted?: boolean; // For sync operations
-    includeChildren?: boolean; // Include entries in child categories
-    childCategoryIds?: string[]; // List of child category IDs to include
+    tag?: string;
+    mention?: string;
+    location_id?: string;
+    includeDeleted?: boolean;
+    includeChildren?: boolean;
+    childCategoryIds?: string[];
   }): Promise<Entry[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
@@ -651,15 +408,12 @@ class LocalDatabase {
     let query = 'SELECT * FROM entries WHERE 1=1';
     const params: any[] = [];
 
-    // CRITICAL: Filter by current user_id to support multiple users
     if (this.currentUserId) {
       query += ' AND user_id = ?';
       params.push(this.currentUserId);
     }
 
-    // Exclude soft-deleted entries unless explicitly requested
-    // Only apply filter if deleted_at column exists (post-migration)
-    if (!filter?.includeDeleted && this.hasDeletedAtColumn) {
+    if (!filter?.includeDeleted) {
       query += ' AND deleted_at IS NULL';
     }
 
@@ -668,7 +422,6 @@ class LocalDatabase {
         if (filter.category_id === null) {
           query += ' AND category_id IS NULL';
         } else if (filter.includeChildren && filter.childCategoryIds && filter.childCategoryIds.length > 0) {
-          // Include the category and all its children
           const placeholders = filter.childCategoryIds.map(() => '?').join(',');
           query += ` AND category_id IN (?, ${placeholders})`;
           params.push(filter.category_id, ...filter.childCategoryIds);
@@ -683,22 +436,19 @@ class LocalDatabase {
         params.push(filter.status);
       }
 
-      // Filter by tag (check if tag is in JSON array)
       if (filter.tag) {
         query += ' AND tags LIKE ?';
         params.push(`%"${filter.tag.toLowerCase()}"%`);
       }
 
-      // Filter by mention (check if mention is in JSON array)
       if (filter.mention) {
         query += ' AND mentions LIKE ?';
         params.push(`%"${filter.mention.toLowerCase()}"%`);
       }
 
-      // Filter by location name
-      if (filter.location_name) {
-        query += ' AND location_name = ?';
-        params.push(filter.location_name);
+      if (filter.location_id) {
+        query += ' AND location_id = ?';
+        params.push(filter.location_id);
       }
     }
 
@@ -719,12 +469,10 @@ class LocalDatabase {
     const existing = await this.getEntry(entryId);
     if (!existing) throw new Error('Entry not found');
 
-    // Only update timestamp if not provided (user edit vs sync update)
     const now = Date.now();
     const updated = {
       ...existing,
       ...updates,
-      // Preserve server timestamp if provided, otherwise use current time
       updated_at: updates.updated_at || new Date(now).toISOString()
     };
 
@@ -732,11 +480,8 @@ class LocalDatabase {
       `UPDATE entries SET
         title = ?, content = ?, tags = ?, mentions = ?,
         category_id = ?, entry_date = ?,
-        entry_latitude = ?, entry_longitude = ?,
-        location_latitude = ?, location_longitude = ?, location_accuracy = ?,
-        location_name = ?, location_name_source = ?, location_address = ?, location_neighborhood = ?,
-        location_postal_code = ?, location_city = ?, location_subdivision = ?,
-        location_region = ?, location_country = ?,
+        entry_latitude = ?, entry_longitude = ?, location_accuracy = ?,
+        location_id = ?,
         status = ?, due_date = ?, completed_at = ?,
         updated_at = ?, local_only = ?, synced = ?, sync_action = ?
       WHERE entry_id = ?`,
@@ -747,30 +492,17 @@ class LocalDatabase {
         JSON.stringify(updated.mentions || []),
         updated.category_id || null,
         updated.entry_date ? Date.parse(updated.entry_date) : null,
-        // GPS coordinates (where user was when creating entry)
         updated.entry_latitude || null,
         updated.entry_longitude || null,
-        // Tagged location coordinates (selected POI/place)
-        updated.location_latitude || null,
-        updated.location_longitude || null,
         updated.location_accuracy || null,
-        // Location name and hierarchy
-        updated.location_name || null,
-        updated.location_name_source || null,
-        updated.location_address || null,
-        updated.location_neighborhood || null,
-        updated.location_postal_code || null,
-        updated.location_city || null,
-        updated.location_subdivision || null,
-        updated.location_region || null,
-        updated.location_country || null,
+        updated.location_id || null,
         updated.status || 'none',
         updated.due_date ? Date.parse(updated.due_date) : null,
         updated.completed_at ? Date.parse(updated.completed_at) : null,
-        Date.parse(updated.updated_at), // Use the preserved timestamp
+        Date.parse(updated.updated_at),
         updated.local_only !== undefined ? updated.local_only : 0,
-        updated.synced !== undefined ? updated.synced : 0, // Preserve sync status if provided
-        updated.sync_action !== undefined ? updated.sync_action : 'update', // Preserve sync action if provided
+        updated.synced !== undefined ? updated.synced : 0,
+        updated.sync_action !== undefined ? updated.sync_action : 'update',
         entryId
       ]
     );
@@ -779,7 +511,7 @@ class LocalDatabase {
   }
 
   /**
-   * Delete an entry (soft delete - sets deleted_at timestamp)
+   * Delete an entry (soft delete)
    */
   async deleteEntry(entryId: string): Promise<void> {
     await this.init();
@@ -797,14 +529,13 @@ class LocalDatabase {
     }
 
     if (entry.local_only) {
-      // Local-only entries can be hard deleted immediately
       await this.db.runAsync('DELETE FROM entries WHERE entry_id = ?', [entryId]);
     } else {
-      // Soft delete: set deleted_at and mark for sync
-      // Note: We don't update updated_at - that should only change when content changes
+      // Soft delete: set deleted_at and release the location
       await this.db.runAsync(
         `UPDATE entries SET
           deleted_at = ?,
+          location_id = NULL,
           synced = 0,
           sync_action = 'delete'
         WHERE entry_id = ?`,
@@ -814,7 +545,7 @@ class LocalDatabase {
   }
 
   /**
-   * Get unsynced entries (for sync queue)
+   * Get unsynced entries
    */
   async getUnsyncedEntries(): Promise<Entry[]> {
     await this.init();
@@ -834,14 +565,11 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Check if this was a delete action
     const entry = await this.getEntry(entryId);
 
     if (entry && entry.sync_action === 'delete') {
-      // Delete was synced, now remove from local DB
       await this.db.runAsync('DELETE FROM entries WHERE entry_id = ?', [entryId]);
     } else {
-      // Mark as synced
       await this.db.runAsync(
         `UPDATE entries SET
           synced = 1,
@@ -898,23 +626,10 @@ class LocalDatabase {
       mentions: row.mentions ? JSON.parse(row.mentions) : [],
       category_id: row.category_id,
       entry_date: row.entry_date ? new Date(row.entry_date).toISOString() : null,
-      // GPS coordinates (where user was when creating entry)
       entry_latitude: row.entry_latitude,
       entry_longitude: row.entry_longitude,
-      // Tagged location coordinates (selected POI/place)
-      location_latitude: row.location_latitude,
-      location_longitude: row.location_longitude,
       location_accuracy: row.location_accuracy,
-      // Location name and hierarchy
-      location_name: row.location_name,
-      location_name_source: row.location_name_source,
-      location_address: row.location_address,
-      location_neighborhood: row.location_neighborhood,
-      location_postal_code: row.location_postal_code,
-      location_city: row.location_city,
-      location_subdivision: row.location_subdivision,
-      location_region: row.location_region,
-      location_country: row.location_country,
+      location_id: row.location_id,
       status: row.status || 'none',
       due_date: row.due_date ? new Date(row.due_date).toISOString() : null,
       completed_at: row.completed_at ? new Date(row.completed_at).toISOString() : null,
@@ -922,13 +637,266 @@ class LocalDatabase {
       updated_at: new Date(row.updated_at).toISOString(),
       deleted_at: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
       attachments: null,
-      // Sync fields (not in Entry type, but available)
       local_only: row.local_only,
       synced: row.synced,
       sync_action: row.sync_action,
       sync_error: row.sync_error,
     } as Entry;
   }
+
+  // ========================================
+  // LOCATION OPERATIONS
+  // ========================================
+
+  /**
+   * Save a location to local database
+   */
+  async saveLocation(location: LocationEntity): Promise<LocationEntity> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const now = Date.now();
+
+    await this.db.runAsync(
+      `INSERT OR REPLACE INTO locations (
+        location_id, user_id, name, latitude, longitude,
+        source, address, neighborhood, postal_code, city,
+        subdivision, region, country, mapbox_place_id, foursquare_fsq_id,
+        created_at, updated_at, synced, sync_action
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        location.location_id,
+        location.user_id,
+        location.name,
+        location.latitude,
+        location.longitude,
+        location.source || null,
+        location.address || null,
+        location.neighborhood || null,
+        location.postal_code || null,
+        location.city || null,
+        location.subdivision || null,
+        location.region || null,
+        location.country || null,
+        location.mapbox_place_id || null,
+        location.foursquare_fsq_id || null,
+        location.created_at ? Date.parse(location.created_at) : now,
+        location.updated_at ? Date.parse(location.updated_at) : now,
+        location.synced !== undefined ? location.synced : 0,
+        location.sync_action !== undefined ? location.sync_action : 'create'
+      ]
+    );
+
+    return this.getLocation(location.location_id) as Promise<LocationEntity>;
+  }
+
+  /**
+   * Get a single location by ID
+   */
+  async getLocation(locationId: string): Promise<LocationEntity | null> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    let query = 'SELECT * FROM locations WHERE location_id = ?';
+    const params: any[] = [locationId];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    const row = await this.db.getFirstAsync<any>(query, params);
+
+    if (!row) return null;
+
+    return this.rowToLocation(row);
+  }
+
+  /**
+   * Get all locations for current user
+   */
+  async getAllLocations(): Promise<LocationEntity[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    let query = 'SELECT * FROM locations WHERE deleted_at IS NULL';
+    const params: any[] = [];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    query += ' ORDER BY name ASC';
+
+    const rows = await this.db.getAllAsync<any>(query, params);
+
+    return rows.map(row => this.rowToLocation(row));
+  }
+
+  /**
+   * Get locations with entry counts
+   */
+  async getLocationsWithCounts(): Promise<Array<LocationEntity & { entry_count: number }>> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    let query = `
+      SELECT l.*, COUNT(e.entry_id) as entry_count
+      FROM locations l
+      LEFT JOIN entries e ON l.location_id = e.location_id AND e.deleted_at IS NULL
+      WHERE l.deleted_at IS NULL
+    `;
+    const params: any[] = [];
+
+    if (this.currentUserId) {
+      query += ' AND l.user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    query += ' GROUP BY l.location_id ORDER BY entry_count DESC, l.name ASC';
+
+    const rows = await this.db.getAllAsync<any>(query, params);
+
+    return rows.map(row => ({
+      ...this.rowToLocation(row),
+      entry_count: row.entry_count || 0
+    }));
+  }
+
+  /**
+   * Update a location
+   */
+  async updateLocation(locationId: string, updates: Partial<LocationEntity>): Promise<LocationEntity> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const existing = await this.getLocation(locationId);
+    if (!existing) throw new Error('Location not found');
+
+    const now = Date.now();
+    const updatedAt = updates.updated_at !== undefined
+      ? (typeof updates.updated_at === 'string' ? Date.parse(updates.updated_at) : updates.updated_at)
+      : now;
+
+    await this.db.runAsync(
+      `UPDATE locations SET
+        name = ?, latitude = ?, longitude = ?,
+        source = ?, address = ?, neighborhood = ?, postal_code = ?,
+        city = ?, subdivision = ?, region = ?, country = ?,
+        mapbox_place_id = ?, foursquare_fsq_id = ?,
+        updated_at = ?, synced = ?, sync_action = ?
+      WHERE location_id = ?`,
+      [
+        updates.name !== undefined ? updates.name : existing.name,
+        updates.latitude !== undefined ? updates.latitude : existing.latitude,
+        updates.longitude !== undefined ? updates.longitude : existing.longitude,
+        updates.source !== undefined ? updates.source : existing.source,
+        updates.address !== undefined ? updates.address : existing.address,
+        updates.neighborhood !== undefined ? updates.neighborhood : existing.neighborhood,
+        updates.postal_code !== undefined ? updates.postal_code : existing.postal_code,
+        updates.city !== undefined ? updates.city : existing.city,
+        updates.subdivision !== undefined ? updates.subdivision : existing.subdivision,
+        updates.region !== undefined ? updates.region : existing.region,
+        updates.country !== undefined ? updates.country : existing.country,
+        updates.mapbox_place_id !== undefined ? updates.mapbox_place_id : existing.mapbox_place_id,
+        updates.foursquare_fsq_id !== undefined ? updates.foursquare_fsq_id : existing.foursquare_fsq_id,
+        updatedAt,
+        updates.synced !== undefined ? updates.synced : 0,
+        updates.sync_action !== undefined ? updates.sync_action : 'update',
+        locationId
+      ]
+    );
+
+    return this.getLocation(locationId) as Promise<LocationEntity>;
+  }
+
+  /**
+   * Delete a location (soft delete)
+   */
+  async deleteLocation(locationId: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const now = Date.now();
+
+    await this.db.runAsync(
+      `UPDATE locations SET
+        deleted_at = ?,
+        synced = 0,
+        sync_action = 'delete'
+      WHERE location_id = ?`,
+      [now, locationId]
+    );
+  }
+
+  /**
+   * Get unsynced locations
+   */
+  async getUnsyncedLocations(): Promise<LocationEntity[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const rows = await this.db.getAllAsync<any>(
+      'SELECT * FROM locations WHERE synced = 0 ORDER BY updated_at ASC'
+    );
+
+    return rows.map(row => this.rowToLocation(row));
+  }
+
+  /**
+   * Mark location as synced
+   */
+  async markLocationSynced(locationId: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const location = await this.getLocation(locationId);
+
+    if (location && location.sync_action === 'delete') {
+      await this.db.runAsync('DELETE FROM locations WHERE location_id = ?', [locationId]);
+    } else {
+      await this.db.runAsync(
+        `UPDATE locations SET
+          synced = 1,
+          sync_action = NULL
+        WHERE location_id = ?`,
+        [locationId]
+      );
+    }
+  }
+
+  /**
+   * Convert database row to LocationEntity
+   */
+  private rowToLocation(row: any): LocationEntity {
+    return {
+      location_id: row.location_id,
+      user_id: row.user_id,
+      name: row.name,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      source: row.source,
+      address: row.address,
+      neighborhood: row.neighborhood,
+      postal_code: row.postal_code,
+      city: row.city,
+      subdivision: row.subdivision,
+      region: row.region,
+      country: row.country,
+      mapbox_place_id: row.mapbox_place_id,
+      foursquare_fsq_id: row.foursquare_fsq_id,
+      created_at: new Date(row.created_at).toISOString(),
+      updated_at: new Date(row.updated_at).toISOString(),
+      deleted_at: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
+      synced: row.synced,
+      sync_action: row.sync_action,
+    };
+  }
+
+  // ========================================
+  // CATEGORY OPERATIONS
+  // ========================================
 
   /**
    * Get all categories
@@ -937,9 +905,6 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Calculate entry_count dynamically by counting entries (excluding deleted)
-    // Exclude categories marked for deletion
-    // Filter by user_id to support multiple users
     let query = `
       SELECT
         c.*,
@@ -951,7 +916,6 @@ class LocalDatabase {
 
     const params: any[] = [];
 
-    // Add user_id filter if currentUserId is set
     if (this.currentUserId) {
       query += ` WHERE (c.sync_action IS NULL OR c.sync_action != 'delete')
         AND c.user_id = ?`;
@@ -976,7 +940,6 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Calculate entry_count dynamically by counting entries (excluding deleted)
     const row = await this.db.getFirstAsync<any>(
       `SELECT
         c.*,
@@ -1017,8 +980,8 @@ class LocalDatabase {
         category.icon || null,
         Date.parse(category.created_at),
         Date.parse(category.updated_at || category.created_at),
-        0, // Not synced yet
-        'create' // Pending create action
+        0,
+        'create'
       ]
     );
   }
@@ -1030,13 +993,11 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Only update timestamp if not provided (user edit vs sync update)
     const now = Date.now();
     const updatedAt = updates.updated_at !== undefined
       ? (typeof updates.updated_at === 'string' ? Date.parse(updates.updated_at) : updates.updated_at)
       : now;
 
-    // If synced/sync_action provided (from pull sync), use those. Otherwise mark as needing sync.
     const synced = updates.synced !== undefined ? updates.synced : 0;
     const syncAction = updates.sync_action !== undefined ? updates.sync_action : 'update';
 
@@ -1074,13 +1035,12 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Get the category to find its parent
     const category = await this.getCategory(categoryId);
     if (!category) return;
 
     const parentCategoryId = category.parent_category_id;
 
-    // Move all entries in this category to the parent category (or uncategorized if no parent)
+    // Move entries to parent
     await this.db.runAsync(
       `UPDATE entries
        SET category_id = ?, synced = 0
@@ -1088,7 +1048,7 @@ class LocalDatabase {
       [parentCategoryId, categoryId]
     );
 
-    // Move all child categories to the parent category
+    // Move child categories to parent
     await this.db.runAsync(
       `UPDATE categories
        SET parent_category_id = ?, synced = 0
@@ -1096,7 +1056,7 @@ class LocalDatabase {
       [parentCategoryId, categoryId]
     );
 
-    // Mark category for deletion
+    // Mark for deletion
     await this.db.runAsync(
       `UPDATE categories SET synced = 0, sync_action = 'delete' WHERE category_id = ?`,
       [categoryId]
@@ -1127,10 +1087,8 @@ class LocalDatabase {
     const category = await this.getCategory(categoryId);
 
     if (category && category.sync_action === 'delete') {
-      // Delete was synced, now remove from local DB
       await this.db.runAsync('DELETE FROM categories WHERE category_id = ?', [categoryId]);
     } else {
-      // Mark as synced
       await this.db.runAsync(
         `UPDATE categories SET
           synced = 1,
@@ -1157,24 +1115,24 @@ class LocalDatabase {
     );
   }
 
+  // ========================================
+  // TAG AND MENTION OPERATIONS
+  // ========================================
+
   /**
    * Get all unique tags with entry counts
-   * Returns array of {tag: string, count: number}
    */
   async getAllTags(): Promise<Array<{ tag: string; count: number }>> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Get all non-deleted entries with tags
-    const deleteFilter = this.hasDeletedAtColumn ? 'AND deleted_at IS NULL' : '';
     const rows = await this.db.getAllAsync<any>(
       `SELECT tags FROM entries
        WHERE tags IS NOT NULL
        AND tags != '[]'
-       ${deleteFilter}`
+       AND deleted_at IS NULL`
     );
 
-    // Aggregate tags and count occurrences
     const tagCounts = new Map<string, number>();
 
     rows.forEach(row => {
@@ -1191,35 +1149,30 @@ class LocalDatabase {
       }
     });
 
-    // Convert to array and sort by count (desc) then by tag name (asc)
     return Array.from(tagCounts.entries())
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => {
         if (b.count !== a.count) {
-          return b.count - a.count; // Higher counts first
+          return b.count - a.count;
         }
-        return a.tag.localeCompare(b.tag); // Alphabetical for same count
+        return a.tag.localeCompare(b.tag);
       });
   }
 
   /**
    * Get all unique mentions with entry counts
-   * Returns array of {mention: string, count: number}
    */
   async getAllMentions(): Promise<Array<{ mention: string; count: number }>> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Get all non-deleted entries with mentions
-    const deleteFilter = this.hasDeletedAtColumn ? 'AND deleted_at IS NULL' : '';
     const rows = await this.db.getAllAsync<any>(
       `SELECT mentions FROM entries
        WHERE mentions IS NOT NULL
        AND mentions != '[]'
-       ${deleteFilter}`
+       AND deleted_at IS NULL`
     );
 
-    // Aggregate mentions and count occurrences
     const mentionCounts = new Map<string, number>();
 
     rows.forEach(row => {
@@ -1236,16 +1189,19 @@ class LocalDatabase {
       }
     });
 
-    // Convert to array and sort by count (desc) then by mention name (asc)
     return Array.from(mentionCounts.entries())
       .map(([mention, count]) => ({ mention, count }))
       .sort((a, b) => {
         if (b.count !== a.count) {
-          return b.count - a.count; // Higher counts first
+          return b.count - a.count;
         }
-        return a.mention.localeCompare(b.mention); // Alphabetical for same count
+        return a.mention.localeCompare(b.mention);
       });
   }
+
+  // ========================================
+  // SYNC LOG OPERATIONS
+  // ========================================
 
   /**
    * Add a sync log entry
@@ -1259,6 +1215,8 @@ class LocalDatabase {
       entries_errors?: number;
       categories_pushed?: number;
       categories_errors?: number;
+      photos_pushed?: number;
+      photos_errors?: number;
       entries_pulled?: number;
     }
   ): Promise<void> {
@@ -1283,7 +1241,6 @@ class LocalDatabase {
       ]
     );
 
-    // Auto-cleanup old logs after adding
     await this.cleanupOldSyncLogs();
   }
 
@@ -1326,69 +1283,6 @@ class LocalDatabase {
       'DELETE FROM sync_logs WHERE timestamp < ?',
       [sevenDaysAgo]
     );
-  }
-
-  /**
-   * DEBUG: Run raw SQL query (development only)
-   */
-  async debugQuery(sql: string): Promise<any[]> {
-    await this.init();
-    if (!this.db) throw new Error('Database not initialized');
-
-    console.log('🔍 Debug query:', sql);
-    const result = await this.db.getAllAsync<any>(sql);
-    console.log('📊 Result:', JSON.stringify(result, null, 2));
-    return result;
-  }
-
-  /**
-   * Clear all data (for testing or logout)
-   */
-  async clearAllData(): Promise<void> {
-    await this.init();
-    if (!this.db) throw new Error('Database not initialized');
-
-    await this.db.execAsync(`
-      DELETE FROM photos;
-      DELETE FROM entries;
-      DELETE FROM categories;
-      DELETE FROM sync_metadata;
-      DELETE FROM sync_logs;
-    `);
-
-    console.log('🗑️ All local data cleared');
-  }
-
-  /**
-   * Run custom SQL query (for debugging)
-   */
-  async runCustomQuery(sql: string, params?: any[]): Promise<any[]> {
-    await this.init();
-    if (!this.db) throw new Error('Database not initialized');
-
-    const result = await this.db.getAllAsync(sql, params || []);
-    // Only log row count, not full data (can be massive)
-    // console.log(`📊 Query returned ${result.length} rows`);
-    return result;
-  }
-
-  /**
-   * Set current user ID for query filtering
-   * Call this after user signs in/switches accounts
-   */
-  setCurrentUser(userId: string): void {
-    if (this.currentUserId !== userId) {
-      console.log(`👤 Switched to user: ${userId}`);
-      this.currentUserId = userId;
-    }
-  }
-
-  /**
-   * Clear current user (on sign out)
-   */
-  clearCurrentUser(): void {
-    console.log('👤 Cleared current user');
-    this.currentUserId = null;
   }
 
   // ========================================
@@ -1436,8 +1330,8 @@ class LocalDatabase {
         now,
         now,
         photo.uploaded ? 1 : 0,
-        0, // Not synced yet
-        'create', // Mark for sync
+        0,
+        'create',
       ]
     );
 
@@ -1445,7 +1339,7 @@ class LocalDatabase {
   }
 
   /**
-   * Get all photos for an entry (excludes photos marked for deletion)
+   * Get all photos for an entry
    */
   async getPhotosForEntry(entryId: string): Promise<any[]> {
     await this.init();
@@ -1454,7 +1348,6 @@ class LocalDatabase {
     let query = 'SELECT * FROM photos WHERE entry_id = ? AND (sync_action IS NULL OR sync_action != ?)';
     const params: any[] = [entryId, 'delete'];
 
-    // Filter by current user if set
     if (this.currentUserId) {
       query += ' AND user_id = ?';
       params.push(this.currentUserId);
@@ -1556,9 +1449,7 @@ class LocalDatabase {
   }
 
   /**
-   * Update entry_id for all photos (used when entry is created with temp ID)
-   * This fixes the issue where photos are saved before entry creation
-   * Also renames local file paths to match new entry_id
+   * Update entry_id for all photos
    */
   async updatePhotoEntryIds(oldEntryId: string, newEntryId: string): Promise<void> {
     await this.init();
@@ -1566,7 +1457,6 @@ class LocalDatabase {
 
     console.log(`📸 updatePhotoEntryIds: ${oldEntryId} → ${newEntryId}`);
 
-    // Get all photos with the old entry_id
     const photos = await this.db.getAllAsync<any>(
       'SELECT photo_id, file_path, local_path FROM photos WHERE entry_id = ?',
       [oldEntryId]
@@ -1576,38 +1466,28 @@ class LocalDatabase {
 
     if (photos.length === 0) return;
 
-    // Import FileSystem
     const FileSystem = await import('expo-file-system/legacy');
 
-    // Update entry_id, file_path, and local_path for each photo
     for (const photo of photos) {
       console.log(`📸 Processing photo ${photo.photo_id}:`);
       console.log(`  Old path: ${photo.local_path}`);
 
-      // Update file_path to use new entry_id (Supabase path)
       const newFilePath = photo.file_path.replace(oldEntryId, newEntryId);
-
-      // Update local_path to use new entry_id (local file system path)
       let newLocalPath = photo.local_path ? photo.local_path.replace(oldEntryId, newEntryId) : null;
 
       console.log(`  New path: ${newLocalPath}`);
 
-      // If photo has a local file, rename the directory
       if (photo.local_path && newLocalPath) {
         try {
-          // Check if old file exists
           const oldFileInfo = await FileSystem.getInfoAsync(photo.local_path);
           console.log(`  Old file exists: ${oldFileInfo.exists}`);
 
           if (oldFileInfo.exists) {
-            // Get new directory path
             const newDir = newLocalPath.substring(0, newLocalPath.lastIndexOf('/'));
             console.log(`  Creating new directory: ${newDir}`);
 
-            // Create new directory
             await FileSystem.makeDirectoryAsync(newDir, { intermediates: true });
 
-            // Move file from old path to new path
             console.log(`  Moving file...`);
             await FileSystem.moveAsync({
               from: photo.local_path,
@@ -1616,7 +1496,6 @@ class LocalDatabase {
 
             console.log(`✅ Moved photo file successfully`);
 
-            // Verify file exists at new location
             const newFileInfo = await FileSystem.getInfoAsync(newLocalPath);
             console.log(`  New file exists: ${newFileInfo.exists}`);
           } else {
@@ -1624,7 +1503,6 @@ class LocalDatabase {
           }
         } catch (error) {
           console.error(`❌ Failed to move photo file ${photo.photo_id}:`, error);
-          // Continue with database update even if file move failed
         }
       }
 
@@ -1645,7 +1523,6 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Mark for deletion sync first
     await this.db.runAsync(
       'UPDATE photos SET sync_action = ?, synced = 0 WHERE photo_id = ?',
       ['delete', photoId]
@@ -1655,7 +1532,7 @@ class LocalDatabase {
   }
 
   /**
-   * Permanently delete a photo (after sync)
+   * Permanently delete a photo
    */
   async permanentlyDeletePhoto(photoId: string): Promise<void> {
     await this.init();
@@ -1666,16 +1543,7 @@ class LocalDatabase {
   }
 
   /**
-   * Clean up orphaned photos (photos whose entries no longer exist)
-   * Returns count of orphans found and marked for deletion
-   *
-   * PERFORMANCE NOTE: This is O(n) where n = total photos.
-   * Use sparingly - recommended triggers:
-   * - Manual user action (Database Info screen)
-   * - Weekly background task
-   * - After bulk entry deletions
-   *
-   * DO NOT run on every sync - it will slow down sync significantly with large photo counts.
+   * Clean up orphaned photos
    */
   async cleanupOrphanedPhotos(): Promise<number> {
     await this.init();
@@ -1683,7 +1551,6 @@ class LocalDatabase {
 
     console.log('🧹 Searching for orphaned photos...');
 
-    // Get all photos (excluding already marked for deletion)
     let query = 'SELECT * FROM photos WHERE sync_action IS NULL OR sync_action != ?';
     const params: any[] = ['delete'];
 
@@ -1696,10 +1563,8 @@ class LocalDatabase {
     let orphanCount = 0;
 
     for (const photo of photos) {
-      // Check if entry exists
       const entry = await this.getEntry(photo.entry_id);
 
-      // If entry doesn't exist or is deleted, mark photo for deletion
       if (!entry || entry.deleted_at) {
         console.log(`🗑️ Found orphaned photo ${photo.photo_id} (entry ${photo.entry_id} ${!entry ? 'not found' : 'deleted'})`);
         await this.deletePhoto(photo.photo_id);
@@ -1744,9 +1609,6 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Sync photos if:
-    // 1. Parent entry has been synced (for create/update) OR
-    // 2. Photo is marked for deletion (delete even if entry not synced or deleted)
     let query = `
       SELECT p.*
       FROM photos p
@@ -1787,6 +1649,71 @@ class LocalDatabase {
 
     const photos = await this.db.getAllAsync<any>(query, params);
     return photos;
+  }
+
+  // ========================================
+  // UTILITY OPERATIONS
+  // ========================================
+
+  /**
+   * DEBUG: Run raw SQL query
+   */
+  async debugQuery(sql: string): Promise<any[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    console.log('🔍 Debug query:', sql);
+    const result = await this.db.getAllAsync<any>(sql);
+    console.log('📊 Result:', JSON.stringify(result, null, 2));
+    return result;
+  }
+
+  /**
+   * Clear all data
+   */
+  async clearAllData(): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execAsync(`
+      DELETE FROM photos;
+      DELETE FROM entries;
+      DELETE FROM categories;
+      DELETE FROM locations;
+      DELETE FROM sync_metadata;
+      DELETE FROM sync_logs;
+    `);
+
+    console.log('🗑️ All local data cleared');
+  }
+
+  /**
+   * Run custom SQL query
+   */
+  async runCustomQuery(sql: string, params?: any[]): Promise<any[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const result = await this.db.getAllAsync(sql, params || []);
+    return result;
+  }
+
+  /**
+   * Set current user ID
+   */
+  setCurrentUser(userId: string): void {
+    if (this.currentUserId !== userId) {
+      console.log(`👤 Switched to user: ${userId}`);
+      this.currentUserId = userId;
+    }
+  }
+
+  /**
+   * Clear current user
+   */
+  clearCurrentUser(): void {
+    console.log('👤 Cleared current user');
+    this.currentUserId = null;
   }
 
   /**

@@ -36,6 +36,15 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
 
 ---
 
+## 🔧 Project Configuration
+
+**Supabase Project:**
+- Project ID: `lsszorssvkavegobmqic`
+- Dashboard: https://supabase.com/dashboard/project/lsszorssvkavegobmqic
+- Region: us-east-2
+
+---
+
 ## 🎯 Project Overview
 
 Trace is a cross-platform monorepo application (mobile/web) with shared business logic. The architecture is designed for:

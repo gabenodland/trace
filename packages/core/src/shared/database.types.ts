@@ -30,6 +30,7 @@ export type Database = {
           last_edited_device: string | null
           name: string
           parent_category_id: string | null
+          parent_id: string | null
           updated_at: string
           user_id: string
           version: number | null
@@ -49,6 +50,7 @@ export type Database = {
           last_edited_device?: string | null
           name: string
           parent_category_id?: string | null
+          parent_id?: string | null
           updated_at?: string
           user_id: string
           version?: number | null
@@ -68,6 +70,7 @@ export type Database = {
           last_edited_device?: string | null
           name?: string
           parent_category_id?: string | null
+          parent_id?: string | null
           updated_at?: string
           user_id?: string
           version?: number | null
@@ -92,6 +95,7 @@ export type Database = {
           conflict_status: string | null
           content: string
           created_at: string
+          deleted_at: string | null
           due_date: string | null
           entry_date: string | null
           entry_id: string
@@ -100,21 +104,7 @@ export type Database = {
           last_edited_by: string | null
           last_edited_device: string | null
           location_accuracy: number | null
-          location_city: string | null
-          location_country: string | null
-          location_foursquare_fsq_id: string | null
-          location_latitude: number | null
-          location_longitude: number | null
-          location_mapbox_json: Json | null
-          location_mapbox_place_id: string | null
-          location_name: string | null
-          location_name_original: string | null
-          location_name_source: string | null
-          location_neighborhood: string | null
-          location_postal_code: string | null
-          location_precision: string | null
-          location_region: string | null
-          location_subdivision: string | null
+          location_id: string | null
           mentions: string[] | null
           status: string
           tags: string[] | null
@@ -132,6 +122,7 @@ export type Database = {
           conflict_status?: string | null
           content: string
           created_at?: string
+          deleted_at?: string | null
           due_date?: string | null
           entry_date?: string | null
           entry_id?: string
@@ -140,21 +131,7 @@ export type Database = {
           last_edited_by?: string | null
           last_edited_device?: string | null
           location_accuracy?: number | null
-          location_city?: string | null
-          location_country?: string | null
-          location_foursquare_fsq_id?: string | null
-          location_latitude?: number | null
-          location_longitude?: number | null
-          location_mapbox_json?: Json | null
-          location_mapbox_place_id?: string | null
-          location_name?: string | null
-          location_name_original?: string | null
-          location_name_source?: string | null
-          location_neighborhood?: string | null
-          location_postal_code?: string | null
-          location_precision?: string | null
-          location_region?: string | null
-          location_subdivision?: string | null
+          location_id?: string | null
           mentions?: string[] | null
           status?: string
           tags?: string[] | null
@@ -172,6 +149,7 @@ export type Database = {
           conflict_status?: string | null
           content?: string
           created_at?: string
+          deleted_at?: string | null
           due_date?: string | null
           entry_date?: string | null
           entry_id?: string
@@ -180,21 +158,7 @@ export type Database = {
           last_edited_by?: string | null
           last_edited_device?: string | null
           location_accuracy?: number | null
-          location_city?: string | null
-          location_country?: string | null
-          location_foursquare_fsq_id?: string | null
-          location_latitude?: number | null
-          location_longitude?: number | null
-          location_mapbox_json?: Json | null
-          location_mapbox_place_id?: string | null
-          location_name?: string | null
-          location_name_original?: string | null
-          location_name_source?: string | null
-          location_neighborhood?: string | null
-          location_postal_code?: string | null
-          location_precision?: string | null
-          location_region?: string | null
-          location_subdivision?: string | null
+          location_id?: string | null
           mentions?: string[] | null
           status?: string
           tags?: string[] | null
@@ -211,44 +175,120 @@ export type Database = {
             referencedRelation: "categories"
             referencedColumns: ["category_id"]
           },
+          {
+            foreignKeyName: "entries_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["location_id"]
+          },
         ]
+      }
+      locations: {
+        Row: {
+          address: string | null
+          city: string | null
+          country: string | null
+          created_at: string | null
+          deleted_at: string | null
+          foursquare_fsq_id: string | null
+          latitude: number
+          location_id: string
+          longitude: number
+          mapbox_place_id: string | null
+          name: string
+          neighborhood: string | null
+          postal_code: string | null
+          region: string | null
+          source: string | null
+          subdivision: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          foursquare_fsq_id?: string | null
+          latitude: number
+          location_id?: string
+          longitude: number
+          mapbox_place_id?: string | null
+          name: string
+          neighborhood?: string | null
+          postal_code?: string | null
+          region?: string | null
+          source?: string | null
+          subdivision?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          foursquare_fsq_id?: string | null
+          latitude?: number
+          location_id?: string
+          longitude?: number
+          mapbox_place_id?: string | null
+          name?: string
+          neighborhood?: string | null
+          postal_code?: string | null
+          region?: string | null
+          source?: string | null
+          subdivision?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       photos: {
         Row: {
+          captured_at: string
           created_at: string
           entry_id: string
           file_path: string
-          file_size: number | null
+          file_size: number
           height: number | null
           mime_type: string
           photo_id: string
           position: number
+          thumbnail_path: string | null
           updated_at: string
           user_id: string
           width: number | null
         }
         Insert: {
+          captured_at?: string
           created_at?: string
           entry_id: string
           file_path: string
-          file_size?: number | null
+          file_size: number
           height?: number | null
           mime_type?: string
           photo_id?: string
           position?: number
+          thumbnail_path?: string | null
           updated_at?: string
           user_id: string
           width?: number | null
         }
         Update: {
+          captured_at?: string
           created_at?: string
           entry_id?: string
           file_path?: string
-          file_size?: number | null
+          file_size?: number
           height?: number | null
           mime_type?: string
           photo_id?: string
           position?: number
+          thumbnail_path?: string | null
           updated_at?: string
           user_id?: string
           width?: number | null
@@ -268,6 +308,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_category_path: { Args: { category_id: string }; Returns: string }
+      get_entries_for_sync: {
+        Args: { since_timestamp?: string }
+        Returns: {
+          attachments: Json
+          category_id: string
+          completed_at: string
+          content: string
+          created_at: string
+          deleted_at: string
+          due_date: string
+          entry_id: string
+          location_accuracy: number
+          location_lat: number
+          location_lng: number
+          location_name: string
+          mentions: string[]
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
       is_category_owner: { Args: { p_category_id: string }; Returns: boolean }
       is_entry_owner: { Args: { p_entry_id: string }; Returns: boolean }
     }

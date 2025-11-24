@@ -9,6 +9,11 @@ interface Category {
   full_path: string;
 }
 
+interface Location {
+  location_id: string;
+  name: string;
+}
+
 import type { EntryDisplayMode } from '../types/EntryDisplayMode';
 
 interface EntryListProps {
@@ -22,15 +27,22 @@ interface EntryListProps {
   onDelete?: (entryId: string) => void;
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
   categories?: Category[]; // Optional categories for displaying category names
+  locations?: Location[]; // Optional locations for displaying location names
   displayMode?: EntryDisplayMode; // Display mode for entry items
 }
 
-export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, onMove, onDelete, ListHeaderComponent, categories, displayMode }: EntryListProps) {
+export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, onMove, onDelete, ListHeaderComponent, categories, locations, displayMode }: EntryListProps) {
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
   // Create a lookup map for categories (using full_path)
   const categoryMap = categories?.reduce((map, cat) => {
     map[cat.category_id] = cat.full_path;
+    return map;
+  }, {} as Record<string, string>);
+
+  // Create a lookup map for locations
+  const locationMap = locations?.reduce((map, loc) => {
+    map[loc.location_id] = loc.name;
     return map;
   }, {} as Record<string, string>);
   if (isLoading) {
@@ -57,6 +69,7 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
             onMove={onMove}
             onDelete={onDelete}
             categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
+            locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
             displayMode={displayMode}
             showMenu={openMenuEntryId === item.entry_id}
             onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}
@@ -98,6 +111,7 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
           onMove={onMove}
           onDelete={onDelete}
           categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
+          locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
           displayMode={displayMode}
           showMenu={openMenuEntryId === item.entry_id}
           onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}

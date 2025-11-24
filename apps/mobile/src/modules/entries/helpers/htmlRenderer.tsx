@@ -5,7 +5,7 @@
  */
 import { useWindowDimensions, Image, TouchableOpacity, ActivityIndicator, View } from 'react-native';
 import RenderHtml from 'react-native-render-html';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { extractPhotoIds } from '@trace/core';
 import { getPhotoUri } from '../../photos/mobilePhotoApi';
 import { PhotoViewer } from '../../photos/components/PhotoViewer';
@@ -51,8 +51,9 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
     loadPhotos();
   }, [html]);
 
-  // Custom renderer for img tags with data-photo-id
-  const customRenderers = {
+  // Memoize custom renderer for img tags with data-photo-id
+  // This prevents RenderHtml from doing expensive tree rerenders
+  const customRenderers = useMemo(() => ({
     img: ({ TDefaultRenderer, ...props }: any) => {
       const photoId = props.tnode?.attributes?.['data-photo-id'];
 
@@ -129,10 +130,11 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
       // Regular img tag - use default renderer
       return <TDefaultRenderer {...props} />;
     },
-  };
+  }), [photoUris, loadingPhotos, photoIds]);
 
-  // Base styles for rendering
-  const baseStyle = {
+  // Memoize base styles for rendering
+  // This prevents RenderHtml from doing expensive tree rerenders
+  const baseStyle = useMemo(() => ({
     body: {
       fontSize: 15,
       lineHeight: 22,
@@ -160,21 +162,21 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
       marginBottom: 4,
     },
     strong: {
-      fontWeight: '600',
+      fontWeight: '600' as const,
     },
     b: {
-      fontWeight: '600',
+      fontWeight: '600' as const,
     },
     em: {
-      fontStyle: 'italic',
+      fontStyle: 'italic' as const,
     },
     i: {
-      fontStyle: 'italic',
+      fontStyle: 'italic' as const,
     },
     img: {
       marginVertical: 8,
     },
-  };
+  }), [strikethrough]);
 
   return (
     <>

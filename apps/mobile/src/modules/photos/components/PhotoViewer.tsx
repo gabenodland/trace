@@ -4,15 +4,19 @@
  * Fullscreen photo viewer with pinch-to-zoom support using react-native-image-viewing
  */
 
-import React from 'react';
-import { Alert, View, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect } from 'react';
+import { Alert, View, StyleSheet, TouchableOpacity, BackHandler } from 'react-native';
 import ImageViewing from 'react-native-image-viewing';
 import { ImageSource } from 'react-native-image-viewing/dist/@types';
 import Svg, { Circle, Path } from 'react-native-svg';
+import * as Sharing from 'expo-sharing';
 
 interface PhotoItem {
   photoId: string;
   uri: string | null;
+  width?: number | null;
+  height?: number | null;
+  fileSize?: number | null;
 }
 
 interface PhotoViewerProps {
@@ -24,6 +28,18 @@ interface PhotoViewerProps {
 }
 
 export function PhotoViewer({ visible, photos, initialIndex = 0, onClose, onDelete }: PhotoViewerProps) {
+  // Handle hardware back button when viewer is visible
+  useEffect(() => {
+    if (!visible) return;
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true; // Prevent default behavior (don't let it bubble up)
+    });
+
+    return () => backHandler.remove();
+  }, [visible, onClose]);
+
   // Convert photos to ImageViewing format
   const images: ImageSource[] = photos
     .filter(photo => photo.uri) // Only include photos with URIs
@@ -55,10 +71,57 @@ export function PhotoViewer({ visible, photos, initialIndex = 0, onClose, onDele
     );
   };
 
+  // Format file size for display
+  const formatFileSize = (bytes?: number | null): string => {
+    if (!bytes) return 'Unknown';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const handleShowInfo = (index: number) => {
+    const photo = photos.filter(p => p.uri)[index];
+    if (!photo) return;
+
+    const dimensions = photo.width && photo.height
+      ? `${photo.width} × ${photo.height} px`
+      : 'Unknown';
+    const fileSize = formatFileSize(photo.fileSize);
+
+    Alert.alert(
+      'Photo Info',
+      `Dimensions: ${dimensions}\nFile Size: ${fileSize}`,
+      [{ text: 'OK' }]
+    );
+  };
+
+  const handleShare = async (index: number) => {
+    const photo = photos.filter(p => p.uri)[index];
+    if (!photo || !photo.uri) return;
+
+    try {
+      // Check if sharing is available
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert('Error', 'Sharing is not available on this device.');
+        return;
+      }
+
+      // Share the photo - user can save to gallery from share sheet
+      await Sharing.shareAsync(photo.uri, {
+        mimeType: 'image/jpeg',
+        dialogTitle: 'Save or share photo',
+      });
+    } catch (error) {
+      console.error('Error sharing photo:', error);
+      Alert.alert('Error', 'Failed to share photo.');
+    }
+  };
+
   // Don't render if no valid photos
   if (images.length === 0) return null;
 
-  // Header with close and delete buttons
+  // Header with close, info, and delete buttons
   const HeaderComponent = ({ imageIndex }: { imageIndex: number }) => {
     return (
       <View style={styles.headerContainer}>
@@ -79,16 +142,24 @@ export function PhotoViewer({ visible, photos, initialIndex = 0, onClose, onDele
           </Svg>
         </TouchableOpacity>
 
-        {/* Delete button on right */}
-        {onDelete && (
+        {/* Right side buttons */}
+        <View style={styles.headerRightButtons}>
+          {/* Info button */}
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => handleDelete(imageIndex)}
+            onPress={() => handleShowInfo(imageIndex)}
             activeOpacity={0.7}
           >
             <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <Circle
+                cx={12}
+                cy={12}
+                r={10}
+                stroke="#ffffff"
+                strokeWidth={2}
+              />
               <Path
-                d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
+                d="M12 16v-4M12 8h.01"
                 stroke="#ffffff"
                 strokeWidth={2}
                 strokeLinecap="round"
@@ -96,7 +167,46 @@ export function PhotoViewer({ visible, photos, initialIndex = 0, onClose, onDele
               />
             </Svg>
           </TouchableOpacity>
-        )}
+
+          {/* Share button */}
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => handleShare(imageIndex)}
+            activeOpacity={0.7}
+          >
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <Circle cx={18} cy={5} r={3} stroke="#ffffff" strokeWidth={2} />
+              <Circle cx={6} cy={12} r={3} stroke="#ffffff" strokeWidth={2} />
+              <Circle cx={18} cy={19} r={3} stroke="#ffffff" strokeWidth={2} />
+              <Path
+                d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"
+                stroke="#ffffff"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </TouchableOpacity>
+
+          {/* Delete button */}
+          {onDelete && (
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => handleDelete(imageIndex)}
+              activeOpacity={0.7}
+            >
+              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     );
   };
@@ -128,9 +238,11 @@ export function PhotoViewer({ visible, photos, initialIndex = 0, onClose, onDele
       imageIndex={initialIndex}
       visible={visible}
       onRequestClose={onClose}
-      onLongPress={onDelete ? (_, index) => handleDelete(index) : undefined}
+      swipeToCloseEnabled={true}
+      doubleTapToZoomEnabled={true}
       HeaderComponent={HeaderComponent}
       FooterComponent={PaginationFooter}
+      presentationStyle="overFullScreen"
     />
   );
 }
@@ -144,6 +256,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     zIndex: 10,
+  },
+  headerRightButtons: {
+    flexDirection: 'row',
+    gap: 8,
   },
   headerButton: {
     padding: 12,

@@ -5,7 +5,7 @@
  * Shows thumbnails with tap-to-view full size functionality
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Text } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -47,6 +47,9 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
   const [viewerVisible, setViewerVisible] = useState(false);
   const [downloadingPhotos, setDownloadingPhotos] = useState<Set<string>>(new Set());
 
+  // Track which entryId+refreshKey we're currently loading to prevent duplicate loads
+  const loadingKeyRef = useRef<string | null>(null);
+
   // Load photos for this entry (reload when entryId or refreshKey changes)
   // OR use pending photos if provided (for new entries)
   useEffect(() => {
@@ -68,9 +71,16 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
 
     // Load from DB (existing entry)
     let mounted = true;
+    const loadKey = `${entryId}-${refreshKey ?? 0}`;
+
+    // Skip if we're already loading this exact key (prevents duplicate loads)
+    if (loadingKeyRef.current === loadKey) {
+      return;
+    }
 
     const loadData = async () => {
       if (!mounted) return;
+      loadingKeyRef.current = loadKey;
       await loadPhotos(mounted);
     };
 
@@ -288,10 +298,24 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
 
       <PhotoViewer
         visible={viewerVisible}
-        photos={displayPhotos.map(photo => ({
-          photoId: photo.photoId,
-          uri: photoUris[photo.photoId] || null,
-        }))}
+        photos={displayPhotos.map(photo => {
+          // For pending photos, get from photo object
+          // For DB photos, get from photos array
+          const dbPhoto = pendingPhotos === undefined
+            ? photos.find(p => p.photo_id === photo.photoId)
+            : null;
+          const pendingPhoto = pendingPhotos
+            ? pendingPhotos.find(p => p.photoId === photo.photoId)
+            : null;
+
+          return {
+            photoId: photo.photoId,
+            uri: photoUris[photo.photoId] || null,
+            width: pendingPhoto?.width ?? dbPhoto?.width,
+            height: pendingPhoto?.height ?? dbPhoto?.height,
+            fileSize: pendingPhoto?.fileSize ?? dbPhoto?.file_size,
+          };
+        })}
         initialIndex={selectedPhotoIndex}
         onClose={() => {
           setViewerVisible(false);

@@ -116,7 +116,7 @@ export function CategoriesScreen() {
     setShowMovePicker(true);
   };
 
-  const handleMoveCategorySelect = async (newParentId: string | null, _categoryName: string) => {
+  const handleMoveCategorySelect = async (newParentId: string | null, _categoryName: string | null) => {
     if (!categoryToMove) return;
 
     try {

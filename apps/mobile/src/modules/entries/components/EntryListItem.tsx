@@ -20,12 +20,13 @@ interface EntryListItemProps {
   onMove?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   categoryName?: string | null; // Category name to display
+  locationName?: string | null; // Location name to display
   displayMode?: EntryDisplayMode; // Display mode for content rendering
   showMenu?: boolean; // Whether menu is shown for this entry
   onMenuToggle?: () => void; // Toggle menu visibility
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, categoryName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, categoryName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(0);
   const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
@@ -371,8 +372,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
 
             {/* Location indicator */}
             {(entry.entry_latitude && entry.entry_longitude) && (
-              <Text style={styles.location}>
-                {entry.location_name || 'GPS'}
+              <Text style={styles.location} numberOfLines={1}>
+                {locationName || (entry.location_id ? 'Location' : 'GPS')}
               </Text>
             )}
           </View>

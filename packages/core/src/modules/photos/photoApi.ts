@@ -66,6 +66,7 @@ export async function createPhoto(input: CreatePhotoInput): Promise<Photo> {
     user_id: input.user_id,
     entry_id: input.entry_id,
     file_path: input.file_path,
+    file_size: input.file_size,
     mime_type: input.mime_type,
     position: input.position,
   };

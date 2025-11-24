@@ -26,15 +26,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
       entry_latitude: data.entry_latitude || null,
       entry_longitude: data.entry_longitude || null,
       location_accuracy: data.location_accuracy || null,
-      location_name: data.location_name || null,
-      location_name_source: data.location_name_source || null,
-      location_address: data.location_address || null,
-      location_neighborhood: data.location_neighborhood || null,
-      location_postal_code: data.location_postal_code || null,
-      location_city: data.location_city || null,
-      location_subdivision: data.location_subdivision || null,
-      location_region: data.location_region || null,
-      location_country: data.location_country || null,
+      location_id: data.location_id || null,
       status: data.status || "none",
       due_date: data.due_date || null,
     })
@@ -42,7 +34,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     .single();
 
   if (error) throw error;
-  return entry as Entry;
+  return entry as unknown as Entry;
 }
 
 /**
@@ -90,7 +82,7 @@ export async function getEntries(filter?: EntryFilter): Promise<Entry[]> {
   const { data, error } = await query;
 
   if (error) throw error;
-  return data as Entry[];
+  return data as unknown as Entry[];
 }
 
 /**
@@ -110,7 +102,7 @@ export async function getEntry(id: string): Promise<Entry> {
     .single();
 
   if (error) throw error;
-  return data as Entry;
+  return data as unknown as Entry;
 }
 
 /**
@@ -137,7 +129,7 @@ export async function updateEntry(
     .single();
 
   if (error) throw error;
-  return data as Entry;
+  return data as unknown as Entry;
 }
 
 /**

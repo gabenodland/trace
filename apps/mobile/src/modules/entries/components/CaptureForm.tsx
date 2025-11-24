@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Platform, StatusBar, Keyboard } from "react-native";
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Platform, StatusBar, Keyboard, Animated } from "react-native";
 import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState, generatePhotoPath, type Location as LocationType, locationFromEntry, locationToEntryFields } from "@trace/core";
+import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput, locationToEntryGpsFields } from "@trace/core";
+import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useCategories } from "../../categories/mobileCategoryHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
-import { usePersistedState } from "../../../shared/hooks/usePersistedState";
+import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { CategoryPicker } from "../../categories/components/CategoryPicker";
 import { BottomBar } from "../../../components/layout/BottomBar";
@@ -22,8 +23,6 @@ import { compressPhoto, savePhotoToLocalStorage, deletePhoto } from "../../photo
 import { localDB } from "../../../shared/db/localDB";
 import { syncQueue } from "../../../shared/sync/syncQueue";
 import * as Crypto from "expo-crypto";
-import type { UnsavedChangesBehavior } from "../../../shared/types/UnsavedChangesBehavior";
-import { DEFAULT_UNSAVED_CHANGES_BEHAVIOR } from "../../../shared/types/UnsavedChangesBehavior";
 
 import type { ReturnContext } from "../../../screens/EntryScreen";
 
@@ -41,11 +40,17 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   // Determine if we're editing an existing entry or creating a new one
   const isEditing = !!entryId;
 
+  // Get user settings for default GPS capture behavior
+  const { settings } = useSettings();
+
   const [title, setTitle] = useState("");
   const [content, setContent] = useState(initialContent || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [captureLocation, setCaptureLocation] = useState(!isEditing || !!initialLocation); // Default ON for new entries or when initialLocation provided, OFF for editing
+  // For new entries: use setting, for editing: use initialLocation presence
+  const [captureLocation, setCaptureLocation] = useState(
+    isEditing ? !!initialLocation : settings.captureGpsLocation
+  );
 
   // Initialize category from props for new entries, or null for editing (will be loaded from entry)
   const getInitialCategoryId = (): string | null => {
@@ -101,6 +106,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const [locationData, setLocationData] = useState<LocationType | null>(initialLocation || null);
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const [locationIconBlink, setLocationIconBlink] = useState(true);
+  const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
+  const snackbarOpacity = useRef(new Animated.Value(0)).current;
   const editorRef = useRef<any>(null);
   const titleInputRef = useRef<TextInput>(null);
   const photoCaptureRef = useRef<PhotoCaptureRef>(null);
@@ -131,11 +138,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [showMenu, setShowMenu] = useState(false);
 
-  // Unsaved changes behavior setting
-  const [unsavedChangesBehavior] = usePersistedState<UnsavedChangesBehavior>(
-    'unsaved_changes_behavior',
-    DEFAULT_UNSAVED_CHANGES_BEHAVIOR
-  );
+  // Get unsaved changes behavior from settings
+  const unsavedChangesBehavior = settings.unsavedChangesBehavior;
 
   // Track original values for change detection
   const originalValues = useRef<{
@@ -341,6 +345,24 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     setIsEditMode(true);
   };
 
+  // Show snackbar notification
+  const showSnackbar = (message: string) => {
+    setSnackbarMessage(message);
+    Animated.sequence([
+      Animated.timing(snackbarOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.delay(2000),
+      Animated.timing(snackbarOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setSnackbarMessage(null));
+  };
+
   // Handle double-tap on title to enter edit mode
   const handleTitlePress = () => {
     const now = Date.now();
@@ -420,11 +442,54 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         setIncludeTime(date.getMilliseconds() !== 100);
       }
 
-      // Load location data if available, keep toggle state reflecting what's saved
-      const location = locationFromEntry(entry);
-      if (location) {
-        setLocationData(location);
+      // Load location data if available from locations table
+      if (entry.location_id) {
+        getLocationById(entry.location_id).then(locationEntity => {
+          if (locationEntity) {
+            // Convert LocationEntity to Location type for component use
+            const location: LocationType = {
+              location_id: locationEntity.location_id, // Include ID for reuse and readOnly check
+              latitude: locationEntity.latitude,
+              longitude: locationEntity.longitude,
+              name: locationEntity.name,
+              source: (locationEntity.source as any) || 'user_custom',
+              address: locationEntity.address || null,
+              neighborhood: locationEntity.neighborhood || null,
+              postalCode: locationEntity.postal_code || null,
+              city: locationEntity.city || null,
+              subdivision: locationEntity.subdivision || null,
+              region: locationEntity.region || null,
+              country: locationEntity.country || null,
+            };
+            setLocationData(location);
+            setCaptureLocation(true);
+            // Update original values for change detection
+            if (originalValues.current) {
+              originalValues.current.locationData = location;
+            }
+          } else {
+            setLocationData(null);
+            setCaptureLocation(false);
+          }
+        }).catch(err => {
+          console.error('Failed to load location:', err);
+          setLocationData(null);
+          setCaptureLocation(false);
+        });
+      } else if (entry.entry_latitude && entry.entry_longitude) {
+        // Entry has GPS coordinates but no location_id (GPS-only entry)
+        const gpsLocation: LocationType = {
+          latitude: entry.entry_latitude,
+          longitude: entry.entry_longitude,
+          name: null,
+          source: 'user_custom',
+        };
+        setLocationData(gpsLocation);
         setCaptureLocation(true);
+        // Update original values for change detection
+        if (originalValues.current) {
+          originalValues.current.locationData = gpsLocation;
+        }
       } else {
         // No location saved - keep toggle off and clear location data
         setLocationData(null);
@@ -446,7 +511,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       }
 
       // Store original values for change detection (after all state is set)
-      const origLocation = locationFromEntry(entry);
+      // Note: locationData will be set asynchronously by the getLocationById call above
       originalValues.current = {
         title: entry.title || "",
         content: entry.content,
@@ -454,7 +519,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         status: entry.status,
         dueDate: entry.due_date,
         entryDate: entry.entry_date || entry.created_at || entryDate,
-        locationData: origLocation,
+        locationData: null, // Will be updated when location loads
         photoCount: 0, // Will be updated when photos load
       };
 
@@ -644,11 +709,29 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
     try {
       const { tags, mentions } = extractTagsAndMentions(content);
-      const locationFields = locationToEntryFields(locationData);
+      const gpsFields = locationToEntryGpsFields(locationData);
+
+      // Get or create location if we have location data
+      let location_id: string | null = null;
+      if (locationData && locationData.name) {
+        // Check if this is a saved location (has existing location_id)
+        if (locationData.location_id) {
+          // Reuse existing location
+          location_id = locationData.location_id;
+          console.log('[CaptureForm] 📍 Reusing existing location:', location_id);
+        } else {
+          // Create a new location in the locations table
+          const locationInput = locationToCreateInput(locationData);
+          console.log('[CaptureForm] 📍 Creating new location:', locationInput);
+          const savedLocation = await createLocation(locationInput);
+          location_id = savedLocation.location_id;
+          console.log('[CaptureForm] ✅ Location created with ID:', location_id);
+        }
+      }
 
       if (isEditing) {
         // Update existing entry
-        console.log('[CaptureForm] 💾 Updating entry with location data:', locationFields);
+        console.log('[CaptureForm] 💾 Updating entry with location_id:', location_id);
 
         await singleEntryMutations.updateEntry({
           title: title.trim() || null,
@@ -659,13 +742,14 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           entry_date: entryDate,
           status,
           due_date: dueDate,
-          ...locationFields,
+          location_id,
+          ...gpsFields,
         });
 
         console.log('[CaptureForm] ✅ Entry updated successfully');
       } else {
         // Create new entry
-        console.log('[CaptureForm] 💾 Saving entry with location data:', locationFields);
+        console.log('[CaptureForm] 💾 Saving entry with location_id:', location_id);
 
         const newEntry = await entryMutations.createEntry({
           title: title.trim() || null,
@@ -676,7 +760,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           category_id: categoryId,
           status,
           due_date: dueDate,
-          ...locationFields,
+          location_id,
+          ...gpsFields,
         });
 
         console.log('[CaptureForm] ✅ Entry saved successfully with ID:', newEntry.entry_id);
@@ -810,8 +895,10 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         return;
       }
 
-      // Compress photo
-      const compressed = await compressPhoto(uri);
+      // Compress photo using quality setting
+      console.log(`📸 Compressing photo with quality setting: ${settings.imageQuality}`);
+      const compressed = await compressPhoto(uri, settings.imageQuality);
+      console.log(`📸 Compressed result: ${compressed.width}x${compressed.height}, ${(compressed.file_size / 1024 / 1024).toFixed(2)} MB`);
 
       // Generate IDs
       const photoId = Crypto.randomUUID();
@@ -1231,72 +1318,119 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       <BottomBar keyboardOffset={keyboardHeight}>
         {/* Formatting Buttons - Only show in edit mode */}
         {isEditMode && (
-          <View style={styles.formatButtons}>
-            {/* Bold Button */}
-            <TouchableOpacity
-              style={styles.toolbarButton}
-              onPress={() => editorRef.current?.toggleBold()}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
-                <Path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
+          <View style={styles.formatButtonsContainer}>
+            {/* Row 1: Text formatting */}
+            <View style={styles.formatButtons}>
+              {/* Bold Button */}
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={() => editorRef.current?.toggleBold()}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
+                  <Path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </TouchableOpacity>
 
-            {/* Italic Button */}
-            <TouchableOpacity
-              style={styles.toolbarButton}
-              onPress={() => editorRef.current?.toggleItalic()}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Line x1={19} y1={4} x2={10} y2={4} strokeLinecap="round" />
-                <Line x1={14} y1={20} x2={5} y2={20} strokeLinecap="round" />
-                <Line x1={15} y1={4} x2={9} y2={20} strokeLinecap="round" />
-              </Svg>
-            </TouchableOpacity>
+              {/* Italic Button */}
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={() => editorRef.current?.toggleItalic()}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Line x1={19} y1={4} x2={10} y2={4} strokeLinecap="round" />
+                  <Line x1={14} y1={20} x2={5} y2={20} strokeLinecap="round" />
+                  <Line x1={15} y1={4} x2={9} y2={20} strokeLinecap="round" />
+                </Svg>
+              </TouchableOpacity>
 
-            {/* Bullet List Button */}
-            <TouchableOpacity
-              style={styles.toolbarButton}
-              onPress={() => editorRef.current?.toggleBulletList()}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Line x1={9} y1={6} x2={20} y2={6} strokeLinecap="round" />
-                <Line x1={9} y1={12} x2={20} y2={12} strokeLinecap="round" />
-                <Line x1={9} y1={18} x2={20} y2={18} strokeLinecap="round" />
-                <Circle cx={5} cy={6} r={1} fill="#6b7280" />
-                <Circle cx={5} cy={12} r={1} fill="#6b7280" />
-                <Circle cx={5} cy={18} r={1} fill="#6b7280" />
-              </Svg>
-            </TouchableOpacity>
+              {/* H1 Button */}
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={() => editorRef.current?.toggleHeading(1)}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Path d="M4 12h8M4 6v12M12 6v12" strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M17 12v6M17 12l2-2" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </TouchableOpacity>
 
-            {/* Indent Button */}
-            <TouchableOpacity
-              style={styles.toolbarButton}
-              onPress={() => editorRef.current?.indent()}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Path d="M3 9l4 3-4 3" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
+              {/* H2 Button */}
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={() => editorRef.current?.toggleHeading(2)}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Path d="M4 12h8M4 6v12M12 6v12" strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M15 18h5l-2.5-3c1.5-1 2-2.5 1-4-.5-1-1.5-1-2.5-1s-2 1-2 2" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </TouchableOpacity>
+            </View>
 
-            {/* Outdent Button */}
-            <TouchableOpacity
-              style={styles.toolbarButton}
-              onPress={() => editorRef.current?.outdent()}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Path d="M7 9l-4 3 4 3" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
+            {/* Row 2: Lists and indentation */}
+            <View style={styles.formatButtons}>
+              {/* Bullet List Button */}
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={() => editorRef.current?.toggleBulletList()}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Line x1={9} y1={6} x2={20} y2={6} strokeLinecap="round" />
+                  <Line x1={9} y1={12} x2={20} y2={12} strokeLinecap="round" />
+                  <Line x1={9} y1={18} x2={20} y2={18} strokeLinecap="round" />
+                  <Circle cx={5} cy={6} r={1} fill="#6b7280" />
+                  <Circle cx={5} cy={12} r={1} fill="#6b7280" />
+                  <Circle cx={5} cy={18} r={1} fill="#6b7280" />
+                </Svg>
+              </TouchableOpacity>
 
-            {/* Photo Capture Button */}
-            <PhotoCapture
-              ref={photoCaptureRef}
-              onPhotoSelected={handlePhotoSelected}
-              disabled={isSubmitting}
-            />
+              {/* Numbered List Button */}
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={() => editorRef.current?.toggleOrderedList()}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Line x1={10} y1={6} x2={21} y2={6} strokeLinecap="round" />
+                  <Line x1={10} y1={12} x2={21} y2={12} strokeLinecap="round" />
+                  <Line x1={10} y1={18} x2={21} y2={18} strokeLinecap="round" />
+                  <Path d="M4 6h1v4M3 10h3M3 14.5a1.5 1.5 0 011.5-1.5h.5l-2 3h3" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </TouchableOpacity>
+
+              {/* Checkbox List Button */}
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={() => editorRef.current?.toggleTaskList()}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Path d="M3 5h4v4H3zM3 14h4v4H3z" strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M4 7l1 1 2-2" strokeLinecap="round" strokeLinejoin="round" />
+                  <Line x1={10} y1={7} x2={21} y2={7} strokeLinecap="round" />
+                  <Line x1={10} y1={16} x2={21} y2={16} strokeLinecap="round" />
+                </Svg>
+              </TouchableOpacity>
+
+              {/* Indent Button */}
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={() => editorRef.current?.indent()}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Path d="M3 9l4 3-4 3" strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </TouchableOpacity>
+
+              {/* Outdent Button */}
+              <TouchableOpacity
+                style={styles.toolbarButton}
+                onPress={() => editorRef.current?.outdent()}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Path d="M7 9l-4 3 4 3" strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -1405,8 +1539,17 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           visible={showCategoryPicker}
           onClose={() => setShowCategoryPicker(false)}
           onSelect={(id, name) => {
+            const hadCategory = !!categoryId;
+            const isRemoving = !id;
             setCategoryId(id);
             setCategoryName(name);
+            if (isRemoving && hadCategory) {
+              showSnackbar('You removed the category');
+            } else if (hadCategory) {
+              showSnackbar('Success! You updated the category.');
+            } else {
+              showSnackbar('Success! You added the category.');
+            }
             if (!isEditMode) {
               enterEditMode();
             }
@@ -1423,7 +1566,15 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         >
           <LocationPickerComponent
             visible={showLocationPicker}
-            onClose={() => setShowLocationPicker(false)}
+            onClose={() => {
+              console.log('[CaptureForm] LocationPicker closed');
+              setShowLocationPicker(false);
+            }}
+            readOnly={(() => {
+              const isReadOnly = !isEditMode && captureLocation && !!locationData;
+              console.log('[CaptureForm] readOnly check:', { isEditMode, captureLocation, hasLocationData: !!locationData, isReadOnly });
+              return isReadOnly;
+            })()}
             onSelect={(location: LocationType | null) => {
               // If location is null (user selected "None"), clear location data
               if (location === null) {
@@ -1431,6 +1582,10 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
                 setLocationData(null);
                 setCaptureLocation(false);
                 setShowLocationPicker(false);
+                showSnackbar('You removed the location');
+                if (!isEditMode) {
+                  enterEditMode();
+                }
                 return;
               }
 
@@ -1446,9 +1601,12 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
                 subdivision: location.subdivision,
               });
 
+              // Show snackbar based on whether we're adding or updating
+              const isUpdating = !!locationData;
               setLocationData(location);
               setCaptureLocation(true);
               setShowLocationPicker(false);
+              showSnackbar(isUpdating ? 'Success! You updated the location.' : 'Success! You added the location.');
               if (!isEditMode) {
                 enterEditMode();
               }
@@ -1466,10 +1624,15 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         <SimpleDatePicker
           value={dueDate ? new Date(dueDate) : null}
           onChange={(date) => {
+            const hadDueDate = !!dueDate;
             if (date) {
               setDueDate(date.toISOString());
+              showSnackbar(hadDueDate ? 'Success! You updated the due date.' : 'Success! You added the due date.');
             } else {
               setDueDate(null);
+              if (hadDueDate) {
+                showSnackbar('You removed the due date');
+              }
             }
           }}
           onClose={() => setShowDatePicker(false)}
@@ -1554,6 +1717,20 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             setShowNativePicker(false);
           }}
         />
+      )}
+
+      {/* Photo Capture (hidden, triggered via ref) */}
+      <PhotoCapture
+        ref={photoCaptureRef}
+        showButton={false}
+        onPhotoSelected={handlePhotoSelected}
+      />
+
+      {/* Snackbar */}
+      {snackbarMessage && (
+        <Animated.View style={[styles.snackbar, { opacity: snackbarOpacity }]}>
+          <Text style={styles.snackbarText}>{snackbarMessage}</Text>
+        </Animated.View>
       )}
     </View>
   );
@@ -1731,10 +1908,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
   },
+  formatButtonsContainer: {
+    flexDirection: "column",
+    gap: 4,
+  },
   formatButtons: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
   },
   actionButtons: {
     flexDirection: "row",
@@ -1808,5 +1989,21 @@ const styles = StyleSheet.create({
   },
   datePickerButtonDangerText: {
     color: "#dc2626",
+  },
+  snackbar: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 60 : 40,
+    left: 16,
+    right: 16,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  snackbarText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+    textAlign: "center",
   },
 });

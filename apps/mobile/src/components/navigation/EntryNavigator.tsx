@@ -7,8 +7,8 @@ import { CategoryTree as CategoryTreeComponent } from "../../modules/categories/
 import { TagList } from "../../modules/entries/components/TagList";
 import { PeopleList } from "../../modules/entries/components/PeopleList";
 import { theme } from "../../shared/theme/theme";
-import { localDB } from "../../shared/db/localDB";
-import type { Entry } from "@trace/core";
+import { getLocationsWithCounts } from "../../modules/locations/mobileLocationApi";
+import type { LocationEntity } from "@trace/core";
 
 interface EntryNavigatorProps {
   visible: boolean;
@@ -19,11 +19,11 @@ interface EntryNavigatorProps {
 
 type SegmentType = "categories" | "locations" | "tags" | "mentions";
 
-// Location data structure for grouping
+// Location data structure for display
 interface LocationItem {
   name: string;
   entryCount: number;
-  locationId: string; // Unique identifier for filtering
+  locationId: string; // location_id from locations table
 }
 
 export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId }: EntryNavigatorProps) {
@@ -33,20 +33,29 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSegment, setSelectedSegment] = useState<SegmentType>("categories");
   const scrollViewRef = useRef<ScrollView>(null);
-  const [locationEntries, setLocationEntries] = useState<Entry[]>([]);
+  const [locations, setLocations] = useState<LocationItem[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
 
-  // Load entries with locations when locations tab is selected
+  // Load locations from locations table when locations tab is selected
   useEffect(() => {
     if (visible && selectedSegment === "locations") {
       const loadLocations = async () => {
         setIsLoadingLocations(true);
         try {
-          const allEntries = await localDB.getAllEntries();
-          const entriesWithLocation = allEntries.filter(
-            (entry) => entry.location_name
-          );
-          setLocationEntries(entriesWithLocation);
+          const locationsWithCounts = await getLocationsWithCounts();
+          const locationItems: LocationItem[] = locationsWithCounts.map(loc => ({
+            name: loc.name,
+            entryCount: loc.entry_count,
+            locationId: loc.location_id,
+          }));
+          // Sort by entry count (descending), then by name
+          locationItems.sort((a, b) => {
+            if (b.entryCount !== a.entryCount) {
+              return b.entryCount - a.entryCount;
+            }
+            return a.name.localeCompare(b.name);
+          });
+          setLocations(locationItems);
         } catch (error) {
           console.error("Error loading locations:", error);
         } finally {
@@ -56,35 +65,6 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
       loadLocations();
     }
   }, [visible, selectedSegment]);
-
-  // Build location list from entries
-  const locations = useMemo(() => {
-    const locationMap = new Map<string, LocationItem>();
-
-    for (const entry of locationEntries) {
-      const name = entry.location_name;
-      if (!name) continue;
-
-      // Use location_name as the unique identifier
-      const locationId = `location:${name}`;
-
-      const existing = locationMap.get(name);
-      if (existing) {
-        existing.entryCount++;
-      } else {
-        locationMap.set(name, {
-          name,
-          entryCount: 1,
-          locationId,
-        });
-      }
-    }
-
-    // Sort by name
-    return Array.from(locationMap.values()).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
-  }, [locationEntries]);
 
   // Filter locations by search
   const filteredLocations = useMemo(() => {
@@ -391,7 +371,8 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                 {!isLoadingLocations && locations.length > 0 ? (
                   <View style={styles.listWrapper}>
                     {locations.map((location) => {
-                      const isSelected = selectedCategoryId === location.locationId;
+                      const locationFilterId = `location:${location.locationId}`;
+                      const isSelected = selectedCategoryId === locationFilterId;
                       return (
                         <TouchableOpacity
                           key={location.locationId}
@@ -399,7 +380,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                             styles.categoryItem,
                             isSelected && styles.categoryItemSelected,
                           ]}
-                          onPress={() => handleSelect(location.locationId, location.name)}
+                          onPress={() => handleSelect(locationFilterId, location.name)}
                         >
                           <View style={styles.categoryContent}>
                             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
@@ -511,7 +492,8 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
 
             {/* Locations */}
             {filteredLocations.map((location) => {
-              const isSelected = selectedCategoryId === location.locationId;
+              const locationFilterId = `location:${location.locationId}`;
+              const isSelected = selectedCategoryId === locationFilterId;
               return (
                 <TouchableOpacity
                   key={location.locationId}
@@ -519,7 +501,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                     styles.categoryItem,
                     isSelected && styles.categoryItemSelected,
                   ]}
-                  onPress={() => handleSelect(location.locationId, location.name)}
+                  onPress={() => handleSelect(locationFilterId, location.name)}
                 >
                   <View style={styles.categoryContent}>
                     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>

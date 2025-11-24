@@ -38,6 +38,16 @@ export const RichTextEditor = forwardRef(({
     p + p {
       margin-top: 4px !important;
     }
+    h1 {
+      font-size: 24px !important;
+      font-weight: bold !important;
+      margin: 8px 0 4px 0 !important;
+    }
+    h2 {
+      font-size: 20px !important;
+      font-weight: bold !important;
+      margin: 6px 0 4px 0 !important;
+    }
     ul, ol {
       padding-left: 24px !important;
       margin-top: 4px !important;
@@ -45,6 +55,38 @@ export const RichTextEditor = forwardRef(({
     }
     ul ul, ol ul, ul ol, ol ol {
       padding-left: 20px !important;
+    }
+    /* Numbered list hierarchy: 1 -> a -> i -> A -> I (5 levels) */
+    ol {
+      list-style-type: decimal !important;
+    }
+    ol ol {
+      list-style-type: lower-alpha !important;
+    }
+    ol ol ol {
+      list-style-type: lower-roman !important;
+    }
+    ol ol ol ol {
+      list-style-type: upper-alpha !important;
+    }
+    ol ol ol ol ol {
+      list-style-type: upper-roman !important;
+    }
+    /* Task list (checkbox) styling */
+    ul[data-type="taskList"] {
+      padding-left: 0 !important;
+      list-style: none !important;
+    }
+    ul[data-type="taskList"] li {
+      display: flex !important;
+      align-items: flex-start !important;
+    }
+    ul[data-type="taskList"] li > label {
+      margin-right: 8px !important;
+      user-select: none !important;
+    }
+    ul[data-type="taskList"] ul[data-type="taskList"] {
+      padding-left: 24px !important;
     }
     .ProseMirror {
       -webkit-text-size-adjust: 100%;
@@ -69,8 +111,16 @@ export const RichTextEditor = forwardRef(({
     toggleBulletList: () => editor.toggleBulletList(),
     toggleOrderedList: () => editor.toggleOrderedList(),
     toggleTaskList: () => editor.toggleTaskList(),
-    indent: () => editor.sink(),
-    outdent: () => editor.lift(),
+    setHeading: (level: number) => editor.setHeading(level),
+    toggleHeading: (level: number) => editor.toggleHeading(level),
+    indent: () => {
+      // TenTap's sink() works for all list types including task lists
+      editor.sink();
+    },
+    outdent: () => {
+      // TenTap's lift() works for all list types including task lists
+      editor.lift();
+    },
     blur: () => editor.blur(),
     getHTML: () => editor.getHTML(),
     setContent: (html: string) => editor.setContent(html),

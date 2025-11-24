@@ -5,7 +5,7 @@
 
 import { localDB } from '../db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
-import { Entry } from '@trace/core';
+import { Entry, LocationEntity } from '@trace/core';
 import { AppState, AppStateStatus } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import type { QueryClient } from '@tanstack/react-query';
@@ -110,9 +110,23 @@ class SyncQueue {
             this.handleRealtimeChange(payload);
           }
         )
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+            schema: 'public',
+            table: 'locations',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+            console.log('📍 Realtime location update received:', payload.eventType);
+            // Trigger a pull sync when changes are detected
+            this.handleRealtimeChange(payload);
+          }
+        )
         .subscribe();
 
-      console.log('📡 Realtime subscription active (entries + categories + photos)');
+      console.log('📡 Realtime subscription active (entries + categories + photos + locations)');
     } catch (error) {
       console.error('❌ Failed to set up Realtime subscription:', error);
     }
@@ -306,6 +320,31 @@ class SyncQueue {
         console.log(`📤 Category push complete: ${categoryPushSuccessCount} success, ${categoryPushErrorCount} errors`);
       } else {
         console.log('✅ No category changes to push');
+      }
+
+      // STEP 1.5: Push unsynced locations to Supabase (BEFORE entries - entries reference locations)
+      let locationPushSuccessCount = 0;
+      let locationPushErrorCount = 0;
+      const unsyncedLocations = await localDB.getUnsyncedLocations();
+
+      if (unsyncedLocations.length > 0) {
+        console.log(`📍 Pushing ${unsyncedLocations.length} location changes...`);
+
+        for (const location of unsyncedLocations) {
+          try {
+            await this.syncLocation(location);
+            locationPushSuccessCount++;
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error(`❌ Failed to push location ${location.location_id}:`, errorMessage);
+            locationPushErrorCount++;
+            // Will retry on next sync trigger
+          }
+        }
+
+        console.log(`📍 Location push complete: ${locationPushSuccessCount} success, ${locationPushErrorCount} errors`);
+      } else {
+        console.log('✅ No location changes to push');
       }
 
       // STEP 2: Push local entry CREATE/UPDATE to Supabase (BEFORE photos)
@@ -613,20 +652,9 @@ class SyncQueue {
         // GPS coordinates (where user was when creating entry)
         entry_latitude: entry.entry_latitude,
         entry_longitude: entry.entry_longitude,
-        // Tagged location coordinates (selected POI/place)
-        location_latitude: entry.location_latitude,
-        location_longitude: entry.location_longitude,
         location_accuracy: entry.location_accuracy,
-        // Location name and hierarchy
-        location_name: entry.location_name,
-        location_name_source: entry.location_name_source,
-        location_neighborhood: entry.location_neighborhood,
-        location_postal_code: entry.location_postal_code,
-        location_city: entry.location_city,
-        location_subdivision: entry.location_subdivision,
-        location_region: entry.location_region,
-        location_country: entry.location_country,
-        location_address: entry.location_address,
+        // Location reference (points to locations table)
+        location_id: entry.location_id,
         status: entry.status,
         due_date: entry.due_date && (typeof entry.due_date === 'number'
           ? new Date(entry.due_date).toISOString()
@@ -745,6 +773,7 @@ class SyncQueue {
             .from('entries')
             .update({
               deleted_at: entry.deleted_at || new Date().toISOString(),
+              location_id: null, // Release the location when deleting
             })
             .eq('entry_id', entry.entry_id);
 
@@ -833,6 +862,70 @@ class SyncQueue {
       // Enhance error message with context
       if (error instanceof Error) {
         throw new Error(`Category sync failed (${category.sync_action}): ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Sync a single location to Supabase
+   */
+  private async syncLocation(location: LocationEntity): Promise<void> {
+    try {
+      const { sync_action } = location;
+
+      // Prepare data for Supabase (exclude sync tracking fields)
+      const supabaseData = {
+        location_id: location.location_id,
+        user_id: location.user_id,
+        name: location.name,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        source: location.source,
+        address: location.address,
+        neighborhood: location.neighborhood,
+        postal_code: location.postal_code,
+        city: location.city,
+        subdivision: location.subdivision,
+        region: location.region,
+        country: location.country,
+        mapbox_place_id: location.mapbox_place_id,
+        foursquare_fsq_id: location.foursquare_fsq_id,
+        created_at: location.created_at,
+        updated_at: location.updated_at,
+        deleted_at: location.deleted_at,
+      };
+
+      if (sync_action === 'create' || sync_action === 'update') {
+        // Upsert to Supabase
+        const { error } = await supabase
+          .from('locations')
+          .upsert(supabaseData, {
+            onConflict: 'location_id',
+          });
+
+        if (error) {
+          throw new Error(`Supabase upsert failed: ${error.message} (code: ${error.code || 'unknown'})`);
+        }
+
+      } else if (sync_action === 'delete') {
+        // Soft delete from Supabase
+        const { error } = await supabase
+          .from('locations')
+          .update({ deleted_at: location.deleted_at || new Date().toISOString() })
+          .eq('location_id', location.location_id);
+
+        if (error) {
+          throw new Error(`Supabase delete failed: ${error.message} (code: ${error.code || 'unknown'})`);
+        }
+      }
+
+      // Mark as synced in local DB
+      await localDB.markLocationSynced(location.location_id);
+    } catch (error) {
+      // Enhance error message with context
+      if (error instanceof Error) {
+        throw new Error(`Location sync failed (${location.sync_action}): ${error.message}`);
       }
       throw error;
     }
@@ -1006,20 +1099,9 @@ class SyncQueue {
             // GPS coordinates (where user was when creating entry)
             entry_latitude: (remoteEntry as any).entry_latitude || null,
             entry_longitude: (remoteEntry as any).entry_longitude || null,
-            // Tagged location coordinates (selected POI/place)
-            location_latitude: (remoteEntry as any).location_latitude || null,
-            location_longitude: (remoteEntry as any).location_longitude || null,
             location_accuracy: (remoteEntry as any).location_accuracy || null,
-            // Location name and hierarchy
-            location_name: (remoteEntry as any).location_name || null,
-            location_name_source: (remoteEntry as any).location_name_source || null,
-            location_neighborhood: (remoteEntry as any).location_neighborhood || null,
-            location_postal_code: (remoteEntry as any).location_postal_code || null,
-            location_city: (remoteEntry as any).location_city || null,
-            location_subdivision: (remoteEntry as any).location_subdivision || null,
-            location_region: (remoteEntry as any).location_region || null,
-            location_country: (remoteEntry as any).location_country || null,
-            location_address: (remoteEntry as any).location_address || null,
+            // Location reference (points to locations table)
+            location_id: (remoteEntry as any).location_id || null,
             status: (remoteEntry.status as "none" | "incomplete" | "in_progress" | "complete") || 'none',
             due_date: remoteEntry.due_date,
             completed_at: remoteEntry.completed_at,

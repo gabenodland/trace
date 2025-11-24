@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { View, StyleSheet, Alert } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
-import { useAuthState } from "@trace/core";
+import { useAuthState, type LocationEntity } from "@trace/core";
 import { useEntries, useEntry, MobileEntryFilter } from "../modules/entries/mobileEntryHooks";
-import { getEntryLocationByName } from "../modules/entries/mobileEntryApi";
+import { getLocation as getLocationById } from "../modules/locations/mobileLocationApi";
 import { type Location as LocationType } from "@trace/core";
+import { localDB } from "../shared/db/localDB";
 import { useCategories, getAllChildCategoryIds } from "../modules/categories/mobileCategoryHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
@@ -48,6 +49,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
   const [displayMode, setDisplayMode] = usePersistedState<EntryDisplayMode>('@entryListDisplayMode', DEFAULT_DISPLAY_MODE);
   const [sortMode, setSortMode] = usePersistedState<EntrySortMode>('@entryListSortMode', DEFAULT_SORT_MODE);
   const [orderMode, setOrderMode] = usePersistedState<EntrySortOrder>('@entryListOrderMode', DEFAULT_SORT_ORDER);
+  const [locations, setLocations] = useState<LocationEntity[]>([]);
 
   // Update category when returning from entry screen
   useEffect(() => {
@@ -56,6 +58,19 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
       setSelectedCategoryName(returnCategoryName);
     }
   }, [returnCategoryId, returnCategoryName]);
+
+  // Fetch locations for displaying location names
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        const allLocations = await localDB.getAllLocations();
+        setLocations(allLocations);
+      } catch (error) {
+        console.error('Failed to fetch locations:', error);
+      }
+    };
+    fetchLocations();
+  }, []);
 
   console.log("EntryListScreen - selectedCategoryName:", selectedCategoryName);
 
@@ -103,12 +118,12 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
       return [{ id: "all", label: "Home" }, { id: selectedCategoryId, label: `@${mention}` }];
     } else if (typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith("location:")) {
       // Location filter - show location in breadcrumb with icon
-      const locationName = selectedCategoryId.substring(9);
+      // Use selectedCategoryName which contains the actual location name
       return [
         { id: "all", label: "Home" },
         {
           id: selectedCategoryId,
-          label: locationName,
+          label: selectedCategoryName || "Location",
           icon: (
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
@@ -121,7 +136,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
 
     // Default: just All
     return [{ id: "all", label: "All" }];
-  }, [selectedCategoryId, categories]);
+  }, [selectedCategoryId, selectedCategoryName, categories]);
 
   // Get child category IDs for hierarchical filtering
   const childCategoryIds = useMemo(() => {
@@ -164,9 +179,9 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     const mention = selectedCategoryId.substring(8); // Remove "mention:" prefix
     categoryFilter = { mention };
   } else if (typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('location:')) {
-    // Filter by specific location
-    const locationName = selectedCategoryId.substring(9); // Remove "location:" prefix
-    categoryFilter = { location_name: locationName };
+    // Filter by specific location using location_id
+    const locationId = selectedCategoryId.substring(9); // Remove "location:" prefix
+    categoryFilter = { location_id: locationId };
   } else if (selectedCategoryId !== null) {
     // Specific category ID - include all children hierarchically
     categoryFilter = {
@@ -222,23 +237,23 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         const mention = selectedCategoryId.substring(8);
         initialContent = `@${mention} `;
       } else if (selectedCategoryId.startsWith('location:')) {
-        // Get location data from an existing entry with this location name
-        const locationName = selectedCategoryId.substring(9);
-        const locationData = await getEntryLocationByName(locationName);
-        if (locationData && locationData.location_latitude !== null && locationData.location_longitude !== null) {
+        // Get location data from the locations table
+        const locationId = selectedCategoryId.substring(9);
+        const locationEntity = await getLocationById(locationId);
+        if (locationEntity) {
           initialLocation = {
-            name: locationData.location_name,
-            latitude: locationData.location_latitude,
-            longitude: locationData.location_longitude,
-            accuracy: locationData.location_accuracy,
-            source: locationData.location_name_source as LocationType['source'] || 'user_custom',
-            address: locationData.location_address,
-            neighborhood: locationData.location_neighborhood,
-            postalCode: locationData.location_postal_code,
-            city: locationData.location_city,
-            subdivision: locationData.location_subdivision,
-            region: locationData.location_region,
-            country: locationData.location_country,
+            name: locationEntity.name,
+            latitude: locationEntity.latitude,
+            longitude: locationEntity.longitude,
+            accuracy: null,
+            source: locationEntity.source as LocationType['source'] || 'user_custom',
+            address: locationEntity.address,
+            neighborhood: locationEntity.neighborhood,
+            postalCode: locationEntity.postal_code,
+            city: locationEntity.city,
+            subdivision: locationEntity.subdivision,
+            region: locationEntity.region,
+            country: locationEntity.country,
           };
         }
       }
@@ -315,7 +330,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     setShowMoveCategoryPicker(true);
   };
 
-  const handleMoveCategorySelect = async (categoryId: string | null, categoryName: string) => {
+  const handleMoveCategorySelect = async (categoryId: string | null, categoryName: string | null) => {
     if (!entryToMove) return;
 
     try {
@@ -397,6 +412,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         onMove={handleMoveEntry}
         onDelete={handleDeleteEntry}
         categories={categories}
+        locations={locations}
         displayMode={displayMode}
       />
 

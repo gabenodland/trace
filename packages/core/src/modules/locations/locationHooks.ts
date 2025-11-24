@@ -64,13 +64,13 @@ export function useNearbyPOIs(
       try {
         console.log('[useNearbyPOIs] queryFn executing...');
         const response = await locationApi.searchNearbyPOIs(request!);
-        console.log('[useNearbyPOIs] Converting', response.results.length, 'results to POI items');
+        console.log('[useNearbyPOIs] Received', response.results.length, 'results from API');
+
+        // Note: Quality filtering (stats, popularity, rating) requires premium API tier
+        // For now, return all results - may add filtering later if premium access is enabled
 
         // Convert Foursquare places to POI items
-        const pois = response.results.map((place, index) => {
-          console.log(`[useNearbyPOIs] Converting place ${index + 1}/${response.results.length}`);
-          return locationHelpers.foursquareToPOI(place);
-        });
+        const pois = response.results.map(place => locationHelpers.foursquareToPOI(place));
 
         console.log('[useNearbyPOIs] ✅ Successfully converted', pois.length, 'POIs');
         return pois;

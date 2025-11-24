@@ -7,18 +7,17 @@ import { SubBar } from "../components/layout/SubBar";
 import { localDB } from "../shared/db/localDB";
 import Svg, { Path, Circle } from "react-native-svg";
 import { theme } from "../shared/theme/theme";
-import type { Entry } from "@trace/core";
+import type { LocationEntity } from "@trace/core";
 
 interface LocationNode {
   name: string;
-  level: "country" | "region" | "subdivision" | "city" | "neighborhood" | "place";
+  level: "country" | "region" | "city" | "neighborhood" | "place";
   entryCount: number;
   children: LocationNode[];
   // Location filter data for navigation
   filter: {
     country?: string;
     region?: string;
-    subdivision?: string;
     city?: string;
     neighborhood?: string;
     placeName?: string;
@@ -29,43 +28,40 @@ export function LocationsScreen() {
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
 
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const [locations, setLocations] = useState<Array<LocationEntity & { entry_count: number }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Load entries with location data
+  // Load locations with entry counts
   useEffect(() => {
-    const loadEntries = async () => {
+    const loadLocations = async () => {
       try {
         setIsLoading(true);
-        const allEntries = await localDB.getAllEntries();
-        // Filter entries that have location data
-        const entriesWithLocation = allEntries.filter(
-          (entry) => entry.location_country || entry.location_name
-        );
-        setEntries(entriesWithLocation);
+        const allLocations = await localDB.getLocationsWithCounts();
+        setLocations(allLocations);
       } catch (error) {
-        console.error("Error loading entries for locations:", error);
+        console.error("Error loading locations:", error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadEntries();
+    loadLocations();
   }, []);
 
-  // Build location tree from entries
+  // Build location tree from locations
   const locationTree = useMemo(() => {
     const tree: LocationNode[] = [];
     const countryMap = new Map<string, LocationNode>();
 
-    for (const entry of entries) {
-      const country = entry.location_country || "Unknown Location";
-      const region = entry.location_region;
-      const subdivision = entry.location_subdivision;
-      const city = entry.location_city;
-      const neighborhood = entry.location_neighborhood;
-      const placeName = entry.location_name;
+    for (const location of locations) {
+      const country = location.country || "Unknown Location";
+      const region = location.region;
+      const subdivision = location.subdivision;
+      const city = location.city;
+      const neighborhood = location.neighborhood;
+      const placeName = location.name;
+      const entryCount = location.entry_count || 0;
 
       // Get or create country node
       let countryNode = countryMap.get(country);
@@ -80,33 +76,27 @@ export function LocationsScreen() {
         countryMap.set(country, countryNode);
         tree.push(countryNode);
       }
-      countryNode.entryCount++;
+      countryNode.entryCount += entryCount;
 
       // Build deeper levels
       let currentNode = countryNode;
-      let currentFilter = { country };
+      let currentFilter: LocationNode["filter"] = { country };
 
       if (region) {
         currentNode = getOrCreateChild(currentNode, region, "region", {
           ...currentFilter,
           region,
-        });
+        }, entryCount);
         currentFilter = { ...currentFilter, region };
       }
 
-      if (subdivision) {
-        currentNode = getOrCreateChild(currentNode, subdivision, "subdivision", {
-          ...currentFilter,
-          subdivision,
-        });
-        currentFilter = { ...currentFilter, subdivision };
-      }
+      // Skip subdivision (county) level - go directly from region to city
 
       if (city) {
         currentNode = getOrCreateChild(currentNode, city, "city", {
           ...currentFilter,
           city,
-        });
+        }, entryCount);
         currentFilter = { ...currentFilter, city };
       }
 
@@ -114,17 +104,17 @@ export function LocationsScreen() {
         currentNode = getOrCreateChild(currentNode, neighborhood, "neighborhood", {
           ...currentFilter,
           neighborhood,
-        });
+        }, entryCount);
         currentFilter = { ...currentFilter, neighborhood };
       }
 
       // Only create place node if placeName is different from the current node's name
       // This avoids redundant nesting like "Coffee Shop > Coffee Shop"
       if (placeName && placeName !== currentNode.name) {
-        currentNode = getOrCreateChild(currentNode, placeName, "place", {
+        getOrCreateChild(currentNode, placeName, "place", {
           ...currentFilter,
           placeName,
-        });
+        }, entryCount);
       }
     }
 
@@ -132,7 +122,7 @@ export function LocationsScreen() {
     sortLocationTree(tree);
 
     return tree;
-  }, [entries]);
+  }, [locations]);
 
   // Filter locations by search
   const filteredTree = useMemo(() => {
@@ -238,7 +228,8 @@ function getOrCreateChild(
   parent: LocationNode,
   name: string,
   level: LocationNode["level"],
-  filter: LocationNode["filter"]
+  filter: LocationNode["filter"],
+  entryCount: number = 1
 ): LocationNode {
   let child = parent.children.find((c) => c.name === name);
   if (!child) {
@@ -251,7 +242,7 @@ function getOrCreateChild(
     };
     parent.children.push(child);
   }
-  child.entryCount++;
+  child.entryCount += entryCount;
   return child;
 }
 
@@ -305,7 +296,6 @@ function LocationTreeNode({ node, depth, searchQuery, navigate }: LocationTreeNo
           </Svg>
         );
       case "region":
-      case "subdivision":
         return (
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
             <Path d="M3 21h18M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7H3l2-4h14l2 4M5 21V10.85M19 21V10.85M9 21v-4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4" strokeLinecap="round" strokeLinejoin="round" />

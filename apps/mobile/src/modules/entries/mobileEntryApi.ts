@@ -51,20 +51,9 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     // GPS coordinates (where user was when creating entry)
     entry_latitude: data.entry_latitude || null,
     entry_longitude: data.entry_longitude || null,
-    // Tagged location coordinates (selected POI/place)
-    location_latitude: data.location_latitude || null,
-    location_longitude: data.location_longitude || null,
     location_accuracy: data.location_accuracy || null,
-    // Location name and hierarchy
-    location_name: data.location_name || null,
-    location_name_source: data.location_name_source || null,
-    location_neighborhood: data.location_neighborhood || null,
-    location_postal_code: data.location_postal_code || null,
-    location_city: data.location_city || null,
-    location_subdivision: data.location_subdivision || null,
-    location_region: data.location_region || null,
-    location_country: data.location_country || null,
-    location_address: data.location_address || null,
+    // Location reference (points to locations table)
+    location_id: data.location_id || null,
     status: data.status || 'none',
     due_date: data.due_date || null,
     completed_at: null,
@@ -190,42 +179,4 @@ export async function getTags(): Promise<Array<{ tag: string; count: number }>> 
  */
 export async function getMentions(): Promise<Array<{ mention: string; count: number }>> {
   return await localDB.getAllMentions();
-}
-
-/**
- * Get location data from an entry by location name
- * Returns the first entry found with that location_name
- */
-export async function getEntryLocationByName(locationName: string): Promise<{
-  location_latitude: number | null;
-  location_longitude: number | null;
-  location_accuracy: number | null;
-  location_name: string | null;
-  location_name_source: string | null;
-  location_address: string | null;
-  location_neighborhood: string | null;
-  location_postal_code: string | null;
-  location_city: string | null;
-  location_subdivision: string | null;
-  location_region: string | null;
-  location_country: string | null;
-} | null> {
-  const entries = await localDB.getAllEntries({ location_name: locationName });
-  if (entries.length === 0) return null;
-
-  const entry = entries[0];
-  return {
-    location_latitude: entry.location_latitude || null,
-    location_longitude: entry.location_longitude || null,
-    location_accuracy: entry.location_accuracy || null,
-    location_name: entry.location_name || null,
-    location_name_source: entry.location_name_source || null,
-    location_address: entry.location_address || null,
-    location_neighborhood: entry.location_neighborhood || null,
-    location_postal_code: entry.location_postal_code || null,
-    location_city: entry.location_city || null,
-    location_subdivision: entry.location_subdivision || null,
-    location_region: entry.location_region || null,
-    location_country: entry.location_country || null,
-  };
 }

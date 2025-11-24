@@ -46,6 +46,7 @@ export interface MapboxFeature {
   text: string;                  // Place name
   place_name: string;            // Full formatted address
   center: [number, number];      // [longitude, latitude]
+  bbox?: [number, number, number, number]; // [minLon, minLat, maxLon, maxLat]
   geometry: {
     type: 'Point';
     coordinates: [number, number]; // [longitude, latitude]
@@ -118,6 +119,20 @@ export interface FoursquarePlace {
     };
   }>;
   distance?: number;             // Distance from search point (meters)
+  // Quality fields for filtering low-quality POIs
+  popularity?: number;           // 0-1 scale based on foot traffic
+  rating?: number;               // 0-10 based on user votes
+  verified?: boolean;            // Place claimed by owner
+  price?: number;                // 1-4 price tier
+  stats?: {
+    total_photos?: number;
+    total_ratings?: number;
+    total_tips?: number;
+  };
+  chains?: Array<{
+    id: string;
+    name: string;
+  }>;
 }
 
 /**
@@ -191,6 +206,9 @@ export interface LocationData {
  * This is the canonical type passed between LocationPicker and CaptureForm
  */
 export interface Location {
+  // Database ID (if this location was previously saved)
+  location_id?: string;
+
   // Display coordinates (respecting privacy level)
   latitude: number;
   longitude: number;
@@ -222,6 +240,53 @@ export interface Location {
 
   // Full Mapbox response (temporary, for privacy level selection)
   mapboxJson?: MapboxReverseGeocodeResponse | null;
+}
+
+/**
+ * Location entity stored in database (locations table)
+ * This is the canonical storage format for locations
+ */
+export interface LocationEntity {
+  location_id: string;
+  user_id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  source: string | null; // 'mapbox_poi', 'foursquare', 'user_custom', 'gps'
+  address: string | null;
+  neighborhood: string | null;
+  postal_code: string | null;
+  city: string | null;
+  subdivision: string | null;
+  region: string | null;
+  country: string | null;
+  mapbox_place_id: string | null;
+  foursquare_fsq_id: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+  // Sync tracking fields (mobile only)
+  synced?: number;
+  sync_action?: 'create' | 'update' | 'delete' | null;
+}
+
+/**
+ * Input for creating a new location
+ */
+export interface CreateLocationInput {
+  name: string;
+  latitude: number;
+  longitude: number;
+  source?: string;
+  address?: string | null;
+  neighborhood?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  subdivision?: string | null;
+  region?: string | null;
+  country?: string | null;
+  mapbox_place_id?: string | null;
+  foursquare_fsq_id?: string | null;
 }
 
 /**
@@ -260,6 +325,7 @@ export interface POIItem {
   longitude: number;
   // Location hierarchy (from API response)
   city?: string;
+  subdivision?: string;
   region?: string;
   country?: string;
   postalCode?: string;
@@ -377,76 +443,53 @@ export function createEmptyLocation(): Location {
 }
 
 /**
- * Convert Entry database fields to Location object
- * Prioritizes location_latitude/longitude (tagged location) over entry_latitude/longitude (GPS capture)
+ * Convert LocationEntity (database) to Location object (component communication)
  */
-export function locationFromEntry(entry: {
-  entry_latitude?: number | null;
-  entry_longitude?: number | null;
-  location_latitude?: number | null;
-  location_longitude?: number | null;
-  location_accuracy?: number | null;
-  location_name?: string | null;
-  location_name_source?: string | null;
-  location_address?: string | null;
-  location_neighborhood?: string | null;
-  location_postal_code?: string | null;
-  location_city?: string | null;
-  location_subdivision?: string | null;
-  location_region?: string | null;
-  location_country?: string | null;
-}): Location | null {
-  // Check if location data exists - prioritize tagged location, fallback to GPS
-  const hasLocation = (entry.location_latitude && entry.location_longitude) ||
-                      (entry.entry_latitude && entry.entry_longitude);
-
-  if (!hasLocation) return null;
-
-  // Use location_latitude/longitude (tagged location) if set, otherwise fallback to entry GPS
-  const displayLat = entry.location_latitude ?? entry.entry_latitude!;
-  const displayLon = entry.location_longitude ?? entry.entry_longitude!;
-
+export function locationFromEntity(entity: LocationEntity): Location {
   return {
-    // Display coordinates (tagged location respecting privacy, or GPS if not tagged)
-    latitude: displayLat,
-    longitude: displayLon,
-    // Original GPS coordinates (for LocationPicker to know where entry was created)
-    originalLatitude: entry.entry_latitude ?? undefined,
-    originalLongitude: entry.entry_longitude ?? undefined,
-    accuracy: entry.location_accuracy,
-    name: entry.location_name || null,
-    source: (entry.location_name_source as LocationNameSource) || 'user_custom',
-    address: entry.location_address || null,
-    neighborhood: entry.location_neighborhood || null,
-    postalCode: entry.location_postal_code || null,
-    city: entry.location_city || null,
-    subdivision: entry.location_subdivision || null,
-    region: entry.location_region || null,
-    country: entry.location_country || null,
+    latitude: entity.latitude,
+    longitude: entity.longitude,
+    name: entity.name,
+    source: (entity.source as LocationNameSource) || 'user_custom',
+    address: entity.address || null,
+    neighborhood: entity.neighborhood || null,
+    postalCode: entity.postal_code || null,
+    city: entity.city || null,
+    subdivision: entity.subdivision || null,
+    region: entity.region || null,
+    country: entity.country || null,
   };
 }
 
 /**
- * Convert Location object to Entry database fields
- * Returns object with entry_latitude/entry_longitude and location_* fields
+ * Convert Location object to CreateLocationInput for database insertion
  */
-export function locationToEntryFields(location: Location | null) {
+export function locationToCreateInput(location: Location): CreateLocationInput {
+  return {
+    name: location.name || 'Unknown Location',
+    latitude: location.latitude,
+    longitude: location.longitude,
+    source: location.source,
+    address: location.address,
+    neighborhood: location.neighborhood,
+    postal_code: location.postalCode,
+    city: location.city,
+    subdivision: location.subdivision,
+    region: location.region,
+    country: location.country,
+  };
+}
+
+/**
+ * Convert Location object to entry GPS fields
+ * Returns object with entry_latitude/entry_longitude for GPS capture
+ */
+export function locationToEntryGpsFields(location: Location | null) {
   if (!location) {
     return {
       entry_latitude: null,
       entry_longitude: null,
-      location_latitude: null,
-      location_longitude: null,
       location_accuracy: null,
-      location_name: null,
-      location_name_source: null,
-      location_address: null,
-      location_neighborhood: null,
-      location_postal_code: null,
-      location_city: null,
-      location_subdivision: null,
-      location_region: null,
-      location_country: null,
     };
   }
 
@@ -454,18 +497,6 @@ export function locationToEntryFields(location: Location | null) {
     // GPS coordinates (where user was when creating entry - original exact coordinates)
     entry_latitude: location.originalLatitude ?? location.latitude,
     entry_longitude: location.originalLongitude ?? location.longitude,
-    // Tagged location coordinates (respecting privacy level)
-    location_latitude: location.latitude,
-    location_longitude: location.longitude,
-    location_accuracy: location.accuracy,
-    location_name: location.name,
-    location_name_source: location.source,
-    location_address: location.address,
-    location_neighborhood: location.neighborhood,
-    location_postal_code: location.postalCode,
-    location_city: location.city,
-    location_subdivision: location.subdivision,
-    location_region: location.region,
-    location_country: location.country,
+    location_accuracy: location.accuracy ?? null,
   };
 }

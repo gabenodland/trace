@@ -8,10 +8,10 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
-import { supabase } from '@trace/core';
+import { supabase, IMAGE_QUALITY_PRESETS } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
 import { generatePhotoPath, generateThumbnailPath, getExtensionFromMimeType } from '@trace/core';
-import type { CompressedPhoto } from '@trace/core';
+import type { CompressedPhoto, ImageQuality } from '@trace/core';
 
 /**
  * Request camera permissions
@@ -31,6 +31,9 @@ export async function requestGalleryPermissions(): Promise<boolean> {
 
 /**
  * Launch camera to capture a photo
+ * Uses quality 1 to get full resolution - compression happens later in compressPhoto()
+ * Note: On Android, the camera app may still compress images. For true full quality,
+ * users may need to use the gallery picker with photos taken by the native camera app.
  */
 export async function capturePhoto(): Promise<{ uri: string; width: number; height: number } | null> {
   const hasPermission = await requestCameraPermissions();
@@ -40,7 +43,8 @@ export async function capturePhoto(): Promise<{ uri: string; width: number; heig
 
   const result = await ImagePicker.launchCameraAsync({
     allowsEditing: false,
-    quality: 0.8,
+    quality: 1, // Full quality - compression is handled by compressPhoto() based on user setting
+    exif: true, // Preserve EXIF data
   });
 
   if (result.canceled) {
@@ -57,6 +61,8 @@ export async function capturePhoto(): Promise<{ uri: string; width: number; heig
 
 /**
  * Pick photo from gallery
+ * Uses quality 1 to get full resolution - compression happens later in compressPhoto()
+ * This is the best way to get true full quality - take photo with native camera app, then import here
  */
 export async function pickPhotoFromGallery(): Promise<{ uri: string; width: number; height: number } | null> {
   const hasPermission = await requestGalleryPermissions();
@@ -66,7 +72,8 @@ export async function pickPhotoFromGallery(): Promise<{ uri: string; width: numb
 
   const result = await ImagePicker.launchImageLibraryAsync({
     allowsEditing: false,
-    quality: 0.8,
+    quality: 1, // Full quality - compression is handled by compressPhoto() based on user setting
+    exif: true, // Preserve EXIF data and original quality
   });
 
   if (result.canceled) {
@@ -82,14 +89,51 @@ export async function pickPhotoFromGallery(): Promise<{ uri: string; width: numb
 }
 
 /**
- * Compress and resize photo
- * Target: 1280px max width, 70% quality
+ * Compress and resize photo based on quality setting
+ * @param uri - Source image URI
+ * @param quality - Quality preset ('full' | 'high' | 'standard' | 'small')
  */
-export async function compressPhoto(uri: string): Promise<CompressedPhoto> {
+export async function compressPhoto(uri: string, quality: ImageQuality = 'standard'): Promise<CompressedPhoto> {
+  const preset = IMAGE_QUALITY_PRESETS[quality];
+
+  // For full quality, skip manipulation entirely to preserve original quality
+  if (quality === 'full') {
+    // Get original file info
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    const size = fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0;
+
+    // Get image dimensions using ImageManipulator without any transforms
+    // This is needed because we need to know the width/height
+    const infoResult = await ImageManipulator.manipulateAsync(
+      uri,
+      [], // No transforms - just get info
+      { format: ImageManipulator.SaveFormat.JPEG } // Temporary, we won't use this URI
+    );
+
+    // Return original URI - no compression or conversion
+    return {
+      uri: uri, // Use original file
+      width: infoResult.width,
+      height: infoResult.height,
+      file_size: size,
+      mime_type: uri.toLowerCase().includes('.heic') ? 'image/heic' :
+                 uri.toLowerCase().includes('.png') ? 'image/png' : 'image/jpeg',
+    };
+  }
+
+  // Build manipulation actions for other quality levels
+  const actions: ImageManipulator.Action[] = [];
+
+  // Resize if maxWidth is set
+  if (preset.maxWidth !== null) {
+    actions.push({ resize: { width: preset.maxWidth } });
+  }
+
+  // Compress and convert to JPEG
   const manipResult = await ImageManipulator.manipulateAsync(
     uri,
-    [{ resize: { width: 1280 } }], // Resize to max 1280px width (maintains aspect ratio)
-    { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+    actions,
+    { compress: preset.compress, format: ImageManipulator.SaveFormat.JPEG }
   );
 
   // Get file size
