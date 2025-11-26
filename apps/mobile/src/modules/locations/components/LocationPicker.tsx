@@ -465,10 +465,39 @@ export function LocationPicker({ visible, onClose, onSelect, initialLocation, re
         setUI(prev => ({ ...prev, editableNameInput: enrichedLocation.name || '' }));
       }
 
+      // If in quick select mode, auto-complete the selection
+      if (ui.quickSelectMode && enrichedLocation.name) {
+        console.log('[LocationPicker] 🚀 Quick select mode - auto-completing selection');
+
+        const finalLocation: LocationType = {
+          latitude: enrichedLocation.latitude,
+          longitude: enrichedLocation.longitude,
+          originalLatitude: enrichedLocation.originalLatitude ?? enrichedLocation.latitude,
+          originalLongitude: enrichedLocation.originalLongitude ?? enrichedLocation.longitude,
+          name: enrichedLocation.name,
+          source: enrichedLocation.source,
+          address: enrichedLocation.address,
+          postalCode: enrichedLocation.postalCode,
+          neighborhood: enrichedLocation.neighborhood,
+          city: enrichedLocation.city,
+          subdivision: enrichedLocation.subdivision,
+          region: enrichedLocation.region,
+          country: enrichedLocation.country,
+          category: enrichedLocation.category,
+          distance: enrichedLocation.distance,
+        };
+
+        // Reset quick select mode and close
+        setUI(prev => ({ ...prev, quickSelectMode: false }));
+        onSelect(finalLocation);
+        onClose();
+        return;
+      }
+
       // Note: Navigation to details tab is handled explicitly by user clicking list items
       // Map taps should NOT auto-navigate - they just add to the list
     }
-  }, [selection.isLoadingDetails, mapboxData, mapboxLoading, selection.type, ui.editableNameInput]);
+  }, [selection.isLoadingDetails, mapboxData, mapboxLoading, selection.type, ui.editableNameInput, ui.quickSelectMode, onSelect, onClose]);
 
   // Handler: Saved location selected from list
   const handleSavedLocationSelect = (location: LocationEntity & { distance: number }) => {
@@ -939,6 +968,16 @@ export function LocationPicker({ visible, onClose, onSelect, initialLocation, re
 
                     // Animate map to location
                     mapRef.current.animateToRegion(newRegion, 500);
+
+                    // In read-only mode, only pan the map - don't move marker or change selection
+                    if (readOnly) {
+                      setMapState(prev => ({
+                        ...prev,
+                        region: newRegion,
+                        // Keep markerPosition unchanged
+                      }));
+                      return;
+                    }
 
                     // Move marker to current location
                     setMapState(prev => ({
@@ -1424,9 +1463,13 @@ export function LocationPicker({ visible, onClose, onSelect, initialLocation, re
                                   onClose();
                                 } else if (item.type === 'poi' && item.poi) {
                                   // Go through handlePOISelect to trigger Mapbox enrichment
+                                  // Set quickSelectMode to auto-complete after enrichment
+                                  setUI(prev => ({ ...prev, quickSelectMode: true }));
                                   handlePOISelect(item.poi);
                                 } else if (item.type === 'google_poi' && item.googlePOI) {
                                   // Go through handlePOISelect to trigger Mapbox enrichment
+                                  // Set quickSelectMode to auto-complete after enrichment
+                                  setUI(prev => ({ ...prev, quickSelectMode: true }));
                                   const googlePoi: POIItem = {
                                     id: item.googlePOI.placeId,
                                     source: 'google',
@@ -1552,42 +1595,47 @@ export function LocationPicker({ visible, onClose, onSelect, initialLocation, re
                   )}
                 </View>
 
-                {/* Divider */}
-                <View style={styles.formDivider} />
+                {/* Action Buttons - Hidden in read-only mode */}
+                {!readOnly && (
+                  <>
+                    {/* Divider */}
+                    <View style={styles.formDivider} />
 
-                {/* Action Buttons */}
-                <View style={styles.formActions}>
-                  {/* Select New Location Button */}
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => {
-                      console.log('[LocationPicker] Select New Location pressed');
-                      setUI(prev => ({ ...prev, showingDetails: false }));
-                      setPreviewMarker(null);
-                    }}
-                  >
-                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-                      <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                      <Circle cx={12} cy={10} r={3} fill={theme.colors.text.primary} />
-                    </Svg>
-                    <Text style={styles.actionButtonText}>Select New Location</Text>
-                  </TouchableOpacity>
+                    {/* Action Buttons */}
+                    <View style={styles.formActions}>
+                      {/* Select New Location Button */}
+                      <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => {
+                          console.log('[LocationPicker] Select New Location pressed');
+                          setUI(prev => ({ ...prev, showingDetails: false }));
+                          setPreviewMarker(null);
+                        }}
+                      >
+                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
+                          <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+                          <Circle cx={12} cy={10} r={3} fill={theme.colors.text.primary} />
+                        </Svg>
+                        <Text style={styles.actionButtonText}>Select New Location</Text>
+                      </TouchableOpacity>
 
-                  {/* Remove Location Button */}
-                  <TouchableOpacity
-                    style={styles.actionButtonDanger}
-                    onPress={() => {
-                      console.log('[LocationPicker] Remove Location pressed');
-                      onSelect(null);
-                      onClose();
-                    }}
-                  >
-                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={2}>
-                      <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                    <Text style={styles.actionButtonDangerText}>Remove Location</Text>
-                  </TouchableOpacity>
-                </View>
+                      {/* Remove Location Button */}
+                      <TouchableOpacity
+                        style={styles.actionButtonDanger}
+                        onPress={() => {
+                          console.log('[LocationPicker] Remove Location pressed');
+                          onSelect(null);
+                          onClose();
+                        }}
+                      >
+                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={2}>
+                          <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                        <Text style={styles.actionButtonDangerText}>Remove Location</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </ScrollView>
             ) : (
               <View style={styles.emptyDetailsState}>

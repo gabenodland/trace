@@ -23,9 +23,20 @@ export type Database = {
           conflict_status: string | null
           created_at: string
           depth: number
+          entry_content_template: string | null
+          entry_content_type: string
           entry_count: number
+          entry_title_template: string | null
+          entry_use_duedates: boolean
+          entry_use_location: boolean
+          entry_use_photos: boolean
+          entry_use_priority: boolean
+          entry_use_rating: boolean
+          entry_use_status: boolean
           full_path: string
           icon: string | null
+          is_localonly: boolean
+          is_private: boolean
           last_edited_by: string | null
           last_edited_device: string | null
           name: string
@@ -43,9 +54,20 @@ export type Database = {
           conflict_status?: string | null
           created_at?: string
           depth?: number
+          entry_content_template?: string | null
+          entry_content_type?: string
           entry_count?: number
+          entry_title_template?: string | null
+          entry_use_duedates?: boolean
+          entry_use_location?: boolean
+          entry_use_photos?: boolean
+          entry_use_priority?: boolean
+          entry_use_rating?: boolean
+          entry_use_status?: boolean
           full_path: string
           icon?: string | null
+          is_localonly?: boolean
+          is_private?: boolean
           last_edited_by?: string | null
           last_edited_device?: string | null
           name: string
@@ -63,9 +85,20 @@ export type Database = {
           conflict_status?: string | null
           created_at?: string
           depth?: number
+          entry_content_template?: string | null
+          entry_content_type?: string
           entry_count?: number
+          entry_title_template?: string | null
+          entry_use_duedates?: boolean
+          entry_use_location?: boolean
+          entry_use_photos?: boolean
+          entry_use_priority?: boolean
+          entry_use_rating?: boolean
+          entry_use_status?: boolean
           full_path?: string
           icon?: string | null
+          is_localonly?: boolean
+          is_private?: boolean
           last_edited_by?: string | null
           last_edited_device?: string | null
           name?: string
@@ -101,11 +134,14 @@ export type Database = {
           entry_id: string
           entry_latitude: number | null
           entry_longitude: number | null
+          is_pinned: boolean
           last_edited_by: string | null
           last_edited_device: string | null
           location_accuracy: number | null
           location_id: string | null
           mentions: string[] | null
+          priority: number
+          rating: number
           status: string
           tags: string[] | null
           title: string | null
@@ -128,11 +164,14 @@ export type Database = {
           entry_id?: string
           entry_latitude?: number | null
           entry_longitude?: number | null
+          is_pinned?: boolean
           last_edited_by?: string | null
           last_edited_device?: string | null
           location_accuracy?: number | null
           location_id?: string | null
           mentions?: string[] | null
+          priority?: number
+          rating?: number
           status?: string
           tags?: string[] | null
           title?: string | null
@@ -155,11 +194,14 @@ export type Database = {
           entry_id?: string
           entry_latitude?: number | null
           entry_longitude?: number | null
+          is_pinned?: boolean
           last_edited_by?: string | null
           last_edited_device?: string | null
           location_accuracy?: number | null
           location_id?: string | null
           mentions?: string[] | null
+          priority?: number
+          rating?: number
           status?: string
           tags?: string[] | null
           title?: string | null

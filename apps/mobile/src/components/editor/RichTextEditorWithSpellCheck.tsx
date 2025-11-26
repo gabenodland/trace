@@ -13,14 +13,16 @@ interface RichTextEditorProps {
   placeholder?: string;
   editable?: boolean;
   onDoublePress?: () => void;
+  enableSpellCheck?: boolean;
 }
 
-export const RichTextEditor = forwardRef(({
+export const RichTextEditorWithSpellCheck = forwardRef(({
   value,
   onChange,
   placeholder = "Start typing...",
   editable = true,
   onDoublePress,
+  enableSpellCheck = true,
 }: RichTextEditorProps, ref) => {
   const isLocalChange = useRef(false);
   const lastContent = useRef(value);
@@ -90,6 +92,13 @@ export const RichTextEditor = forwardRef(({
     }
     .ProseMirror {
       -webkit-text-size-adjust: 100%;
+      /* Enable spell check styling */
+      -webkit-appearance: none;
+    }
+    /* Custom misspelling underline (for visibility) */
+    [spellcheck="true"] .misspelled {
+      text-decoration: underline wavy red !important;
+      text-decoration-thickness: 1px !important;
     }
   `;
 
@@ -103,6 +112,50 @@ export const RichTextEditor = forwardRef(({
       CoreBridge.configureCSS(customCSS),
     ],
   });
+
+  // Enable spell check in the WebView after editor is ready
+  useEffect(() => {
+    if (enableSpellCheck) {
+      // Small delay to ensure WebView is ready
+      const timer = setTimeout(() => {
+        try {
+          const webview = (editor as any).webviewRef?.current;
+          if (webview && typeof webview.injectJavaScript === 'function') {
+            webview.injectJavaScript(`
+              (function() {
+                // Enable spellcheck on the contenteditable div
+                const proseMirror = document.querySelector('.ProseMirror');
+                if (proseMirror) {
+                  proseMirror.setAttribute('spellcheck', 'true');
+                  proseMirror.setAttribute('autocorrect', 'on');
+                  proseMirror.setAttribute('autocapitalize', 'sentences');
+
+                  // For Android WebView, we need to set these on the document too
+                  document.documentElement.setAttribute('spellcheck', 'true');
+                  document.body.setAttribute('spellcheck', 'true');
+
+                  console.log('Spell check enabled');
+                }
+
+                // Also try to enable it on all editable elements
+                const editables = document.querySelectorAll('[contenteditable="true"]');
+                editables.forEach(el => {
+                  el.setAttribute('spellcheck', 'true');
+                  el.setAttribute('autocorrect', 'on');
+                  el.setAttribute('autocapitalize', 'sentences');
+                });
+              })();
+              true;
+            `);
+          }
+        } catch (e) {
+          console.log('Failed to enable spell check:', e);
+        }
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [editor, enableSpellCheck]);
 
   useImperativeHandle(ref, () => ({
     toggleBold: () => editor.toggleBold(),

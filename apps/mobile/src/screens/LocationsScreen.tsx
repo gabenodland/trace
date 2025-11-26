@@ -22,6 +22,8 @@ interface LocationNode {
     neighborhood?: string;
     placeName?: string;
   };
+  // Location ID for place-level nodes (for navigation to entries)
+  locationId?: string;
 }
 
 export function LocationsScreen() {
@@ -114,7 +116,10 @@ export function LocationsScreen() {
         getOrCreateChild(currentNode, placeName, "place", {
           ...currentFilter,
           placeName,
-        }, entryCount);
+        }, entryCount, location.location_id);
+      } else if (placeName && placeName === currentNode.name) {
+        // If the place name matches the current node name, add the location_id to the current node
+        currentNode.locationId = location.location_id;
       }
     }
 
@@ -229,7 +234,8 @@ function getOrCreateChild(
   name: string,
   level: LocationNode["level"],
   filter: LocationNode["filter"],
-  entryCount: number = 1
+  entryCount: number = 1,
+  locationId?: string
 ): LocationNode {
   let child = parent.children.find((c) => c.name === name);
   if (!child) {
@@ -239,10 +245,15 @@ function getOrCreateChild(
       entryCount: 0,
       children: [],
       filter,
+      locationId,
     };
     parent.children.push(child);
   }
   child.entryCount += entryCount;
+  // Update locationId if provided (for place-level nodes)
+  if (locationId) {
+    child.locationId = locationId;
+  }
   return child;
 }
 
@@ -327,12 +338,17 @@ function LocationTreeNode({ node, depth, searchQuery, navigate }: LocationTreeNo
   };
 
   const handlePress = () => {
-    // Navigate to entries filtered by this location
-    // For now, we'll just expand/collapse. Later we can add navigation.
-    if (hasChildren) {
+    // Only place-level nodes with locationId are navigable
+    if (node.locationId) {
+      // Navigate to entries filtered by this location
+      navigate("inbox", {
+        returnCategoryId: `location:${node.locationId}`,
+        returnCategoryName: node.name
+      });
+    } else if (hasChildren) {
+      // Hierarchy nodes just expand/collapse
       setIsExpanded(!isExpanded);
     }
-    // TODO: Navigate to filtered entries view
   };
 
   return (

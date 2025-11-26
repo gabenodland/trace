@@ -118,6 +118,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     maxHeight: 400,
+    paddingBottom: 10,
   },
   header: {
     padding: 16,

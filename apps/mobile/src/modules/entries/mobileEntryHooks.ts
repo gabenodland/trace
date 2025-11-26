@@ -15,7 +15,7 @@ import {
   getMentions,
   MobileEntryFilter,
 } from './mobileEntryApi';
-import { CreateEntryInput } from '@trace/core';
+import { CreateEntryInput, Entry } from '@trace/core';
 import * as entryHelpers from '@trace/core/src/modules/entries/entryHelpers';
 
 // Re-export MobileEntryFilter for consumers
@@ -68,7 +68,7 @@ function useUpdateEntryMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<CreateEntryInput> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<Entry> }) =>
       updateEntry(id, data),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
@@ -121,7 +121,7 @@ export function useEntries(filter?: MobileEntryFilter) {
         return createMutation.mutateAsync(data);
       },
 
-      updateEntry: async (id: string, data: Partial<CreateEntryInput>) => {
+      updateEntry: async (id: string, data: Partial<Entry>) => {
         return updateMutation.mutateAsync({ id, data });
       },
 
@@ -151,7 +151,7 @@ export function useEntry(id: string | null) {
 
     // Mutations
     entryMutations: {
-      updateEntry: async (data: Partial<CreateEntryInput>) => {
+      updateEntry: async (data: Partial<Entry>) => {
         if (!id) throw new Error('No entry ID provided');
         return updateMutation.mutateAsync({ id, data });
       },

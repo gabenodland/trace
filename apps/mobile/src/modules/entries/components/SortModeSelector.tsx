@@ -13,6 +13,8 @@ interface SortModeSelectorProps {
   onClose: () => void;
   sortOrder?: EntrySortOrder;
   onSortOrderChange?: (order: EntrySortOrder) => void;
+  showPinnedFirst?: boolean;
+  onShowPinnedFirstChange?: (value: boolean) => void;
 }
 
 export function SortModeSelector({
@@ -22,6 +24,8 @@ export function SortModeSelector({
   onClose,
   sortOrder = 'desc',
   onSortOrderChange,
+  showPinnedFirst = false,
+  onShowPinnedFirstChange,
 }: SortModeSelectorProps) {
   const scrollViewRef = useRef<ScrollView>(null);
   const isDescending = sortOrder === 'desc';
@@ -34,6 +38,12 @@ export function SortModeSelector({
   const handleToggleOrder = () => {
     if (onSortOrderChange) {
       onSortOrderChange(isDescending ? 'asc' : 'desc');
+    }
+  };
+
+  const handleTogglePinnedFirst = () => {
+    if (onShowPinnedFirstChange) {
+      onShowPinnedFirstChange(!showPinnedFirst);
     }
   };
 
@@ -68,6 +78,30 @@ export function SortModeSelector({
           <View style={styles.header}>
             <Text style={styles.title}>Sort By</Text>
           </View>
+
+          {/* Show pinned entries first checkbox */}
+          {onShowPinnedFirstChange && (
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              onPress={handleTogglePinnedFirst}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, showPinnedFirst && styles.checkboxChecked]}>
+                {showPinnedFirst && (
+                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M5 13l4 4L19 7"
+                      stroke="#ffffff"
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </Svg>
+                )}
+              </View>
+              <Text style={styles.checkboxLabel}>Show pinned entries first</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Descending checkbox */}
           {onSortOrderChange && (

@@ -32,6 +32,7 @@ export interface LocationPickerUI {
   showingDetails: boolean; // true = showing location info, false = showing POI list
   searchQuery: string;
   editableNameInput: string;
+  quickSelectMode?: boolean; // true = auto-complete after enrichment (from Select button)
 }
 
 /**

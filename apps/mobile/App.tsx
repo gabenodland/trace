@@ -11,6 +11,7 @@ import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { EntryScreen } from "./src/screens/EntryScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CategoriesScreen } from "./src/screens/CategoriesScreen";
+import { CategoryPropertiesScreen } from "./src/screens/CategoryPropertiesScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { TasksScreen } from "./src/screens/TasksScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
@@ -187,6 +188,8 @@ function AuthGate() {
         );
       case "categories":
         return <CategoriesScreen />;
+      case "category-properties":
+        return <CategoryPropertiesScreen categoryId={navParams.categoryId} />;
       case "calendar":
         return <CalendarScreen returnDate={navParams.returnDate} />;
       case "tasks":

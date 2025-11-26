@@ -78,6 +78,25 @@ class LocalDatabase {
       // Don't throw - the column might already exist or there could be other reasons
     }
 
+    // Migration: Add priority, rating, is_pinned columns to entries table
+    try {
+      const priorityCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('entries') WHERE name = 'priority'`
+      );
+
+      if (!priorityCheck) {
+        console.log('📦 Running migration: Adding priority, rating, is_pinned to entries table...');
+        await this.db.execAsync(`
+          ALTER TABLE entries ADD COLUMN priority INTEGER DEFAULT 0;
+          ALTER TABLE entries ADD COLUMN rating REAL DEFAULT 0.00;
+          ALTER TABLE entries ADD COLUMN is_pinned INTEGER DEFAULT 0;
+        `);
+        console.log('✅ Migration complete: priority, rating, is_pinned added to entries');
+      }
+    } catch (error) {
+      console.error('Migration error (priority/rating/is_pinned):', error);
+    }
+
     // Migration: Add locations table if it doesn't exist (should be handled by CREATE TABLE IF NOT EXISTS, but just in case)
     try {
       const result = await this.db.getFirstAsync<{ name: string }>(
@@ -119,6 +138,33 @@ class LocalDatabase {
       }
     } catch (error) {
       console.error('Migration error (locations table):', error);
+    }
+
+    // Migration: Add category properties columns
+    try {
+      const propertyCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('categories') WHERE name = 'entry_title_template'`
+      );
+
+      if (!propertyCheck) {
+        console.log('📦 Running migration: Adding category properties columns...');
+        await this.db.execAsync(`
+          ALTER TABLE categories ADD COLUMN entry_title_template TEXT;
+          ALTER TABLE categories ADD COLUMN entry_content_template TEXT;
+          ALTER TABLE categories ADD COLUMN entry_use_rating INTEGER DEFAULT 0;
+          ALTER TABLE categories ADD COLUMN entry_use_priority INTEGER DEFAULT 0;
+          ALTER TABLE categories ADD COLUMN entry_use_status INTEGER DEFAULT 1;
+          ALTER TABLE categories ADD COLUMN entry_use_duedates INTEGER DEFAULT 0;
+          ALTER TABLE categories ADD COLUMN entry_use_location INTEGER DEFAULT 1;
+          ALTER TABLE categories ADD COLUMN entry_use_photos INTEGER DEFAULT 1;
+          ALTER TABLE categories ADD COLUMN entry_content_type TEXT DEFAULT 'richformat';
+          ALTER TABLE categories ADD COLUMN is_private INTEGER DEFAULT 0;
+          ALTER TABLE categories ADD COLUMN is_localonly INTEGER DEFAULT 0;
+        `);
+        console.log('✅ Migration complete: category properties added');
+      }
+    } catch (error) {
+      console.error('Migration error (category properties):', error);
     }
   }
 
@@ -177,6 +223,11 @@ class LocalDatabase {
         created_at INTEGER NOT NULL,  -- Unix timestamp
         updated_at INTEGER NOT NULL,  -- Unix timestamp
         deleted_at INTEGER,           -- Unix timestamp (soft delete)
+
+        -- Priority, rating, and pinning fields
+        priority INTEGER DEFAULT 0,   -- Integer priority level for sorting
+        rating REAL DEFAULT 0.00,     -- Decimal rating from 0.00 to 5.00
+        is_pinned INTEGER DEFAULT 0,  -- Boolean flag (0=false, 1=true) to pin entries
 
         -- Sync tracking fields
         local_only INTEGER DEFAULT 0,     -- 0 = sync enabled, 1 = local only
@@ -337,8 +388,9 @@ class LocalDatabase {
         entry_latitude, entry_longitude, location_accuracy,
         location_id,
         status, due_date, completed_at, created_at, updated_at,
+        priority, rating, is_pinned,
         local_only, synced, sync_action
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -357,6 +409,9 @@ class LocalDatabase {
         entry.completed_at ? Date.parse(entry.completed_at) : null,
         entry.created_at ? Date.parse(entry.created_at) : now,
         entry.updated_at ? Date.parse(entry.updated_at) : now,
+        entry.priority !== undefined ? entry.priority : 0,
+        entry.rating !== undefined ? entry.rating : 0.00,
+        entry.is_pinned ? 1 : 0,
         entry.local_only !== undefined ? entry.local_only : 0,
         entry.synced !== undefined ? entry.synced : 0,
         entry.sync_action !== undefined ? entry.sync_action : 'create'
@@ -476,6 +531,14 @@ class LocalDatabase {
       updated_at: updates.updated_at || new Date(now).toISOString()
     };
 
+    console.log('🔧 [LocalDB] updateEntry called:', {
+      entryId,
+      updates,
+      'updated.is_pinned': updated.is_pinned,
+      'updated.priority': updated.priority,
+      'updated.rating': updated.rating
+    });
+
     await this.db.runAsync(
       `UPDATE entries SET
         title = ?, content = ?, tags = ?, mentions = ?,
@@ -483,6 +546,7 @@ class LocalDatabase {
         entry_latitude = ?, entry_longitude = ?, location_accuracy = ?,
         location_id = ?,
         status = ?, due_date = ?, completed_at = ?,
+        priority = ?, rating = ?, is_pinned = ?,
         updated_at = ?, local_only = ?, synced = ?, sync_action = ?
       WHERE entry_id = ?`,
       [
@@ -499,6 +563,9 @@ class LocalDatabase {
         updated.status || 'none',
         updated.due_date ? Date.parse(updated.due_date) : null,
         updated.completed_at ? Date.parse(updated.completed_at) : null,
+        updated.priority !== undefined ? updated.priority : 0,
+        updated.rating !== undefined ? updated.rating : 0.00,
+        updated.is_pinned ? 1 : 0,
         Date.parse(updated.updated_at),
         updated.local_only !== undefined ? updated.local_only : 0,
         updated.synced !== undefined ? updated.synced : 0,
@@ -507,7 +574,16 @@ class LocalDatabase {
       ]
     );
 
-    return this.getEntry(entryId) as Promise<Entry>;
+    console.log('✅ [LocalDB] UPDATE executed, fetching updated entry...');
+    const result = await this.getEntry(entryId);
+    if (!result) throw new Error('Entry not found after update');
+    console.log('📖 [LocalDB] Retrieved entry:', {
+      entryId: result.entry_id,
+      is_pinned: result.is_pinned,
+      priority: result.priority,
+      rating: result.rating
+    });
+    return result;
   }
 
   /**
@@ -637,6 +713,9 @@ class LocalDatabase {
       updated_at: new Date(row.updated_at).toISOString(),
       deleted_at: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
       attachments: null,
+      priority: row.priority !== undefined ? row.priority : 0,
+      rating: row.rating !== undefined ? row.rating : 0.00,
+      is_pinned: row.is_pinned === 1,
       local_only: row.local_only,
       synced: row.synced,
       sync_action: row.sync_action,
@@ -930,7 +1009,19 @@ class LocalDatabase {
     `;
 
     const rows = await this.db.getAllAsync<any>(query, params);
-    return rows;
+
+    // Convert SQLite integer booleans (0/1) to proper booleans
+    return rows.map(row => ({
+      ...row,
+      entry_use_rating: !!row.entry_use_rating,
+      entry_use_priority: !!row.entry_use_priority,
+      entry_use_status: !!row.entry_use_status,
+      entry_use_duedates: !!row.entry_use_duedates,
+      entry_use_location: !!row.entry_use_location,
+      entry_use_photos: !!row.entry_use_photos,
+      is_private: !!row.is_private,
+      is_localonly: !!row.is_localonly,
+    }));
   }
 
   /**
@@ -952,7 +1043,20 @@ class LocalDatabase {
       [categoryId]
     );
 
-    return row || null;
+    if (!row) return null;
+
+    // Convert SQLite integer booleans (0/1) to proper booleans
+    return {
+      ...row,
+      entry_use_rating: !!row.entry_use_rating,
+      entry_use_priority: !!row.entry_use_priority,
+      entry_use_status: !!row.entry_use_status,
+      entry_use_duedates: !!row.entry_use_duedates,
+      entry_use_location: !!row.entry_use_location,
+      entry_use_photos: !!row.entry_use_photos,
+      is_private: !!row.is_private,
+      is_localonly: !!row.is_localonly,
+    };
   }
 
   /**
@@ -1009,6 +1113,17 @@ class LocalDatabase {
         depth = ?,
         color = ?,
         icon = ?,
+        entry_title_template = ?,
+        entry_content_template = ?,
+        entry_use_rating = ?,
+        entry_use_priority = ?,
+        entry_use_status = ?,
+        entry_use_duedates = ?,
+        entry_use_location = ?,
+        entry_use_photos = ?,
+        entry_content_type = ?,
+        is_private = ?,
+        is_localonly = ?,
         updated_at = ?,
         synced = ?,
         sync_action = ?
@@ -1020,6 +1135,17 @@ class LocalDatabase {
         updates.depth !== undefined ? updates.depth : 0,
         updates.color || null,
         updates.icon || null,
+        updates.entry_title_template !== undefined ? updates.entry_title_template : null,
+        updates.entry_content_template !== undefined ? updates.entry_content_template : null,
+        updates.entry_use_rating !== undefined ? (updates.entry_use_rating ? 1 : 0) : null,
+        updates.entry_use_priority !== undefined ? (updates.entry_use_priority ? 1 : 0) : null,
+        updates.entry_use_status !== undefined ? (updates.entry_use_status ? 1 : 0) : null,
+        updates.entry_use_duedates !== undefined ? (updates.entry_use_duedates ? 1 : 0) : null,
+        updates.entry_use_location !== undefined ? (updates.entry_use_location ? 1 : 0) : null,
+        updates.entry_use_photos !== undefined ? (updates.entry_use_photos ? 1 : 0) : null,
+        updates.entry_content_type !== undefined ? updates.entry_content_type : null,
+        updates.is_private !== undefined ? (updates.is_private ? 1 : 0) : null,
+        updates.is_localonly !== undefined ? (updates.is_localonly ? 1 : 0) : null,
         updatedAt,
         synced,
         syncAction,

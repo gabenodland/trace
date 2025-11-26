@@ -1,7 +1,7 @@
 /**
  * Entry sort modes for list views
  */
-export type EntrySortMode = 'title' | 'category' | 'entry_date' | 'created_date' | 'updated_date' | 'due_date';
+export type EntrySortMode = 'title' | 'category' | 'entry_date' | 'created_date' | 'updated_date' | 'due_date' | 'priority' | 'rating';
 
 export interface EntrySortModeOption {
   value: EntrySortMode;
@@ -32,6 +32,14 @@ export const ENTRY_SORT_MODES: EntrySortModeOption[] = [
   {
     value: 'due_date',
     label: 'Due Date',
+  },
+  {
+    value: 'priority',
+    label: 'Priority',
+  },
+  {
+    value: 'rating',
+    label: 'Rating',
   },
 ];
 

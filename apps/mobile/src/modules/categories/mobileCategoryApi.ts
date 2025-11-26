@@ -85,6 +85,18 @@ export async function updateCategory(
     parent_category_id?: string | null;
     color?: string | null;
     icon?: string | null;
+    // Category property fields
+    entry_title_template?: string | null;
+    entry_content_template?: string | null;
+    entry_use_rating?: boolean;
+    entry_use_priority?: boolean;
+    entry_use_status?: boolean;
+    entry_use_duedates?: boolean;
+    entry_use_location?: boolean;
+    entry_use_photos?: boolean;
+    entry_content_type?: string;
+    is_private?: boolean;
+    is_localonly?: boolean;
   }
 ): Promise<CategoryWithPath> {
   const existing = await localDB.getCategory(categoryId);
@@ -93,6 +105,9 @@ export async function updateCategory(
   const updated = {
     ...existing,
     ...data,
+    // Mark as needing sync
+    synced: 0,
+    sync_action: existing.sync_action === 'create' ? 'create' : 'update',
   };
 
   // If parent changed or name changed, recalculate full_path and depth

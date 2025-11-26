@@ -404,6 +404,14 @@ function CategoryNode({
       },
     },
     {
+      label: "Properties",
+      onPress: () => {
+        navigate("category-properties", {
+          categoryId: node.category.category_id,
+        });
+      },
+    },
+    {
       label: "Add Child",
       onPress: () => onAddChild(node.category.category_id),
     },

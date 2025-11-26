@@ -49,6 +49,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
   const [displayMode, setDisplayMode] = usePersistedState<EntryDisplayMode>('@entryListDisplayMode', DEFAULT_DISPLAY_MODE);
   const [sortMode, setSortMode] = usePersistedState<EntrySortMode>('@entryListSortMode', DEFAULT_SORT_MODE);
   const [orderMode, setOrderMode] = usePersistedState<EntrySortOrder>('@entryListOrderMode', DEFAULT_SORT_ORDER);
+  const [showPinnedFirst, setShowPinnedFirst] = usePersistedState<boolean>('@entryListShowPinnedFirst', false);
   const [locations, setLocations] = useState<LocationEntity[]>([]);
 
   // Update category when returning from entry screen
@@ -205,8 +206,8 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
   }, [categories]);
 
   const sortedEntries = useMemo(() => {
-    return sortEntries(entries, sortMode, categoryMap, orderMode);
-  }, [entries, sortMode, categoryMap, orderMode]);
+    return sortEntries(entries, sortMode, categoryMap, orderMode, showPinnedFirst);
+  }, [entries, sortMode, categoryMap, orderMode, showPinnedFirst]);
 
   // Get display labels
   const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Smashed';
@@ -373,6 +374,23 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     );
   };
 
+  const handlePinEntry = async (entryId: string, currentPinned: boolean) => {
+    try {
+      console.log('📌 [EntryListScreen] handlePinEntry called:', {
+        entryId,
+        currentPinned,
+        newValue: !currentPinned
+      });
+      await entryMutations.updateEntry(entryId, {
+        is_pinned: !currentPinned,
+      });
+      console.log('✅ [EntryListScreen] Pin update complete');
+    } catch (error) {
+      console.error("Failed to pin/unpin entry:", error);
+      Alert.alert("Error", "Failed to pin/unpin entry");
+    }
+  };
+
   // Get current category of entry being moved
   const entryToMoveData = entryToMove ? entries.find(e => e.entry_id === entryToMove) : null;
   const entryToMoveCategoryId = entryToMoveData?.category_id || null;
@@ -411,6 +429,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         onCategoryPress={handleCategoryPress}
         onMove={handleMoveEntry}
         onDelete={handleDeleteEntry}
+        onPin={handlePinEntry}
         categories={categories}
         locations={locations}
         displayMode={displayMode}
@@ -445,6 +464,8 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         onClose={() => setShowSortModeSelector(false)}
         sortOrder={orderMode}
         onSortOrderChange={setOrderMode}
+        showPinnedFirst={showPinnedFirst}
+        onShowPinnedFirstChange={setShowPinnedFirst}
       />
 
       {/* Move Category Picker */}

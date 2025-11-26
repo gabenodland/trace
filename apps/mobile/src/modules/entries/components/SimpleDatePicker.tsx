@@ -5,9 +5,10 @@ interface SimpleDatePickerProps {
   value: Date | null;
   onChange: (date: Date | null) => void;
   onClose: () => void;
+  allowClear?: boolean;
 }
 
-export function SimpleDatePicker({ value, onChange, onClose }: SimpleDatePickerProps) {
+export function SimpleDatePicker({ value, onChange, onClose, allowClear = true }: SimpleDatePickerProps) {
   const currentDate = value || new Date();
   const today = new Date();
 
@@ -76,21 +77,39 @@ export function SimpleDatePicker({ value, onChange, onClose }: SimpleDatePickerP
     onChange(new Date(newDate.getFullYear(), newDate.getMonth(), value?.getDate() || 1));
   };
 
+  const handlePrevYear = () => {
+    onChange(new Date(year - 1, month, value?.getDate() || 1));
+  };
+
+  const handleNextYear = () => {
+    onChange(new Date(year + 1, month, value?.getDate() || 1));
+  };
+
   return (
     <View style={styles.container}>
       {/* Header with month/year and navigation */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
-          <Text style={styles.navText}>‹</Text>
-        </TouchableOpacity>
+        <View style={styles.navButtons}>
+          <TouchableOpacity onPress={handlePrevYear} style={styles.navButton}>
+            <Text style={styles.navText}>«</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
+            <Text style={styles.navText}>‹</Text>
+          </TouchableOpacity>
+        </View>
 
         <Text style={styles.monthYear}>
           {monthNames[month]} {year}
         </Text>
 
-        <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-          <Text style={styles.navText}>›</Text>
-        </TouchableOpacity>
+        <View style={styles.navButtons}>
+          <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
+            <Text style={styles.navText}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleNextYear} style={styles.navButton}>
+            <Text style={styles.navText}>»</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Day labels */}
@@ -109,7 +128,7 @@ export function SimpleDatePicker({ value, onChange, onClose }: SimpleDatePickerP
 
       {/* Actions */}
       <View style={styles.actions}>
-        {value && (
+        {allowClear && value && (
           <TouchableOpacity
             onPress={() => {
               onChange(null);
@@ -120,6 +139,17 @@ export function SimpleDatePicker({ value, onChange, onClose }: SimpleDatePickerP
             <Text style={styles.clearText}>Clear</Text>
           </TouchableOpacity>
         )}
+
+        <TouchableOpacity
+          onPress={() => {
+            const todayDate = new Date();
+            todayDate.setHours(12, 0, 0, 0);
+            onChange(todayDate);
+          }}
+          style={styles.actionButton}
+        >
+          <Text style={styles.todayText}>Today</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           onPress={onClose}
@@ -141,6 +171,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: theme.spacing.lg,
+  },
+  navButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   navButton: {
     padding: theme.spacing.sm,
@@ -210,6 +244,11 @@ const styles = StyleSheet.create({
   clearText: {
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  todayText: {
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.secondary,
     fontWeight: theme.typography.fontWeight.medium,
   },
   doneText: {

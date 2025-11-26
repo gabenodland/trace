@@ -88,6 +88,8 @@ export function TasksScreen() {
       const newStatus = currentStatus === "complete" ? "incomplete" : "complete";
       await entryMutations.updateEntry(entryId, {
         status: newStatus,
+        // Clear completed_at when changing from complete to incomplete
+        completed_at: newStatus === "complete" ? new Date().toISOString() : null,
       });
     } catch (error) {
       console.error("Failed to toggle task:", error);

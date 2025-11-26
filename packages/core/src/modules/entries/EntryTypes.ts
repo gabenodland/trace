@@ -24,6 +24,10 @@ export interface Entry {
   due_date: string | null;
   completed_at: string | null;
   attachments: Json;
+  // Priority, rating, and pinning fields
+  priority: number; // Integer priority level for sorting (default: 0)
+  rating: number; // Decimal rating from 0.00 to 5.00 (default: 0.00)
+  is_pinned: boolean; // Boolean flag to pin important entries (default: false)
   // Sync tracking fields (mobile only)
   local_only?: number; // 0 = sync enabled, 1 = local only
   synced?: number; // 0 = needs sync, 1 = synced
@@ -51,6 +55,8 @@ export interface CreateEntryInput {
   location_id?: string | null;
   status?: "none" | "incomplete" | "in_progress" | "complete";
   due_date?: string | null;
+  priority?: number;
+  rating?: number;
   local_only?: number; // 0 = sync enabled (default), 1 = local only
 }
 
@@ -68,6 +74,9 @@ export interface UpdateEntryInput {
   status?: "none" | "incomplete" | "in_progress" | "complete";
   due_date?: string | null;
   completed_at?: string | null;
+  priority?: number;
+  rating?: number;
+  is_pinned?: boolean;
 }
 
 export interface EntryFilter {

@@ -61,6 +61,10 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     attachments: null,
+    // Priority, rating, and pinning fields
+    priority: 0,
+    rating: 0.00,
+    is_pinned: false,
     local_only: data.local_only || 0,
     synced: 0,
     sync_action: 'create',

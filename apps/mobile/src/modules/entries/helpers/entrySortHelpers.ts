@@ -7,12 +7,14 @@ import type { EntrySortOrder } from '../types/EntrySortOrder';
 
 /**
  * Sort entries based on sort mode and order
+ * Pinned entries can optionally appear first, controlled by showPinnedFirst parameter
  */
 export function sortEntries(
   entries: Entry[],
   sortMode: EntrySortMode,
   categoryMap?: Record<string, string>,
-  order: EntrySortOrder = 'desc'
+  order: EntrySortOrder = 'desc',
+  showPinnedFirst: boolean = false
 ): Entry[] {
   const sorted = [...entries];
   const multiplier = order === 'asc' ? -1 : 1;
@@ -20,6 +22,12 @@ export function sortEntries(
   switch (sortMode) {
     case 'title':
       return sorted.sort((a, b) => {
+        // Optionally, pinned entries come first
+        if (showPinnedFirst) {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+        }
+
         const titleA = a.title || a.content || '';
         const titleB = b.title || b.content || '';
         return titleA.localeCompare(titleB) * (order === 'asc' ? 1 : -1);
@@ -27,6 +35,12 @@ export function sortEntries(
 
     case 'category':
       return sorted.sort((a, b) => {
+        // Optionally, pinned entries come first
+        if (showPinnedFirst) {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+        }
+
         const catA = a.category_id && categoryMap ? categoryMap[a.category_id] || '' : '';
         const catB = b.category_id && categoryMap ? categoryMap[b.category_id] || '' : '';
         // Sort by category, then by entry_date within category
@@ -38,6 +52,12 @@ export function sortEntries(
 
     case 'entry_date':
       return sorted.sort((a, b) => {
+        // Optionally, pinned entries come first
+        if (showPinnedFirst) {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+        }
+
         const dateA = new Date(a.entry_date || a.created_at).getTime();
         const dateB = new Date(b.entry_date || b.created_at).getTime();
         return (dateB - dateA) * multiplier;
@@ -45,6 +65,12 @@ export function sortEntries(
 
     case 'created_date':
       return sorted.sort((a, b) => {
+        // Optionally, pinned entries come first
+        if (showPinnedFirst) {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+        }
+
         const dateA = new Date(a.created_at).getTime();
         const dateB = new Date(b.created_at).getTime();
         return (dateB - dateA) * multiplier;
@@ -52,6 +78,12 @@ export function sortEntries(
 
     case 'updated_date':
       return sorted.sort((a, b) => {
+        // Optionally, pinned entries come first
+        if (showPinnedFirst) {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+        }
+
         const dateA = new Date(a.updated_at).getTime();
         const dateB = new Date(b.updated_at).getTime();
         return (dateB - dateA) * multiplier;
@@ -59,6 +91,12 @@ export function sortEntries(
 
     case 'due_date':
       return sorted.sort((a, b) => {
+        // Optionally, pinned entries come first
+        if (showPinnedFirst) {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+        }
+
         // Entries with due dates come first, sorted by due date
         // Entries without due dates come last
         if (!a.due_date && !b.due_date) return 0;
@@ -68,6 +106,32 @@ export function sortEntries(
         const dateA = new Date(a.due_date).getTime();
         const dateB = new Date(b.due_date).getTime();
         return (dateA - dateB) * multiplier;
+      });
+
+    case 'priority':
+      return sorted.sort((a, b) => {
+        // Optionally, pinned entries come first
+        if (showPinnedFirst) {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+        }
+
+        const priorityA = a.priority || 0;
+        const priorityB = b.priority || 0;
+        return (priorityB - priorityA) * multiplier;
+      });
+
+    case 'rating':
+      return sorted.sort((a, b) => {
+        // Optionally, pinned entries come first
+        if (showPinnedFirst) {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+        }
+
+        const ratingA = a.rating || 0;
+        const ratingB = b.rating || 0;
+        return (ratingB - ratingA) * multiplier;
       });
 
     default:

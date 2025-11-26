@@ -23,18 +23,31 @@ interface EntryCluster {
 interface ClusterMarkerProps {
   cluster: EntryCluster;
   onPress: () => void;
+  isSelected?: boolean;
 }
 
-function ClusterMarker({ cluster, onPress }: ClusterMarkerProps) {
+function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerProps) {
   const [shouldTrack, setShouldTrack] = useState(true);
+  const prevCountRef = useRef(cluster.count);
+  const prevSelectedRef = useRef(isSelected);
 
   useEffect(() => {
-    // Disable tracking after initial render to prevent flickering
+    // Re-enable tracking when count or selection changes so marker updates
+    if (cluster.count !== prevCountRef.current || isSelected !== prevSelectedRef.current) {
+      prevCountRef.current = cluster.count;
+      prevSelectedRef.current = isSelected;
+      setShouldTrack(true);
+    }
+
+    // Disable tracking after render to prevent flickering
     const timeout = setTimeout(() => {
       setShouldTrack(false);
     }, 300);
     return () => clearTimeout(timeout);
-  }, []);
+  }, [cluster.count, isSelected]);
+
+  // Color based on selection state
+  const markerColor = isSelected ? "#ef4444" : "#3b82f6";
 
   return (
     <Marker
@@ -46,12 +59,12 @@ function ClusterMarker({ cluster, onPress }: ClusterMarkerProps) {
       tracksViewChanges={shouldTrack}
     >
       {cluster.count > 1 ? (
-        <View style={styles.clusterMarker}>
+        <View style={[styles.clusterMarker, isSelected && styles.clusterMarkerSelected]}>
           <Text style={styles.clusterText}>{cluster.count}</Text>
         </View>
       ) : (
         <View style={styles.singleMarker}>
-          <Svg width={32} height={32} viewBox="0 0 24 24" fill="#3b82f6">
+          <Svg width={32} height={32} viewBox="0 0 24 24" fill={markerColor}>
             <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
             <Circle cx="12" cy="10" r="3" fill="#ffffff" />
           </Svg>
@@ -75,7 +88,9 @@ export function MapScreen() {
     longitudeDelta: 0.5,
   });
   const [visibleEntries, setVisibleEntries] = useState<Entry[]>([]);
+  const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const mapRef = useRef<MapView>(null);
+  const listRef = useRef<FlatList<Entry>>(null);
   const regionRef = useRef<Region>(region); // Track region without causing re-renders
 
   // Load entries with GPS coordinates
@@ -281,8 +296,15 @@ export function MapScreen() {
   // Handle cluster/marker press
   const handleClusterPress = (cluster: EntryCluster) => {
     if (cluster.count === 1) {
-      // Single entry - navigate to it
-      navigate("capture", { entryId: cluster.entries[0].entry_id });
+      // Single entry - select it and scroll to it in the list
+      const entry = cluster.entries[0];
+      setSelectedEntry(entry);
+
+      // Scroll to entry in list
+      const entryIndex = visibleEntries.findIndex(e => e.entry_id === entry.entry_id);
+      if (entryIndex >= 0 && listRef.current) {
+        listRef.current.scrollToIndex({ index: entryIndex, animated: true, viewPosition: 0.5 });
+      }
     } else {
       // Multiple entries - zoom to fit all entries in the cluster
       const bounds = calculateBounds(cluster.entries);
@@ -305,18 +327,36 @@ export function MapScreen() {
     }
   };
 
+  // Handle entry item press - show preview on map
+  const handleEntryPress = (entry: Entry) => {
+    if (!entry.entry_latitude || !entry.entry_longitude) return;
+
+    // Set as selected entry to show red marker
+    setSelectedEntry(entry);
+
+    // Zoom to the entry location
+    mapRef.current?.animateToRegion({
+      latitude: entry.entry_latitude,
+      longitude: entry.entry_longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    }, 500);
+  };
+
   // Render entry item in list
   const renderEntryItem = ({ item }: { item: Entry }) => {
     const dateStr = formatRelativeTime(item.entry_date || item.created_at);
-    // Get location name from map, or show GPS Location if no saved location
+    // Get location name from map, or show coordinates if no saved location
     const locationName = item.location_id && locationNames[item.location_id]
       ? locationNames[item.location_id]
-      : "GPS Location";
+      : `${item.entry_latitude?.toFixed(4)}, ${item.entry_longitude?.toFixed(4)}`;
+    const isSelected = selectedEntry?.entry_id === item.entry_id;
 
     return (
       <TouchableOpacity
-        style={styles.entryItem}
-        onPress={() => navigate("capture", { entryId: item.entry_id })}
+        style={[styles.entryItem, isSelected && styles.entryItemSelected]}
+        onPress={() => handleEntryPress(item)}
+        onLongPress={() => navigate("capture", { entryId: item.entry_id })}
         activeOpacity={0.7}
       >
         <View style={styles.entryContent}>
@@ -332,8 +372,9 @@ export function MapScreen() {
             <Text style={styles.entryLocation} numberOfLines={1}>{locationName}</Text>
           </View>
         </View>
-        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
-          <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#ef4444" : "#9ca3af"} strokeWidth={2}>
+          <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+          <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       </TouchableOpacity>
     );
@@ -384,13 +425,21 @@ export function MapScreen() {
           showsIndoors={false}
           toolbarEnabled={false}
         >
-          {clusters.map(cluster => (
-            <ClusterMarker
-              key={cluster.id}
-              cluster={cluster}
-              onPress={() => handleClusterPress(cluster)}
-            />
-          ))}
+          {clusters.map(cluster => {
+            // Check if selected entry is in this cluster
+            const isClusterSelected = selectedEntry
+              ? cluster.entries.some(e => e.entry_id === selectedEntry.entry_id)
+              : false;
+
+            return (
+              <ClusterMarker
+                key={cluster.id}
+                cluster={cluster}
+                onPress={() => handleClusterPress(cluster)}
+                isSelected={isClusterSelected}
+              />
+            );
+          })}
         </MapView>
 
         {/* My Location Button */}
@@ -436,11 +485,20 @@ export function MapScreen() {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={visibleEntries}
           renderItem={renderEntryItem}
           keyExtractor={item => item.entry_id}
           style={styles.entryList}
           contentContainerStyle={styles.entryListContent}
+          onScrollToIndexFailed={(info) => {
+            // Handle scroll failure gracefully
+            setTimeout(() => {
+              if (listRef.current && visibleEntries.length > info.index) {
+                listRef.current.scrollToIndex({ index: info.index, animated: true });
+              }
+            }, 100);
+          }}
           ListEmptyComponent={
             <View style={styles.emptyListContainer}>
               <Text style={styles.emptyListText}>No entries in this area</Text>
@@ -523,6 +581,9 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  clusterMarkerSelected: {
+    backgroundColor: "#ef4444",
+  },
   clusterText: {
     color: "#fff",
     fontSize: 14,
@@ -557,6 +618,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border.light,
+  },
+  entryItemSelected: {
+    backgroundColor: "#fef2f2",
+    borderLeftWidth: 3,
+    borderLeftColor: "#ef4444",
   },
   entryContent: {
     flex: 1,

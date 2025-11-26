@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Clipboard, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { supabase } from '@trace/core';
+import { supabase, reverseGeocode, parseMapboxHierarchy } from '@trace/core';
 import { useNavigation } from '../shared/contexts/NavigationContext';
 import { useNavigationMenu } from '../shared/hooks/useNavigationMenu';
 import { TopBar } from '../components/layout/TopBar';
@@ -430,6 +430,114 @@ export function DatabaseInfoScreen() {
       );
     } catch (error) {
       Alert.alert('Error', `Failed to find duplicate locations: ${error}`);
+    }
+  };
+
+  const handleEnrichLocationHierarchy = async () => {
+    try {
+      // Find locations with NULL hierarchy data (not yet enriched)
+      // Empty string '' means "checked but no data available"
+      const locationsToEnrich = await localDB.runCustomQuery(`
+        SELECT location_id, name, latitude, longitude
+        FROM locations
+        WHERE deleted_at IS NULL
+          AND (
+            neighborhood IS NULL
+            OR postal_code IS NULL
+            OR city IS NULL
+            OR subdivision IS NULL
+            OR region IS NULL
+            OR country IS NULL
+          )
+      `);
+
+      if (locationsToEnrich.length === 0) {
+        Alert.alert('All Good', 'All locations already have complete hierarchy data.');
+        return;
+      }
+
+      Alert.alert(
+        'Enrich Location Data',
+        `Found ${locationsToEnrich.length} location${locationsToEnrich.length === 1 ? '' : 's'} with missing hierarchy data (region, country, etc.).\n\nThis will use Mapbox to lookup and fill in missing data based on GPS coordinates.\n\nThis may take a while for many locations.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Enrich',
+            onPress: async () => {
+              try {
+                let enrichedCount = 0;
+                let errorCount = 0;
+
+                for (const loc of locationsToEnrich) {
+                  try {
+                    // Call Mapbox reverse geocoding
+                    const response = await reverseGeocode({
+                      latitude: loc.latitude,
+                      longitude: loc.longitude,
+                    });
+
+                    // Parse hierarchy from response
+                    const hierarchy = parseMapboxHierarchy(response);
+
+                    // Update location with hierarchy data
+                    // Use empty string '' when no data available (to mark as "checked")
+                    // Only update fields that are currently NULL
+                    await localDB.runCustomQuery(
+                      `UPDATE locations SET
+                        neighborhood = COALESCE(neighborhood, ?),
+                        postal_code = COALESCE(postal_code, ?),
+                        city = COALESCE(city, ?),
+                        subdivision = COALESCE(subdivision, ?),
+                        region = COALESCE(region, ?),
+                        country = COALESCE(country, ?),
+                        synced = 0,
+                        sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END,
+                        updated_at = ?
+                      WHERE location_id = ?`,
+                      [
+                        hierarchy.neighborhood || '',  // empty string if no data
+                        hierarchy.postcode || '',
+                        hierarchy.place || '',  // city
+                        hierarchy.district || '',  // county/subdivision
+                        hierarchy.region || '',
+                        hierarchy.country || '',
+                        Date.now(),
+                        loc.location_id
+                      ]
+                    );
+
+                    enrichedCount++;
+
+                    // Small delay to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                  } catch (err) {
+                    console.error(`Failed to enrich location ${loc.name}:`, err);
+                    errorCount++;
+                  }
+                }
+
+                setRefreshKey(prev => prev + 1);
+
+                if (errorCount > 0) {
+                  Alert.alert(
+                    'Partial Success',
+                    `Enriched ${enrichedCount} location${enrichedCount === 1 ? '' : 's'}.\n${errorCount} location${errorCount === 1 ? '' : 's'} failed.`
+                  );
+                } else {
+                  Alert.alert(
+                    'Success',
+                    `Enriched ${enrichedCount} location${enrichedCount === 1 ? '' : 's'} with hierarchy data.`
+                  );
+                }
+              } catch (error) {
+                Alert.alert('Error', `Failed to enrich locations: ${error}`);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', `Failed to find locations needing enrichment: ${error}`);
     }
   };
 
@@ -965,7 +1073,10 @@ export function DatabaseInfoScreen() {
 
             {/* Actions */}
             <View style={styles.section}>
-              <TouchableOpacity style={styles.dangerButton} onPress={handleMergeDuplicateLocations}>
+              <TouchableOpacity style={styles.cleanupButton} onPress={handleEnrichLocationHierarchy}>
+                <Text style={styles.cleanupButtonText}>🌍 Enrich Location Hierarchy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.dangerButton, { marginTop: 8 }]} onPress={handleMergeDuplicateLocations}>
                 <Text style={styles.dangerButtonText}>🔀 Merge Duplicate Locations</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.dangerButton, { marginTop: 8 }]} onPress={handleDeleteUnusedLocations}>

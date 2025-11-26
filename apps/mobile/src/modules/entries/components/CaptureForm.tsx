@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Platform, StatusBar, Keyboard, Animated } from "react-native";
+import Slider from "@react-native-community/slider";
 import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput, locationToEntryGpsFields } from "@trace/core";
@@ -76,6 +77,10 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const [status, setStatus] = useState<"none" | "incomplete" | "in_progress" | "complete">("none");
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [rating, setRating] = useState<number>(0);
+  const [showRatingPicker, setShowRatingPicker] = useState(false);
+  const [priority, setPriority] = useState<number>(0);
+  const [showPriorityPicker, setShowPriorityPicker] = useState(false);
   const [entryDate, setEntryDate] = useState<string>(() => {
     // If initialDate is provided (from calendar), use it with current time + 100ms to hide time
     if (initialDate) {
@@ -94,6 +99,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   });
   const [showNativePicker, setShowNativePicker] = useState(false);
   const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
+  const [showEntryDatePicker, setShowEntryDatePicker] = useState(false);
   // Check milliseconds to determine if time should be shown (0 = show, 100 = hidden)
   const [includeTime, setIncludeTime] = useState(() => {
     // If initialDate provided, hide time initially
@@ -138,6 +144,19 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [showMenu, setShowMenu] = useState(false);
 
+  // Get current category for visibility controls
+  const currentCategory = categories.find(c => c.category_id === categoryId);
+
+  // Category-based visibility
+  // If no category: show all fields (default true)
+  // If category set: only show if field is true (database converts 0/1 to false/true)
+  const showRating = !currentCategory || currentCategory.entry_use_rating === true;
+  const showPriority = !currentCategory || currentCategory.entry_use_priority === true;
+  const showStatus = !currentCategory || currentCategory.entry_use_status !== false;
+  const showDueDate = !currentCategory || currentCategory.entry_use_duedates === true;
+  const showLocation = !currentCategory || currentCategory.entry_use_location !== false;
+  const showPhotos = !currentCategory || currentCategory.entry_use_photos !== false;
+
   // Get unsaved changes behavior from settings
   const unsavedChangesBehavior = settings.unsavedChangesBehavior;
 
@@ -148,6 +167,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     categoryId: string | null;
     status: "none" | "incomplete" | "in_progress" | "complete";
     dueDate: string | null;
+    rating: number;
+    priority: number;
     entryDate: string;
     locationData: LocationType | null;
     photoCount: number;
@@ -165,6 +186,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         categoryId: getInitialCategoryId(),
         status: "none",
         dueDate: null,
+        rating: 0,
+        priority: 0,
         entryDate: entryDate,
         locationData: initialLocation || null,
         photoCount: 0,
@@ -429,6 +452,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       setCategoryId(entry.category_id || null);
       setStatus(entry.status);
       setDueDate(entry.due_date);
+      setRating(entry.rating || 0);
+      setPriority(entry.priority || 0);
 
       // Load entry_date or default to created_at
       if (entry.entry_date) {
@@ -518,6 +543,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         categoryId: entry.category_id || null,
         status: entry.status,
         dueDate: entry.due_date,
+        rating: entry.rating || 0,
+        priority: entry.priority || 0,
         entryDate: entry.entry_date || entry.created_at || entryDate,
         locationData: null, // Will be updated when location loads
         photoCount: 0, // Will be updated when photos load
@@ -742,6 +769,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           entry_date: entryDate,
           status,
           due_date: dueDate,
+          rating: rating || 0,
+          priority: priority || 0,
           location_id,
           ...gpsFields,
         });
@@ -760,6 +789,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           category_id: categoryId,
           status,
           due_date: dueDate,
+          rating: rating || 0,
+          priority: priority || 0,
           location_id,
           ...gpsFields,
         });
@@ -809,6 +840,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         setLocationData(null);
         setStatus("none");
         setDueDate(null);
+        setRating(0);
+        setPriority(0);
       }
 
       // Navigate back to inbox with the category that was set
@@ -1064,9 +1097,12 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         {/* Date */}
         <TouchableOpacity
           onPress={() => {
-            setPickerMode("date");
-            setShowNativePicker(true);
-            if (!isEditMode) enterEditMode();
+            editorRef.current?.blur();
+            Keyboard.dismiss();
+            setTimeout(() => {
+              setShowEntryDatePicker(true);
+              if (!isEditMode) enterEditMode();
+            }, 100);
           }}
         >
           <Text style={styles.entryDateText}>
@@ -1115,17 +1151,18 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         )}
 
         {/* Status - Right aligned */}
-        <TouchableOpacity
-          style={styles.statusButton}
-          onPress={() => {
-            // Cycle through: none -> incomplete -> in_progress -> complete -> none
-            if (status === "none") setStatus("incomplete");
-            else if (status === "incomplete") setStatus("in_progress");
-            else if (status === "in_progress") setStatus("complete");
-            else setStatus("none");
-            if (!isEditMode) enterEditMode();
-          }}
-        >
+        {showStatus && (
+          <TouchableOpacity
+            style={styles.statusButton}
+            onPress={() => {
+              // Cycle through: none -> incomplete -> in_progress -> complete -> none
+              if (status === "none") setStatus("incomplete");
+              else if (status === "incomplete") setStatus("in_progress");
+              else if (status === "in_progress") setStatus("complete");
+              else setStatus("none");
+              if (!isEditMode) enterEditMode();
+            }}
+          >
           <View style={styles.statusContent}>
             {status !== "none" && (
               <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
@@ -1153,42 +1190,46 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             </Text>
           </View>
         </TouchableOpacity>
+        )}
       </View>
 
       {/* Metadata Bar - Text links with dividers */}
       <View style={styles.metadataBar}>
         {/* Location */}
-        <TouchableOpacity
-          style={styles.metadataLink}
-          onPress={async () => {
-            editorRef.current?.blur();
-            Keyboard.dismiss();
+        {showLocation && (
+          <TouchableOpacity
+            style={styles.metadataLink}
+            onPress={async () => {
+              editorRef.current?.blur();
+              Keyboard.dismiss();
 
-            // Dynamically load LocationPicker only when needed
-            if (!LocationPickerComponent) {
-              const { LocationPicker } = await import('../../locations/components/LocationPicker');
-              setLocationPickerComponent(() => LocationPicker);
-            }
+              // Dynamically load LocationPicker only when needed
+              if (!LocationPickerComponent) {
+                const { LocationPicker } = await import('../../locations/components/LocationPicker');
+                setLocationPickerComponent(() => LocationPicker);
+              }
 
-            setTimeout(() => setShowLocationPicker(!showLocationPicker), 100);
-          }}
-        >
-          <View style={styles.metadataLinkContent}>
-            {captureLocation && (
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                <Circle cx={12} cy={10} r={3} fill={theme.colors.text.primary} />
-              </Svg>
-            )}
-            <Text style={[styles.metadataText, captureLocation && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-              {captureLocation ? (locationData?.name || "GPS") : "Add Location"}
-            </Text>
-          </View>
-        </TouchableOpacity>
+              setTimeout(() => setShowLocationPicker(!showLocationPicker), 100);
+            }}
+          >
+            <View style={styles.metadataLinkContent}>
+              {captureLocation && (
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+                  <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+                  <Circle cx={12} cy={10} r={3} fill={theme.colors.text.primary} />
+                </Svg>
+              )}
+              <Text style={[styles.metadataText, captureLocation && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                {captureLocation ? (locationData?.name || "GPS") : "Add Location"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
-        <Text style={styles.metadataDivider}>|</Text>
+        {/* Divider after Location */}
+        {showLocation && <Text style={styles.metadataDivider}>|</Text>}
 
-        {/* Category */}
+        {/* Category - always shown */}
         <TouchableOpacity
           style={styles.metadataLink}
           onPress={() => {
@@ -1209,66 +1250,135 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           </View>
         </TouchableOpacity>
 
-        <Text style={styles.metadataDivider}>|</Text>
+        {/* Divider after Category if any following item is visible */}
+        {(showDueDate || showRating || showPriority || (showPhotos && (photosCollapsed || photoCount === 0))) && (
+          <Text style={styles.metadataDivider}>|</Text>
+        )}
 
         {/* Due Date */}
-        <TouchableOpacity
-          style={styles.metadataLink}
-          onPress={() => {
-            editorRef.current?.blur();
-            Keyboard.dismiss();
-            setTimeout(() => {
-              setShowDatePicker(!showDatePicker);
-              if (!isEditMode) enterEditMode();
-            }, 100);
-          }}
-        >
-          <View style={styles.metadataLinkContent}>
-            {dueDate && (
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
-                <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            )}
-            <Text style={[styles.metadataText, dueDate && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-              {dueDate ? `Due: ${new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : "Add Due Date"}
-            </Text>
-          </View>
-        </TouchableOpacity>
+        {showDueDate && (
+          <TouchableOpacity
+            style={styles.metadataLink}
+            onPress={() => {
+              editorRef.current?.blur();
+              Keyboard.dismiss();
+              setTimeout(() => {
+                setShowDatePicker(!showDatePicker);
+                if (!isEditMode) enterEditMode();
+              }, 100);
+            }}
+          >
+            <View style={styles.metadataLinkContent}>
+              {dueDate && (
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+                  <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
+                  <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
+                  <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
+                  <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              )}
+              <Text style={[styles.metadataText, dueDate && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                {dueDate ? `Due: ${new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : "Add Due Date"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Divider after Due Date if any following item is visible */}
+        {showDueDate && (showRating || showPriority || (showPhotos && (photosCollapsed || photoCount === 0))) && (
+          <Text style={styles.metadataDivider}>|</Text>
+        )}
+
+        {/* Rating */}
+        {showRating && (
+          <TouchableOpacity
+            style={styles.metadataLink}
+            onPress={() => {
+              editorRef.current?.blur();
+              Keyboard.dismiss();
+              setTimeout(() => {
+                setShowRatingPicker(true);
+                if (!isEditMode) enterEditMode();
+              }, 100);
+            }}
+          >
+            <View style={styles.metadataLinkContent}>
+              {rating > 0 && (
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill={theme.colors.text.primary} stroke="none">
+                  <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </Svg>
+              )}
+              <Text style={[styles.metadataText, rating > 0 && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                {rating > 0 ? `${rating}/5` : "Add Rating"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Divider after Rating if any following item is visible */}
+        {showRating && (showPriority || (showPhotos && (photosCollapsed || photoCount === 0))) && (
+          <Text style={styles.metadataDivider}>|</Text>
+        )}
+
+        {/* Priority */}
+        {showPriority && (
+          <TouchableOpacity
+            style={styles.metadataLink}
+            onPress={() => {
+              editorRef.current?.blur();
+              Keyboard.dismiss();
+              setTimeout(() => {
+                setShowPriorityPicker(true);
+                if (!isEditMode) enterEditMode();
+              }, 100);
+            }}
+          >
+            <View style={styles.metadataLinkContent}>
+              {priority > 0 && (
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill={theme.colors.text.primary} stroke="none">
+                  <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.primary} />
+                  <Path d="M5 3h13l-4 5 4 5H5z" />
+                </Svg>
+              )}
+              <Text style={[styles.metadataText, priority > 0 && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                {priority > 0 ? `${priority}` : "Add Priority"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Divider after Priority if Photos is visible */}
+        {showPriority && showPhotos && (photosCollapsed || photoCount === 0) && (
+          <Text style={styles.metadataDivider}>|</Text>
+        )}
 
         {/* Photos - only show when collapsed or no photos */}
-        {(photosCollapsed || photoCount === 0) && (
-          <>
-            <Text style={styles.metadataDivider}>|</Text>
-
-            <TouchableOpacity
-              style={styles.metadataLink}
-              onPress={() => {
-                if (photoCount > 0) {
-                  // Toggle collapse if there are photos
-                  setPhotosCollapsed(!photosCollapsed);
-                } else {
-                  // No photos - launch photo capture and enter edit mode
-                  if (!isEditMode) enterEditMode();
-                  photoCaptureRef.current?.openMenu();
-                }
-              }}
-            >
-              <View style={styles.metadataLinkContent}>
-                {photoCount > 0 && (
-                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                    <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                    <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
-                )}
-                <Text style={[styles.metadataText, photoCount > 0 && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                  {photoCount > 0 ? `${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}` : "Add Photos"}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </>
+        {showPhotos && (photosCollapsed || photoCount === 0) && (
+          <TouchableOpacity
+            style={styles.metadataLink}
+            onPress={() => {
+              if (photoCount > 0) {
+                // Toggle collapse if there are photos
+                setPhotosCollapsed(!photosCollapsed);
+              } else {
+                // No photos - launch photo capture and enter edit mode
+                if (!isEditMode) enterEditMode();
+                photoCaptureRef.current?.openMenu();
+              }
+            }}
+          >
+            <View style={styles.metadataLinkContent}>
+              {photoCount > 0 && (
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+                  <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+                  <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              )}
+              <Text style={[styles.metadataText, photoCount > 0 && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                {photoCount > 0 ? `${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}` : "Add Photos"}
+              </Text>
+            </View>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -1348,10 +1458,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
                 style={styles.toolbarButton}
                 onPress={() => editorRef.current?.toggleHeading(1)}
               >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Path d="M4 12h8M4 6v12M12 6v12" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M17 12v6M17 12l2-2" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Text style={styles.headingButtonText}>H1</Text>
               </TouchableOpacity>
 
               {/* H2 Button */}
@@ -1359,10 +1466,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
                 style={styles.toolbarButton}
                 onPress={() => editorRef.current?.toggleHeading(2)}
               >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Path d="M4 12h8M4 6v12M12 6v12" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M15 18h5l-2.5-3c1.5-1 2-2.5 1-4-.5-1-1.5-1-2.5-1s-2 1-2 2" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Text style={styles.headingButtonText}>H2</Text>
               </TouchableOpacity>
             </View>
 
@@ -1616,7 +1720,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         </TopBarDropdownContainer>
       )}
 
-      {/* Date Picker Dropdown */}
+      {/* Date Picker Dropdown (Due Date) */}
       <TopBarDropdownContainer
         visible={showDatePicker}
         onClose={() => setShowDatePicker(false)}
@@ -1636,6 +1740,26 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             }
           }}
           onClose={() => setShowDatePicker(false)}
+        />
+      </TopBarDropdownContainer>
+
+      {/* Entry Date Picker Dropdown */}
+      <TopBarDropdownContainer
+        visible={showEntryDatePicker}
+        onClose={() => setShowEntryDatePicker(false)}
+      >
+        <SimpleDatePicker
+          value={new Date(entryDate)}
+          onChange={(date) => {
+            if (date) {
+              // Preserve the current time when changing date
+              const currentDate = new Date(entryDate);
+              date.setHours(currentDate.getHours(), currentDate.getMinutes(), currentDate.getSeconds(), currentDate.getMilliseconds());
+              setEntryDate(date.toISOString());
+            }
+          }}
+          onClose={() => setShowEntryDatePicker(false)}
+          allowClear={false}
         />
       </TopBarDropdownContainer>
 
@@ -1687,21 +1811,6 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         </View>
       </TopBarDropdownContainer>
 
-      {/* Native Date Picker */}
-      {showNativePicker && pickerMode === "date" && (
-        <DateTimePicker
-          value={new Date(entryDate)}
-          mode="date"
-          display="spinner"
-          onChange={(event, selectedDate) => {
-            if (event.type === "set" && selectedDate) {
-              setEntryDate(selectedDate.toISOString());
-            }
-            setShowNativePicker(false);
-          }}
-        />
-      )}
-
       {/* Native Time Picker (triggered from modal) */}
       {showNativePicker && pickerMode === "time" && (
         <DateTimePicker
@@ -1718,6 +1827,144 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           }}
         />
       )}
+
+      {/* Rating Picker Modal */}
+      <TopBarDropdownContainer
+        visible={showRatingPicker}
+        onClose={() => setShowRatingPicker(false)}
+      >
+        <View style={styles.pickerContainer}>
+          <Text style={styles.pickerTitle}>Set Rating</Text>
+
+          {/* Star Rating Buttons - 1 to 5 stars */}
+          <View style={styles.starRatingRow}>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <TouchableOpacity
+                key={value}
+                style={styles.starRatingButton}
+                onPress={() => {
+                  setRating(value);
+                  showSnackbar(`Rating set to ${value}/5`);
+                  setShowRatingPicker(false);
+                }}
+              >
+                <Text style={[styles.starRatingIcon, rating >= value && styles.starRatingIconActive]}>
+                  ★
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Clear Rating Button */}
+          {rating > 0 && (
+            <TouchableOpacity
+              style={[styles.pickerButton, styles.pickerButtonDanger]}
+              onPress={() => {
+                setRating(0);
+                showSnackbar('Rating cleared');
+                setShowRatingPicker(false);
+              }}
+            >
+              <Text style={[styles.pickerButtonText, styles.pickerButtonDangerText]}>
+                Clear Rating
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TopBarDropdownContainer>
+
+      {/* Priority Picker Modal */}
+      <TopBarDropdownContainer
+        visible={showPriorityPicker}
+        onClose={() => setShowPriorityPicker(false)}
+      >
+        <View style={styles.pickerContainer}>
+          <Text style={styles.pickerTitle}>Set Priority (1-100)</Text>
+
+          {/* Current Priority Display */}
+          <View style={styles.priorityDisplay}>
+            <Text style={styles.priorityValueText}>{priority || 0}</Text>
+          </View>
+
+          {/* Priority Slider */}
+          <View style={styles.sliderContainer}>
+            <Text style={styles.sliderLabel}>1</Text>
+            <Slider
+              style={styles.slider}
+              minimumValue={1}
+              maximumValue={100}
+              step={1}
+              value={priority || 1}
+              onValueChange={(value) => setPriority(Math.round(value))}
+              minimumTrackTintColor="#3b82f6"
+              maximumTrackTintColor="#d1d5db"
+              thumbTintColor="#3b82f6"
+            />
+            <Text style={styles.sliderLabel}>100</Text>
+          </View>
+
+          {/* Quick Set Buttons - Row 1: 1-10 */}
+          <View style={styles.quickButtonRow}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
+              <TouchableOpacity
+                key={value}
+                style={[styles.quickButton, priority === value && styles.quickButtonSelected]}
+                onPress={() => setPriority(value)}
+              >
+                <Text style={[styles.quickButtonText, priority === value && styles.quickButtonTextSelected]}>
+                  {value}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Quick Set Buttons - Row 2: 20, 30, 40, 50, 60, 70, 80, 90, 100 */}
+          <View style={styles.quickButtonRow}>
+            {[20, 30, 40, 50, 60, 70, 80, 90, 100].map((value) => (
+              <TouchableOpacity
+                key={value}
+                style={[styles.quickButton, priority === value && styles.quickButtonSelected]}
+                onPress={() => setPriority(value)}
+              >
+                <Text style={[styles.quickButtonText, priority === value && styles.quickButtonTextSelected]}>
+                  {value}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.pickerActionRow}>
+            {priority > 0 && (
+              <TouchableOpacity
+                style={[styles.pickerActionButton, styles.pickerButtonDanger]}
+                onPress={() => {
+                  setPriority(0);
+                  showSnackbar('Priority cleared');
+                  setShowPriorityPicker(false);
+                }}
+              >
+                <Text style={[styles.pickerButtonText, styles.pickerButtonDangerText]}>
+                  Clear
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.pickerActionButton, styles.pickerButtonPrimary]}
+              onPress={() => {
+                if (priority > 0) {
+                  showSnackbar(`Priority set to ${priority}`);
+                }
+                setShowPriorityPicker(false);
+              }}
+            >
+              <Text style={styles.pickerButtonText}>
+                Done
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TopBarDropdownContainer>
 
       {/* Photo Capture (hidden, triggered via ref) */}
       <PhotoCapture
@@ -1930,6 +2177,11 @@ const styles = StyleSheet.create({
   toolbarButtonActive: {
     backgroundColor: "#dbeafe",
   },
+  headingButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6b7280",
+  },
   deleteButton: {
     padding: theme.spacing.sm,
     alignItems: "center",
@@ -2005,5 +2257,129 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     textAlign: "center",
+  },
+  // Rating and Priority Picker Styles
+  pickerContainer: {
+    backgroundColor: theme.colors.background.primary,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.sm,
+  },
+  starRatingRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.lg,
+  },
+  starRatingButton: {
+    padding: theme.spacing.sm,
+  },
+  starRatingIcon: {
+    fontSize: 40,
+    color: "#d1d5db",
+  },
+  starRatingIconActive: {
+    color: "#fbbf24",
+  },
+  priorityDisplay: {
+    alignItems: "center",
+    paddingVertical: theme.spacing.xl,
+  },
+  priorityValueText: {
+    fontSize: 48,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.text.primary,
+  },
+  sliderContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+  },
+  slider: {
+    flex: 1,
+    height: 40,
+  },
+  sliderLabel: {
+    fontSize: 14,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.text.secondary,
+    minWidth: 30,
+    textAlign: "center",
+  },
+  sliderTrack: {
+    flex: 1,
+    height: 40,
+    flexDirection: "row",
+    gap: 1,
+  },
+  sliderSegment: {
+    flex: 1,
+    backgroundColor: theme.colors.background.secondary,
+    borderRadius: 2,
+  },
+  sliderSegmentActive: {
+    backgroundColor: "#3b82f6",
+  },
+  quickButtonRow: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    justifyContent: "space-between",
+  },
+  quickButton: {
+    flex: 1,
+    backgroundColor: theme.colors.background.secondary,
+    paddingVertical: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+  },
+  quickButtonSelected: {
+    backgroundColor: "#dbeafe",
+  },
+  quickButtonText: {
+    fontSize: 16,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.text.primary,
+  },
+  quickButtonTextSelected: {
+    color: "#3b82f6",
+  },
+  pickerButton: {
+    backgroundColor: theme.colors.background.secondary,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+  },
+  pickerButtonDanger: {
+    backgroundColor: "#fee2e2",
+  },
+  pickerButtonDangerText: {
+    color: "#dc2626",
+  },
+  pickerActionRow: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+  },
+  pickerActionButton: {
+    flex: 1,
+    backgroundColor: theme.colors.background.secondary,
+    paddingVertical: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+  },
+  pickerButtonPrimary: {
+    backgroundColor: "#3b82f6",
+  },
+  pickerButtonText: {
+    fontSize: 16,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.text.primary,
   },
 });

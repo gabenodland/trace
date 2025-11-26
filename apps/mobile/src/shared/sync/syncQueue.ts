@@ -641,6 +641,25 @@ class SyncQueue {
 
       // Prepare data for Supabase (exclude sync tracking fields)
       // Convert timestamps from Unix milliseconds to ISO strings
+
+      // IMPORTANT: Enforce completed_at constraint
+      // Database constraint: completed_at_requires_complete_status
+      // - status = 'complete' => completed_at must NOT be null
+      // - status != 'complete' => completed_at must be null
+      let completedAtValue: string | null = null;
+      if (entry.status === 'complete') {
+        // Status is complete - ensure completed_at has a value
+        if (entry.completed_at) {
+          completedAtValue = typeof entry.completed_at === 'number'
+            ? new Date(entry.completed_at).toISOString()
+            : entry.completed_at;
+        } else {
+          // No completed_at but status is complete - set it to now
+          completedAtValue = new Date().toISOString();
+        }
+      }
+      // If status != 'complete', completedAtValue stays null (constraint satisfied)
+
       const supabaseData = {
         entry_id: entry.entry_id,
         user_id: entry.user_id,
@@ -659,9 +678,7 @@ class SyncQueue {
         due_date: entry.due_date && (typeof entry.due_date === 'number'
           ? new Date(entry.due_date).toISOString()
           : entry.due_date),
-        completed_at: entry.completed_at && (typeof entry.completed_at === 'number'
-          ? new Date(entry.completed_at).toISOString()
-          : entry.completed_at),
+        completed_at: completedAtValue,
         created_at: typeof entry.created_at === 'number'
           ? new Date(entry.created_at).toISOString()
           : entry.created_at,
@@ -1110,6 +1127,10 @@ class SyncQueue {
             updated_at: remoteEntry.updated_at,
             deleted_at: remoteEntry.deleted_at,
             attachments: remoteEntry.attachments,
+            // Priority, rating, and pinning fields
+            priority: (remoteEntry as any).priority || 0,
+            rating: (remoteEntry as any).rating || 0.00,
+            is_pinned: (remoteEntry as any).is_pinned || false,
             local_only: 0, // From Supabase, so not local-only
             synced: 1, // Already in Supabase, so marked as synced
             sync_action: null,
@@ -1246,6 +1267,12 @@ class SyncQueue {
             savedCount++;
             console.log(`  ✓ New category: ${category.name}`);
           } else {
+            // Skip if local has unsynced changes - let local changes be pushed first
+            if (localCategory.synced === 0) {
+              console.log(`  ⊘ Skipped (local has unsynced changes): ${category.name}`);
+              continue;
+            }
+
             // Category exists - only update if actual content changed
             // Don't include updated_at in comparison (it changes on every server touch)
             const hasChanged =

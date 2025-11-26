@@ -1,12 +1,14 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { useCategories } from "../modules/categories/mobileCategoryHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
-import { EntryList } from "../modules/entries/components/EntryList";
+import { EntryListItem } from "../modules/entries/components/EntryListItem";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
+import { theme } from "../shared/theme/theme";
 
 // Helper function to format date in YYYY-MM-DD format in local timezone
 function formatDateKey(date: Date): string {
@@ -17,8 +19,8 @@ function formatDateKey(date: Date): string {
 }
 
 interface CalendarScreenProps {
-  returnDate?: string; // Date to select when returning from entry screen
-  returnZoomLevel?: ZoomLevel; // Zoom level to return to
+  returnDate?: string;
+  returnZoomLevel?: ZoomLevel;
 }
 
 type ZoomLevel = "day" | "month" | "year";
@@ -28,12 +30,11 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [zoomLevel, setZoomLevel] = useState<ZoomLevel>("day");
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    // Default to today
     const today = new Date();
     return formatDateKey(today);
   });
 
-  // State for viewing month/year (separate from selected date)
+  // State for viewing month/year
   const [viewingMonth, setViewingMonth] = useState(() => new Date().getMonth());
   const [viewingYear, setViewingYear] = useState(() => new Date().getFullYear());
 
@@ -48,7 +49,22 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
   });
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
-  // When returning from entry screen, update selected date and viewing month/year
+  // Scroll refs and grid heights for each view
+  const dayScrollRef = useRef<ScrollView>(null);
+  const monthScrollRef = useRef<ScrollView>(null);
+  const yearScrollRef = useRef<ScrollView>(null);
+  const [dayGridHeight, setDayGridHeight] = useState(400);
+  const [monthGridHeight, setMonthGridHeight] = useState(300);
+  const [yearGridHeight, setYearGridHeight] = useState(300);
+
+  // Scroll position tracking
+  const [dayScrollY, setDayScrollY] = useState(0);
+  const [monthScrollY, setMonthScrollY] = useState(0);
+  const [yearScrollY, setYearScrollY] = useState(0);
+
+  const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
+
+  // Return date handling
   useEffect(() => {
     if (returnDate) {
       const date = new Date(returnDate);
@@ -57,20 +73,17 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
       setViewingMonth(date.getMonth());
       setViewingYear(date.getFullYear());
       setMonthViewYear(date.getFullYear());
-      // Return to the zoom level we were on before navigating away
       if (returnZoomLevel) {
         setZoomLevel(returnZoomLevel);
       }
     }
   }, [returnDate, returnZoomLevel]);
 
-  // Get all entries
-  const { entries, isLoading } = useEntries({});
-
-  // Get categories for display
+  // Data hooks
+  const { entries } = useEntries({});
   const { categories } = useCategories();
 
-  // Calculate entry counts by date
+  // Entry counts
   const entryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     entries.forEach(entry => {
@@ -81,7 +94,6 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     return counts;
   }, [entries]);
 
-  // Calculate entry counts by month (YYYY-MM)
   const monthCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     entries.forEach(entry => {
@@ -92,7 +104,6 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     return counts;
   }, [entries]);
 
-  // Calculate entry counts by year
   const yearCounts = useMemo(() => {
     const counts: Record<number, number> = {};
     entries.forEach(entry => {
@@ -103,7 +114,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     return counts;
   }, [entries]);
 
-  // Filter entries for selected date
+  // Filtered entries
   const filteredEntries = useMemo(() => {
     return entries.filter(entry => {
       const date = new Date(entry.entry_date || entry.created_at);
@@ -112,7 +123,6 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     });
   }, [entries, selectedDate]);
 
-  // Filter entries for selected year (always compute, use when needed)
   const filteredEntriesForYear = useMemo(() => {
     if (selectedYear === null) return [];
     return entries.filter(entry => {
@@ -121,7 +131,6 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     });
   }, [entries, selectedYear]);
 
-  // Filter entries for selected month (always compute, use when needed)
   const filteredEntriesForMonth = useMemo(() => {
     if (selectedMonth === null) return [];
     return entries.filter(entry => {
@@ -130,32 +139,79 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     });
   }, [entries, monthViewYear, selectedMonth]);
 
+  // Category map
+  const categoryMap = categories?.reduce((map, cat) => {
+    map[cat.category_id] = cat.full_path;
+    return map;
+  }, {} as Record<string, string>);
+
+  // Navigation handlers
   const handleEntryPress = (entryId: string) => {
     navigate("capture", {
       entryId,
-      returnContext: {
-        screen: "calendar",
-        selectedDate,
-        zoomLevel
-      }
+      returnContext: { screen: "calendar", selectedDate, zoomLevel }
     });
   };
 
   const handleTagPress = (tag: string) => {
-    // Navigate to inbox with tag filter
     navigate("inbox", { returnCategoryId: `tag:${tag}`, returnCategoryName: `#${tag}` });
   };
 
   const handleMentionPress = (mention: string) => {
-    // Navigate to inbox with mention filter
     navigate("inbox", { returnCategoryId: `mention:${mention}`, returnCategoryName: `@${mention}` });
   };
 
-  const handleCategoryPress = (categoryId: string | null, categoryName: string) => {
-    // Navigate to inbox with category filter
-    navigate("inbox", { returnCategoryId: categoryId, returnCategoryName: categoryName });
+  const handleAddEntry = () => {
+    let dateToUse = selectedDate;
+    if (zoomLevel === "month" && selectedMonth !== null) {
+      const firstDay = new Date(monthViewYear, selectedMonth, 1);
+      dateToUse = formatDateKey(firstDay);
+    }
+    if (zoomLevel === "year" && selectedYear !== null) {
+      const firstDay = new Date(selectedYear, 0, 1);
+      dateToUse = formatDateKey(firstDay);
+    }
+    navigate("capture", {
+      initialDate: dateToUse,
+      returnContext: { screen: "calendar", selectedDate: dateToUse, zoomLevel }
+    });
   };
 
+  // Calendar generation
+  const today = new Date();
+  const currentMonth = viewingMonth;
+  const currentYear = viewingYear;
+  const firstDay = new Date(currentYear, currentMonth, 1);
+  const lastDay = new Date(currentYear, currentMonth + 1, 0);
+  const startDayOfWeek = firstDay.getDay();
+  const daysInMonth = lastDay.getDate();
+  const monthName = firstDay.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+  const calendar: Array<{ day: number; isCurrentMonth: boolean; date: Date }> = [];
+  const prevMonthLastDay = new Date(currentYear, currentMonth, 0);
+  const prevMonthDays = prevMonthLastDay.getDate();
+  for (let i = startDayOfWeek - 1; i >= 0; i--) {
+    const day = prevMonthDays - i;
+    const date = new Date(currentYear, currentMonth - 1, day);
+    calendar.push({ day, isCurrentMonth: false, date });
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(currentYear, currentMonth, day);
+    calendar.push({ day, isCurrentMonth: true, date });
+  }
+  const remainingCells = 42 - calendar.length;
+  for (let day = 1; day <= remainingCells; day++) {
+    const date = new Date(currentYear, currentMonth + 1, day);
+    calendar.push({ day, isCurrentMonth: false, date });
+  }
+
+  const [selYear, selMonth, selDay] = selectedDate.split('-').map(Number);
+  const selectedDateObj = new Date(selYear, selMonth - 1, selDay);
+  const formattedSelectedDate = selectedDateObj.toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric',
+  });
+
+  // Day view navigation
   const handlePrevMonth = () => {
     if (viewingMonth === 0) {
       setViewingMonth(11);
@@ -181,44 +237,8 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     setSelectedDate(formatDateKey(today));
   };
 
-  // Generate calendar for viewing month
-  const today = new Date();
-  const currentMonth = viewingMonth;
-  const currentYear = viewingYear;
-
-  const firstDay = new Date(currentYear, currentMonth, 1);
-  const lastDay = new Date(currentYear, currentMonth + 1, 0);
-  const startDayOfWeek = firstDay.getDay();
-  const daysInMonth = lastDay.getDate();
-
-  const monthName = firstDay.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-
-  // Build calendar grid with previous and next month days
-  const calendar: Array<{ day: number; isCurrentMonth: boolean; date: Date }> = [];
-
-  // Add days from previous month
-  const prevMonthLastDay = new Date(currentYear, currentMonth, 0);
-  const prevMonthDays = prevMonthLastDay.getDate();
-  for (let i = startDayOfWeek - 1; i >= 0; i--) {
-    const day = prevMonthDays - i;
-    const date = new Date(currentYear, currentMonth - 1, day);
-    calendar.push({ day, isCurrentMonth: false, date });
-  }
-
-  // Add days from current month
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(currentYear, currentMonth, day);
-    calendar.push({ day, isCurrentMonth: true, date });
-  }
-
-  // Add days from next month to complete the grid (always show 6 rows)
-  const remainingCells = 42 - calendar.length; // 6 rows * 7 days
-  for (let day = 1; day <= remainingCells; day++) {
-    const date = new Date(currentYear, currentMonth + 1, day);
-    calendar.push({ day, isCurrentMonth: false, date });
-  }
-
-  const renderDay = (dayInfo: { day: number; isCurrentMonth: boolean; date: Date }, index: number) => {
+  // Render day cell
+  const renderDay = (dayInfo: { day: number; isCurrentMonth: boolean; date: Date }) => {
     const { day, isCurrentMonth, date } = dayInfo;
     const dateKey = formatDateKey(date);
     const count = entryCounts[dateKey] || 0;
@@ -254,267 +274,334 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     );
   };
 
-  // Parse selectedDate (YYYY-MM-DD) in local timezone to avoid UTC conversion
-  const [selYear, selMonth, selDay] = selectedDate.split('-').map(Number);
-  const selectedDateObj = new Date(selYear, selMonth - 1, selDay);
-  const formattedSelectedDate = selectedDateObj.toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
-
-  // Render day view
-  const renderDayView = () => (
-    <ScrollView style={styles.content}>
-      {/* Calendar */}
-      <View style={styles.calendarContainer}>
-        {/* Month navigation */}
-        <View style={styles.monthHeader}>
-          <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
-            <Text style={styles.navButtonText}>‹</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.monthTitle}>{monthName}</Text>
-
-          <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-            <Text style={styles.navButtonText}>›</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Today button */}
-        <TouchableOpacity onPress={handleToday} style={styles.todayButton}>
-          <Text style={styles.todayButtonText}>Today</Text>
-        </TouchableOpacity>
-
-        {/* Day headers */}
-        <View style={styles.weekRow}>
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-            <View key={index} style={styles.dayHeaderCell}>
-              <Text style={styles.dayHeaderText}>{day}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Calendar grid */}
-        <View style={styles.calendarGrid}>
-          {Array.from({ length: Math.ceil(calendar.length / 7) }).map((_, weekIndex) => (
-            <View key={weekIndex} style={styles.weekRow}>
-              {calendar.slice(weekIndex * 7, weekIndex * 7 + 7).map((day, dayIndex) =>
-                renderDay(day, weekIndex * 7 + dayIndex)
-              )}
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* Entries for selected date */}
-      <View style={styles.entriesSection}>
-        <Text style={styles.entriesSectionTitle}>
-          {formattedSelectedDate} • {filteredEntries.length} {filteredEntries.length === 1 ? 'entry' : 'entries'}
-        </Text>
-        <EntryList
-          entries={filteredEntries}
-          isLoading={isLoading}
-          onEntryPress={handleEntryPress}
-          onTagPress={handleTagPress}
-          onMentionPress={handleMentionPress}
-          categories={categories}
-        />
-      </View>
-    </ScrollView>
-  );
-
-  const handleAddEntry = () => {
-    let dateToUse = selectedDate;
-
-    // In month view, use first day of selected month
-    if (zoomLevel === "month" && selectedMonth !== null) {
-      const firstDay = new Date(monthViewYear, selectedMonth, 1);
-      dateToUse = formatDateKey(firstDay);
-    }
-
-    // In year view, use Jan 1 of selected year
-    if (zoomLevel === "year" && selectedYear !== null) {
-      const firstDay = new Date(selectedYear, 0, 1);
-      dateToUse = formatDateKey(firstDay);
-    }
-
-    navigate("capture", {
-      initialDate: dateToUse,
-      returnContext: {
-        screen: "calendar",
-        selectedDate: dateToUse,
-        zoomLevel
-      }
-    });
-  };
-
-  // Render year view (decade view)
-  const renderYearView = () => {
-    const decadeStart = viewingDecade;
-    const decadeEnd = viewingDecade + 9;
-    const years = Array.from({ length: 10 }, (_, i) => decadeStart + i);
-
-    const handlePrevDecade = () => {
-      setViewingDecade(viewingDecade - 10);
-      setSelectedYear(null);
-    };
-
-    const handleNextDecade = () => {
-      setViewingDecade(viewingDecade + 10);
-      setSelectedYear(null);
-    };
+  // Render Day View
+  const renderDayView = () => {
+    const isScrolledPastGrid = dayScrollY > dayGridHeight - 50;
 
     return (
       <View style={styles.content}>
-        {/* Decade navigation */}
-        <View style={styles.yearViewHeader}>
-          <TouchableOpacity onPress={handlePrevDecade} style={styles.navButton}>
-            <Text style={styles.navButtonText}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.decadeTitle}>{decadeStart}-{decadeEnd}</Text>
-          <TouchableOpacity onPress={handleNextDecade} style={styles.navButton}>
-            <Text style={styles.navButtonText}>›</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Years grid */}
-        <View style={styles.yearsGrid}>
-          {years.map(year => {
-            const count = yearCounts[year] || 0;
-            const isSelected = year === selectedYear;
-
-            return (
-              <TouchableOpacity
-                key={year}
-                style={[styles.yearCell, isSelected && styles.yearCellSelected]}
-                onPress={() => {
-                  if (isSelected) {
-                    // Double-click behavior: go to month view
-                    setMonthViewYear(year);
-                    setSelectedMonth(null);
-                    setZoomLevel("month");
-                  } else {
-                    setSelectedYear(year);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.yearCellText, isSelected && styles.yearCellTextSelected]}>
-                  {year}
-                </Text>
-                {count > 0 && (
-                  <View style={[styles.countBadge, isSelected && styles.countBadgeSelected]}>
-                    <Text style={[styles.countText, isSelected && styles.countTextSelected]}>
-                      {count}
-                    </Text>
-                  </View>
-                )}
+        <ScrollView
+          ref={dayScrollRef}
+          onScroll={(e) => setDayScrollY(e.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={16}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Calendar Grid */}
+          <View
+            style={styles.calendarContainer}
+            onLayout={(e) => setDayGridHeight(e.nativeEvent.layout.height)}
+          >
+            <View style={styles.monthHeader}>
+              <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
+                <Text style={styles.navButtonText}>‹</Text>
               </TouchableOpacity>
-            );
-          })}
-        </View>
+              <Text style={styles.monthTitle}>{monthName}</Text>
+              <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
+                <Text style={styles.navButtonText}>›</Text>
+              </TouchableOpacity>
+            </View>
 
-        {/* Entries for selected year */}
-        {selectedYear !== null && (
-          <View style={styles.entriesSection}>
-            <Text style={styles.entriesSectionTitle}>
-              {selectedYear} • {filteredEntriesForYear.length} {filteredEntriesForYear.length === 1 ? 'entry' : 'entries'}
+            <TouchableOpacity onPress={handleToday} style={styles.todayButton}>
+              <Text style={styles.todayButtonText}>Today</Text>
+            </TouchableOpacity>
+
+            <View style={styles.weekRow}>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                <View key={index} style={styles.dayHeaderCell}>
+                  <Text style={styles.dayHeaderText}>{day}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.calendarGrid}>
+              {Array.from({ length: Math.ceil(calendar.length / 7) }).map((_, weekIndex) => (
+                <View key={weekIndex} style={styles.weekRow}>
+                  {calendar.slice(weekIndex * 7, weekIndex * 7 + 7).map(renderDay)}
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Entry List Header */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeaderTitle}>
+              {`${formattedSelectedDate} • ${filteredEntries.length} ${filteredEntries.length === 1 ? 'entry' : 'entries'}`}
             </Text>
-            <EntryList
-              entries={filteredEntriesForYear}
-              isLoading={false}
-              onEntryPress={handleEntryPress}
-              onTagPress={handleTagPress}
-              onMentionPress={handleMentionPress}
-              categories={categories}
-            />
+          </View>
+
+          {/* Entries */}
+          {filteredEntries.length === 0 ? (
+            <View style={styles.emptyEntriesContainer}>
+              <Text style={styles.emptyEntriesText}>No entries for this date</Text>
+            </View>
+          ) : (
+            filteredEntries.map(entry => (
+              <View key={entry.entry_id} style={styles.entryItemWrapper}>
+                <EntryListItem
+                  entry={entry}
+                  onPress={() => handleEntryPress(entry.entry_id)}
+                  onTagPress={handleTagPress}
+                  onMentionPress={handleMentionPress}
+                  categoryName={entry.category_id && categoryMap ? categoryMap[entry.category_id] : null}
+                  showMenu={openMenuEntryId === entry.entry_id}
+                  onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
+                />
+              </View>
+            ))
+          )}
+        </ScrollView>
+
+        {/* Fixed Overlay Header */}
+        {isScrolledPastGrid && (
+          <View style={styles.fixedOverlayHeader}>
+            <Text style={styles.fixedOverlayTitle}>
+              {`${formattedSelectedDate} • ${filteredEntries.length} ${filteredEntries.length === 1 ? 'entry' : 'entries'}`}
+            </Text>
+            <TouchableOpacity
+              onPress={() => dayScrollRef.current?.scrollTo({ y: 0, animated: true })}
+              style={styles.scrollToTopButton}
+            >
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
+                <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
           </View>
         )}
       </View>
     );
   };
 
-  // Render month view (year view)
+  // Render Month View
   const renderMonthView = () => {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'];
-
-    const handlePrevYear = () => {
-      setMonthViewYear(monthViewYear - 1);
-      setSelectedMonth(null);
-    };
-
-    const handleNextYear = () => {
-      setMonthViewYear(monthViewYear + 1);
-      setSelectedMonth(null);
-    };
+    const selectedMonthName = selectedMonth !== null ? monthNames[selectedMonth] : '';
+    const isScrolledPastGrid = monthScrollY > monthGridHeight - 50;
 
     return (
       <View style={styles.content}>
-        {/* Year navigation */}
-        <View style={styles.monthViewHeader}>
-          <TouchableOpacity onPress={handlePrevYear} style={styles.navButton}>
-            <Text style={styles.navButtonText}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.yearTitle}>{monthViewYear}</Text>
-          <TouchableOpacity onPress={handleNextYear} style={styles.navButton}>
-            <Text style={styles.navButtonText}>›</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Months grid */}
-        <View style={styles.monthsGrid}>
-          {monthNames.map((monthName, monthIndex) => {
-            const monthKey = `${monthViewYear}-${String(monthIndex + 1).padStart(2, '0')}`;
-            const count = monthCounts[monthKey] || 0;
-            const isSelected = monthIndex === selectedMonth;
-
-            return (
-              <TouchableOpacity
-                key={monthIndex}
-                style={[styles.monthCell, isSelected && styles.monthCellSelected]}
-                onPress={() => {
-                  if (isSelected) {
-                    // Double-click behavior: go to day view
-                    setViewingMonth(monthIndex);
-                    setViewingYear(monthViewYear);
-                    setZoomLevel("day");
-                  } else {
-                    setSelectedMonth(monthIndex);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.monthCellText, isSelected && styles.monthCellTextSelected]}>
-                  {monthName.substring(0, 3)}
-                </Text>
-                {count > 0 && (
-                  <View style={[styles.countBadge, isSelected && styles.countBadgeSelected]}>
-                    <Text style={[styles.countText, isSelected && styles.countTextSelected]}>
-                      {count}
-                    </Text>
-                  </View>
-                )}
+        <ScrollView
+          ref={monthScrollRef}
+          onScroll={(e) => setMonthScrollY(e.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={16}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Month Grid */}
+          <View
+            style={styles.calendarContainer}
+            onLayout={(e) => setMonthGridHeight(e.nativeEvent.layout.height)}
+          >
+            <View style={styles.monthViewHeader}>
+              <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear - 1); setSelectedMonth(null); }} style={styles.navButton}>
+                <Text style={styles.navButtonText}>‹</Text>
               </TouchableOpacity>
-            );
-          })}
-        </View>
+              <Text style={styles.yearTitle}>{monthViewYear}</Text>
+              <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear + 1); setSelectedMonth(null); }} style={styles.navButton}>
+                <Text style={styles.navButtonText}>›</Text>
+              </TouchableOpacity>
+            </View>
 
-        {/* Entries for selected month */}
-        {selectedMonth !== null && (
-          <View style={styles.entriesSection}>
-            <Text style={styles.entriesSectionTitle}>
-              {monthNames[selectedMonth]} {monthViewYear} • {filteredEntriesForMonth.length} {filteredEntriesForMonth.length === 1 ? 'entry' : 'entries'}
+            <View style={styles.monthsGrid}>
+              {monthNames.map((name, monthIndex) => {
+                const monthKey = `${monthViewYear}-${String(monthIndex + 1).padStart(2, '0')}`;
+                const count = monthCounts[monthKey] || 0;
+                const isSelected = monthIndex === selectedMonth;
+
+                return (
+                  <TouchableOpacity
+                    key={monthIndex}
+                    style={[styles.monthCell, isSelected && styles.monthCellSelected]}
+                    onPress={() => {
+                      if (isSelected) {
+                        setViewingMonth(monthIndex);
+                        setViewingYear(monthViewYear);
+                        setZoomLevel("day");
+                      } else {
+                        setSelectedMonth(monthIndex);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.monthCellText, isSelected && styles.monthCellTextSelected]}>
+                      {name.substring(0, 3)}
+                    </Text>
+                    {count > 0 && (
+                      <View style={[styles.countBadge, isSelected && styles.countBadgeSelected]}>
+                        <Text style={[styles.countText, isSelected && styles.countTextSelected]}>
+                          {count}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Entry section - only show when month is selected */}
+          {selectedMonth !== null && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeaderTitle}>
+                  {`${selectedMonthName} ${monthViewYear} • ${filteredEntriesForMonth.length} ${filteredEntriesForMonth.length === 1 ? 'entry' : 'entries'}`}
+                </Text>
+              </View>
+
+              {filteredEntriesForMonth.length === 0 ? (
+                <View style={styles.emptyEntriesContainer}>
+                  <Text style={styles.emptyEntriesText}>No entries for this month</Text>
+                </View>
+              ) : (
+                filteredEntriesForMonth.map(entry => (
+                  <View key={entry.entry_id} style={styles.entryItemWrapper}>
+                    <EntryListItem
+                      entry={entry}
+                      onPress={() => handleEntryPress(entry.entry_id)}
+                      onTagPress={handleTagPress}
+                      onMentionPress={handleMentionPress}
+                      categoryName={entry.category_id && categoryMap ? categoryMap[entry.category_id] : null}
+                      showMenu={openMenuEntryId === entry.entry_id}
+                      onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
+                    />
+                  </View>
+                ))
+              )}
+            </>
+          )}
+        </ScrollView>
+
+        {/* Fixed Overlay Header */}
+        {selectedMonth !== null && isScrolledPastGrid && (
+          <View style={styles.fixedOverlayHeader}>
+            <Text style={styles.fixedOverlayTitle}>
+              {`${selectedMonthName} ${monthViewYear} • ${filteredEntriesForMonth.length} ${filteredEntriesForMonth.length === 1 ? 'entry' : 'entries'}`}
             </Text>
-            <EntryList
-              entries={filteredEntriesForMonth}
-              isLoading={false}
-              onEntryPress={handleEntryPress}
-              onTagPress={handleTagPress}
-              onMentionPress={handleMentionPress}
-              categories={categories}
-            />
+            <TouchableOpacity
+              onPress={() => monthScrollRef.current?.scrollTo({ y: 0, animated: true })}
+              style={styles.scrollToTopButton}
+            >
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
+                <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // Render Year View
+  const renderYearView = () => {
+    const decadeStart = viewingDecade;
+    const decadeEnd = viewingDecade + 9;
+    const years = Array.from({ length: 10 }, (_, i) => decadeStart + i);
+    const isScrolledPastGrid = yearScrollY > yearGridHeight - 50;
+
+    return (
+      <View style={styles.content}>
+        <ScrollView
+          ref={yearScrollRef}
+          onScroll={(e) => setYearScrollY(e.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={16}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Year Grid */}
+          <View
+            style={styles.calendarContainer}
+            onLayout={(e) => setYearGridHeight(e.nativeEvent.layout.height)}
+          >
+            <View style={styles.yearViewHeader}>
+              <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade - 10); setSelectedYear(null); }} style={styles.navButton}>
+                <Text style={styles.navButtonText}>‹</Text>
+              </TouchableOpacity>
+              <Text style={styles.decadeTitle}>{decadeStart}-{decadeEnd}</Text>
+              <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade + 10); setSelectedYear(null); }} style={styles.navButton}>
+                <Text style={styles.navButtonText}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.yearsGrid}>
+              {years.map(year => {
+                const count = yearCounts[year] || 0;
+                const isSelected = year === selectedYear;
+
+                return (
+                  <TouchableOpacity
+                    key={year}
+                    style={[styles.yearCell, isSelected && styles.yearCellSelected]}
+                    onPress={() => {
+                      if (isSelected) {
+                        setMonthViewYear(year);
+                        setSelectedMonth(null);
+                        setZoomLevel("month");
+                      } else {
+                        setSelectedYear(year);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.yearCellText, isSelected && styles.yearCellTextSelected]}>
+                      {year}
+                    </Text>
+                    {count > 0 && (
+                      <View style={[styles.countBadge, isSelected && styles.countBadgeSelected]}>
+                        <Text style={[styles.countText, isSelected && styles.countTextSelected]}>
+                          {count}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Entry section - only show when year is selected */}
+          {selectedYear !== null && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeaderTitle}>
+                  {`${selectedYear} • ${filteredEntriesForYear.length} ${filteredEntriesForYear.length === 1 ? 'entry' : 'entries'}`}
+                </Text>
+              </View>
+
+              {filteredEntriesForYear.length === 0 ? (
+                <View style={styles.emptyEntriesContainer}>
+                  <Text style={styles.emptyEntriesText}>No entries for this year</Text>
+                </View>
+              ) : (
+                filteredEntriesForYear.map(entry => (
+                  <View key={entry.entry_id} style={styles.entryItemWrapper}>
+                    <EntryListItem
+                      entry={entry}
+                      onPress={() => handleEntryPress(entry.entry_id)}
+                      onTagPress={handleTagPress}
+                      onMentionPress={handleMentionPress}
+                      categoryName={entry.category_id && categoryMap ? categoryMap[entry.category_id] : null}
+                      showMenu={openMenuEntryId === entry.entry_id}
+                      onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
+                    />
+                  </View>
+                ))
+              )}
+            </>
+          )}
+        </ScrollView>
+
+        {/* Fixed Overlay Header */}
+        {selectedYear !== null && isScrolledPastGrid && (
+          <View style={styles.fixedOverlayHeader}>
+            <Text style={styles.fixedOverlayTitle}>
+              {`${selectedYear} • ${filteredEntriesForYear.length} ${filteredEntriesForYear.length === 1 ? 'entry' : 'entries'}`}
+            </Text>
+            <TouchableOpacity
+              onPress={() => yearScrollRef.current?.scrollTo({ y: 0, animated: true })}
+              style={styles.scrollToTopButton}
+            >
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
+                <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -537,9 +624,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           onPress={() => setZoomLevel("day")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, zoomLevel === "day" && styles.tabTextActive]}>
-            Day
-          </Text>
+          <Text style={[styles.tabText, zoomLevel === "day" && styles.tabTextActive]}>Day</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -547,9 +632,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           onPress={() => setZoomLevel("month")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, zoomLevel === "month" && styles.tabTextActive]}>
-            Month
-          </Text>
+          <Text style={[styles.tabText, zoomLevel === "month" && styles.tabTextActive]}>Month</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -557,17 +640,13 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           onPress={() => setZoomLevel("year")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, zoomLevel === "year" && styles.tabTextActive]}>
-            Year
-          </Text>
+          <Text style={[styles.tabText, zoomLevel === "year" && styles.tabTextActive]}>Year</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Render appropriate view based on zoom level */}
+      {/* Views */}
       {zoomLevel === "day" && renderDayView()}
-
       {zoomLevel === "month" && renderMonthView()}
-
       {zoomLevel === "year" && renderYearView()}
 
       <FloatingActionButton onPress={handleAddEntry} />
@@ -580,9 +659,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f9fafb",
   },
+  content: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  // Calendar container
   calendarContainer: {
     backgroundColor: "#ffffff",
     padding: 16,
+    borderRadius: 12,
     marginBottom: 16,
   },
   monthHeader: {
@@ -695,23 +783,6 @@ const styles = StyleSheet.create({
   countTextSelected: {
     color: "#2563eb",
   },
-  dateHeader: {
-    backgroundColor: "#ffffff",
-    padding: 16,
-    marginBottom: 8,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  dateHeaderText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  dateHeaderCount: {
-    fontSize: 14,
-    color: "#6b7280",
-  },
   // Tab styles
   tabContainer: {
     flexDirection: "row",
@@ -739,121 +810,67 @@ const styles = StyleSheet.create({
     color: "#3b82f6",
     fontWeight: "600",
   },
-  // List view styles
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  yearSection: {
-    marginBottom: 24,
-  },
-  yearSectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 12,
-  },
-  yearItem: {
+  // Section header
+  sectionHeader: {
     backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  yearText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  monthItem: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 8,
-    padding: 16,
     marginBottom: 8,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
   },
-  monthText: {
+  sectionHeaderTitle: {
     fontSize: 16,
-    fontWeight: "500",
+    fontWeight: "600",
     color: "#111827",
   },
-  countBadgeList: {
-    backgroundColor: "#2563eb",
-    borderRadius: 12,
-    minWidth: 32,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 8,
-  },
-  countTextList: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#ffffff",
-  },
-  // Year view (decade) styles
-  yearViewHeader: {
+  // Fixed overlay header
+  fixedOverlayHeader: {
+    position: "absolute",
+    top: 0,
+    left: 16,
+    right: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 24,
+    backgroundColor: "#ffffff",
     paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  decadeTitle: {
-    fontSize: 24,
-    fontWeight: "700",
+  fixedOverlayTitle: {
+    fontSize: 16,
+    fontWeight: "600",
     color: "#111827",
     flex: 1,
-    textAlign: "center",
   },
-  yearsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    paddingHorizontal: 16,
-    flexGrow: 0,
-    flexShrink: 0,
+  scrollToTopButton: {
+    padding: 4,
   },
-  yearCell: {
-    width: "47%",
-    minHeight: 56,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 8,
+  // Entry list
+  entryItemWrapper: {
+    marginBottom: 8,
+  },
+  emptyEntriesContainer: {
     alignItems: "center",
-    justifyContent: "flex-start",
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
+    padding: 24,
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
   },
-  yearCellSelected: {
-    backgroundColor: "#2563eb",
-    borderColor: "#2563eb",
+  emptyEntriesText: {
+    fontSize: 16,
+    color: "#6b7280",
   },
-  yearCellText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  yearCellTextSelected: {
-    color: "#ffffff",
-  },
-  // Month view (year) styles
+  // Month view styles
   monthViewHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 24,
-    paddingHorizontal: 16,
   },
   yearTitle: {
     fontSize: 24,
@@ -866,14 +883,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
-    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   monthCell: {
     width: "30%",
     minHeight: 56,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    backgroundColor: "transparent",
+    borderWidth: 0,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "flex-start",
@@ -883,7 +899,6 @@ const styles = StyleSheet.create({
   },
   monthCellSelected: {
     backgroundColor: "#2563eb",
-    borderColor: "#2563eb",
   },
   monthCellText: {
     fontSize: 14,
@@ -893,16 +908,47 @@ const styles = StyleSheet.create({
   monthCellTextSelected: {
     color: "#ffffff",
   },
-  // Entries section styles
-  entriesSection: {
-    marginTop: 12,
-    flex: 1,
+  // Year view styles
+  yearViewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 24,
   },
-  entriesSectionTitle: {
+  decadeTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#111827",
+    flex: 1,
+    textAlign: "center",
+  },
+  yearsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 16,
+  },
+  yearCell: {
+    width: "30%",
+    minHeight: 48,
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingHorizontal: 12,
+    paddingTop: 6,
+    paddingBottom: 6,
+  },
+  yearCellSelected: {
+    backgroundColor: "#2563eb",
+  },
+  yearCellText: {
     fontSize: 16,
     fontWeight: "600",
     color: "#111827",
-    paddingHorizontal: 16,
-    marginBottom: 12,
+  },
+  yearCellTextSelected: {
+    color: "#ffffff",
   },
 });

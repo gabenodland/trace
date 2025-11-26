@@ -19,6 +19,7 @@ interface EntryListItemProps {
   onToggleComplete?: (entryId: string, currentStatus: "incomplete" | "complete") => void;
   onMove?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
+  onPin?: (entryId: string, currentPinned: boolean) => void;
   categoryName?: string | null; // Category name to display
   locationName?: string | null; // Location name to display
   displayMode?: EntryDisplayMode; // Display mode for content rendering
@@ -26,7 +27,7 @@ interface EntryListItemProps {
   onMenuToggle?: () => void; // Toggle menu visibility
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, categoryName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, onPin, categoryName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(0);
   const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
@@ -58,6 +59,14 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
   };
 
   const menuItems: DropdownMenuItem[] = [
+    {
+      label: entry.is_pinned ? "Unpin" : "Pin",
+      onPress: () => {
+        if (onPin) {
+          onPin(entry.entry_id, entry.is_pinned);
+        }
+      },
+    },
     {
       label: "Move",
       onPress: () => {
@@ -107,6 +116,18 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
 
         {/* Content */}
         <View style={styles.contentWrapper}>
+          {/* Pin Icon - Upper Right (if pinned) */}
+          {entry.is_pinned && (
+            <View style={styles.pinIcon}>
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"
+                  fill="#3b82f6"
+                />
+              </Svg>
+            </View>
+          )}
+
           {/* Menu Button - Upper Right */}
           <TouchableOpacity
             style={styles.menuButton}
@@ -287,6 +308,16 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
               </TouchableOpacity>
             )}
 
+            {/* Location Badge */}
+            {(locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
+              <View style={styles.locationBadge}>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                  <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                </Svg>
+                <Text style={styles.locationText}>{locationName || "GPS"}</Text>
+              </View>
+            )}
+
             {/* Category Badge */}
             <TouchableOpacity
               style={styles.category}
@@ -306,6 +337,9 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
               }}
               activeOpacity={0.7}
             >
+              <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                <Path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+              </Svg>
               <Text style={styles.categoryText}>{categoryName || "Uncategorized"}</Text>
             </TouchableOpacity>
 
@@ -323,6 +357,27 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
                 ]}>
                   {dueDateStr}
                 </Text>
+              </View>
+            )}
+
+            {/* Priority Badge */}
+            {(entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
+              <View style={styles.priorityBadge}>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                  <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.secondary} />
+                  <Path d="M5 3h13l-4 5 4 5H5z" />
+                </Svg>
+                <Text style={styles.priorityText}>{entry.priority}</Text>
+              </View>
+            )}
+
+            {/* Rating Badge */}
+            {(entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
+              <View style={styles.ratingBadge}>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                  <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </Svg>
+                <Text style={styles.ratingText}>{entry.rating}/5</Text>
               </View>
             )}
 
@@ -369,13 +424,6 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
             )}
           </View>
         )}
-
-            {/* Location indicator */}
-            {(entry.entry_latitude && entry.entry_longitude) && (
-              <Text style={styles.location} numberOfLines={1}>
-                {locationName || (entry.location_id ? 'Location' : 'GPS')}
-              </Text>
-            )}
           </View>
         </View>
       </View>
@@ -467,7 +515,24 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.text.tertiary,
   },
+  locationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: theme.colors.background.tertiary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs - 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  locationText: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
   category: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
     backgroundColor: theme.colors.background.tertiary,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.xs - 2,
@@ -551,6 +616,41 @@ const styles = StyleSheet.create({
   },
   dueDateTextToday: {
     color: theme.colors.text.secondary,
+  },
+  priorityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: theme.colors.background.tertiary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs - 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  priorityText: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  ratingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: theme.colors.background.tertiary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs - 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  ratingText: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  pinIcon: {
+    position: "absolute",
+    top: 4,
+    right: 32,
+    padding: 2,
+    zIndex: 9,
   },
   menuButton: {
     position: "absolute",
