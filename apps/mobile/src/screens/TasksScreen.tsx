@@ -8,7 +8,7 @@ import { TopBar } from "../components/layout/TopBar";
 import { EntryListItem } from "../modules/entries/components/EntryListItem";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
 
-type TaskFilter = "all" | "incomplete" | "complete";
+type TaskFilter = "all" | "incomplete" | "in_progress" | "complete";
 type TaskGroup = {
   title: string;
   entries: Entry[];
@@ -21,9 +21,13 @@ export function TasksScreen() {
   const [filter, setFilter] = useState<TaskFilter>("incomplete");
 
 
-  // Filter entries to only tasks
+  // Filter entries to only tasks (any entry with a task status)
   const tasks = useMemo(() => {
-    return entries.filter(entry => entry.status === "incomplete" || entry.status === "complete");
+    return entries.filter(entry =>
+      entry.status === "incomplete" ||
+      entry.status === "in_progress" ||
+      entry.status === "complete"
+    );
   }, [entries]);
 
   // Get task statistics
@@ -31,12 +35,16 @@ export function TasksScreen() {
 
   // Filter tasks based on selected filter
   const filteredTasks = useMemo(() => {
-    if (filter === "incomplete") {
-      return tasks.filter(t => t.status === "incomplete");
-    } else if (filter === "complete") {
-      return tasks.filter(t => t.status === "complete");
+    switch (filter) {
+      case "incomplete":
+        return tasks.filter(t => t.status === "incomplete");
+      case "in_progress":
+        return tasks.filter(t => t.status === "in_progress");
+      case "complete":
+        return tasks.filter(t => t.status === "complete");
+      default:
+        return tasks;
     }
-    return tasks;
   }, [tasks, filter]);
 
   // Group tasks by due date
@@ -75,20 +83,29 @@ export function TasksScreen() {
     if (noDueDate.length > 0) {
       groups.push({ title: "No Due Date", entries: noDueDate });
     }
-    if (completed.length > 0 && filter !== "incomplete") {
+    if (completed.length > 0 && filter === "complete") {
       groups.push({ title: "Completed", entries: completed });
     }
 
     return groups;
   }, [filteredTasks, filter]);
 
-  // Handle task completion toggle
-  const handleToggleComplete = async (entryId: string, currentStatus: "incomplete" | "complete") => {
+  // Handle task completion toggle (cycles through: incomplete -> in_progress -> complete -> incomplete)
+  const handleToggleComplete = async (entryId: string, currentStatus: "incomplete" | "in_progress" | "complete") => {
     try {
-      const newStatus = currentStatus === "complete" ? "incomplete" : "complete";
+      // Cycle through statuses
+      let newStatus: "incomplete" | "in_progress" | "complete";
+      if (currentStatus === "incomplete") {
+        newStatus = "in_progress";
+      } else if (currentStatus === "in_progress") {
+        newStatus = "complete";
+      } else {
+        newStatus = "incomplete";
+      }
+
       await entryMutations.updateEntry(entryId, {
         status: newStatus,
-        // Clear completed_at when changing from complete to incomplete
+        // Set completed_at only when status is complete
         completed_at: newStatus === "complete" ? new Date().toISOString() : null,
       });
     } catch (error) {
@@ -110,7 +127,7 @@ export function TasksScreen() {
       <View style={styles.container}>
         <TopBar
           title="Tasks"
-          badge={stats.incomplete}
+          badge={stats.incomplete + stats.inProgress}
           menuItems={menuItems}
           userEmail={userEmail}
           onProfilePress={onProfilePress}
@@ -126,20 +143,13 @@ export function TasksScreen() {
     <View style={styles.container}>
       <TopBar
         title="Tasks"
-        badge={stats.incomplete}
+        badge={stats.incomplete + stats.inProgress}
         menuItems={menuItems}
         userEmail={userEmail}
         onProfilePress={onProfilePress}
       />
 
       <ScrollView style={styles.content}>
-        {/* Stats */}
-        <View style={styles.stats}>
-          <Text style={styles.statsText}>
-            {stats.total} total • {stats.incomplete} incomplete • {stats.complete} completed
-          </Text>
-        </View>
-
         {/* Filter Tabs */}
         <View style={styles.filterContainer}>
           <TouchableOpacity
@@ -147,8 +157,24 @@ export function TasksScreen() {
             onPress={() => setFilter("incomplete")}
             activeOpacity={0.7}
           >
-            <Text style={[styles.filterTabText, filter === "incomplete" && styles.filterTabTextActive]}>
-              Active ({stats.incomplete})
+            <Text style={[styles.filterTabText, filter === "incomplete" && styles.filterTabTextActive]} numberOfLines={1}>
+              Not Started
+            </Text>
+            <Text style={[styles.filterTabCount, filter === "incomplete" && styles.filterTabCountActive]}>
+              {stats.incomplete}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterTab, filter === "in_progress" && styles.filterTabActive]}
+            onPress={() => setFilter("in_progress")}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterTabText, filter === "in_progress" && styles.filterTabTextActive]} numberOfLines={1}>
+              In Progress
+            </Text>
+            <Text style={[styles.filterTabCount, filter === "in_progress" && styles.filterTabCountActive]}>
+              {stats.inProgress}
             </Text>
           </TouchableOpacity>
 
@@ -157,18 +183,11 @@ export function TasksScreen() {
             onPress={() => setFilter("complete")}
             activeOpacity={0.7}
           >
-            <Text style={[styles.filterTabText, filter === "complete" && styles.filterTabTextActive]}>
-              Completed ({stats.complete})
+            <Text style={[styles.filterTabText, filter === "complete" && styles.filterTabTextActive]} numberOfLines={1}>
+              Complete
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterTab, filter === "all" && styles.filterTabActive]}
-            onPress={() => setFilter("all")}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterTabText, filter === "all" && styles.filterTabTextActive]}>
-              All ({stats.total})
+            <Text style={[styles.filterTabCount, filter === "complete" && styles.filterTabCountActive]}>
+              {stats.complete}
             </Text>
           </TouchableOpacity>
         </View>
@@ -243,13 +262,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#6b7280",
   },
-  stats: {
-    marginBottom: 16,
-  },
-  statsText: {
-    fontSize: 14,
-    color: "#6b7280",
-  },
   filterContainer: {
     flexDirection: "row",
     backgroundColor: "#ffffff",
@@ -259,8 +271,8 @@ const styles = StyleSheet.create({
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     alignItems: "center",
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
@@ -269,13 +281,22 @@ const styles = StyleSheet.create({
     borderBottomColor: "#3b82f6",
   },
   filterTabText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "500",
     color: "#6b7280",
   },
   filterTabTextActive: {
     color: "#3b82f6",
     fontWeight: "600",
+  },
+  filterTabCount: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#9ca3af",
+    marginTop: 2,
+  },
+  filterTabCountActive: {
+    color: "#3b82f6",
   },
   groupsContainer: {
     paddingBottom: 20,

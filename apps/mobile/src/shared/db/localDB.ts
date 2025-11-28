@@ -166,6 +166,109 @@ class LocalDatabase {
     } catch (error) {
       console.error('Migration error (category properties):', error);
     }
+
+    // Migration: Update status CHECK constraint to include 'in_progress'
+    // SQLite doesn't allow altering CHECK constraints, so we need to recreate the table
+    try {
+      // Check if migration is needed by looking for a marker in sync_metadata
+      const migrationCheck = await this.db.getFirstAsync<{ value: string }>(
+        `SELECT value FROM sync_metadata WHERE key = 'migration_status_in_progress_done'`
+      );
+
+      if (!migrationCheck) {
+        console.log('📦 Running migration: Updating entries status constraint to include in_progress...');
+
+        // Get existing column names from the entries table
+        const columns = await this.db.getAllAsync<{ name: string }>(
+          `SELECT name FROM pragma_table_info('entries')`
+        );
+        const columnNames = columns.map(c => c.name);
+        console.log(`Found ${columnNames.length} columns in entries table`);
+
+        // Define the new table columns (matching current schema)
+        const newTableColumns = `
+          entry_id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          title TEXT,
+          content TEXT NOT NULL,
+          tags TEXT,
+          mentions TEXT,
+          category_id TEXT,
+          entry_date INTEGER,
+          entry_latitude REAL,
+          entry_longitude REAL,
+          location_accuracy REAL,
+          location_id TEXT,
+          status TEXT CHECK (status IN ('none', 'incomplete', 'in_progress', 'complete')) DEFAULT 'none',
+          due_date INTEGER,
+          completed_at INTEGER,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          deleted_at INTEGER,
+          priority INTEGER DEFAULT 0,
+          rating REAL DEFAULT 0.00,
+          is_pinned INTEGER DEFAULT 0,
+          local_only INTEGER DEFAULT 0,
+          synced INTEGER DEFAULT 0,
+          sync_action TEXT,
+          sync_error TEXT,
+          sync_retry_count INTEGER DEFAULT 0,
+          sync_last_attempt INTEGER,
+          version INTEGER DEFAULT 1,
+          base_version INTEGER DEFAULT 1,
+          conflict_status TEXT,
+          conflict_backup TEXT,
+          last_edited_by TEXT,
+          last_edited_device TEXT
+        `;
+
+        // Build explicit column list for INSERT (only columns that exist in both old and new tables)
+        const newTableColumnNames = [
+          'entry_id', 'user_id', 'title', 'content', 'tags', 'mentions', 'category_id',
+          'entry_date', 'entry_latitude', 'entry_longitude', 'location_accuracy', 'location_id',
+          'status', 'due_date', 'completed_at', 'created_at', 'updated_at', 'deleted_at',
+          'priority', 'rating', 'is_pinned', 'local_only', 'synced', 'sync_action',
+          'sync_error', 'sync_retry_count', 'sync_last_attempt', 'version', 'base_version',
+          'conflict_status', 'conflict_backup', 'last_edited_by', 'last_edited_device'
+        ];
+
+        // Only copy columns that exist in the old table
+        const columnsToMigrate = newTableColumnNames.filter(col => columnNames.includes(col));
+        const columnList = columnsToMigrate.join(', ');
+
+        console.log(`Migrating columns: ${columnList}`);
+
+        // Drop any existing entries_new table from previous failed migration
+        await this.db.execAsync(`DROP TABLE IF EXISTS entries_new;`);
+
+        // Create new table
+        await this.db.execAsync(`
+          CREATE TABLE entries_new (${newTableColumns});
+        `);
+
+        // Copy data with explicit column names
+        await this.db.execAsync(`
+          INSERT INTO entries_new (${columnList})
+          SELECT ${columnList} FROM entries;
+        `);
+
+        // Drop old table and rename new
+        await this.db.execAsync(`
+          DROP TABLE entries;
+          ALTER TABLE entries_new RENAME TO entries;
+        `);
+
+        // Mark migration as done
+        await this.db.execAsync(`
+          INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)
+          VALUES ('migration_status_in_progress_done', 'true', ${Date.now()});
+        `);
+
+        console.log('✅ Migration complete: entries status constraint updated to include in_progress');
+      }
+    } catch (error) {
+      console.error('Migration error (status in_progress constraint):', error);
+    }
   }
 
   private async createTables(): Promise<void> {

@@ -16,7 +16,7 @@ interface EntryListItemProps {
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
   onCategoryPress?: (categoryId: string | null, categoryName: string) => void;
-  onToggleComplete?: (entryId: string, currentStatus: "incomplete" | "complete") => void;
+  onToggleComplete?: (entryId: string, currentStatus: "incomplete" | "in_progress" | "complete") => void;
   onMove?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
@@ -46,7 +46,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
 
   const handleCheckboxPress = (e: any) => {
     e.stopPropagation();
-    if (onToggleComplete && (entry.status === "incomplete" || entry.status === "complete")) {
+    if (onToggleComplete && (entry.status === "incomplete" || entry.status === "in_progress" || entry.status === "complete")) {
       onToggleComplete(entry.entry_id, entry.status);
     }
   };
