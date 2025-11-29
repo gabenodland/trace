@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View, ActivityIndicator, Platform, StatusBar, BackHandler } from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator, Platform, StatusBar, BackHandler, Alert } from "react-native";
 import { useFonts, MavenPro_400Regular, MavenPro_500Medium, MavenPro_600SemiBold, MavenPro_700Bold } from "@expo-google-fonts/maven-pro";
+import * as Linking from "expo-linking";
+import { setSession } from "@trace/core";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
 import { NavigationProvider, BeforeBackHandler } from "./src/shared/contexts/NavigationContext";
 import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
@@ -244,6 +246,59 @@ function AuthGate() {
 }
 
 /**
+ * Handle deep link URL for auth callbacks (email confirmation, password reset, etc.)
+ */
+async function handleAuthDeepLink(url: string): Promise<boolean> {
+  console.log("[DeepLink] Received URL:", url);
+
+  // Check if this is an auth callback
+  if (!url.includes("access_token") && !url.includes("refresh_token") && !url.includes("error")) {
+    return false; // Not an auth URL
+  }
+
+  try {
+    let access_token: string | null = null;
+    let refresh_token: string | null = null;
+
+    // Check for fragment-based tokens (#access_token=...)
+    if (url.includes("#")) {
+      const fragment = url.split("#")[1];
+      const params = new URLSearchParams(fragment);
+      access_token = params.get("access_token");
+      refresh_token = params.get("refresh_token");
+    }
+
+    // Check query params if not in fragment (?access_token=...)
+    if (!access_token && url.includes("?")) {
+      const urlObj = new URL(url);
+      access_token = urlObj.searchParams.get("access_token");
+      refresh_token = urlObj.searchParams.get("refresh_token");
+    }
+
+    if (access_token) {
+      console.log("[DeepLink] Setting session from deep link");
+      await setSession(access_token, refresh_token);
+      Alert.alert("Success", "Your email has been confirmed! You are now signed in.");
+      return true;
+    }
+
+    // Check for errors
+    if (url.includes("error")) {
+      const urlObj = new URL(url.replace("#", "?"));
+      const error = urlObj.searchParams.get("error_description") || urlObj.searchParams.get("error");
+      if (error) {
+        Alert.alert("Error", decodeURIComponent(error));
+        return true;
+      }
+    }
+  } catch (error) {
+    console.error("[DeepLink] Error handling auth URL:", error);
+  }
+
+  return false;
+}
+
+/**
  * Root App Component
  */
 export default function App() {
@@ -253,6 +308,25 @@ export default function App() {
     MavenPro_600SemiBold,
     MavenPro_700Bold,
   });
+
+  // Handle deep links for auth callbacks
+  useEffect(() => {
+    // Handle URL that launched the app
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleAuthDeepLink(url);
+      }
+    });
+
+    // Handle URLs while app is open
+    const subscription = Linking.addEventListener("url", (event) => {
+      handleAuthDeepLink(event.url);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // Show loading while fonts are loading
   if (!fontsLoaded) {

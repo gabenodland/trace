@@ -11,7 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { validateSignupForm, ERROR_MESSAGES, INFO_MESSAGES } from "@trace/core";
+import { validateSignupForm, ERROR_MESSAGES, INFO_MESSAGES, SUCCESS_MESSAGES } from "@trace/core";
 import { useAuth } from "../../../shared/contexts/AuthContext";
 import { GoogleIcon } from "../components/GoogleIcon";
 
@@ -35,8 +35,16 @@ export default function SignUpScreen({ onSwitchToLogin }: SignUpScreenProps) {
 
     setLoading(true);
     try {
-      await signUpWithEmail(email, password);
-      // Success - auth state will update automatically
+      const result = await signUpWithEmail(email, password);
+      // Check if email confirmation is required (user exists but no session yet)
+      if (result.user && !result.session) {
+        Alert.alert(
+          SUCCESS_MESSAGES.ACCOUNT_CREATED,
+          SUCCESS_MESSAGES.EMAIL_CONFIRMATION,
+          [{ text: "OK", onPress: onSwitchToLogin }]
+        );
+      }
+      // If session exists, auth state will update automatically
     } catch (error: unknown) {
       Alert.alert(
         ERROR_MESSAGES.SIGNUP_FAILED,

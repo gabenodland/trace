@@ -591,17 +591,18 @@ class SyncQueue {
         this.queryClient.invalidateQueries({ queryKey: ['entries'] });
         this.queryClient.invalidateQueries({ queryKey: ['categories'] });
         this.queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
+        this.queryClient.invalidateQueries({ queryKey: ['locations'] });
         this.queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
         console.log('✅ Cache invalidated, UI will refresh');
       }
 
       // STEP 5: Log sync summary
       const syncDuration = Date.now() - syncStartTime;
-      const hasErrors = pushErrorCount > 0 || categoryPushErrorCount > 0 || photoPushErrorCount > 0;
+      const hasErrors = pushErrorCount > 0 || categoryPushErrorCount > 0 || photoPushErrorCount > 0 || locationPushErrorCount > 0;
       const logLevel = hasErrors ? 'warning' : 'info';
 
-      const totalPushed = pushSuccessCount + categoryPushSuccessCount + photoPushSuccessCount;
-      const totalErrors = pushErrorCount + categoryPushErrorCount + photoPushErrorCount;
+      const totalPushed = pushSuccessCount + categoryPushSuccessCount + photoPushSuccessCount + locationPushSuccessCount;
+      const totalErrors = pushErrorCount + categoryPushErrorCount + photoPushErrorCount + locationPushErrorCount;
 
       let message = `Sync completed in ${(syncDuration / 1000).toFixed(1)}s`;
       if (totalPushed > 0) {
@@ -618,6 +619,8 @@ class SyncQueue {
         categories_errors: categoryPushErrorCount,
         photos_pushed: photoPushSuccessCount,
         photos_errors: photoPushErrorCount,
+        locations_pushed: locationPushSuccessCount,
+        locations_errors: locationPushErrorCount,
         entries_pulled: 0, // Pull stats not tracked yet
       });
     } catch (error) {
@@ -1038,6 +1041,9 @@ class SyncQueue {
       // Pull categories first (entries depend on them)
       await this.pullCategoriesFromSupabase(forceFullPull, pullStartTime);
 
+      // Pull locations second (entries reference them via location_id)
+      await this.pullLocationsFromSupabase(forceFullPull, pullStartTime);
+
       // Check if database is empty - if so, force full pull
       const entryCount = await localDB.getAllEntries();
       const databaseIsEmpty = entryCount.length === 0;
@@ -1302,6 +1308,115 @@ class SyncQueue {
   }
 
   /**
+   * Pull locations from Supabase
+   */
+  private async pullLocationsFromSupabase(forceFullPull: boolean, pullStartTime: Date): Promise<void> {
+    try {
+      // Get user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('Not authenticated, skipping location pull');
+        return;
+      }
+
+      console.log('📍 Pulling locations from Supabase...');
+
+      // Fetch all non-deleted locations for this user
+      const { data: remoteLocations, error } = await supabase
+        .from('locations')
+        .select('*')
+        .eq('user_id', user.id)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Failed to fetch locations from Supabase:', error);
+        return;
+      }
+
+      if (!remoteLocations || remoteLocations.length === 0) {
+        console.log('No locations to pull from Supabase');
+        return;
+      }
+
+      console.log(`📍 Found ${remoteLocations.length} locations to pull from Supabase...`);
+
+      // Process each location
+      let savedCount = 0;
+      let updatedCount = 0;
+      let skippedCount = 0;
+
+      for (const remoteLocation of remoteLocations) {
+        try {
+          // Check if location already exists locally
+          const localLocation = await localDB.getLocation(remoteLocation.location_id);
+
+          const location: LocationEntity = {
+            location_id: remoteLocation.location_id,
+            user_id: remoteLocation.user_id,
+            name: remoteLocation.name,
+            latitude: remoteLocation.latitude,
+            longitude: remoteLocation.longitude,
+            source: remoteLocation.source,
+            address: remoteLocation.address,
+            neighborhood: remoteLocation.neighborhood,
+            postal_code: remoteLocation.postal_code,
+            city: remoteLocation.city,
+            subdivision: remoteLocation.subdivision,
+            region: remoteLocation.region,
+            country: remoteLocation.country,
+            mapbox_place_id: remoteLocation.mapbox_place_id,
+            foursquare_fsq_id: remoteLocation.foursquare_fsq_id,
+            created_at: remoteLocation.created_at,
+            updated_at: remoteLocation.updated_at,
+            deleted_at: remoteLocation.deleted_at,
+            synced: 1, // Already in Supabase
+            sync_action: null,
+          };
+
+          if (!localLocation) {
+            // New location from remote - save it
+            await localDB.saveLocation(location);
+            await localDB.markLocationSynced(location.location_id);
+            savedCount++;
+            console.log(`  ✓ New location: ${location.name}`);
+          } else {
+            // Skip if local has unsynced changes - let local changes be pushed first
+            if (localLocation.synced === 0) {
+              console.log(`  ⊘ Skipped (local has unsynced changes): ${location.name}`);
+              skippedCount++;
+              continue;
+            }
+
+            // Location exists - only update if actual content changed
+            const hasChanged =
+              localLocation.name !== location.name ||
+              localLocation.latitude !== location.latitude ||
+              localLocation.longitude !== location.longitude ||
+              localLocation.address !== location.address ||
+              localLocation.city !== location.city;
+
+            if (hasChanged) {
+              await localDB.saveLocation(location);
+              await localDB.markLocationSynced(location.location_id);
+              updatedCount++;
+              console.log(`  ↻ Updated location: ${location.name}`);
+            } else {
+              skippedCount++;
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to process location ${remoteLocation.location_id}:`, error);
+        }
+      }
+
+      console.log(`✅ Location pull complete: ${savedCount} new, ${updatedCount} updated, ${skippedCount} skipped`);
+    } catch (error) {
+      console.error('Location pull sync failed:', error);
+    }
+  }
+
+  /**
    * Pull photo metadata from Supabase
    * Downloads metadata only - actual files are downloaded on-demand
    */
@@ -1409,7 +1524,7 @@ class SyncQueue {
               file_size: photo.file_size,
               position: photo.position
             });
-            await localDB.createPhoto(photo);
+            await localDB.createPhoto(photo, true); // fromSync = true
             savedCount++;
             console.log(`   ✅ Successfully created photo metadata: ${photo.photo_id}`);
           } else {

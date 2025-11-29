@@ -94,7 +94,7 @@ export const RichTextEditor = forwardRef(({
   `;
 
   const editor = useEditorBridge({
-    autofocus: editable,
+    autofocus: false, // Never autofocus - we manage focus manually to avoid stealing from title input
     avoidIosKeyboard: true,
     initialContent: value,
     editable: editable,
@@ -204,10 +204,11 @@ export const RichTextEditor = forwardRef(({
     isLocalChange.current = false;
   }, [value, editor]);
 
-  // Focus editor when transitioning from read-only to editable
+  // Track editable state transitions (don't auto-focus - let user tap where they want)
   useEffect(() => {
     if (wasReadOnly.current && editable) {
-      editor.focus();
+      // Don't auto-focus here - user may be focusing title input or another element
+      // They can tap the editor to focus it
       wasReadOnly.current = false;
     } else if (!editable) {
       wasReadOnly.current = true;

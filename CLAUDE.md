@@ -19,14 +19,16 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
 5. **All code must be maintainable and in the right place** - Respect the module structure and file organization.
 
 6. **Always play a sound when complete** - After providing summary of completed work:
+   - Mac: `say "<one sentence summary of what was completed>"`
    - Windows: `ffplay -nodisp -autoexit -loglevel quiet "C:/Projects/complete.wav"`
-   - Mac/Linux: `afplay /path/to/complete.wav` or `aplay /path/to/complete.wav`
-   - Then say "done"
+   - Linux: `aplay /path/to/complete.wav`
+   - Example: `say "just updated the app config with ios permissions"`
 
 7. **Always play a sound when you need more information** - After asking a question:
+   - Mac: `say "<one sentence summary of what you need>"`
    - Windows: `ffplay -nodisp -autoexit -loglevel quiet "C:/Projects/question.wav"`
-   - Mac/Linux: `afplay /path/to/question.wav` or `aplay /path/to/question.wav`
-   - Then say "answer please"
+   - Linux: `aplay /path/to/question.wav`
+   - Example: `say "do you want me to update the permissions config"`
 
 8. **Never create 'nul' files** - Always use correct null device syntax for bash:
    - ✅ Use `/dev/null` in bash/Git Bash commands

@@ -1520,6 +1520,8 @@ class LocalDatabase {
 
   /**
    * Create a new photo record
+   * @param photo - Photo data
+   * @param fromSync - If true, photo is from cloud sync (already synced, no sync_action needed)
    */
   async createPhoto(photo: {
     photo_id: string;
@@ -1533,7 +1535,9 @@ class LocalDatabase {
     height?: number;
     position: number;
     uploaded?: boolean;
-  }): Promise<void> {
+    created_at?: number;
+    updated_at?: number;
+  }, fromSync: boolean = false): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
@@ -1556,15 +1560,15 @@ class LocalDatabase {
         photo.width || null,
         photo.height || null,
         photo.position,
-        now,
-        now,
+        photo.created_at || now,
+        photo.updated_at || now,
         photo.uploaded ? 1 : 0,
-        0,
-        'create',
+        fromSync ? 1 : 0,           // If from sync, mark as synced
+        fromSync ? null : 'create', // If from sync, no sync action needed
       ]
     );
 
-    console.log(`📸 Photo created: ${photo.photo_id}`);
+    console.log(`📸 Photo created: ${photo.photo_id}${fromSync ? ' (from sync)' : ''}`);
   }
 
   /**

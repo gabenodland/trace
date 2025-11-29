@@ -19,6 +19,12 @@ module.exports = {
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           'Trace uses your location to add context to your captured entries.',
+        NSCameraUsageDescription:
+          'Trace uses the camera to capture photos for your entries.',
+        NSPhotoLibraryUsageDescription:
+          'Trace accesses your photo library to attach photos to entries.',
+        NSPhotoLibraryAddUsageDescription:
+          'Trace saves photos to your library.',
       },
     },
     android: {
@@ -45,6 +51,20 @@ module.exports = {
         },
       ],
       'expo-sqlite',
+      [
+        'expo-image-picker',
+        {
+          cameraPermission: 'Trace uses the camera to capture photos for your entries.',
+          photosPermission: 'Trace accesses your photo library to attach photos to entries.',
+        },
+      ],
+      [
+        'expo-media-library',
+        {
+          photosPermission: 'Trace accesses your photos to attach them to entries.',
+          savePhotosPermission: 'Trace saves photos to your library.',
+        },
+      ],
     ],
   },
 };
