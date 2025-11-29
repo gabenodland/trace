@@ -20,6 +20,7 @@ import { theme } from "../../../shared/theme/theme";
 import { SimpleDatePicker } from "./SimpleDatePicker";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
+import { LocationPicker } from "../../locations/components/LocationPicker";
 import { compressPhoto, savePhotoToLocalStorage, deletePhoto } from "../../photos/mobilePhotoApi";
 import { localDB } from "../../../shared/db/localDB";
 import { syncQueue } from "../../../shared/sync/syncQueue";
@@ -73,7 +74,6 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   );
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [LocationPickerComponent, setLocationPickerComponent] = useState<any>(null);
   const [status, setStatus] = useState<"none" | "incomplete" | "in_progress" | "complete">("none");
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -1199,16 +1199,9 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         {showLocation && (
           <TouchableOpacity
             style={styles.metadataLink}
-            onPress={async () => {
+            onPress={() => {
               editorRef.current?.blur();
               Keyboard.dismiss();
-
-              // Dynamically load LocationPicker only when needed
-              if (!LocationPickerComponent) {
-                const { LocationPicker } = await import('../../locations/components/LocationPicker');
-                setLocationPickerComponent(() => LocationPicker);
-              }
-
               setTimeout(() => setShowLocationPicker(!showLocationPicker), 100);
             }}
           >
@@ -1662,63 +1655,59 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         />
       </TopBarDropdownContainer>
 
-      {/* Location Picker Dropdown */}
-      {LocationPickerComponent && (
-        <TopBarDropdownContainer
-          visible={showLocationPicker}
-          onClose={() => setShowLocationPicker(false)}
-        >
-          <LocationPickerComponent
-            visible={showLocationPicker}
-            onClose={() => {
-              console.log('[CaptureForm] LocationPicker closed');
-              setShowLocationPicker(false);
-            }}
-            readOnly={(() => {
-              const isReadOnly = !isEditMode && captureLocation && !!locationData;
-              console.log('[CaptureForm] readOnly check:', { isEditMode, captureLocation, hasLocationData: !!locationData, isReadOnly });
-              return isReadOnly;
-            })()}
-            onSelect={(location: LocationType | null) => {
-              // If location is null (user selected "None"), clear location data
-              if (location === null) {
-                console.log('[CaptureForm] 📍 User selected "None" - clearing location data');
-                setLocationData(null);
-                setCaptureLocation(false);
-                setShowLocationPicker(false);
-                showSnackbar('You removed the location');
-                if (!isEditMode) {
-                  enterEditMode();
-                }
-                return;
-              }
+      {/* Location Picker (fullscreen modal) */}
+      <LocationPicker
+        visible={showLocationPicker}
+        onClose={() => {
+          console.log('[CaptureForm] LocationPicker closed');
+          setShowLocationPicker(false);
+        }}
+        mode={(() => {
+          // view: location already selected (either editing existing or user already picked one)
+          // select: no location yet, user needs to pick
+          const hasLocation = locationData && (locationData.name || (locationData.latitude && locationData.longitude));
+          const pickerMode = hasLocation ? 'view' : 'select';
+          console.log('[CaptureForm] mode check:', { isEditMode, captureLocation, hasLocationData: !!locationData, hasLocation, pickerMode });
+          return pickerMode as 'select' | 'view';
+        })()}
+        onSelect={(location: LocationType | null) => {
+          // If location is null (user selected "None"), clear location data
+          if (location === null) {
+            console.log('[CaptureForm] 📍 User selected "None" - clearing location data');
+            setLocationData(null);
+            setCaptureLocation(false);
+            setShowLocationPicker(false);
+            showSnackbar('You removed the location');
+            if (!isEditMode) {
+              enterEditMode();
+            }
+            return;
+          }
 
-              console.log('[CaptureForm] 📍 Received location from LocationPicker:', {
-                name: location.name,
-                latitude: location.latitude,
-                longitude: location.longitude,
-                city: location.city,
-                region: location.region,
-                country: location.country,
-                neighborhood: location.neighborhood,
-                postalCode: location.postalCode,
-                subdivision: location.subdivision,
-              });
+          console.log('[CaptureForm] 📍 Received location from LocationPicker:', {
+            name: location.name,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            city: location.city,
+            region: location.region,
+            country: location.country,
+            neighborhood: location.neighborhood,
+            postalCode: location.postalCode,
+            subdivision: location.subdivision,
+          });
 
-              // Show snackbar based on whether we're adding or updating
-              const isUpdating = !!locationData;
-              setLocationData(location);
-              setCaptureLocation(true);
-              setShowLocationPicker(false);
-              showSnackbar(isUpdating ? 'Success! You updated the location.' : 'Success! You added the location.');
-              if (!isEditMode) {
-                enterEditMode();
-              }
-            }}
-            initialLocation={locationData}
-          />
-        </TopBarDropdownContainer>
-      )}
+          // Show snackbar based on whether we're adding or updating
+          const isUpdating = !!locationData;
+          setLocationData(location);
+          setCaptureLocation(true);
+          setShowLocationPicker(false);
+          showSnackbar(isUpdating ? 'Success! You updated the location.' : 'Success! You added the location.');
+          if (!isEditMode) {
+            enterEditMode();
+          }
+        }}
+        initialLocation={locationData}
+      />
 
       {/* Date Picker Dropdown (Due Date) */}
       <TopBarDropdownContainer

@@ -10,6 +10,14 @@
 import type { Location, POIItem } from '@trace/core';
 
 /**
+ * LocationPicker operating modes:
+ * - 'select': Interactive - browse nearby/search, click map/POI to move marker
+ * - 'create': Marker locked - enter name, OK/Select New/Remove buttons
+ * - 'view': Read-only - only Select New/Remove buttons shown
+ */
+export type LocationPickerMode = 'select' | 'create' | 'view';
+
+/**
  * Single source of truth for the current location selection
  */
 export interface LocationSelection {
