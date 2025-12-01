@@ -6,6 +6,7 @@ import { formatEntryDateTime, formatRelativeTime, isTask, formatDueDate, isTaskO
 import { getFormattedContent, getDisplayModeLines } from "../helpers/entryDisplayHelpers";
 import type { EntryDisplayMode } from "../types/EntryDisplayMode";
 import { HtmlRenderer } from "../helpers/htmlRenderer";
+import { WebViewHtmlRenderer } from "../helpers/webViewHtmlRenderer";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { theme } from "../../../shared/theme/theme";
 import { DropdownMenu, type DropdownMenuItem } from "../../../components/layout/DropdownMenu";
@@ -210,7 +211,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
                 />
               )}
               {displayMode === 'flow' ? (
-                <HtmlRenderer
+                <WebViewHtmlRenderer
                   html={entry.content || ''}
                   style={[
                     styles.preview,
@@ -269,7 +270,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
                     onPhotoCountChange={setPhotoCount}
                   />
                 )}
-                <HtmlRenderer
+                <WebViewHtmlRenderer
                   html={entry.content || ''}
                   style={[
                     styles.content,
@@ -465,11 +466,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.semibold,
+    fontSize: theme.typography.fontSize.xxl,
+    fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.text.primary,
-    marginBottom: theme.spacing.xs,
-    lineHeight: theme.typography.fontSize.lg * theme.typography.lineHeight.normal,
+    marginBottom: theme.spacing.sm,
+    lineHeight: theme.typography.fontSize.xxl * theme.typography.lineHeight.tight,
   },
   dateSmall: {
     fontSize: theme.typography.fontSize.xs,

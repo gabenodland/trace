@@ -2,6 +2,7 @@
  * HTML renderer for React Native using react-native-render-html
  * Handles formatting: bold, italic, bullets, nested lists, paragraphs, line breaks
  * Also renders inline photos with tap-to-view functionality
+ * Supports task lists with checkbox rendering
  */
 import { useWindowDimensions, Image, TouchableOpacity, ActivityIndicator, View } from 'react-native';
 import RenderHtml from 'react-native-render-html';
@@ -51,7 +52,7 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
     loadPhotos();
   }, [html]);
 
-  // Memoize custom renderer for img tags with data-photo-id
+  // Memoize custom renderer for img tags with data-photo-id and task list items
   // This prevents RenderHtml from doing expensive tree rerenders
   const customRenderers = useMemo(() => ({
     img: ({ TDefaultRenderer, ...props }: any) => {
@@ -130,6 +131,10 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
       // Regular img tag - use default renderer
       return <TDefaultRenderer {...props} />;
     },
+    // Suppress checkbox inputs - react-native-render-html can't render them
+    input: () => null,
+    // Suppress empty labels from task lists
+    label: () => null,
   }), [photoUris, loadingPhotos, photoIds]);
 
   // Memoize base styles for rendering

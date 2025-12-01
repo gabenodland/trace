@@ -8,6 +8,7 @@ export interface NavigationMenuItem {
   icon?: ReactNode;
   isDivider?: boolean;
   isSignOut?: boolean;
+  destructive?: boolean;
 }
 
 interface NavigationMenuProps {
@@ -79,6 +80,7 @@ export function NavigationMenu({ visible, onClose, menuItems, userEmail, onProfi
                 <Text style={[
                   styles.menuItemText,
                   item.isSignOut && styles.signOutText,
+                  item.destructive && styles.destructiveText,
                 ]}>
                   {item.label}
                 </Text>
@@ -162,5 +164,8 @@ const styles = StyleSheet.create({
   signOutText: {
     color: "#ef4444",
     fontWeight: "600",
+  },
+  destructiveText: {
+    color: "#ef4444",
   },
 });

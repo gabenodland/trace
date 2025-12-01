@@ -81,6 +81,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const [showRatingPicker, setShowRatingPicker] = useState(false);
   const [priority, setPriority] = useState<number>(0);
   const [showPriorityPicker, setShowPriorityPicker] = useState(false);
+  const [showAttributesPicker, setShowAttributesPicker] = useState(false);
   const [entryDate, setEntryDate] = useState<string>(() => {
     // If initialDate is provided (from calendar), use it with current time + 100ms to hide time
     if (initialDate) {
@@ -176,6 +177,9 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
   // Edit mode: new entries start in edit mode, existing entries start in read-only
   const [isEditMode, setIsEditMode] = useState(!isEditing);
+
+  // Full-screen edit mode (hides all metadata, shows only title + body + toolbar)
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   // Initialize original values for new entries
   useEffect(() => {
@@ -363,9 +367,15 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     }
   };
 
-  // Enter edit mode
-  const enterEditMode = () => {
+  // Enter edit mode, optionally placing cursor at tap coordinates
+  const enterEditMode = (tapCoordinates?: { x: number; y: number }) => {
     setIsEditMode(true);
+    // If we have tap coordinates, focus the editor at that position after a brief delay
+    if (tapCoordinates) {
+      setTimeout(() => {
+        editorRef.current?.focusAtPosition(tapCoordinates.x, tapCoordinates.y);
+      }, 100);
+    }
   };
 
   // Show snackbar notification
@@ -566,6 +576,11 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   // Fetches GPS coordinates immediately when creating new entry
   // These coords are used by LocationPicker for POI search and privacy calculations
   useEffect(() => {
+    // Skip if location is not enabled for this category
+    if (!showLocation) {
+      return;
+    }
+
     // Clear location when toggled off
     if (!captureLocation) {
       setLocationData(null);
@@ -654,7 +669,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         clearTimeout(timeoutId);
       }
     };
-  }, [captureLocation, isEditing]);
+  }, [showLocation, captureLocation, isEditing]);
 
   // Keyboard listeners
   useEffect(() => {
@@ -1026,10 +1041,164 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
   return (
     <View style={styles.container}>
-      {/* Title Bar with Hamburger Menu */}
-      <View style={styles.titleBar}>
-        {/* Title Input - Collapsible */}
-        <View style={styles.titleBarContent}>
+      {/* Header Bar with Cancel/Date/Save buttons */}
+      <View style={[styles.titleBar, isFullScreen && styles.titleBarFullScreen]}>
+        {/* Left side: Cancel button in edit mode, Back button in view mode */}
+        <View style={styles.headerLeftContainer}>
+          {isEditMode ? (
+            <TouchableOpacity
+              onPress={handleCancel}
+              style={styles.headerCancelButton}
+            >
+              <Text style={styles.headerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={() => handleNavigationWithUnsavedCheck(() => {
+                if (returnContext) {
+                  if (returnContext.screen === "calendar") {
+                    navigate("calendar", {
+                      returnDate: returnContext.selectedDate,
+                      returnZoomLevel: returnContext.zoomLevel
+                    });
+                  } else if (returnContext.screen === "tasks") {
+                    navigate("tasks");
+                  } else if (returnContext.screen === "inbox") {
+                    navigate("inbox", {
+                      returnCategoryId: returnContext.categoryId || null,
+                      returnCategoryName: returnContext.categoryName || "Uncategorized"
+                    });
+                  } else {
+                    navigate("inbox");
+                  }
+                } else {
+                  navigate("inbox");
+                }
+              })}
+              style={styles.headerCancelButton}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Center: Date & Time (normal mode) or Editable Title (fullscreen mode) */}
+        {isFullScreen ? (
+          <View style={styles.headerTitleContainer}>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Untitled"
+              placeholderTextColor="#9ca3af"
+              style={styles.headerTitleInput}
+              editable={isEditMode && !isSubmitting}
+              returnKeyType="done"
+              blurOnSubmit={true}
+            />
+          </View>
+        ) : (
+          <View style={styles.headerDateContainer}>
+            {/* Date */}
+            <TouchableOpacity
+              onPress={() => {
+                editorRef.current?.blur();
+                Keyboard.dismiss();
+                setTimeout(() => {
+                  setShowEntryDatePicker(true);
+                  if (!isEditMode) enterEditMode();
+                }, 100);
+              }}
+            >
+              <Text style={styles.headerDateText}>
+                {entryDate ? new Date(entryDate).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                }) : 'Set date'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Time or Watch Icon */}
+            {includeTime ? (
+              <TouchableOpacity
+                style={styles.headerTimeContainer}
+                onPress={() => {
+                  setShowTimeModal(true);
+                  if (!isEditMode) enterEditMode();
+                }}
+              >
+                <Text style={styles.headerDateText}>
+                  {entryDate ? new Date(entryDate).toLocaleTimeString(undefined, {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  }) : 'Set time'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.headerWatchButton}
+                onPress={() => {
+                  setIncludeTime(true);
+                  const date = new Date(entryDate);
+                  date.setMilliseconds(0);
+                  setEntryDate(date.toISOString());
+                  if (!isEditMode) enterEditMode();
+                }}
+              >
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+                  <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Right side: Save button (in edit mode) + Hamburger Menu (hidden in fullscreen) */}
+        <View style={styles.headerRightContainer}>
+          {/* Save button only shows in edit mode - no Edit button, user taps content to edit */}
+          {isEditMode && (
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={isSubmitting}
+              style={[styles.headerSaveButton, isSubmitting && styles.headerSaveButtonDisabled]}
+            >
+              <Text style={[styles.headerSaveText, isSubmitting && styles.headerSaveTextDisabled]}>
+                {isSubmitting ? "Saving..." : "Save"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Hamburger Menu - hidden in fullscreen mode */}
+          {!isFullScreen && (
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={() => setShowMenu(!showMenu)}
+            >
+              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
+                <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
+                <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
+                <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
+              </Svg>
+            </TouchableOpacity>
+          )}
+
+          <NavigationMenu
+            visible={showMenu}
+            onClose={() => setShowMenu(false)}
+            menuItems={isEditing ? [...wrappedMenuItems.slice(0, -1), { label: "Delete Entry", onPress: handleDelete, destructive: true }, wrappedMenuItems[wrappedMenuItems.length - 1]] : wrappedMenuItems}
+            userEmail={userEmail}
+            onProfilePress={wrappedOnProfilePress}
+          />
+        </View>
+      </View>
+
+      {/* Title Row - Full width below header (hidden in fullscreen - title shows in header) */}
+      {!isFullScreen && (
+        <View style={styles.titleRow}>
           {shouldCollapse ? (
             <TouchableOpacity
               style={styles.titleCollapsed}
@@ -1049,179 +1218,28 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               </Text>
             </TouchableOpacity>
           ) : (
-            <View style={styles.titleContainer}>
-              <TextInput
-                ref={titleInputRef}
-                value={title}
-                onChangeText={setTitle}
-                placeholder="Title"
-                placeholderTextColor="#9ca3af"
-                style={styles.titleInput}
-                editable={isEditMode && !isSubmitting}
-                returnKeyType="next"
-                blurOnSubmit={false}
-                onFocus={() => {
-                  setIsTitleExpanded(true);
-                }}
-                onPressIn={handleTitlePress}
-              />
-            </View>
+            <TextInput
+              ref={titleInputRef}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Title"
+              placeholderTextColor="#9ca3af"
+              style={styles.titleInputFullWidth}
+              editable={isEditMode && !isSubmitting}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onFocus={() => {
+                setIsTitleExpanded(true);
+              }}
+              onPressIn={handleTitlePress}
+            />
           )}
         </View>
+      )}
 
-        {/* Hamburger Menu */}
-        <View style={styles.menuContainer}>
-          <TouchableOpacity
-            style={styles.menuButton}
-            onPress={() => setShowMenu(!showMenu)}
-          >
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
-              <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
-              <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
-              <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
-            </Svg>
-          </TouchableOpacity>
-
-          <NavigationMenu
-            visible={showMenu}
-            onClose={() => setShowMenu(false)}
-            menuItems={wrappedMenuItems}
-            userEmail={userEmail}
-            onProfilePress={wrappedOnProfilePress}
-          />
-        </View>
-      </View>
-
-      {/* Entry Date & Time - Below title */}
-      <View style={styles.entryDateContainer}>
-        {/* Date */}
-        <TouchableOpacity
-          onPress={() => {
-            editorRef.current?.blur();
-            Keyboard.dismiss();
-            setTimeout(() => {
-              setShowEntryDatePicker(true);
-              if (!isEditMode) enterEditMode();
-            }, 100);
-          }}
-        >
-          <Text style={styles.entryDateText}>
-            {entryDate ? new Date(entryDate).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            }) : 'Set date'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Time or Watch Icon */}
-        {includeTime ? (
-          <TouchableOpacity
-            style={styles.timeContainer}
-            onPress={() => {
-              setShowTimeModal(true);
-              if (!isEditMode) enterEditMode();
-            }}
-          >
-            <Text style={styles.entryDateText}>
-              {entryDate ? new Date(entryDate).toLocaleTimeString(undefined, {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-              }) : 'Set time'}
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.watchIconButton}
-            onPress={() => {
-              // Show time again by setting milliseconds to 0
-              setIncludeTime(true);
-              const date = new Date(entryDate);
-              date.setMilliseconds(0);
-              setEntryDate(date.toISOString());
-              if (!isEditMode) enterEditMode();
-            }}
-          >
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
-              <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-        )}
-
-        {/* Status - Right aligned */}
-        {showStatus && (
-          <TouchableOpacity
-            style={styles.statusButton}
-            onPress={() => {
-              // Cycle through: none -> incomplete -> in_progress -> complete -> none
-              if (status === "none") setStatus("incomplete");
-              else if (status === "incomplete") setStatus("in_progress");
-              else if (status === "in_progress") setStatus("complete");
-              else setStatus("none");
-              if (!isEditMode) enterEditMode();
-            }}
-          >
-          <View style={styles.statusContent}>
-            {status !== "none" && (
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                <Circle
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke={status === "complete" ? theme.colors.text.primary : "#6b7280"}
-                  strokeWidth={2}
-                  fill={status === "complete" ? theme.colors.text.primary : "none"}
-                />
-                {status === "complete" && (
-                  <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                )}
-                {status === "in_progress" && (
-                  <Circle cx="12" cy="12" r="4" fill="#6b7280" />
-                )}
-              </Svg>
-            )}
-            <Text style={styles.statusText}>
-              {status === "none" ? "Add Status" :
-               status === "incomplete" ? "Not Started" :
-               status === "in_progress" ? "In Progress" :
-               "Completed"}
-            </Text>
-          </View>
-        </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Metadata Bar - Text links with dividers */}
+      {/* Metadata Bar - Only shows SET values (hidden in full-screen mode) */}
+      {!isFullScreen && (
       <View style={styles.metadataBar}>
-        {/* Location */}
-        {showLocation && (
-          <TouchableOpacity
-            style={styles.metadataLink}
-            onPress={() => {
-              editorRef.current?.blur();
-              Keyboard.dismiss();
-              setTimeout(() => setShowLocationPicker(!showLocationPicker), 100);
-            }}
-          >
-            <View style={styles.metadataLinkContent}>
-              {captureLocation && (
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                  <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={12} cy={10} r={3} fill={theme.colors.text.primary} />
-                </Svg>
-              )}
-              <Text style={[styles.metadataText, captureLocation && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                {captureLocation ? (locationData?.name || "GPS") : "Add Location"}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Divider after Location */}
-        {showLocation && <Text style={styles.metadataDivider}>|</Text>}
-
         {/* Category - always shown */}
         <TouchableOpacity
           style={styles.metadataLink}
@@ -1232,172 +1250,236 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           }}
         >
           <View style={styles.metadataLinkContent}>
-            {categoryName && (
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            )}
+            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+              <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
             <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-              {categoryName || "Add Category"}
+              {categoryName || "Uncategorized"}
             </Text>
           </View>
         </TouchableOpacity>
 
-        {/* Divider after Category if any following item is visible */}
-        {(showDueDate || showRating || showPriority || (showPhotos && (photosCollapsed || photoCount === 0))) && (
-          <Text style={styles.metadataDivider}>|</Text>
+        {/* Location - only if set */}
+        {showLocation && captureLocation && locationData && (
+          <>
+            <Text style={styles.metadataDivider}>·</Text>
+            <TouchableOpacity
+              style={styles.metadataLink}
+              onPress={() => {
+                editorRef.current?.blur();
+                Keyboard.dismiss();
+                setTimeout(() => setShowLocationPicker(!showLocationPicker), 100);
+              }}
+            >
+              <View style={styles.metadataLinkContent}>
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+                  <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+                  <Circle cx={12} cy={10} r={3} fill={theme.colors.text.primary} />
+                </Svg>
+                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                  {locationData.name || "GPS"}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </>
         )}
 
-        {/* Due Date */}
-        {showDueDate && (
-          <TouchableOpacity
-            style={styles.metadataLink}
-            onPress={() => {
-              editorRef.current?.blur();
-              Keyboard.dismiss();
-              setTimeout(() => {
-                setShowDatePicker(!showDatePicker);
+        {/* Status - only if set (not "none") */}
+        {showStatus && status !== "none" && (
+          <>
+            <Text style={styles.metadataDivider}>·</Text>
+            <TouchableOpacity
+              style={styles.metadataLink}
+              onPress={() => {
+                // Cycle through statuses
+                if (status === "incomplete") setStatus("in_progress");
+                else if (status === "in_progress") setStatus("complete");
+                else setStatus("none");
                 if (!isEditMode) enterEditMode();
-              }, 100);
-            }}
-          >
-            <View style={styles.metadataLinkContent}>
-              {dueDate && (
+              }}
+            >
+              <View style={styles.metadataLinkContent}>
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                  <Circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke={status === "complete" ? theme.colors.text.primary : "#6b7280"}
+                    strokeWidth={2}
+                    fill={status === "complete" ? theme.colors.text.primary : "none"}
+                  />
+                  {status === "complete" && (
+                    <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                  )}
+                  {status === "in_progress" && (
+                    <Circle cx="12" cy="12" r="4" fill="#6b7280" />
+                  )}
+                </Svg>
+                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                  {status === "incomplete" ? "Not Started" :
+                   status === "in_progress" ? "In Progress" :
+                   "Completed"}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* Due Date - only if set */}
+        {showDueDate && dueDate && (
+          <>
+            <Text style={styles.metadataDivider}>·</Text>
+            <TouchableOpacity
+              style={styles.metadataLink}
+              onPress={() => {
+                editorRef.current?.blur();
+                Keyboard.dismiss();
+                setTimeout(() => {
+                  setShowDatePicker(!showDatePicker);
+                  if (!isEditMode) enterEditMode();
+                }, 100);
+              }}
+            >
+              <View style={styles.metadataLinkContent}>
                 <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
                   <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
                   <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
                   <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
                   <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
-              )}
-              <Text style={[styles.metadataText, dueDate && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                {dueDate ? `Due: ${new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : "Add Due Date"}
-              </Text>
-            </View>
-          </TouchableOpacity>
+                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                  {new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </>
         )}
 
-        {/* Divider after Due Date if any following item is visible */}
-        {showDueDate && (showRating || showPriority || (showPhotos && (photosCollapsed || photoCount === 0))) && (
-          <Text style={styles.metadataDivider}>|</Text>
-        )}
-
-        {/* Rating */}
-        {showRating && (
-          <TouchableOpacity
-            style={styles.metadataLink}
-            onPress={() => {
-              editorRef.current?.blur();
-              Keyboard.dismiss();
-              setTimeout(() => {
-                setShowRatingPicker(true);
-                if (!isEditMode) enterEditMode();
-              }, 100);
-            }}
-          >
-            <View style={styles.metadataLinkContent}>
-              {rating > 0 && (
+        {/* Rating - only if set */}
+        {showRating && rating > 0 && (
+          <>
+            <Text style={styles.metadataDivider}>·</Text>
+            <TouchableOpacity
+              style={styles.metadataLink}
+              onPress={() => {
+                editorRef.current?.blur();
+                Keyboard.dismiss();
+                setTimeout(() => {
+                  setShowRatingPicker(true);
+                  if (!isEditMode) enterEditMode();
+                }, 100);
+              }}
+            >
+              <View style={styles.metadataLinkContent}>
                 <Svg width={12} height={12} viewBox="0 0 24 24" fill={theme.colors.text.primary} stroke="none">
                   <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </Svg>
-              )}
-              <Text style={[styles.metadataText, rating > 0 && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                {rating > 0 ? `${rating}/5` : "Add Rating"}
-              </Text>
-            </View>
-          </TouchableOpacity>
+                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                  {rating}/5
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </>
         )}
 
-        {/* Divider after Rating if any following item is visible */}
-        {showRating && (showPriority || (showPhotos && (photosCollapsed || photoCount === 0))) && (
-          <Text style={styles.metadataDivider}>|</Text>
-        )}
-
-        {/* Priority */}
-        {showPriority && (
-          <TouchableOpacity
-            style={styles.metadataLink}
-            onPress={() => {
-              editorRef.current?.blur();
-              Keyboard.dismiss();
-              setTimeout(() => {
-                setShowPriorityPicker(true);
-                if (!isEditMode) enterEditMode();
-              }, 100);
-            }}
-          >
-            <View style={styles.metadataLinkContent}>
-              {priority > 0 && (
+        {/* Priority - only if set */}
+        {showPriority && priority > 0 && (
+          <>
+            <Text style={styles.metadataDivider}>·</Text>
+            <TouchableOpacity
+              style={styles.metadataLink}
+              onPress={() => {
+                editorRef.current?.blur();
+                Keyboard.dismiss();
+                setTimeout(() => {
+                  setShowPriorityPicker(true);
+                  if (!isEditMode) enterEditMode();
+                }, 100);
+              }}
+            >
+              <View style={styles.metadataLinkContent}>
                 <Svg width={12} height={12} viewBox="0 0 24 24" fill={theme.colors.text.primary} stroke="none">
                   <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.primary} />
                   <Path d="M5 3h13l-4 5 4 5H5z" />
                 </Svg>
-              )}
-              <Text style={[styles.metadataText, priority > 0 && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                {priority > 0 ? `${priority}` : "Add Priority"}
-              </Text>
-            </View>
-          </TouchableOpacity>
+                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                  P{priority}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </>
         )}
 
-        {/* Divider after Priority if Photos is visible */}
-        {showPriority && showPhotos && (photosCollapsed || photoCount === 0) && (
-          <Text style={styles.metadataDivider}>|</Text>
-        )}
-
-        {/* Photos - only show when collapsed or no photos */}
-        {showPhotos && (photosCollapsed || photoCount === 0) && (
-          <TouchableOpacity
-            style={styles.metadataLink}
-            onPress={() => {
-              if (photoCount > 0) {
-                // Toggle collapse if there are photos
-                setPhotosCollapsed(!photosCollapsed);
-              } else {
-                // No photos - launch photo capture and enter edit mode
-                if (!isEditMode) enterEditMode();
-                photoCaptureRef.current?.openMenu();
-              }
-            }}
-          >
-            <View style={styles.metadataLinkContent}>
-              {photoCount > 0 && (
+        {/* Photos - only if has photos and collapsed */}
+        {showPhotos && photoCount > 0 && photosCollapsed && (
+          <>
+            <Text style={styles.metadataDivider}>·</Text>
+            <TouchableOpacity
+              style={styles.metadataLink}
+              onPress={() => setPhotosCollapsed(false)}
+            >
+              <View style={styles.metadataLinkContent}>
                 <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
                   <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
                   <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
-              )}
-              <Text style={[styles.metadataText, photoCount > 0 && styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                {photoCount > 0 ? `${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}` : "Add Photos"}
-              </Text>
-            </View>
-          </TouchableOpacity>
+                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                  {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </>
         )}
+
+        {/* Entry Menu Button (...) */}
+        <TouchableOpacity
+          style={styles.entryMenuButton}
+          onPress={() => {
+            editorRef.current?.blur();
+            Keyboard.dismiss();
+            setTimeout(() => setShowAttributesPicker(true), 100);
+          }}
+        >
+          <Svg width={16} height={16} viewBox="0 0 24 24" fill="#6b7280" stroke="none">
+            <Circle cx={12} cy={5} r={2} />
+            <Circle cx={12} cy={12} r={2} />
+            <Circle cx={12} cy={19} r={2} />
+          </Svg>
+        </TouchableOpacity>
+
       </View>
+      )}
 
       {/* Content Area */}
-      <View style={styles.contentContainer}>
+      <View style={[
+        styles.contentContainer,
+        // Dynamic padding to account for bottom bar height (~60px)
+        isEditMode ? { paddingBottom: 60 } : { paddingBottom: 0 },
+        keyboardHeight > 0 && { paddingBottom: keyboardHeight + 80 }
+      ]}>
 
-        {/* Photo Gallery */}
-        <PhotoGallery
-          entryId={entryId || tempEntryId}
-          refreshKey={photoCount}
-          onPhotoCountChange={setPhotoCount}
-          onPhotoDelete={handlePhotoDelete}
-          pendingPhotos={isEditing ? undefined : pendingPhotos}
-          collapsible={true}
-          isCollapsed={photosCollapsed}
-          onCollapsedChange={setPhotosCollapsed}
-          onAddPhoto={() => {
-            if (!isEditMode) enterEditMode();
-            photoCaptureRef.current?.openMenu();
-          }}
-        />
+        {/* Photo Gallery (hidden in full-screen mode) */}
+        {!isFullScreen && (
+          <PhotoGallery
+            entryId={entryId || tempEntryId}
+            refreshKey={photoCount}
+            onPhotoCountChange={setPhotoCount}
+            onPhotoDelete={handlePhotoDelete}
+            pendingPhotos={isEditing ? undefined : pendingPhotos}
+            collapsible={true}
+            isCollapsed={photosCollapsed}
+            onCollapsedChange={setPhotosCollapsed}
+            onAddPhoto={() => {
+              if (!isEditMode) enterEditMode();
+              photoCaptureRef.current?.openMenu();
+            }}
+          />
+        )}
 
         {/* Editor */}
         <View style={[
           styles.editorContainer,
-          keyboardHeight > 0 && { paddingBottom: keyboardHeight + 105 }
+          isFullScreen && styles.fullScreenEditor
         ]}>
           <RichTextEditor
             ref={editorRef}
@@ -1405,227 +1487,107 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             onChange={setContent}
             placeholder="What's on your mind? Use #tags and @mentions..."
             editable={isEditMode}
-            onDoublePress={enterEditMode}
+            onPress={enterEditMode}
           />
         </View>
 
-        {/* Word/Character Count */}
+        {/* Word/Character Count (hidden in full-screen mode) */}
+        {!isFullScreen && (
         <View style={styles.countContainer}>
           <Text style={styles.countText}>
             {getWordCount(content)} {getWordCount(content) === 1 ? "word" : "words"} • {getCharacterCount(content)} {getCharacterCount(content) === 1 ? "character" : "characters"}
           </Text>
         </View>
+        )}
       </View>
 
-      {/* Bottom Bar */}
+      {/* Bottom Bar - only shown when in edit mode */}
+      {isEditMode && (
       <BottomBar keyboardOffset={keyboardHeight}>
-        {/* Formatting Buttons - Only show in edit mode */}
-        {isEditMode && (
-          <View style={styles.formatButtonsContainer}>
-            {/* Row 1: Text formatting */}
-            <View style={styles.formatButtons}>
-              {/* Bold Button */}
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => editorRef.current?.toggleBold()}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
-                  <Path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </TouchableOpacity>
+        <View style={styles.fullScreenToolbar}>
+          {/* Text formatting */}
+          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleBold()}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
+              <Path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleItalic()}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Line x1={19} y1={4} x2={10} y2={4} strokeLinecap="round" />
+              <Line x1={14} y1={20} x2={5} y2={20} strokeLinecap="round" />
+              <Line x1={15} y1={4} x2={9} y2={20} strokeLinecap="round" />
+            </Svg>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleHeading(1)}>
+            <Text style={styles.headingButtonText}>H1</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleHeading(2)}>
+            <Text style={styles.headingButtonText}>H2</Text>
+          </TouchableOpacity>
 
-              {/* Italic Button */}
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => editorRef.current?.toggleItalic()}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Line x1={19} y1={4} x2={10} y2={4} strokeLinecap="round" />
-                  <Line x1={14} y1={20} x2={5} y2={20} strokeLinecap="round" />
-                  <Line x1={15} y1={4} x2={9} y2={20} strokeLinecap="round" />
-                </Svg>
-              </TouchableOpacity>
+          <View style={styles.toolbarDivider} />
 
-              {/* H1 Button */}
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => editorRef.current?.toggleHeading(1)}
-              >
-                <Text style={styles.headingButtonText}>H1</Text>
-              </TouchableOpacity>
+          {/* List formatting */}
+          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleBulletList()}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Line x1={9} y1={6} x2={20} y2={6} strokeLinecap="round" />
+              <Line x1={9} y1={12} x2={20} y2={12} strokeLinecap="round" />
+              <Line x1={9} y1={18} x2={20} y2={18} strokeLinecap="round" />
+              <Circle cx={5} cy={6} r={1} fill="#6b7280" />
+              <Circle cx={5} cy={12} r={1} fill="#6b7280" />
+              <Circle cx={5} cy={18} r={1} fill="#6b7280" />
+            </Svg>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleOrderedList()}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Line x1={10} y1={6} x2={21} y2={6} strokeLinecap="round" />
+              <Line x1={10} y1={12} x2={21} y2={12} strokeLinecap="round" />
+              <Line x1={10} y1={18} x2={21} y2={18} strokeLinecap="round" />
+              <Path d="M4 6h1v4M3 10h3M3 14.5a1.5 1.5 0 011.5-1.5h.5l-2 3h3" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleTaskList()}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Path d="M3 5h4v4H3zM3 14h4v4H3z" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M4 7l1 1 2-2" strokeLinecap="round" strokeLinejoin="round" />
+              <Line x1={10} y1={7} x2={21} y2={7} strokeLinecap="round" />
+              <Line x1={10} y1={16} x2={21} y2={16} strokeLinecap="round" />
+            </Svg>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.indent()}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Path d="M3 9l4 3-4 3" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.outdent()}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Path d="M7 9l-4 3 4 3" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
 
-              {/* H2 Button */}
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => editorRef.current?.toggleHeading(2)}
-              >
-                <Text style={styles.headingButtonText}>H2</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Row 2: Lists and indentation */}
-            <View style={styles.formatButtons}>
-              {/* Bullet List Button */}
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => editorRef.current?.toggleBulletList()}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Line x1={9} y1={6} x2={20} y2={6} strokeLinecap="round" />
-                  <Line x1={9} y1={12} x2={20} y2={12} strokeLinecap="round" />
-                  <Line x1={9} y1={18} x2={20} y2={18} strokeLinecap="round" />
-                  <Circle cx={5} cy={6} r={1} fill="#6b7280" />
-                  <Circle cx={5} cy={12} r={1} fill="#6b7280" />
-                  <Circle cx={5} cy={18} r={1} fill="#6b7280" />
-                </Svg>
-              </TouchableOpacity>
-
-              {/* Numbered List Button */}
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => editorRef.current?.toggleOrderedList()}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Line x1={10} y1={6} x2={21} y2={6} strokeLinecap="round" />
-                  <Line x1={10} y1={12} x2={21} y2={12} strokeLinecap="round" />
-                  <Line x1={10} y1={18} x2={21} y2={18} strokeLinecap="round" />
-                  <Path d="M4 6h1v4M3 10h3M3 14.5a1.5 1.5 0 011.5-1.5h.5l-2 3h3" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </TouchableOpacity>
-
-              {/* Checkbox List Button */}
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => editorRef.current?.toggleTaskList()}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Path d="M3 5h4v4H3zM3 14h4v4H3z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M4 7l1 1 2-2" strokeLinecap="round" strokeLinejoin="round" />
-                  <Line x1={10} y1={7} x2={21} y2={7} strokeLinecap="round" />
-                  <Line x1={10} y1={16} x2={21} y2={16} strokeLinecap="round" />
-                </Svg>
-              </TouchableOpacity>
-
-              {/* Indent Button */}
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => editorRef.current?.indent()}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Path d="M3 9l4 3-4 3" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </TouchableOpacity>
-
-              {/* Outdent Button */}
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => editorRef.current?.outdent()}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Path d="M7 9l-4 3 4 3" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.actionButtons}>
-          {/* Delete Button (shown when viewing existing entry) */}
-          {isEditing && (
-            <TouchableOpacity
-              onPress={handleDelete}
-              disabled={isSubmitting}
-              style={[styles.deleteButton, isSubmitting && styles.buttonDisabled]}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
-                <Path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
-          )}
-
-          {/* Cancel/Back Button - Back arrow in view mode, X in edit mode */}
+          {/* Full Screen Toggle Button - toggles between expand/collapse */}
+          <View style={styles.toolbarDivider} />
           <TouchableOpacity
-            onPress={() => {
-              // Define the navigation callback
-              const doNavigation = () => {
-                // Navigate back to the appropriate category (or filter view like tag:xxx, mention:xxx)
-                let returnCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
-                let returnCategoryName: string;
-
-                // Navigate back based on returnContext
-                if (returnContext) {
-                  if (returnContext.screen === "calendar") {
-                    navigate("calendar", {
-                      returnDate: entryDate,
-                      returnZoomLevel: returnContext.zoomLevel
-                    });
-                    return;
-                  } else if (returnContext.screen === "tasks") {
-                    navigate("tasks");
-                    return;
-                  } else if (returnContext.screen === "inbox") {
-                    navigate("inbox", {
-                      returnCategoryId: returnContext.categoryId || null,
-                      returnCategoryName: returnContext.categoryName || "Uncategorized"
-                    });
-                    return;
-                  }
-                }
-
-                if (isEditing) {
-                  // For editing: return to entry's original category
-                  returnCategoryId = originalCategoryId;
-                  returnCategoryName = originalCategoryName || "Uncategorized";
-                } else {
-                  // For new entries: return to the list category/filter we came from
-                  returnCategoryId = initialCategoryId || null;
-                  returnCategoryName = initialCategoryName || "Uncategorized";
-                }
-
-                navigate("inbox", { returnCategoryId, returnCategoryName });
-              };
-
-              // X button always discards - just navigate directly
-              doNavigation();
-            }}
-            style={styles.cancelButton}
+            style={styles.toolbarButton}
+            onPress={() => setIsFullScreen(!isFullScreen)}
           >
-            {isEditMode ? (
-              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
-                <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+            {isFullScreen ? (
+              // Collapse icon - arrows pointing inward
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             ) : (
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              // Expand icon - arrows pointing outward
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             )}
           </TouchableOpacity>
-
-          {/* Edit/Save Button - Pencil in read-only, check in edit mode */}
-          {isEditMode ? (
-            <TouchableOpacity
-              onPress={handleSave}
-              disabled={isSubmitting}
-              style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
-            >
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
-                <Path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={enterEditMode}
-              style={styles.editButton}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
-          )}
         </View>
       </BottomBar>
+      )}
 
       {/* Category Picker Dropdown */}
       <TopBarDropdownContainer
@@ -1955,6 +1917,174 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         </View>
       </TopBarDropdownContainer>
 
+      {/* Entry Menu */}
+      <TopBarDropdownContainer
+        visible={showAttributesPicker}
+        onClose={() => setShowAttributesPicker(false)}
+      >
+        <View style={styles.attributePickerContainer}>
+          {/* Attributes Section - only show if there are unset attributes */}
+          {(() => {
+            const hasUnsetAttributes =
+              (showLocation && (!captureLocation || !locationData)) ||
+              (showStatus && status === "none") ||
+              (showDueDate && !dueDate) ||
+              (showRating && rating === 0) ||
+              (showPriority && priority === 0) ||
+              (showPhotos && photoCount === 0);
+
+            if (!hasUnsetAttributes) return null;
+
+            return (
+              <>
+                <Text style={styles.attributePickerTitle}>Add Attribute</Text>
+
+                {/* Location */}
+                {showLocation && (!captureLocation || !locationData) && (
+                  <TouchableOpacity
+                    style={styles.attributePickerItem}
+                    onPress={() => {
+                      setShowAttributesPicker(false);
+                      setTimeout(() => setShowLocationPicker(true), 100);
+                    }}
+                  >
+                    <View style={styles.attributePickerItemIcon}>
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                        <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+                        <Circle cx={12} cy={10} r={3} fill="#6b7280" />
+                      </Svg>
+                    </View>
+                    <Text style={styles.attributePickerItemText}>Location</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Status */}
+                {showStatus && status === "none" && (
+                  <TouchableOpacity
+                    style={styles.attributePickerItem}
+                    onPress={() => {
+                      setStatus("incomplete");
+                      setShowAttributesPicker(false);
+                      showSnackbar('Status set to Not Started');
+                      if (!isEditMode) enterEditMode();
+                    }}
+                  >
+                    <View style={styles.attributePickerItemIcon}>
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                        <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
+                    <Text style={styles.attributePickerItemText}>Status</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Due Date */}
+                {showDueDate && !dueDate && (
+                  <TouchableOpacity
+                    style={styles.attributePickerItem}
+                    onPress={() => {
+                      setShowAttributesPicker(false);
+                      setTimeout(() => setShowDatePicker(true), 100);
+                      if (!isEditMode) enterEditMode();
+                    }}
+                  >
+                    <View style={styles.attributePickerItemIcon}>
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                        <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
+                        <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
+                        <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
+                        <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
+                    <Text style={styles.attributePickerItemText}>Due Date</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Rating */}
+                {showRating && rating === 0 && (
+                  <TouchableOpacity
+                    style={styles.attributePickerItem}
+                    onPress={() => {
+                      setShowAttributesPicker(false);
+                      setTimeout(() => setShowRatingPicker(true), 100);
+                      if (!isEditMode) enterEditMode();
+                    }}
+                  >
+                    <View style={styles.attributePickerItemIcon}>
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                        <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
+                    <Text style={styles.attributePickerItemText}>Rating</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Priority */}
+                {showPriority && priority === 0 && (
+                  <TouchableOpacity
+                    style={styles.attributePickerItem}
+                    onPress={() => {
+                      setShowAttributesPicker(false);
+                      setTimeout(() => setShowPriorityPicker(true), 100);
+                      if (!isEditMode) enterEditMode();
+                    }}
+                  >
+                    <View style={styles.attributePickerItemIcon}>
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                        <Path d="M5 3v18" strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M5 3h13l-4 5 4 5H5z" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
+                    <Text style={styles.attributePickerItemText}>Priority</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Photos */}
+                {showPhotos && photoCount === 0 && (
+                  <TouchableOpacity
+                    style={styles.attributePickerItem}
+                    onPress={() => {
+                      setShowAttributesPicker(false);
+                      if (!isEditMode) enterEditMode();
+                      setTimeout(() => photoCaptureRef.current?.openMenu(), 100);
+                    }}
+                  >
+                    <View style={styles.attributePickerItemIcon}>
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                        <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+                        <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
+                    <Text style={styles.attributePickerItemText}>Photos</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Divider before Delete */}
+                {isEditing && <View style={styles.menuDivider} />}
+              </>
+            );
+          })()}
+
+          {/* Delete Entry - only shown for existing entries */}
+          {isEditing && (
+            <TouchableOpacity
+              style={styles.attributePickerItem}
+              onPress={() => {
+                setShowAttributesPicker(false);
+                setTimeout(() => handleDelete(), 100);
+              }}
+            >
+              <View style={styles.attributePickerItemIcon}>
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}>
+                  <Path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
+              <Text style={[styles.attributePickerItemText, { color: '#ef4444' }]}>Delete Entry</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TopBarDropdownContainer>
+
       {/* Photo Capture (hidden, triggered via ref) */}
       <PhotoCapture
         ref={photoCaptureRef}
@@ -2002,20 +2132,122 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   titleBar: {
-    height: 110,
+    height: 90,
     paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.md,
-    backgroundColor: theme.colors.background.primary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingBottom: 4,
+    backgroundColor: "#fafafa",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+  },
+  titleBarFullScreen: {
+    // Keep same structure as titleBar but adjust spacing
+    // Normal titleBar: height 90, paddingTop 45 (ios), paddingBottom 4
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  headerTitleText: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#1f2937",
+    textAlign: "center",
+  },
+  headerTitleInput: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#1f2937",
+    textAlign: "center",
+    flex: 1,
+    padding: 0,
+    margin: 0,
+  },
+  headerLeftContainer: {
+    width: 70,
+    alignItems: "flex-start",
+  },
+  headerRightContainer: {
+    width: 100,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    position: "relative",
+  },
+  headerCancelButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    minHeight: 32,
+    justifyContent: "center",
+  },
+  headerCancelText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: "#6b7280",
+    fontWeight: "500",
+    includeFontPadding: false,
+    textAlignVertical: "center",
+  },
+  headerSaveButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    minHeight: 32,
+    justifyContent: "center",
+  },
+  headerSaveButtonDisabled: {
+    opacity: 0.5,
+  },
+  headerSaveText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: "#2563eb",
+    fontWeight: "600",
+    includeFontPadding: false,
+    textAlignVertical: "center",
+  },
+  headerSaveTextDisabled: {
+    color: "#9ca3af",
+  },
+  headerDateContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  headerDateText: {
+    fontSize: 15,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  headerTimeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerWatchButton: {
+    padding: 2,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 6,
+    backgroundColor: "#fafafa",
+  },
+  titleInputFullWidth: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.text.primary,
+    padding: 0,
+    margin: 0,
+    textAlign: "center",
   },
   titleBarContent: {
     flex: 1,
-  },
-  menuContainer: {
-    position: "relative",
   },
   menuButton: {
     padding: theme.spacing.sm,
@@ -2026,36 +2258,86 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.sm,
-    backgroundColor: theme.colors.background.primary,
-    rowGap: 4,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: theme.colors.border.light,
+    paddingTop: 10,
+    paddingBottom: 10,
+    backgroundColor: "#fafafa",
+    rowGap: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(0, 0, 0, 0.08)",
+    // Subtle iOS-style shadow
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   metadataLink: {
-    paddingVertical: 4,
-    maxWidth: 120,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    maxWidth: 130,
   },
   metadataLinkContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 5,
   },
   metadataText: {
-    fontSize: 14,
+    fontSize: 13,
     color: theme.colors.text.secondary,
     fontWeight: "500",
+    letterSpacing: -0.2,
   },
   metadataTextActive: {
     color: theme.colors.text.primary,
     fontWeight: "600",
   },
   metadataDivider: {
-    fontSize: 14,
-    color: theme.colors.text.disabled,
-    paddingHorizontal: 6,
+    fontSize: 10,
+    color: "#d1d5db",
+    paddingHorizontal: 8,
+  },
+  entryMenuButton: {
+    marginLeft: "auto",
+    padding: 8,
+    opacity: 0.6,
+  },
+  attributePickerContainer: {
+    backgroundColor: theme.colors.background.primary,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  attributePickerTitle: {
+    fontSize: 16,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.sm,
+  },
+  attributePickerItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+  },
+  attributePickerItemIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.background.secondary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  attributePickerItemText: {
+    fontSize: 16,
+    color: theme.colors.text.primary,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: "#e5e7eb",
+    marginVertical: theme.spacing.sm,
   },
   topBarButtonTask: {
     // No background color
@@ -2077,20 +2359,23 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
+    // No background - inherits from parent container (white)
   },
   titleContainer: {
     flex: 1,
   },
   titleCollapsed: {
     flex: 1,
+    alignItems: "center",
   },
   titlePlaceholder: {
-    fontSize: 28,
+    fontSize: 22,
     color: theme.colors.text.disabled,
     fontWeight: theme.typography.fontWeight.bold,
+    textAlign: "center",
   },
   titleInput: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.text.primary,
     padding: 0,
@@ -2101,25 +2386,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingLeft: 24,
-    paddingRight: 24,
-    paddingTop: 4,
+    paddingRight: 16,
+    paddingTop: 0,
     paddingBottom: 4,
+    backgroundColor: "#fafafa",
   },
   entryDateText: {
     fontSize: 19,
-    color: "#6b7280",
-    fontWeight: "500",
-  },
-  statusButton: {
-    marginLeft: "auto",
-  },
-  statusContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  statusText: {
-    fontSize: 14,
     color: "#6b7280",
     fontWeight: "500",
   },
@@ -2132,9 +2405,9 @@ const styles = StyleSheet.create({
   },
   editorContainer: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 80,
+    paddingLeft: 24,
+    paddingRight: 12,
+    // paddingBottom is set dynamically based on edit mode and popout state
   },
   countContainer: {
     paddingHorizontal: 24,
@@ -2144,14 +2417,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
   },
-  formatButtonsContainer: {
-    flexDirection: "column",
-    gap: 4,
-  },
-  formatButtons: {
+  // Toolbar styles
+  fullScreenToolbar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 2,
+    flex: 1,
+  },
+  toolbarDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: "#d1d5db",
+    marginHorizontal: 4,
+  },
+  fullScreenEditor: {
+    paddingTop: 16,
   },
   actionButtons: {
     flexDirection: "row",
@@ -2162,9 +2442,6 @@ const styles = StyleSheet.create({
   toolbarButton: {
     padding: 8,
     borderRadius: 6,
-  },
-  toolbarButtonActive: {
-    backgroundColor: "#dbeafe",
   },
   headingButtonText: {
     fontSize: 12,

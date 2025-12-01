@@ -6,14 +6,13 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { View, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Text } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
+import { View, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import { localDB } from '../../../shared/db/localDB';
 import { getPhotoUri, ensurePhotoDownloaded } from '../mobilePhotoApi';
 import { PhotoViewer } from './PhotoViewer';
 import type { Photo } from '@trace/core';
-import { theme } from '../../../shared/theme/theme';
 
 interface PendingPhoto {
   photoId: string;
@@ -250,49 +249,44 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
               </TouchableOpacity>
             );
           })}
+
+          {/* Add Photo button - inline as last thumbnail */}
+          {onAddPhoto && (
+            <TouchableOpacity
+              style={styles.addPhotoButton}
+              onPress={onAddPhoto}
+              activeOpacity={0.7}
+            >
+              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M12 5v14M5 12h14"
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </TouchableOpacity>
+          )}
         </ScrollView>
 
-        {/* Vertical toolbar on right side */}
-        {collapsible && (
-          <View style={styles.toolbarContainer}>
-            {/* Add Photo button */}
-            {onAddPhoto && (
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={onAddPhoto}
-                activeOpacity={0.7}
-              >
-                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                  <Path
-                    d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"
-                    stroke={theme.colors.text.tertiary}
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <Circle cx={12} cy={13} r={3} stroke={theme.colors.text.tertiary} strokeWidth={2} />
-                </Svg>
-              </TouchableOpacity>
-            )}
-            {/* Collapse button */}
-            {onCollapsedChange && (
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => onCollapsedChange(true)}
-                activeOpacity={0.7}
-              >
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                  <Path
-                    d="M18 15l-6-6-6 6"
-                    stroke={theme.colors.text.tertiary}
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </Svg>
-              </TouchableOpacity>
-            )}
-          </View>
+        {/* Minimal collapse chevron */}
+        {collapsible && onCollapsedChange && (
+          <TouchableOpacity
+            style={styles.collapseButton}
+            onPress={() => onCollapsedChange(true)}
+            activeOpacity={0.7}
+          >
+            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M18 15l-6-6-6 6"
+                stroke="#9ca3af"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -333,18 +327,19 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
 const styles = StyleSheet.create({
   galleryWrapper: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    marginTop: 8,
   },
   container: {
     marginBottom: 8,
-    maxHeight: 88, // Fixed height to prevent layout issues
+    maxHeight: 88,
     flex: 1,
   },
   contentContainer: {
     paddingLeft: 16,
     paddingRight: 8,
     gap: 8,
-    // Left-align photos (no flexGrow or justifyContent)
+    alignItems: 'center',
   },
   loadingContainer: {
     padding: 8,
@@ -353,9 +348,8 @@ const styles = StyleSheet.create({
   photoContainer: {
     width: 80,
     height: 80,
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
-    marginRight: 8,
     backgroundColor: '#f3f4f6',
   },
   photo: {
@@ -368,17 +362,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  toolbarContainer: {
-    flexDirection: 'column',
+  addPhotoButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#d1d5db',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingRight: 8,
-    paddingTop: 4,
-    gap: 4,
+    backgroundColor: '#fafafa',
   },
-  toolbarButton: {
-    padding: 8,
-    backgroundColor: theme.colors.background.tertiary,
-    borderRadius: 8,
+  collapseButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 8,
   },
 });

@@ -31,6 +31,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.lg,
-    backgroundColor: theme.colors.background.primary,
+    backgroundColor: "#f9fafb",
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
   },
 });

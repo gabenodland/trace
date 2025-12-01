@@ -13,6 +13,7 @@ interface RichTextEditorProps {
   placeholder?: string;
   editable?: boolean;
   onDoublePress?: () => void;
+  onPress?: (tapCoordinates?: { x: number; y: number }) => void;
 }
 
 export const RichTextEditor = forwardRef(({
@@ -21,11 +22,16 @@ export const RichTextEditor = forwardRef(({
   placeholder = "Start typing...",
   editable = true,
   onDoublePress,
+  onPress,
 }: RichTextEditorProps, ref) => {
   const isLocalChange = useRef(false);
   const lastContent = useRef(value);
   const lastTap = useRef<number | null>(null);
   const wasReadOnly = useRef(!editable);
+  const touchStartY = useRef<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const containerRef = useRef<View>(null);
+  const containerLayout = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const customCSS = `
     * {
@@ -53,7 +59,11 @@ export const RichTextEditor = forwardRef(({
       margin-top: 4px !important;
       margin-bottom: 4px !important;
     }
-    ul ul, ol ul, ul ol, ol ol {
+    /* Nested regular lists - exclude task lists */
+    ul:not([data-type="taskList"]) ul:not([data-type="taskList"]),
+    ol ul:not([data-type="taskList"]),
+    ul:not([data-type="taskList"]) ol,
+    ol ol {
       padding-left: 20px !important;
     }
     /* Numbered list hierarchy: 1 -> a -> i -> A -> I (5 levels) */
@@ -75,6 +85,7 @@ export const RichTextEditor = forwardRef(({
     /* Task list (checkbox) styling */
     ul[data-type="taskList"] {
       padding-left: 0 !important;
+      margin-left: 0 !important;
       list-style: none !important;
     }
     ul[data-type="taskList"] li {
@@ -85,11 +96,23 @@ export const RichTextEditor = forwardRef(({
       margin-right: 8px !important;
       user-select: none !important;
     }
-    ul[data-type="taskList"] ul[data-type="taskList"] {
-      padding-left: 24px !important;
+    /* Nested task lists - use same indent as regular bullet nested lists */
+    ul[data-type="taskList"] ul[data-type="taskList"],
+    li[data-type="taskItem"] ul[data-type="taskList"] {
+      padding-left: 20px !important;
+      margin-left: 0 !important;
     }
     .ProseMirror {
       -webkit-text-size-adjust: 100%;
+    }
+    /* Add space before first content element */
+    .ProseMirror > *:first-child {
+      margin-top: 10px !important;
+    }
+    .ProseMirror::before {
+      content: "";
+      display: block;
+      height: 10px;
     }
   `;
 
@@ -114,16 +137,111 @@ export const RichTextEditor = forwardRef(({
     setHeading: (level: 1 | 2 | 3 | 4 | 5 | 6) => editor.toggleHeading(level),
     toggleHeading: (level: 1 | 2 | 3 | 4 | 5 | 6) => editor.toggleHeading(level),
     indent: () => {
-      // TenTap's sink() works for all list types including task lists
-      editor.sink();
+      // Simulate Tab key press for better task list support
+      try {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview && typeof webview.injectJavaScript === 'function') {
+          webview.injectJavaScript(`
+            (function() {
+              const event = new KeyboardEvent('keydown', {
+                key: 'Tab',
+                code: 'Tab',
+                keyCode: 9,
+                which: 9,
+                bubbles: true,
+                cancelable: true
+              });
+              document.activeElement?.dispatchEvent(event);
+            })();
+            true;
+          `);
+        }
+      } catch (e) {
+        // Fallback to sink
+        editor.sink();
+      }
     },
     outdent: () => {
-      // TenTap's lift() works for all list types including task lists
-      editor.lift();
+      // Simulate Shift+Tab key press for better task list support
+      try {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview && typeof webview.injectJavaScript === 'function') {
+          webview.injectJavaScript(`
+            (function() {
+              const event = new KeyboardEvent('keydown', {
+                key: 'Tab',
+                code: 'Tab',
+                keyCode: 9,
+                which: 9,
+                shiftKey: true,
+                bubbles: true,
+                cancelable: true
+              });
+              document.activeElement?.dispatchEvent(event);
+            })();
+            true;
+          `);
+        }
+      } catch (e) {
+        // Fallback to lift
+        editor.lift();
+      }
     },
     blur: () => editor.blur(),
+    focus: () => editor.focus(),
     getHTML: () => editor.getHTML(),
     setContent: (html: string) => editor.setContent(html),
+    // Focus editor and place cursor at given coordinates (relative to editor)
+    focusAtPosition: (x: number, y: number) => {
+      editor.focus();
+      // Inject JavaScript to simulate a click at the coordinates to place cursor
+      try {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview && typeof webview.injectJavaScript === 'function') {
+          webview.injectJavaScript(`
+            (function() {
+              // Get the element at the coordinates
+              const element = document.elementFromPoint(${x}, ${y});
+              if (!element) return;
+
+              // Try to use caretPositionFromPoint (standard) or caretRangeFromPoint (webkit)
+              let range;
+              if (document.caretPositionFromPoint) {
+                const pos = document.caretPositionFromPoint(${x}, ${y});
+                if (pos) {
+                  range = document.createRange();
+                  range.setStart(pos.offsetNode, pos.offset);
+                  range.collapse(true);
+                }
+              } else if (document.caretRangeFromPoint) {
+                range = document.caretRangeFromPoint(${x}, ${y});
+              }
+
+              if (range) {
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+
+                // Also update ProseMirror's selection if available
+                if (window.editor?.view) {
+                  const view = window.editor.view;
+                  const pos = view.posAtCoords({ left: ${x}, top: ${y} });
+                  if (pos) {
+                    const tr = view.state.tr.setSelection(
+                      view.state.selection.constructor.near(view.state.doc.resolve(pos.pos))
+                    );
+                    view.dispatch(tr);
+                  }
+                }
+              }
+            })();
+            true;
+          `);
+        }
+      } catch (e) {
+        // Silently fail, editor is still focused
+      }
+    },
     // Force scroll to cursor position
     scrollToCursor: () => {
       editor.focus();
@@ -215,18 +333,67 @@ export const RichTextEditor = forwardRef(({
     }
   }, [editable, editor]);
 
-  // Handle touch events for double-tap detection without blocking scroll
+  // Track touch start position to differentiate taps from scrolls
+  const handleTouchStart = (e: any) => {
+    const touch = e.nativeEvent.touches?.[0] || e.nativeEvent;
+    touchStartX.current = touch.pageX;
+    touchStartY.current = touch.pageY;
+  };
+
+  // Handle touch events for tap detection without triggering on scroll
   const handleTouchEnd = (e: any) => {
-    if (!editable && onDoublePress) {
-      handlePress();
+    if (!editable) {
+      const touch = e.nativeEvent.changedTouches?.[0] || e.nativeEvent;
+      const endX = touch.pageX;
+      const endY = touch.pageY;
+
+      // Calculate distance moved - if significant, it was a scroll not a tap
+      const SCROLL_THRESHOLD = 10; // pixels
+      const deltaX = Math.abs(endX - (touchStartX.current || 0));
+      const deltaY = Math.abs(endY - (touchStartY.current || 0));
+
+      // Only trigger edit mode if it was a tap (minimal movement)
+      if (deltaX < SCROLL_THRESHOLD && deltaY < SCROLL_THRESHOLD) {
+        if (onPress) {
+          // Calculate coordinates relative to container for cursor positioning
+          const layout = containerLayout.current;
+          if (layout) {
+            const relativeX = endX - layout.x;
+            const relativeY = endY - layout.y;
+            onPress({ x: relativeX, y: relativeY });
+          } else {
+            onPress();
+          }
+        } else if (onDoublePress) {
+          // Fallback to double-press behavior if onPress not provided
+          handlePress();
+        }
+      }
     }
+
+    // Reset touch tracking
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  // Capture container layout for coordinate calculations
+  const handleLayout = () => {
+    containerRef.current?.measureInWindow((x, y, width, height) => {
+      containerLayout.current = { x, y, width, height };
+    });
   };
 
   return (
-    <View style={styles.container} onTouchEnd={handleTouchEnd}>
+    <View
+      ref={containerRef}
+      style={styles.container}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onLayout={handleLayout}
+    >
       <RichText
         editor={editor}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         overScrollMode="never"
       />
     </View>
