@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Platform, StatusBar, Keyboard, Animated } from "react-native";
-import Slider from "@react-native-community/slider";
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
 import * as Location from "expo-location";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { extractTagsAndMentions, getWordCount, getCharacterCount, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput, locationToEntryGpsFields } from "@trace/core";
+import { extractTagsAndMentions, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput, locationToEntryGpsFields } from "@trace/core";
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useCategories } from "../../categories/mobileCategoryHooks";
@@ -13,10 +11,8 @@ import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { CategoryPicker } from "../../categories/components/CategoryPicker";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdownContainer";
-import { NavigationMenu } from "../../../components/navigation/NavigationMenu";
 import { useNavigationMenu } from "../../../shared/hooks/useNavigationMenu";
-import Svg, { Path, Circle, Line } from "react-native-svg";
-import { theme } from "../../../shared/theme/theme";
+import Svg, { Path, Circle } from "react-native-svg";
 import { SimpleDatePicker } from "./SimpleDatePicker";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
@@ -25,6 +21,12 @@ import { compressPhoto, savePhotoToLocalStorage, deletePhoto } from "../../photo
 import { localDB } from "../../../shared/db/localDB";
 import { syncQueue } from "../../../shared/sync/syncQueue";
 import * as Crypto from "expo-crypto";
+import { useCaptureFormState } from "./hooks/useCaptureFormState";
+import { styles } from "./CaptureForm.styles";
+import { RatingPicker, PriorityPicker, TimePicker, AttributesPicker } from "./pickers";
+import { MetadataBar } from "./MetadataBar";
+import { EditorToolbar } from "./EditorToolbar";
+import { CaptureFormHeader } from "./CaptureFormHeader";
 
 import type { ReturnContext } from "../../../screens/EntryScreen";
 
@@ -45,72 +47,34 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   // Get user settings for default GPS capture behavior
   const { settings } = useSettings();
 
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState(initialContent || "");
+  // Single form data state hook (consolidates form field state + pending photos)
+  const { formData, updateField, updateMultipleFields, addPendingPhoto, removePendingPhoto } = useCaptureFormState({
+    isEditing,
+    initialCategoryId,
+    initialCategoryName,
+    initialContent,
+    initialDate,
+    initialLocation,
+    captureGpsLocationSetting: settings.captureGpsLocation,
+  });
+
+  // UI State (NOT form data - keep as individual useState)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  // For new entries: use setting, for editing: use initialLocation presence
-  const [captureLocation, setCaptureLocation] = useState(
-    isEditing ? !!initialLocation : settings.captureGpsLocation
-  );
-
-  // Initialize category from props for new entries, or null for editing (will be loaded from entry)
-  const getInitialCategoryId = (): string | null => {
-    if (isEditing) return null; // Will be loaded from entry
-    // For new entries, use initialCategoryId if it's a real category (not a filter like "all", "tasks", etc.)
-    if (!initialCategoryId || typeof initialCategoryId !== 'string' ||
-        initialCategoryId === "all" || initialCategoryId === "tasks" ||
-        initialCategoryId === "events" || initialCategoryId === "categories" ||
-        initialCategoryId === "tags" || initialCategoryId === "people" ||
-        initialCategoryId.startsWith("tag:") || initialCategoryId.startsWith("mention:") || initialCategoryId.startsWith("location:")) {
-      return null; // Default to Uncategorized for filters
-    }
-    return initialCategoryId;
-  };
-
-  const [categoryId, setCategoryId] = useState<string | null>(getInitialCategoryId());
-  const [categoryName, setCategoryName] = useState<string | null>(
-    !isEditing && initialCategoryName && getInitialCategoryId() !== null ? initialCategoryName : null
-  );
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [status, setStatus] = useState<"none" | "incomplete" | "in_progress" | "complete">("none");
-  const [dueDate, setDueDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [rating, setRating] = useState<number>(0);
   const [showRatingPicker, setShowRatingPicker] = useState(false);
-  const [priority, setPriority] = useState<number>(0);
   const [showPriorityPicker, setShowPriorityPicker] = useState(false);
   const [showAttributesPicker, setShowAttributesPicker] = useState(false);
-  const [entryDate, setEntryDate] = useState<string>(() => {
-    // If initialDate is provided (from calendar), use it with current time + 100ms to hide time
-    if (initialDate) {
-      // Parse YYYY-MM-DD in local timezone to avoid UTC conversion issues
-      const [year, month, day] = initialDate.split('-').map(Number);
-      const selectedDate = new Date(year, month - 1, day); // month is 0-indexed
-      const now = new Date();
-      // Set the time to current time but on the selected date
-      selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 100); // 100ms to hide time
-      return selectedDate.toISOString();
-    }
-    // Default to current date and time (with 0 milliseconds to show time)
-    const now = new Date();
-    now.setMilliseconds(0);
-    return now.toISOString();
-  });
   const [showNativePicker, setShowNativePicker] = useState(false);
   const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
   const [showEntryDatePicker, setShowEntryDatePicker] = useState(false);
-  // Check milliseconds to determine if time should be shown (0 = show, 100 = hidden)
-  const [includeTime, setIncludeTime] = useState(() => {
-    // If initialDate provided, hide time initially
-    return !initialDate;
-  });
-  const [showTimeModal, setShowTimeModal] = useState(false); // Custom modal for time with Clear button
-  // Store original category for cancel navigation (for edited entries)
+  const [showTimeModal, setShowTimeModal] = useState(false);
+
+  // Original category for cancel navigation (for edited entries)
   const [originalCategoryId, setOriginalCategoryId] = useState<string | null>(null);
   const [originalCategoryName, setOriginalCategoryName] = useState<string | null>(null);
-  const [locationData, setLocationData] = useState<LocationType | null>(initialLocation || null);
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const [locationIconBlink, setLocationIconBlink] = useState(true);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
@@ -122,20 +86,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const lastTitleTap = useRef<number | null>(null); // Track last tap time for double-tap detection
   const [photoCount, setPhotoCount] = useState(0); // Track photo position for ordering
   const [photosCollapsed, setPhotosCollapsed] = useState(false); // Start expanded
-  const [tempEntryId] = useState(() => entryId || Crypto.randomUUID()); // Temp ID for new entries
-
-  // Pending photos for NEW entries only (not saved to DB yet)
-  // For EXISTING entries, photos are saved to DB immediately
-  const [pendingPhotos, setPendingPhotos] = useState<Array<{
-    photoId: string;
-    localPath: string;
-    filePath: string;
-    mimeType: string;
-    fileSize: number;
-    width: number;
-    height: number;
-    position: number;
-  }>>([]);
+  const [tempEntryId] = useState(() => entryId || Crypto.randomUUID()); // Temp ID for new entries;
 
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
@@ -146,7 +97,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const [showMenu, setShowMenu] = useState(false);
 
   // Get current category for visibility controls
-  const currentCategory = categories.find(c => c.category_id === categoryId);
+  const currentCategory = categories.find(c => c.category_id === formData.categoryId);
 
   // Category-based visibility
   // If no category: show all fields (default true)
@@ -178,22 +129,22 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   // Edit mode: new entries start in edit mode, existing entries start in read-only
   const [isEditMode, setIsEditMode] = useState(!isEditing);
 
-  // Full-screen edit mode (hides all metadata, shows only title + body + toolbar)
+  // Full-screen edit mode (hides all metadata, shows only formData.title + body + toolbar)
   const [isFullScreen, setIsFullScreen] = useState(false);
 
   // Initialize original values for new entries
   useEffect(() => {
     if (!isEditing && !originalValues.current) {
       originalValues.current = {
-        title: "",
-        content: initialContent || "",
-        categoryId: getInitialCategoryId(),
-        status: "none",
-        dueDate: null,
-        rating: 0,
-        priority: 0,
-        entryDate: entryDate,
-        locationData: initialLocation || null,
+        title: formData.title,
+        content: formData.content,
+        categoryId: formData.categoryId,
+        status: formData.status,
+        dueDate: formData.dueDate,
+        rating: formData.rating,
+        priority: formData.priority,
+        entryDate: formData.entryDate,
+        locationData: formData.locationData,
         photoCount: 0,
       };
     }
@@ -256,7 +207,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     return () => {
       setBeforeBackHandler(null);
     };
-  }, [unsavedChangesBehavior, title, content, categoryId, status, dueDate, entryDate, locationData, photoCount, pendingPhotos, isEditMode]);
+  }, [unsavedChangesBehavior, formData.title, formData.content, formData.categoryId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode]);
 
   // Check if there are unsaved changes
   const hasUnsavedChanges = (): boolean => {
@@ -268,28 +219,28 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     const orig = originalValues.current;
 
     // Compare current values with original
-    if (title !== orig.title) return true;
-    if (content !== orig.content) return true;
-    if (categoryId !== orig.categoryId) return true;
-    if (status !== orig.status) return true;
-    if (dueDate !== orig.dueDate) return true;
-    if (entryDate !== orig.entryDate) return true;
+    if (formData.title !== orig.title) return true;
+    if (formData.content !== orig.content) return true;
+    if (formData.categoryId !== orig.categoryId) return true;
+    if (formData.status !== orig.status) return true;
+    if (formData.dueDate !== orig.dueDate) return true;
+    if (formData.entryDate !== orig.entryDate) return true;
 
     // Compare photo count
-    const currentPhotoCount = isEditing ? photoCount : pendingPhotos.length;
+    const currentPhotoCount = isEditing ? photoCount : formData.pendingPhotos.length;
     if (currentPhotoCount !== orig.photoCount) return true;
 
     // Compare location data
     const origLoc = orig.locationData;
-    if (!locationData && !origLoc) {
+    if (!formData.locationData && !origLoc) {
       // Both null, no change
-    } else if (!locationData || !origLoc) {
+    } else if (!formData.locationData || !origLoc) {
       return true; // One is null, other is not
     } else {
       // Compare location fields
-      if (locationData.name !== origLoc.name) return true;
-      if (locationData.latitude !== origLoc.latitude) return true;
-      if (locationData.longitude !== origLoc.longitude) return true;
+      if (formData.locationData.name !== origLoc.name) return true;
+      if (formData.locationData.latitude !== origLoc.latitude) return true;
+      if (formData.locationData.longitude !== origLoc.longitude) return true;
     }
 
     return false;
@@ -396,7 +347,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     ]).start(() => setSnackbarMessage(null));
   };
 
-  // Handle double-tap on title to enter edit mode
+  // Handle double-tap on formData.title to enter edit mode
   const handleTitlePress = () => {
     const now = Date.now();
     const DOUBLE_PRESS_DELAY = 300; // ms
@@ -405,7 +356,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       // Double tap detected
       if (!isEditMode) {
         enterEditMode();
-        // Focus the title input after a short delay to ensure edit mode is active
+        // Focus the formData.title input after a short delay to ensure edit mode is active
         setTimeout(() => {
           titleInputRef.current?.focus();
         }, 100);
@@ -418,8 +369,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     }
   };
 
-  // Determine if title should be collapsed
-  const shouldCollapse = !title.trim() && content.trim().length > 0 && !isTitleExpanded;
+  // Determine if formData.title should be collapsed
+  const shouldCollapse = !formData.title.trim() && formData.content.trim().length > 0 && !isTitleExpanded;
 
   const currentDate = new Date().toLocaleDateString('en-US', {
     month: 'short',
@@ -432,9 +383,9 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   useEffect(() => {
     // Only blink if location capture is on AND we don't have any location data yet
     // If we have a name OR coordinates, don't blink (location is already set)
-    const hasLocationData = locationData && (locationData.name || (locationData.latitude && locationData.longitude));
+    const hasLocationData = formData.locationData && (formData.locationData.name || (formData.locationData.latitude && formData.locationData.longitude));
 
-    if (captureLocation && !hasLocationData) {
+    if (formData.captureLocation && !hasLocationData) {
       // Start blinking by toggling state
       const interval = setInterval(() => {
         setLocationIconBlink(prev => !prev);
@@ -443,38 +394,38 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     } else {
       setLocationIconBlink(true);
     }
-  }, [captureLocation, locationData?.name, locationData?.latitude, locationData?.longitude]);
+  }, [formData.captureLocation, formData.locationData?.name, formData.locationData?.latitude, formData.locationData?.longitude]);
 
-  // Auto-collapse title when user starts typing in body without a title
+  // Auto-collapse formData.title when user starts typing in body without a formData.title
   useEffect(() => {
-    if (!title.trim() && content.trim().length > 0) {
+    if (!formData.title.trim() && formData.content.trim().length > 0) {
       setIsTitleExpanded(false);
-    } else if (title.trim()) {
+    } else if (formData.title.trim()) {
       setIsTitleExpanded(true);
     }
-  }, [title, content]);
+  }, [formData.title, formData.content]);
 
   // Load entry data when editing
   useEffect(() => {
     if (entry && isEditing) {
-      setTitle(entry.title || "");
-      setContent(entry.content);
-      setCategoryId(entry.category_id || null);
-      setStatus(entry.status);
-      setDueDate(entry.due_date);
-      setRating(entry.rating || 0);
-      setPriority(entry.priority || 0);
+      updateField("title", entry.title || "");
+      updateField("content", entry.content);
+      updateField("categoryId", entry.category_id || null);
+      updateField("status", entry.status);
+      updateField("dueDate", entry.due_date);
+      updateField("rating", entry.rating || 0);
+      updateField("priority", entry.priority || 0);
 
       // Load entry_date or default to created_at
       if (entry.entry_date) {
-        setEntryDate(entry.entry_date);
+        updateField("entryDate", entry.entry_date);
         // Check milliseconds to determine if time should be shown
         const date = new Date(entry.entry_date);
-        setIncludeTime(date.getMilliseconds() !== 100);
+        updateField("includeTime", date.getMilliseconds() !== 100);
       } else if (entry.created_at) {
-        setEntryDate(entry.created_at);
+        updateField("entryDate", entry.created_at);
         const date = new Date(entry.created_at);
-        setIncludeTime(date.getMilliseconds() !== 100);
+        updateField("includeTime", date.getMilliseconds() !== 100);
       }
 
       // Load location data if available from locations table
@@ -496,20 +447,20 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               region: locationEntity.region || null,
               country: locationEntity.country || null,
             };
-            setLocationData(location);
-            setCaptureLocation(true);
+            updateField("locationData", location);
+            updateField("captureLocation", true);
             // Update original values for change detection
             if (originalValues.current) {
               originalValues.current.locationData = location;
             }
           } else {
-            setLocationData(null);
-            setCaptureLocation(false);
+            updateField("locationData", null);
+            updateField("captureLocation", false);
           }
         }).catch(err => {
           console.error('Failed to load location:', err);
-          setLocationData(null);
-          setCaptureLocation(false);
+          updateField("locationData", null);
+          updateField("captureLocation", false);
         });
       } else if (entry.entry_latitude && entry.entry_longitude) {
         // Entry has GPS coordinates but no location_id (GPS-only entry)
@@ -519,34 +470,34 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           name: null,
           source: 'user_custom',
         };
-        setLocationData(gpsLocation);
-        setCaptureLocation(true);
+        updateField("locationData", gpsLocation);
+        updateField("captureLocation", true);
         // Update original values for change detection
         if (originalValues.current) {
           originalValues.current.locationData = gpsLocation;
         }
       } else {
         // No location saved - keep toggle off and clear location data
-        setLocationData(null);
-        setCaptureLocation(false);
+        updateField("locationData", null);
+        updateField("captureLocation", false);
       }
 
       // Look up category name from categories list
       if (entry.category_id && categories.length > 0) {
         const category = categories.find(c => c.category_id === entry.category_id);
-        setCategoryName(category?.name || null);
+        updateField("categoryName", category?.name || null);
         // Store original category for cancel navigation
         setOriginalCategoryId(entry.category_id);
         setOriginalCategoryName(category?.name || null);
       } else {
-        setCategoryName(null);
+        updateField("categoryName", null);
         // Store original category (Uncategorized) for cancel navigation
         setOriginalCategoryId(null);
         setOriginalCategoryName(null);
       }
 
       // Store original values for change detection (after all state is set)
-      // Note: locationData will be set asynchronously by the getLocationById call above
+      // Note: formData.locationData will be set asynchronously by the getLocationById call above
       originalValues.current = {
         title: entry.title || "",
         content: entry.content,
@@ -555,7 +506,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         dueDate: entry.due_date,
         rating: entry.rating || 0,
         priority: entry.priority || 0,
-        entryDate: entry.entry_date || entry.created_at || entryDate,
+        entryDate: entry.entry_date || entry.created_at || formData.entryDate,
         locationData: null, // Will be updated when location loads
         photoCount: 0, // Will be updated when photos load
       };
@@ -582,8 +533,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     }
 
     // Clear location when toggled off
-    if (!captureLocation) {
-      setLocationData(null);
+    if (!formData.captureLocation) {
+      updateField("locationData", null);
       return;
     }
 
@@ -593,7 +544,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     }
 
     // Skip fetching if we already have location data loaded
-    if (locationData?.latitude && locationData?.longitude) {
+    if (formData.locationData?.latitude && formData.locationData?.longitude) {
       return;
     }
 
@@ -605,14 +556,14 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
     const fetchLocation = async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        console.log('[CaptureForm] GPS permission status:', status);
-        if (status === "granted" && !isCancelled) {
+        const { status: permissionStatus } = await Location.requestForegroundPermissionsAsync();
+        console.log('[CaptureForm] GPS permission status:', permissionStatus);
+        if (permissionStatus === "granted" && !isCancelled) {
           // Set timeout to give up after 15 seconds
           timeoutId = setTimeout(() => {
             if (!isCancelled && !hasLocation) {
               console.log("Location fetch timeout - giving up");
-              setCaptureLocation(false);
+              updateField("captureLocation", false);
               Alert.alert(
                 "Location Unavailable",
                 "Could not get your location. Please check that GPS is enabled.",
@@ -638,7 +589,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               longitude: location.coords.longitude,
               accuracy: location.coords.accuracy
             });
-            setLocationData({
+            updateField("locationData", {
               latitude: location.coords.latitude,
               longitude: location.coords.longitude,
               accuracy: location.coords.accuracy,
@@ -651,7 +602,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       } catch (geoError) {
         console.log("Location not available:", geoError);
         if (!isCancelled) {
-          setCaptureLocation(false);
+          updateField("captureLocation", false);
           Alert.alert(
             "Location Error",
             "Could not access your location. Please check that GPS is enabled and permissions are granted.",
@@ -669,7 +620,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         clearTimeout(timeoutId);
       }
     };
-  }, [showLocation, captureLocation, isEditing]);
+  }, [showLocation, formData.captureLocation, isEditing]);
 
   // Keyboard listeners
   useEffect(() => {
@@ -705,7 +656,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     if (returnContext) {
       if (returnContext.screen === "calendar") {
         navigate("calendar", {
-          returnDate: entryDate,
+          returnDate: formData.entryDate,
           returnZoomLevel: returnContext.zoomLevel
         });
         return;
@@ -722,8 +673,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     }
 
     // Default: go to inbox with original category (for edited entries) or current category
-    const returnCategoryId = isEditing ? originalCategoryId : (categoryId || null);
-    const returnCategoryName = isEditing ? originalCategoryName : (categoryName || "Uncategorized");
+    const returnCategoryId = isEditing ? originalCategoryId : (formData.categoryId || null);
+    const returnCategoryName = isEditing ? originalCategoryName : (formData.categoryName || "Uncategorized");
     navigate("inbox", { returnCategoryId, returnCategoryName });
   };
 
@@ -736,34 +687,34 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
     setIsSubmitting(true);
 
-    // Check if there's something to save (title, content, photos, or location)
-    const textContent = content.replace(/<[^>]*>/g, '').trim();
-    const hasTitle = title.trim().length > 0;
+    // Check if there's something to save (formData.title, formData.content, photos, or location)
+    const textContent = formData.content.replace(/<[^>]*>/g, '').trim();
+    const hasTitle = formData.title.trim().length > 0;
     const hasContent = textContent.length > 0;
-    const hasPhotos = isEditing ? photoCount > 0 : pendingPhotos.length > 0;
-    const hasLocation = captureLocation && locationData;
+    const hasPhotos = isEditing ? photoCount > 0 : formData.pendingPhotos.length > 0;
+    const hasLocation = formData.captureLocation && formData.locationData;
 
     if (!hasTitle && !hasContent && !hasPhotos && !hasLocation) {
       setIsSubmitting(false);
-      Alert.alert("Empty Entry", "Please add a title, content, photo, or location before saving");
+      Alert.alert("Empty Entry", "Please add a formData.title, formData.content, photo, or location before saving");
       return;
     }
 
     try {
-      const { tags, mentions } = extractTagsAndMentions(content);
-      const gpsFields = locationToEntryGpsFields(locationData);
+      const { tags, mentions } = extractTagsAndMentions(formData.content);
+      const gpsFields = locationToEntryGpsFields(formData.locationData);
 
       // Get or create location if we have location data
       let location_id: string | null = null;
-      if (locationData && locationData.name) {
+      if (formData.locationData && formData.locationData.name) {
         // Check if this is a saved location (has existing location_id)
-        if (locationData.location_id) {
+        if (formData.locationData.location_id) {
           // Reuse existing location
-          location_id = locationData.location_id;
+          location_id = formData.locationData.location_id;
           console.log('[CaptureForm] 📍 Reusing existing location:', location_id);
         } else {
           // Create a new location in the locations table
-          const locationInput = locationToCreateInput(locationData);
+          const locationInput = locationToCreateInput(formData.locationData);
           console.log('[CaptureForm] 📍 Creating new location:', locationInput);
           const savedLocation = await createLocation(locationInput);
           location_id = savedLocation.location_id;
@@ -776,16 +727,16 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         console.log('[CaptureForm] 💾 Updating entry with location_id:', location_id);
 
         await singleEntryMutations.updateEntry({
-          title: title.trim() || null,
-          content,
+          title: formData.title.trim() || null,
+          content: formData.content,
           tags,
           mentions,
-          category_id: categoryId,
-          entry_date: entryDate,
-          status,
-          due_date: dueDate,
-          rating: rating || 0,
-          priority: priority || 0,
+          category_id: formData.categoryId,
+          entry_date: formData.entryDate,
+          status: formData.status,
+          due_date: formData.dueDate,
+          rating: formData.rating || 0,
+          priority: formData.priority || 0,
           location_id,
           ...gpsFields,
         });
@@ -796,16 +747,16 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         console.log('[CaptureForm] 💾 Saving entry with location_id:', location_id);
 
         const newEntry = await entryMutations.createEntry({
-          title: title.trim() || null,
-          content,
+          title: formData.title.trim() || null,
+          content: formData.content,
           tags,
           mentions,
-          entry_date: entryDate,
-          category_id: categoryId,
-          status,
-          due_date: dueDate,
-          rating: rating || 0,
-          priority: priority || 0,
+          entry_date: formData.entryDate,
+          category_id: formData.categoryId,
+          status: formData.status,
+          due_date: formData.dueDate,
+          rating: formData.rating || 0,
+          priority: formData.priority || 0,
           location_id,
           ...gpsFields,
         });
@@ -813,8 +764,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         console.log('[CaptureForm] ✅ Entry saved successfully with ID:', newEntry.entry_id);
 
         // CRITICAL: Save all pending photos to DB with the real entry_id
-        if (pendingPhotos.length > 0) {
-          for (const photo of pendingPhotos) {
+        if (formData.pendingPhotos.length > 0) {
+          for (const photo of formData.pendingPhotos) {
             // Update file path and local path to use real entry_id
             const newFilePath = photo.filePath.replace(tempEntryId, newEntry.entry_id);
             const newLocalPath = photo.localPath.replace(tempEntryId, newEntry.entry_id);
@@ -844,26 +795,26 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             });
           }
 
-          setPendingPhotos([]); // Clear pending photos
+          updateField("pendingPhotos", []); // Clear pending photos
         }
 
         // Clear form only when creating
-        setTitle("");
-        setContent("");
-        setCategoryId(null);
-        setCategoryName(null);
-        setLocationData(null);
-        setStatus("none");
-        setDueDate(null);
-        setRating(0);
-        setPriority(0);
+        updateField("title", "");
+        updateField("content", "");
+        updateField("categoryId", null);
+        updateField("categoryName", null);
+        updateField("locationData", null);
+        updateField("status", "none");
+        updateField("dueDate", null);
+        updateField("rating", 0);
+        updateField("priority", 0);
       }
 
       // Navigate back to inbox with the category that was set
       // This ensures the list shows the category where the entry was saved
       // If category is a filter (all, tasks, etc.), default to Uncategorized
-      let returnCategoryId: string | null = categoryId || null;
-      let returnCategoryName: string = categoryName || "Uncategorized";
+      let returnCategoryId: string | null = formData.categoryId || null;
+      let returnCategoryName: string = formData.categoryName || "Uncategorized";
 
       // Edge case: If returning to a filter view, switch to Uncategorized instead
       if (returnCategoryId === "all" || returnCategoryId === "tasks" ||
@@ -883,7 +834,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       if (returnContext) {
         if (returnContext.screen === "calendar") {
           navigate("calendar", {
-            returnDate: entryDate,
+            returnDate: formData.entryDate,
             returnZoomLevel: returnContext.zoomLevel
           });
           return;
@@ -975,7 +926,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         // NEW ENTRY: Store photo in state only (don't save to DB until entry is saved)
         const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, tempEntryId);
 
-        setPendingPhotos(prev => [...prev, {
+        addPendingPhoto({
           photoId,
           localPath,
           filePath: generatePhotoPath(userId, tempEntryId, photoId, 'jpg'),
@@ -984,7 +935,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           width: compressed.width,
           height: compressed.height,
           position: photoCount,
-        }]);
+        });
 
         setPhotoCount(photoCount + 1);
       }
@@ -1007,7 +958,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         await deletePhoto(photoId);
       } else {
         // NEW ENTRY: Remove from pending photos state
-        setPendingPhotos(prev => prev.filter(p => p.photoId !== photoId));
+        removePendingPhoto(photoId);
       }
 
       // Decrement photo count
@@ -1042,161 +993,57 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   return (
     <View style={styles.container}>
       {/* Header Bar with Cancel/Date/Save buttons */}
-      <View style={[styles.titleBar, isFullScreen && styles.titleBarFullScreen]}>
-        {/* Left side: Cancel button in edit mode, Back button in view mode */}
-        <View style={styles.headerLeftContainer}>
-          {isEditMode ? (
-            <TouchableOpacity
-              onPress={handleCancel}
-              style={styles.headerCancelButton}
-            >
-              <Text style={styles.headerCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={() => handleNavigationWithUnsavedCheck(() => {
-                if (returnContext) {
-                  if (returnContext.screen === "calendar") {
-                    navigate("calendar", {
-                      returnDate: returnContext.selectedDate,
-                      returnZoomLevel: returnContext.zoomLevel
-                    });
-                  } else if (returnContext.screen === "tasks") {
-                    navigate("tasks");
-                  } else if (returnContext.screen === "inbox") {
-                    navigate("inbox", {
-                      returnCategoryId: returnContext.categoryId || null,
-                      returnCategoryName: returnContext.categoryName || "Uncategorized"
-                    });
-                  } else {
-                    navigate("inbox");
-                  }
-                } else {
-                  navigate("inbox");
-                }
-              })}
-              style={styles.headerCancelButton}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
-          )}
-        </View>
+      <CaptureFormHeader
+        isEditMode={isEditMode}
+        isFullScreen={isFullScreen}
+        isSubmitting={isSubmitting}
+        isEditing={isEditing}
+        title={formData.title}
+        entryDate={formData.entryDate}
+        includeTime={formData.includeTime}
+        onTitleChange={(text) => updateField("title", text)}
+        onCancel={handleCancel}
+        onBack={() => handleNavigationWithUnsavedCheck(() => {
+          if (returnContext) {
+            if (returnContext.screen === "calendar") {
+              navigate("calendar", {
+                returnDate: returnContext.selectedDate,
+                returnZoomLevel: returnContext.zoomLevel
+              });
+            } else if (returnContext.screen === "tasks") {
+              navigate("tasks");
+            } else if (returnContext.screen === "inbox") {
+              navigate("inbox", {
+                returnCategoryId: returnContext.categoryId || null,
+                returnCategoryName: returnContext.categoryName || "Uncategorized"
+              });
+            } else {
+              navigate("inbox");
+            }
+          } else {
+            navigate("inbox");
+          }
+        })}
+        onSave={handleSave}
+        onDatePress={() => setShowEntryDatePicker(true)}
+        onTimePress={() => setShowTimeModal(true)}
+        onAddTime={() => {
+          updateField("includeTime", true);
+          const date = new Date(formData.entryDate);
+          date.setMilliseconds(0);
+          updateField("entryDate", date.toISOString());
+        }}
+        onMenuToggle={() => setShowMenu(!showMenu)}
+        enterEditMode={enterEditMode}
+        showMenu={showMenu}
+        menuItems={isEditing ? [...wrappedMenuItems.slice(0, -1), { label: "Delete Entry", onPress: handleDelete, destructive: true }, wrappedMenuItems[wrappedMenuItems.length - 1]] : wrappedMenuItems}
+        userEmail={userEmail || null}
+        onProfilePress={wrappedOnProfilePress}
+        onMenuClose={() => setShowMenu(false)}
+        editorRef={editorRef}
+      />
 
-        {/* Center: Date & Time (normal mode) or Editable Title (fullscreen mode) */}
-        {isFullScreen ? (
-          <View style={styles.headerTitleContainer}>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Untitled"
-              placeholderTextColor="#9ca3af"
-              style={styles.headerTitleInput}
-              editable={isEditMode && !isSubmitting}
-              returnKeyType="done"
-              blurOnSubmit={true}
-            />
-          </View>
-        ) : (
-          <View style={styles.headerDateContainer}>
-            {/* Date */}
-            <TouchableOpacity
-              onPress={() => {
-                editorRef.current?.blur();
-                Keyboard.dismiss();
-                setTimeout(() => {
-                  setShowEntryDatePicker(true);
-                  if (!isEditMode) enterEditMode();
-                }, 100);
-              }}
-            >
-              <Text style={styles.headerDateText}>
-                {entryDate ? new Date(entryDate).toLocaleDateString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                }) : 'Set date'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Time or Watch Icon */}
-            {includeTime ? (
-              <TouchableOpacity
-                style={styles.headerTimeContainer}
-                onPress={() => {
-                  setShowTimeModal(true);
-                  if (!isEditMode) enterEditMode();
-                }}
-              >
-                <Text style={styles.headerDateText}>
-                  {entryDate ? new Date(entryDate).toLocaleTimeString(undefined, {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                  }) : 'Set time'}
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.headerWatchButton}
-                onPress={() => {
-                  setIncludeTime(true);
-                  const date = new Date(entryDate);
-                  date.setMilliseconds(0);
-                  setEntryDate(date.toISOString());
-                  if (!isEditMode) enterEditMode();
-                }}
-              >
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
-                  <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* Right side: Save button (in edit mode) + Hamburger Menu (hidden in fullscreen) */}
-        <View style={styles.headerRightContainer}>
-          {/* Save button only shows in edit mode - no Edit button, user taps content to edit */}
-          {isEditMode && (
-            <TouchableOpacity
-              onPress={handleSave}
-              disabled={isSubmitting}
-              style={[styles.headerSaveButton, isSubmitting && styles.headerSaveButtonDisabled]}
-            >
-              <Text style={[styles.headerSaveText, isSubmitting && styles.headerSaveTextDisabled]}>
-                {isSubmitting ? "Saving..." : "Save"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Hamburger Menu - hidden in fullscreen mode */}
-          {!isFullScreen && (
-            <TouchableOpacity
-              style={styles.menuButton}
-              onPress={() => setShowMenu(!showMenu)}
-            >
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
-                <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
-                <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
-                <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
-              </Svg>
-            </TouchableOpacity>
-          )}
-
-          <NavigationMenu
-            visible={showMenu}
-            onClose={() => setShowMenu(false)}
-            menuItems={isEditing ? [...wrappedMenuItems.slice(0, -1), { label: "Delete Entry", onPress: handleDelete, destructive: true }, wrappedMenuItems[wrappedMenuItems.length - 1]] : wrappedMenuItems}
-            userEmail={userEmail}
-            onProfilePress={wrappedOnProfilePress}
-          />
-        </View>
-      </View>
-
-      {/* Title Row - Full width below header (hidden in fullscreen - title shows in header) */}
+      {/* Title Row - Full width below header (hidden in fullscreen - formData.title shows in header) */}
       {!isFullScreen && (
         <View style={styles.titleRow}>
           {shouldCollapse ? (
@@ -1220,8 +1067,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           ) : (
             <TextInput
               ref={titleInputRef}
-              value={title}
-              onChangeText={setTitle}
+              value={formData.title}
+              onChangeText={(text) => updateField("title", text)}
               placeholder="Title"
               placeholderTextColor="#9ca3af"
               style={styles.titleInputFullWidth}
@@ -1239,215 +1086,40 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
       {/* Metadata Bar - Only shows SET values (hidden in full-screen mode) */}
       {!isFullScreen && (
-      <View style={styles.metadataBar}>
-        {/* Category - always shown */}
-        <TouchableOpacity
-          style={styles.metadataLink}
-          onPress={() => {
-            editorRef.current?.blur();
-            Keyboard.dismiss();
-            setTimeout(() => setShowCategoryPicker(!showCategoryPicker), 100);
+        <MetadataBar
+          categoryName={formData.categoryName}
+          captureLocation={formData.captureLocation}
+          locationData={formData.locationData}
+          status={formData.status}
+          dueDate={formData.dueDate}
+          rating={formData.rating}
+          priority={formData.priority}
+          photoCount={photoCount}
+          photosCollapsed={photosCollapsed}
+          showLocation={showLocation}
+          showStatus={showStatus}
+          showDueDate={showDueDate}
+          showRating={showRating}
+          showPriority={showPriority}
+          showPhotos={showPhotos}
+          isEditMode={isEditMode}
+          enterEditMode={enterEditMode}
+          onCategoryPress={() => setShowCategoryPicker(!showCategoryPicker)}
+          onLocationPress={() => setShowLocationPicker(!showLocationPicker)}
+          onStatusPress={() => {
+            // Cycle through statuses
+            if (formData.status === "incomplete") updateField("status", "in_progress");
+            else if (formData.status === "in_progress") updateField("status", "complete");
+            else updateField("status", "none");
+            if (!isEditMode) enterEditMode();
           }}
-        >
-          <View style={styles.metadataLinkContent}>
-            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-              <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-            <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-              {categoryName || "Uncategorized"}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Location - only if set */}
-        {showLocation && captureLocation && locationData && (
-          <>
-            <Text style={styles.metadataDivider}>·</Text>
-            <TouchableOpacity
-              style={styles.metadataLink}
-              onPress={() => {
-                editorRef.current?.blur();
-                Keyboard.dismiss();
-                setTimeout(() => setShowLocationPicker(!showLocationPicker), 100);
-              }}
-            >
-              <View style={styles.metadataLinkContent}>
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                  <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={12} cy={10} r={3} fill={theme.colors.text.primary} />
-                </Svg>
-                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                  {locationData.name || "GPS"}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* Status - only if set (not "none") */}
-        {showStatus && status !== "none" && (
-          <>
-            <Text style={styles.metadataDivider}>·</Text>
-            <TouchableOpacity
-              style={styles.metadataLink}
-              onPress={() => {
-                // Cycle through statuses
-                if (status === "incomplete") setStatus("in_progress");
-                else if (status === "in_progress") setStatus("complete");
-                else setStatus("none");
-                if (!isEditMode) enterEditMode();
-              }}
-            >
-              <View style={styles.metadataLinkContent}>
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                  <Circle
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke={status === "complete" ? theme.colors.text.primary : "#6b7280"}
-                    strokeWidth={2}
-                    fill={status === "complete" ? theme.colors.text.primary : "none"}
-                  />
-                  {status === "complete" && (
-                    <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  )}
-                  {status === "in_progress" && (
-                    <Circle cx="12" cy="12" r="4" fill="#6b7280" />
-                  )}
-                </Svg>
-                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                  {status === "incomplete" ? "Not Started" :
-                   status === "in_progress" ? "In Progress" :
-                   "Completed"}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* Due Date - only if set */}
-        {showDueDate && dueDate && (
-          <>
-            <Text style={styles.metadataDivider}>·</Text>
-            <TouchableOpacity
-              style={styles.metadataLink}
-              onPress={() => {
-                editorRef.current?.blur();
-                Keyboard.dismiss();
-                setTimeout(() => {
-                  setShowDatePicker(!showDatePicker);
-                  if (!isEditMode) enterEditMode();
-                }, 100);
-              }}
-            >
-              <View style={styles.metadataLinkContent}>
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                  <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                  <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                  <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                  {new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* Rating - only if set */}
-        {showRating && rating > 0 && (
-          <>
-            <Text style={styles.metadataDivider}>·</Text>
-            <TouchableOpacity
-              style={styles.metadataLink}
-              onPress={() => {
-                editorRef.current?.blur();
-                Keyboard.dismiss();
-                setTimeout(() => {
-                  setShowRatingPicker(true);
-                  if (!isEditMode) enterEditMode();
-                }, 100);
-              }}
-            >
-              <View style={styles.metadataLinkContent}>
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill={theme.colors.text.primary} stroke="none">
-                  <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </Svg>
-                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                  {rating}/5
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* Priority - only if set */}
-        {showPriority && priority > 0 && (
-          <>
-            <Text style={styles.metadataDivider}>·</Text>
-            <TouchableOpacity
-              style={styles.metadataLink}
-              onPress={() => {
-                editorRef.current?.blur();
-                Keyboard.dismiss();
-                setTimeout(() => {
-                  setShowPriorityPicker(true);
-                  if (!isEditMode) enterEditMode();
-                }, 100);
-              }}
-            >
-              <View style={styles.metadataLinkContent}>
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill={theme.colors.text.primary} stroke="none">
-                  <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.primary} />
-                  <Path d="M5 3h13l-4 5 4 5H5z" />
-                </Svg>
-                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                  P{priority}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* Photos - only if has photos and collapsed */}
-        {showPhotos && photoCount > 0 && photosCollapsed && (
-          <>
-            <Text style={styles.metadataDivider}>·</Text>
-            <TouchableOpacity
-              style={styles.metadataLink}
-              onPress={() => setPhotosCollapsed(false)}
-            >
-              <View style={styles.metadataLinkContent}>
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                  <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-                <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                  {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* Entry Menu Button (...) */}
-        <TouchableOpacity
-          style={styles.entryMenuButton}
-          onPress={() => {
-            editorRef.current?.blur();
-            Keyboard.dismiss();
-            setTimeout(() => setShowAttributesPicker(true), 100);
-          }}
-        >
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="#6b7280" stroke="none">
-            <Circle cx={12} cy={5} r={2} />
-            <Circle cx={12} cy={12} r={2} />
-            <Circle cx={12} cy={19} r={2} />
-          </Svg>
-        </TouchableOpacity>
-
-      </View>
+          onDueDatePress={() => setShowDatePicker(!showDatePicker)}
+          onRatingPress={() => setShowRatingPicker(true)}
+          onPriorityPress={() => setShowPriorityPicker(true)}
+          onPhotosPress={() => setPhotosCollapsed(false)}
+          onMenuPress={() => setShowAttributesPicker(true)}
+          editorRef={editorRef}
+        />
       )}
 
       {/* Content Area */}
@@ -1465,7 +1137,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             refreshKey={photoCount}
             onPhotoCountChange={setPhotoCount}
             onPhotoDelete={handlePhotoDelete}
-            pendingPhotos={isEditing ? undefined : pendingPhotos}
+            pendingPhotos={isEditing ? undefined : formData.pendingPhotos}
             collapsible={true}
             isCollapsed={photosCollapsed}
             onCollapsedChange={setPhotosCollapsed}
@@ -1483,110 +1155,25 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         ]}>
           <RichTextEditor
             ref={editorRef}
-            value={content}
-            onChange={setContent}
+            value={formData.content}
+            onChange={(text) => updateField("content", text)}
             placeholder="What's on your mind? Use #tags and @mentions..."
             editable={isEditMode}
             onPress={enterEditMode}
           />
         </View>
 
-        {/* Word/Character Count (hidden in full-screen mode) */}
-        {!isFullScreen && (
-        <View style={styles.countContainer}>
-          <Text style={styles.countText}>
-            {getWordCount(content)} {getWordCount(content) === 1 ? "word" : "words"} • {getCharacterCount(content)} {getCharacterCount(content) === 1 ? "character" : "characters"}
-          </Text>
-        </View>
-        )}
       </View>
 
       {/* Bottom Bar - only shown when in edit mode */}
       {isEditMode && (
-      <BottomBar keyboardOffset={keyboardHeight}>
-        <View style={styles.fullScreenToolbar}>
-          {/* Text formatting */}
-          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleBold()}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2.5}>
-              <Path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleItalic()}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Line x1={19} y1={4} x2={10} y2={4} strokeLinecap="round" />
-              <Line x1={14} y1={20} x2={5} y2={20} strokeLinecap="round" />
-              <Line x1={15} y1={4} x2={9} y2={20} strokeLinecap="round" />
-            </Svg>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleHeading(1)}>
-            <Text style={styles.headingButtonText}>H1</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleHeading(2)}>
-            <Text style={styles.headingButtonText}>H2</Text>
-          </TouchableOpacity>
-
-          <View style={styles.toolbarDivider} />
-
-          {/* List formatting */}
-          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleBulletList()}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Line x1={9} y1={6} x2={20} y2={6} strokeLinecap="round" />
-              <Line x1={9} y1={12} x2={20} y2={12} strokeLinecap="round" />
-              <Line x1={9} y1={18} x2={20} y2={18} strokeLinecap="round" />
-              <Circle cx={5} cy={6} r={1} fill="#6b7280" />
-              <Circle cx={5} cy={12} r={1} fill="#6b7280" />
-              <Circle cx={5} cy={18} r={1} fill="#6b7280" />
-            </Svg>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleOrderedList()}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Line x1={10} y1={6} x2={21} y2={6} strokeLinecap="round" />
-              <Line x1={10} y1={12} x2={21} y2={12} strokeLinecap="round" />
-              <Line x1={10} y1={18} x2={21} y2={18} strokeLinecap="round" />
-              <Path d="M4 6h1v4M3 10h3M3 14.5a1.5 1.5 0 011.5-1.5h.5l-2 3h3" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleTaskList()}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M3 5h4v4H3zM3 14h4v4H3z" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M4 7l1 1 2-2" strokeLinecap="round" strokeLinejoin="round" />
-              <Line x1={10} y1={7} x2={21} y2={7} strokeLinecap="round" />
-              <Line x1={10} y1={16} x2={21} y2={16} strokeLinecap="round" />
-            </Svg>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.indent()}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M3 9l4 3-4 3" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.outdent()}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M7 9l-4 3 4 3" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-
-          {/* Full Screen Toggle Button - toggles between expand/collapse */}
-          <View style={styles.toolbarDivider} />
-          <TouchableOpacity
-            style={styles.toolbarButton}
-            onPress={() => setIsFullScreen(!isFullScreen)}
-          >
-            {isFullScreen ? (
-              // Collapse icon - arrows pointing inward
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            ) : (
-              // Expand icon - arrows pointing outward
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            )}
-          </TouchableOpacity>
-        </View>
-      </BottomBar>
+        <BottomBar keyboardOffset={keyboardHeight}>
+          <EditorToolbar
+            editorRef={editorRef}
+            isFullScreen={isFullScreen}
+            onToggleFullScreen={() => setIsFullScreen(!isFullScreen)}
+          />
+        </BottomBar>
       )}
 
       {/* Category Picker Dropdown */}
@@ -1598,10 +1185,10 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           visible={showCategoryPicker}
           onClose={() => setShowCategoryPicker(false)}
           onSelect={(id, name) => {
-            const hadCategory = !!categoryId;
+            const hadCategory = !!formData.categoryId;
             const isRemoving = !id;
-            setCategoryId(id);
-            setCategoryName(name);
+            updateField("categoryId", id);
+            updateField("categoryName", name);
             if (isRemoving && hadCategory) {
               showSnackbar('You removed the category');
             } else if (hadCategory) {
@@ -1613,7 +1200,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               enterEditMode();
             }
           }}
-          selectedCategoryId={categoryId}
+          selectedCategoryId={formData.categoryId}
         />
       </TopBarDropdownContainer>
 
@@ -1627,17 +1214,17 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         mode={(() => {
           // view: location with a name already selected (either editing existing or user already picked one)
           // select: no location name yet (GPS-only or nothing), user needs to pick/create a location
-          const hasNamedLocation = locationData && locationData.name;
+          const hasNamedLocation = formData.locationData && formData.locationData.name;
           const pickerMode = hasNamedLocation ? 'view' : 'select';
-          console.log('[CaptureForm] mode check:', { isEditMode, captureLocation, hasLocationData: !!locationData, hasNamedLocation, pickerMode });
+          console.log('[CaptureForm] mode check:', { isEditMode, captureLocation: formData.captureLocation, hasLocationData: !!formData.locationData, hasNamedLocation, pickerMode });
           return pickerMode as 'select' | 'view';
         })()}
         onSelect={(location: LocationType | null) => {
           // If location is null (user selected "None"), clear location data
           if (location === null) {
             console.log('[CaptureForm] 📍 User selected "None" - clearing location data');
-            setLocationData(null);
-            setCaptureLocation(false);
+            updateField("locationData", null);
+            updateField("captureLocation", false);
             setShowLocationPicker(false);
             showSnackbar('You removed the location');
             if (!isEditMode) {
@@ -1659,16 +1246,16 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           });
 
           // Show snackbar based on whether we're adding or updating
-          const isUpdating = !!locationData;
-          setLocationData(location);
-          setCaptureLocation(true);
+          const isUpdating = !!formData.locationData;
+          updateField("locationData", location);
+          updateField("captureLocation", true);
           setShowLocationPicker(false);
           showSnackbar(isUpdating ? 'Success! You updated the location.' : 'Success! You added the location.');
           if (!isEditMode) {
             enterEditMode();
           }
         }}
-        initialLocation={locationData}
+        initialLocation={formData.locationData}
       />
 
       {/* Date Picker Dropdown (Due Date) */}
@@ -1677,14 +1264,14 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         onClose={() => setShowDatePicker(false)}
       >
         <SimpleDatePicker
-          value={dueDate ? new Date(dueDate) : null}
+          value={formData.dueDate ? new Date(formData.dueDate) : null}
           onChange={(date) => {
-            const hadDueDate = !!dueDate;
+            const hadDueDate = !!formData.dueDate;
             if (date) {
-              setDueDate(date.toISOString());
+              updateField("dueDate", date.toISOString());
               showSnackbar(hadDueDate ? 'Success! You updated the due date.' : 'Success! You added the due date.');
             } else {
-              setDueDate(null);
+              updateField("dueDate", null);
               if (hadDueDate) {
                 showSnackbar('You removed the due date');
               }
@@ -1700,13 +1287,13 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         onClose={() => setShowEntryDatePicker(false)}
       >
         <SimpleDatePicker
-          value={new Date(entryDate)}
+          value={new Date(formData.entryDate)}
           onChange={(date) => {
             if (date) {
               // Preserve the current time when changing date
-              const currentDate = new Date(entryDate);
+              const currentDate = new Date(formData.entryDate);
               date.setHours(currentDate.getHours(), currentDate.getMinutes(), currentDate.getSeconds(), currentDate.getMilliseconds());
-              setEntryDate(date.toISOString());
+              updateField("entryDate", date.toISOString());
             }
           }}
           onClose={() => setShowEntryDatePicker(false)}
@@ -1715,375 +1302,70 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       </TopBarDropdownContainer>
 
       {/* Time Picker Modal */}
-      <TopBarDropdownContainer
+      <TimePicker
         visible={showTimeModal}
         onClose={() => setShowTimeModal(false)}
-      >
-        <View style={styles.datePickerContainer}>
-          <Text style={styles.datePickerTitle}>Set Time</Text>
-
-          {/* Change Time Button */}
-          <TouchableOpacity
-            style={styles.datePickerButton}
-            onPress={() => {
-              setShowTimeModal(false);
-              // Show native picker after a small delay
-              setTimeout(() => {
-                setPickerMode("time");
-                setShowNativePicker(true);
-              }, 100);
-            }}
-          >
-            <Text style={styles.datePickerButtonText}>
-              Change Time ({new Date(entryDate).toLocaleTimeString(undefined, {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-              })})
-            </Text>
-          </TouchableOpacity>
-
-          {/* Clear Time Button */}
-          <TouchableOpacity
-            style={[styles.datePickerButton, styles.datePickerButtonDanger]}
-            onPress={() => {
-              // Clear time by setting milliseconds to 100 (flag to hide time but remember it)
-              setIncludeTime(false);
-              const date = new Date(entryDate);
-              date.setMilliseconds(100);
-              setEntryDate(date.toISOString());
-              setShowTimeModal(false);
-            }}
-          >
-            <Text style={[styles.datePickerButtonText, styles.datePickerButtonDangerText]}>
-              Clear Time
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </TopBarDropdownContainer>
-
-      {/* Native Time Picker (triggered from modal) */}
-      {showNativePicker && pickerMode === "time" && (
-        <DateTimePicker
-          value={new Date(entryDate)}
-          mode="time"
-          display="default"
-          onChange={(event, selectedDate) => {
-            if (event.type === "set" && selectedDate) {
-              // Set milliseconds to 0 to indicate time should be shown
-              selectedDate.setMilliseconds(0);
-              setEntryDate(selectedDate.toISOString());
-            }
+        entryDate={formData.entryDate}
+        onEntryDateChange={(date) => updateField("entryDate", date)}
+        onIncludeTimeChange={(include) => updateField("includeTime", include)}
+        showNativePicker={showNativePicker && pickerMode === "time"}
+        onShowNativePickerChange={(show) => {
+          if (show) {
+            setPickerMode("time");
+            setShowNativePicker(true);
+          } else {
             setShowNativePicker(false);
-          }}
-        />
-      )}
+          }
+        }}
+      />
 
       {/* Rating Picker Modal */}
-      <TopBarDropdownContainer
+      <RatingPicker
         visible={showRatingPicker}
         onClose={() => setShowRatingPicker(false)}
-      >
-        <View style={styles.pickerContainer}>
-          <Text style={styles.pickerTitle}>Set Rating</Text>
-
-          {/* Star Rating Buttons - 1 to 5 stars */}
-          <View style={styles.starRatingRow}>
-            {[1, 2, 3, 4, 5].map((value) => (
-              <TouchableOpacity
-                key={value}
-                style={styles.starRatingButton}
-                onPress={() => {
-                  setRating(value);
-                  showSnackbar(`Rating set to ${value}/5`);
-                  setShowRatingPicker(false);
-                }}
-              >
-                <Text style={[styles.starRatingIcon, rating >= value && styles.starRatingIconActive]}>
-                  ★
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Clear Rating Button */}
-          {rating > 0 && (
-            <TouchableOpacity
-              style={[styles.pickerButton, styles.pickerButtonDanger]}
-              onPress={() => {
-                setRating(0);
-                showSnackbar('Rating cleared');
-                setShowRatingPicker(false);
-              }}
-            >
-              <Text style={[styles.pickerButtonText, styles.pickerButtonDangerText]}>
-                Clear Rating
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </TopBarDropdownContainer>
+        rating={formData.rating}
+        onRatingChange={(value) => updateField("rating", value)}
+        onSnackbar={showSnackbar}
+      />
 
       {/* Priority Picker Modal */}
-      <TopBarDropdownContainer
+      <PriorityPicker
         visible={showPriorityPicker}
         onClose={() => setShowPriorityPicker(false)}
-      >
-        <View style={styles.pickerContainer}>
-          <Text style={styles.pickerTitle}>Set Priority (1-100)</Text>
-
-          {/* Current Priority Display */}
-          <View style={styles.priorityDisplay}>
-            <Text style={styles.priorityValueText}>{priority || 0}</Text>
-          </View>
-
-          {/* Priority Slider */}
-          <View style={styles.sliderContainer}>
-            <Text style={styles.sliderLabel}>1</Text>
-            <Slider
-              style={styles.slider}
-              minimumValue={1}
-              maximumValue={100}
-              step={1}
-              value={priority || 1}
-              onValueChange={(value) => setPriority(Math.round(value))}
-              minimumTrackTintColor="#3b82f6"
-              maximumTrackTintColor="#d1d5db"
-              thumbTintColor="#3b82f6"
-            />
-            <Text style={styles.sliderLabel}>100</Text>
-          </View>
-
-          {/* Quick Set Buttons - Row 1: 1-10 */}
-          <View style={styles.quickButtonRow}>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
-              <TouchableOpacity
-                key={value}
-                style={[styles.quickButton, priority === value && styles.quickButtonSelected]}
-                onPress={() => setPriority(value)}
-              >
-                <Text style={[styles.quickButtonText, priority === value && styles.quickButtonTextSelected]}>
-                  {value}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Quick Set Buttons - Row 2: 20, 30, 40, 50, 60, 70, 80, 90, 100 */}
-          <View style={styles.quickButtonRow}>
-            {[20, 30, 40, 50, 60, 70, 80, 90, 100].map((value) => (
-              <TouchableOpacity
-                key={value}
-                style={[styles.quickButton, priority === value && styles.quickButtonSelected]}
-                onPress={() => setPriority(value)}
-              >
-                <Text style={[styles.quickButtonText, priority === value && styles.quickButtonTextSelected]}>
-                  {value}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Action Buttons */}
-          <View style={styles.pickerActionRow}>
-            {priority > 0 && (
-              <TouchableOpacity
-                style={[styles.pickerActionButton, styles.pickerButtonDanger]}
-                onPress={() => {
-                  setPriority(0);
-                  showSnackbar('Priority cleared');
-                  setShowPriorityPicker(false);
-                }}
-              >
-                <Text style={[styles.pickerButtonText, styles.pickerButtonDangerText]}>
-                  Clear
-                </Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[styles.pickerActionButton, styles.pickerButtonPrimary]}
-              onPress={() => {
-                if (priority > 0) {
-                  showSnackbar(`Priority set to ${priority}`);
-                }
-                setShowPriorityPicker(false);
-              }}
-            >
-              <Text style={styles.pickerButtonText}>
-                Done
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </TopBarDropdownContainer>
+        priority={formData.priority}
+        onPriorityChange={(value) => updateField("priority", value)}
+        onSnackbar={showSnackbar}
+      />
 
       {/* Entry Menu */}
-      <TopBarDropdownContainer
+      <AttributesPicker
         visible={showAttributesPicker}
         onClose={() => setShowAttributesPicker(false)}
-      >
-        <View style={styles.attributePickerContainer}>
-          {/* Attributes Section - only show if there are unset attributes */}
-          {(() => {
-            const hasUnsetAttributes =
-              (showLocation && (!captureLocation || !locationData)) ||
-              (showStatus && status === "none") ||
-              (showDueDate && !dueDate) ||
-              (showRating && rating === 0) ||
-              (showPriority && priority === 0) ||
-              (showPhotos && photoCount === 0);
-
-            if (!hasUnsetAttributes) return null;
-
-            return (
-              <>
-                <Text style={styles.attributePickerTitle}>Add Attribute</Text>
-
-                {/* Location */}
-                {showLocation && (!captureLocation || !locationData) && (
-                  <TouchableOpacity
-                    style={styles.attributePickerItem}
-                    onPress={() => {
-                      setShowAttributesPicker(false);
-                      setTimeout(() => setShowLocationPicker(true), 100);
-                    }}
-                  >
-                    <View style={styles.attributePickerItemIcon}>
-                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                        <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                        <Circle cx={12} cy={10} r={3} fill="#6b7280" />
-                      </Svg>
-                    </View>
-                    <Text style={styles.attributePickerItemText}>Location</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Status */}
-                {showStatus && status === "none" && (
-                  <TouchableOpacity
-                    style={styles.attributePickerItem}
-                    onPress={() => {
-                      setStatus("incomplete");
-                      setShowAttributesPicker(false);
-                      showSnackbar('Status set to Not Started');
-                      if (!isEditMode) enterEditMode();
-                    }}
-                  >
-                    <View style={styles.attributePickerItemIcon}>
-                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                        <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                    </View>
-                    <Text style={styles.attributePickerItemText}>Status</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Due Date */}
-                {showDueDate && !dueDate && (
-                  <TouchableOpacity
-                    style={styles.attributePickerItem}
-                    onPress={() => {
-                      setShowAttributesPicker(false);
-                      setTimeout(() => setShowDatePicker(true), 100);
-                      if (!isEditMode) enterEditMode();
-                    }}
-                  >
-                    <View style={styles.attributePickerItemIcon}>
-                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                        <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
-                        <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                        <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                        <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                    </View>
-                    <Text style={styles.attributePickerItemText}>Due Date</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Rating */}
-                {showRating && rating === 0 && (
-                  <TouchableOpacity
-                    style={styles.attributePickerItem}
-                    onPress={() => {
-                      setShowAttributesPicker(false);
-                      setTimeout(() => setShowRatingPicker(true), 100);
-                      if (!isEditMode) enterEditMode();
-                    }}
-                  >
-                    <View style={styles.attributePickerItemIcon}>
-                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                        <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                    </View>
-                    <Text style={styles.attributePickerItemText}>Rating</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Priority */}
-                {showPriority && priority === 0 && (
-                  <TouchableOpacity
-                    style={styles.attributePickerItem}
-                    onPress={() => {
-                      setShowAttributesPicker(false);
-                      setTimeout(() => setShowPriorityPicker(true), 100);
-                      if (!isEditMode) enterEditMode();
-                    }}
-                  >
-                    <View style={styles.attributePickerItemIcon}>
-                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                        <Path d="M5 3v18" strokeLinecap="round" strokeLinejoin="round" />
-                        <Path d="M5 3h13l-4 5 4 5H5z" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                    </View>
-                    <Text style={styles.attributePickerItemText}>Priority</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Photos */}
-                {showPhotos && photoCount === 0 && (
-                  <TouchableOpacity
-                    style={styles.attributePickerItem}
-                    onPress={() => {
-                      setShowAttributesPicker(false);
-                      if (!isEditMode) enterEditMode();
-                      setTimeout(() => photoCaptureRef.current?.openMenu(), 100);
-                    }}
-                  >
-                    <View style={styles.attributePickerItemIcon}>
-                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                        <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                        <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                    </View>
-                    <Text style={styles.attributePickerItemText}>Photos</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Divider before Delete */}
-                {isEditing && <View style={styles.menuDivider} />}
-              </>
-            );
-          })()}
-
-          {/* Delete Entry - only shown for existing entries */}
-          {isEditing && (
-            <TouchableOpacity
-              style={styles.attributePickerItem}
-              onPress={() => {
-                setShowAttributesPicker(false);
-                setTimeout(() => handleDelete(), 100);
-              }}
-            >
-              <View style={styles.attributePickerItemIcon}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}>
-                  <Path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </View>
-              <Text style={[styles.attributePickerItemText, { color: '#ef4444' }]}>Delete Entry</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </TopBarDropdownContainer>
+        isEditing={isEditing}
+        isEditMode={isEditMode}
+        enterEditMode={enterEditMode}
+        showLocation={showLocation}
+        showStatus={showStatus}
+        showDueDate={showDueDate}
+        showRating={showRating}
+        showPriority={showPriority}
+        showPhotos={showPhotos}
+        captureLocation={formData.captureLocation}
+        hasLocationData={!!formData.locationData}
+        status={formData.status}
+        dueDate={formData.dueDate}
+        rating={formData.rating}
+        priority={formData.priority}
+        photoCount={photoCount}
+        onShowLocationPicker={() => setShowLocationPicker(true)}
+        onStatusChange={(status) => updateField("status", status)}
+        onShowDatePicker={() => setShowDatePicker(true)}
+        onShowRatingPicker={() => setShowRatingPicker(true)}
+        onShowPriorityPicker={() => setShowPriorityPicker(true)}
+        onAddPhoto={() => photoCaptureRef.current?.openMenu()}
+        onDelete={handleDelete}
+        onSnackbar={showSnackbar}
+      />
 
       {/* Photo Capture (hidden, triggered via ref) */}
       <PhotoCapture
@@ -2101,551 +1383,3 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
-  loadingContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    fontSize: 16,
-    color: "#6b7280",
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#ef4444",
-    marginBottom: 16,
-  },
-  backButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: "#3b82f6",
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  titleBar: {
-    height: 90,
-    paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
-    paddingHorizontal: theme.spacing.sm,
-    paddingBottom: 4,
-    backgroundColor: "#fafafa",
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  titleBarFullScreen: {
-    // Keep same structure as titleBar but adjust spacing
-    // Normal titleBar: height 90, paddingTop 45 (ios), paddingBottom 4
-  },
-  headerTitleContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-  headerTitleText: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#1f2937",
-    textAlign: "center",
-  },
-  headerTitleInput: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#1f2937",
-    textAlign: "center",
-    flex: 1,
-    padding: 0,
-    margin: 0,
-  },
-  headerLeftContainer: {
-    width: 70,
-    alignItems: "flex-start",
-  },
-  headerRightContainer: {
-    width: 100,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    position: "relative",
-  },
-  headerCancelButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    minHeight: 32,
-    justifyContent: "center",
-  },
-  headerCancelText: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#6b7280",
-    fontWeight: "500",
-    includeFontPadding: false,
-    textAlignVertical: "center",
-  },
-  headerSaveButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    minHeight: 32,
-    justifyContent: "center",
-  },
-  headerSaveButtonDisabled: {
-    opacity: 0.5,
-  },
-  headerSaveText: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#2563eb",
-    fontWeight: "600",
-    includeFontPadding: false,
-    textAlignVertical: "center",
-  },
-  headerSaveTextDisabled: {
-    color: "#9ca3af",
-  },
-  headerDateContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  headerDateText: {
-    fontSize: 15,
-    color: "#6b7280",
-    fontWeight: "500",
-  },
-  headerTimeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  headerWatchButton: {
-    padding: 2,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: 6,
-    backgroundColor: "#fafafa",
-  },
-  titleInputFullWidth: {
-    flex: 1,
-    fontSize: 22,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
-    padding: 0,
-    margin: 0,
-    textAlign: "center",
-  },
-  titleBarContent: {
-    flex: 1,
-  },
-  menuButton: {
-    padding: theme.spacing.sm,
-  },
-  metadataBar: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: 10,
-    paddingBottom: 10,
-    backgroundColor: "#fafafa",
-    rowGap: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(0, 0, 0, 0.08)",
-    // Subtle iOS-style shadow
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  metadataLink: {
-    paddingVertical: 6,
-    paddingHorizontal: 2,
-    maxWidth: 130,
-  },
-  metadataLinkContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  metadataText: {
-    fontSize: 13,
-    color: theme.colors.text.secondary,
-    fontWeight: "500",
-    letterSpacing: -0.2,
-  },
-  metadataTextActive: {
-    color: theme.colors.text.primary,
-    fontWeight: "600",
-  },
-  metadataDivider: {
-    fontSize: 10,
-    color: "#d1d5db",
-    paddingHorizontal: 8,
-  },
-  entryMenuButton: {
-    marginLeft: "auto",
-    padding: 8,
-    opacity: 0.6,
-  },
-  attributePickerContainer: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.md,
-    gap: theme.spacing.xs,
-  },
-  attributePickerTitle: {
-    fontSize: 16,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.sm,
-  },
-  attributePickerItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
-  },
-  attributePickerItemIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.colors.background.secondary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  attributePickerItemText: {
-    fontSize: 16,
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeight.medium,
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: "#e5e7eb",
-    marginVertical: theme.spacing.sm,
-  },
-  topBarButtonTask: {
-    // No background color
-  },
-  topBarButtonTaskText: {
-    color: theme.colors.text.primary,
-  },
-  topBarButtonComplete: {
-    // No background color
-  },
-  topBarButtonCompleteText: {
-    color: theme.colors.text.primary,
-  },
-  topBarButtonDue: {
-    // No background color
-  },
-  topBarButtonDueText: {
-    color: theme.colors.text.primary,
-  },
-  contentContainer: {
-    flex: 1,
-    // No background - inherits from parent container (white)
-  },
-  titleContainer: {
-    flex: 1,
-  },
-  titleCollapsed: {
-    flex: 1,
-    alignItems: "center",
-  },
-  titlePlaceholder: {
-    fontSize: 22,
-    color: theme.colors.text.disabled,
-    fontWeight: theme.typography.fontWeight.bold,
-    textAlign: "center",
-  },
-  titleInput: {
-    fontSize: 22,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
-    padding: 0,
-    margin: 0,
-  },
-  entryDateContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingLeft: 24,
-    paddingRight: 16,
-    paddingTop: 0,
-    paddingBottom: 4,
-    backgroundColor: "#fafafa",
-  },
-  entryDateText: {
-    fontSize: 19,
-    color: "#6b7280",
-    fontWeight: "500",
-  },
-  timeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  watchIconButton: {
-    padding: 4,
-  },
-  editorContainer: {
-    flex: 1,
-    paddingLeft: 24,
-    paddingRight: 12,
-    // paddingBottom is set dynamically based on edit mode and popout state
-  },
-  countContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 12,
-  },
-  countText: {
-    fontSize: 14,
-    color: "#6b7280",
-  },
-  // Toolbar styles
-  fullScreenToolbar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    flex: 1,
-  },
-  toolbarDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: "#d1d5db",
-    marginHorizontal: 4,
-  },
-  fullScreenEditor: {
-    paddingTop: 16,
-  },
-  actionButtons: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginLeft: "auto",
-  },
-  toolbarButton: {
-    padding: 8,
-    borderRadius: 6,
-  },
-  headingButtonText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6b7280",
-  },
-  deleteButton: {
-    padding: theme.spacing.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: theme.spacing.sm,
-  },
-  cancelButton: {
-    padding: theme.spacing.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: theme.spacing.sm,
-  },
-  buttonDisabled: {
-    opacity: 0.3,
-  },
-  saveButton: {
-    padding: theme.spacing.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: theme.spacing.sm,
-  },
-  saveButtonDisabled: {
-    opacity: 0.3,
-  },
-  editButton: {
-    padding: theme.spacing.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: theme.spacing.sm,
-  },
-  datePickerContainer: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
-  },
-  datePickerTitle: {
-    fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.sm,
-  },
-  datePickerButton: {
-    backgroundColor: theme.colors.background.secondary,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-  },
-  datePickerButtonText: {
-    fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
-  },
-  datePickerButtonDanger: {
-    backgroundColor: "#fee2e2",
-  },
-  datePickerButtonDangerText: {
-    color: "#dc2626",
-  },
-  snackbar: {
-    position: "absolute",
-    top: Platform.OS === "ios" ? 60 : 40,
-    left: 16,
-    right: 16,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  snackbarText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  // Rating and Priority Picker Styles
-  pickerContainer: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
-  },
-  pickerTitle: {
-    fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.sm,
-  },
-  starRatingRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: theme.spacing.xs,
-    paddingVertical: theme.spacing.lg,
-  },
-  starRatingButton: {
-    padding: theme.spacing.sm,
-  },
-  starRatingIcon: {
-    fontSize: 40,
-    color: "#d1d5db",
-  },
-  starRatingIconActive: {
-    color: "#fbbf24",
-  },
-  priorityDisplay: {
-    alignItems: "center",
-    paddingVertical: theme.spacing.xl,
-  },
-  priorityValueText: {
-    fontSize: 48,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
-  },
-  sliderContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.sm,
-  },
-  slider: {
-    flex: 1,
-    height: 40,
-  },
-  sliderLabel: {
-    fontSize: 14,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.secondary,
-    minWidth: 30,
-    textAlign: "center",
-  },
-  sliderTrack: {
-    flex: 1,
-    height: 40,
-    flexDirection: "row",
-    gap: 1,
-  },
-  sliderSegment: {
-    flex: 1,
-    backgroundColor: theme.colors.background.secondary,
-    borderRadius: 2,
-  },
-  sliderSegmentActive: {
-    backgroundColor: "#3b82f6",
-  },
-  quickButtonRow: {
-    flexDirection: "row",
-    gap: theme.spacing.sm,
-    justifyContent: "space-between",
-  },
-  quickButton: {
-    flex: 1,
-    backgroundColor: theme.colors.background.secondary,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-  },
-  quickButtonSelected: {
-    backgroundColor: "#dbeafe",
-  },
-  quickButtonText: {
-    fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
-  },
-  quickButtonTextSelected: {
-    color: "#3b82f6",
-  },
-  pickerButton: {
-    backgroundColor: theme.colors.background.secondary,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-  },
-  pickerButtonDanger: {
-    backgroundColor: "#fee2e2",
-  },
-  pickerButtonDangerText: {
-    color: "#dc2626",
-  },
-  pickerActionRow: {
-    flexDirection: "row",
-    gap: theme.spacing.sm,
-  },
-  pickerActionButton: {
-    flex: 1,
-    backgroundColor: theme.colors.background.secondary,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-  },
-  pickerButtonPrimary: {
-    backgroundColor: "#3b82f6",
-  },
-  pickerButtonText: {
-    fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
-  },
-});
