@@ -1,14 +1,25 @@
 /**
- * Mobile-specific location API
- * Writes to SQLite first (offline-capable), then syncs to Supabase
+ * Mobile Location API - Offline-first location operations
+ *
+ * All reads come from local SQLite.
+ * Writes go to SQLite first, then sync in background.
+ *
+ * Architecture:
+ * Components → Hooks → API (this file) → LocalDB
+ *                                      ↓
+ *                                  SyncService (background)
  */
 
 import { LocationEntity, CreateLocationInput } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
+import { triggerPushSync } from '../../shared/sync';
+import { createScopedLogger } from '../../shared/utils/logger';
+
+const log = createScopedLogger('LocationApi');
 
 /**
- * Generate UUID (simple implementation)
+ * Generate UUID
  */
 function generateUUID(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -17,6 +28,45 @@ function generateUUID(): string {
     return v.toString(16);
   });
 }
+
+// ============================================================================
+// READ OPERATIONS (always from local SQLite)
+// ============================================================================
+
+/**
+ * Get a single location by ID
+ */
+export async function getLocation(id: string): Promise<LocationEntity | null> {
+  log.debug('Getting location', { id });
+  return await localDB.getLocation(id);
+}
+
+/**
+ * Get all locations for current user
+ */
+export async function getLocations(): Promise<LocationEntity[]> {
+  log.debug('Getting all locations');
+  return await localDB.getAllLocations();
+}
+
+/**
+ * Get locations with entry counts (for display in lists)
+ */
+export async function getLocationsWithCounts(): Promise<Array<LocationEntity & { entry_count: number }>> {
+  log.debug('Getting locations with counts');
+  return await localDB.getLocationsWithCounts();
+}
+
+/**
+ * Get unsynced locations
+ */
+export async function getUnsyncedLocations(): Promise<LocationEntity[]> {
+  return await localDB.getUnsyncedLocations();
+}
+
+// ============================================================================
+// WRITE OPERATIONS (local first, then sync)
+// ============================================================================
 
 /**
  * Create a new location (offline-first)
@@ -55,65 +105,59 @@ export async function createLocation(data: CreateLocationInput): Promise<Locatio
     sync_action: 'create',
   };
 
+  log.info('Creating location', { locationId: location_id, name: data.name });
+
   // Save to SQLite immediately
   const savedLocation = await localDB.saveLocation(location);
+
+  // Trigger sync in background (non-blocking)
+  triggerPushSync();
 
   return savedLocation;
 }
 
 /**
- * Get a single location by ID
- */
-export async function getLocation(id: string): Promise<LocationEntity | null> {
-  return await localDB.getLocation(id);
-}
-
-/**
- * Get all locations for current user
- */
-export async function getLocations(): Promise<LocationEntity[]> {
-  return await localDB.getAllLocations();
-}
-
-/**
- * Get locations with entry counts (for display in lists)
- */
-export async function getLocationsWithCounts(): Promise<Array<LocationEntity & { entry_count: number }>> {
-  return await localDB.getLocationsWithCounts();
-}
-
-/**
- * Update a location
+ * Update a location (offline-first)
  */
 export async function updateLocation(
   id: string,
   updates: Partial<LocationEntity>
 ): Promise<LocationEntity> {
+  // Determine if this is a user edit or sync operation
+  const isUserEdit = updates.sync_action === undefined || updates.sync_action === 'update';
+
   const updatesWithSync = {
     ...updates,
     synced: updates.synced !== undefined ? updates.synced : 0,
     sync_action: updates.sync_action !== undefined ? updates.sync_action : 'update',
   };
 
-  return await localDB.updateLocation(id, updatesWithSync);
+  log.info('Updating location', { locationId: id, isUserEdit });
+
+  const updated = await localDB.updateLocation(id, updatesWithSync);
+
+  // Trigger sync in background (non-blocking)
+  if (isUserEdit) {
+    triggerPushSync();
+  }
+
+  return updated;
 }
 
 /**
- * Delete a location (soft delete)
+ * Delete a location (offline-first, soft delete)
  */
 export async function deleteLocation(id: string): Promise<void> {
+  log.info('Deleting location', { locationId: id });
+
   await localDB.deleteLocation(id);
+
+  // Trigger sync in background (non-blocking)
+  triggerPushSync();
 }
 
 /**
- * Get unsynced locations
- */
-export async function getUnsyncedLocations(): Promise<LocationEntity[]> {
-  return await localDB.getUnsyncedLocations();
-}
-
-/**
- * Mark location as synced
+ * Mark location as synced (internal use by sync service)
  */
 export async function markLocationSynced(id: string): Promise<void> {
   await localDB.markLocationSynced(id);

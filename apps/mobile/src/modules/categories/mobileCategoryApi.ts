@@ -1,6 +1,13 @@
 /**
  * Mobile Category API - Offline-first category operations
- * Saves to SQLite immediately, syncs to Supabase in background
+ *
+ * All reads come from local SQLite.
+ * Writes go to SQLite first, then sync in background.
+ *
+ * Architecture:
+ * Components → Hooks → API (this file) → LocalDB
+ *                                      ↓
+ *                                  SyncService (background)
  */
 
 import * as Crypto from 'expo-crypto';
@@ -8,20 +15,49 @@ import { localDB } from '../../shared/db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
 import type { CategoryWithPath, CategoryTree } from '@trace/core';
 import { buildCategoryTree } from '@trace/core/src/modules/categories/categoryHelpers';
+import { triggerPushSync } from '../../shared/sync';
+import { createScopedLogger } from '../../shared/utils/logger';
+
+const log = createScopedLogger('CategoryApi');
+
+// ============================================================================
+// READ OPERATIONS (always from local SQLite)
+// ============================================================================
 
 /**
  * Get all categories from local SQLite
  */
 export async function getCategories(): Promise<CategoryWithPath[]> {
   await localDB.init();
+  log.debug('Getting categories');
 
   const categories = await localDB.getAllCategories();
 
   return categories.map(cat => ({
     ...cat,
-    display_path: cat.full_path, // Add display_path for compatibility
+    display_path: cat.full_path,
   }));
 }
+
+/**
+ * Get category tree (hierarchical structure)
+ */
+export async function getCategoryTree(): Promise<CategoryTree[]> {
+  log.debug('Getting category tree');
+  const categories = await getCategories();
+
+  // Use entry_count from database
+  const countMap = new Map<string, number>();
+  categories.forEach((cat) => {
+    countMap.set(cat.category_id, cat.entry_count);
+  });
+
+  return buildCategoryTree(categories, countMap);
+}
+
+// ============================================================================
+// WRITE OPERATIONS (local first, then sync)
+// ============================================================================
 
 /**
  * Create a category (offline-first)
@@ -66,8 +102,13 @@ export async function createCategory(data: {
     updated_at: now,
   };
 
+  log.info('Creating category', { categoryId: category_id, name: data.name });
+
   // Save to local SQLite
   await localDB.saveCategory(category);
+
+  // Trigger sync in background (non-blocking)
+  triggerPushSync();
 
   return {
     ...category,
@@ -133,7 +174,12 @@ export async function updateCategory(
     }
   }
 
+  log.info('Updating category', { categoryId, name: updated.name });
+
   await localDB.updateCategory(categoryId, updated);
+
+  // Trigger sync in background (non-blocking)
+  triggerPushSync();
 
   return {
     ...updated,
@@ -145,20 +191,10 @@ export async function updateCategory(
  * Delete a category (offline-first)
  */
 export async function deleteCategory(categoryId: string): Promise<void> {
+  log.info('Deleting category', { categoryId });
+
   await localDB.deleteCategory(categoryId);
-}
 
-/**
- * Get category tree (hierarchical structure)
- */
-export async function getCategoryTree(): Promise<CategoryTree[]> {
-  const categories = await getCategories();
-
-  // Use entry_count from database
-  const countMap = new Map<string, number>();
-  categories.forEach((cat) => {
-    countMap.set(cat.category_id, cat.entry_count);
-  });
-
-  return buildCategoryTree(categories, countMap);
+  // Trigger sync in background (non-blocking)
+  triggerPushSync();
 }

@@ -1,6 +1,14 @@
 /**
- * Mobile-specific entry API
- * Writes to SQLite first (offline-capable), then syncs to Supabase
+ * Mobile Entry API - Offline-first entry operations
+ *
+ * All reads come from local SQLite.
+ * Writes go to SQLite first, then sync in background.
+ * Use { refreshFirst: true } for critical reads (editing).
+ *
+ * Architecture:
+ * Components → Hooks → API (this file) → LocalDB
+ *                                      ↓
+ *                                  SyncService (background)
  */
 
 import { Entry, CreateEntryInput, EntryFilter } from '@trace/core';
@@ -8,6 +16,10 @@ import { localDB } from '../../shared/db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
+import { triggerPushSync, refreshEntryFromServer } from '../../shared/sync';
+import { createScopedLogger } from '../../shared/utils/logger';
+
+const log = createScopedLogger('EntryApi');
 
 /**
  * Mobile-specific entry filter that extends core EntryFilter
@@ -19,6 +31,14 @@ export interface MobileEntryFilter extends EntryFilter {
 }
 
 /**
+ * Options for read operations
+ */
+export interface ReadOptions {
+  /** If true, pulls latest from server before reading (requires network) */
+  refreshFirst?: boolean;
+}
+
+/**
  * Get device identifier for attribution
  */
 function getDeviceName(): string {
@@ -26,6 +46,79 @@ function getDeviceName(): string {
   const platformName = Platform.OS === 'ios' ? 'iOS' : 'Android';
   return `${deviceName} (${platformName})`;
 }
+
+/**
+ * Generate UUID
+ */
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+// ============================================================================
+// READ OPERATIONS (always from local SQLite)
+// ============================================================================
+
+/**
+ * Get entries from local database
+ */
+export async function getEntries(filter?: MobileEntryFilter): Promise<Entry[]> {
+  log.debug('Getting entries', { filter });
+  return await localDB.getAllEntries(filter);
+}
+
+/**
+ * Get a single entry by ID
+ * Use { refreshFirst: true } before editing to ensure latest version
+ */
+export async function getEntry(id: string, options?: ReadOptions): Promise<Entry | null> {
+  log.debug('Getting entry', { id, options });
+
+  // Optionally refresh from server first (for editing)
+  if (options?.refreshFirst) {
+    const updated = await refreshEntryFromServer(id);
+    if (updated) {
+      log.debug('Entry refreshed from server', { id });
+    }
+  }
+
+  return await localDB.getEntry(id);
+}
+
+/**
+ * Get count of unsynced entries
+ */
+export async function getUnsyncedCount(): Promise<number> {
+  return await localDB.getUnsyncedCount();
+}
+
+/**
+ * Get all unsynced entries
+ */
+export async function getUnsyncedEntries(): Promise<Entry[]> {
+  return await localDB.getUnsyncedEntries();
+}
+
+/**
+ * Get all unique tags with entry counts
+ */
+export async function getTags(): Promise<Array<{ tag: string; count: number }>> {
+  return await localDB.getAllTags();
+}
+
+/**
+ * Get all unique mentions (people) with entry counts
+ */
+export async function getMentions(): Promise<Array<{ mention: string; count: number }>> {
+  return await localDB.getAllMentions();
+}
+
+// ============================================================================
+// WRITE OPERATIONS (local first, then sync)
+// ============================================================================
 
 /**
  * Create a new entry (offline-first)
@@ -77,25 +170,15 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     last_edited_device: getDeviceName(),
   };
 
+  log.info('Creating entry', { entryId: entry_id, hasTitle: !!entry.title });
+
   // Save to SQLite immediately (always succeeds, works offline)
-  // Sync will be handled by syncQueue in background
   const savedEntry = await localDB.saveEntry(entry);
 
+  // Trigger sync in background (non-blocking)
+  triggerPushSync();
+
   return savedEntry;
-}
-
-/**
- * Get entries from local database
- */
-export async function getEntries(filter?: MobileEntryFilter): Promise<Entry[]> {
-  return await localDB.getAllEntries(filter);
-}
-
-/**
- * Get a single entry by ID
- */
-export async function getEntry(id: string): Promise<Entry | null> {
-  return await localDB.getEntry(id);
 }
 
 /**
@@ -115,10 +198,9 @@ export async function updateEntry(
   // Determine if this is a user edit (needs version increment) or a sync operation
   const isUserEdit = updates.sync_action === undefined || updates.sync_action === 'update';
 
-  // Mark as needing sync (unless explicitly specified otherwise, like during pull sync)
+  // Mark as needing sync (unless explicitly specified otherwise)
   const updatesWithSync = {
     ...updates,
-    // Only override sync fields if not explicitly provided (preserves sync operation behavior)
     synced: updates.synced !== undefined ? updates.synced : 0,
     sync_action: updates.sync_action !== undefined ? updates.sync_action : 'update',
   };
@@ -130,57 +212,28 @@ export async function updateEntry(
     updatesWithSync.last_edited_device = getDeviceName();
   }
 
+  log.info('Updating entry', { entryId: id, isUserEdit });
+
   // Update in SQLite
-  // Sync will be handled by syncQueue in background
   const updated = await localDB.updateEntry(id, updatesWithSync);
+
+  // Trigger sync in background (non-blocking)
+  if (isUserEdit) {
+    triggerPushSync();
+  }
 
   return updated;
 }
 
 /**
- * Delete an entry (offline-first)
+ * Delete an entry (offline-first, soft delete)
  */
 export async function deleteEntry(id: string): Promise<void> {
+  log.info('Deleting entry', { entryId: id });
+
   // Delete from SQLite (soft delete)
-  // Sync will be handled by syncQueue in background
   await localDB.deleteEntry(id);
-}
 
-/**
- * Generate UUID (simple implementation)
- */
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-/**
- * Get count of unsynced entries
- */
-export async function getUnsyncedCount(): Promise<number> {
-  return await localDB.getUnsyncedCount();
-}
-
-/**
- * Get all unsynced entries
- */
-export async function getUnsyncedEntries(): Promise<Entry[]> {
-  return await localDB.getUnsyncedEntries();
-}
-
-/**
- * Get all unique tags with entry counts
- */
-export async function getTags(): Promise<Array<{ tag: string; count: number }>> {
-  return await localDB.getAllTags();
-}
-
-/**
- * Get all unique mentions (people) with entry counts
- */
-export async function getMentions(): Promise<Array<{ mention: string; count: number }>> {
-  return await localDB.getAllMentions();
+  // Trigger sync in background (non-blocking)
+  triggerPushSync();
 }

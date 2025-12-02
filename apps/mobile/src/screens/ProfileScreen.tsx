@@ -8,15 +8,19 @@ import { UnsavedChangesBehaviorSelector } from "../components/settings/UnsavedCh
 import { UnitSystemSelector } from "../components/settings/UnitSystemSelector";
 import { ImageQualitySelector } from "../components/settings/ImageQualitySelector";
 import Svg, { Path } from "react-native-svg";
-import { syncQueue } from "../shared/sync/syncQueue";
+import { useSync } from "../shared/sync";
 import { useState } from "react";
+import { createScopedLogger } from "../shared/utils/logger";
 import { UNSAVED_CHANGES_BEHAVIOR_OPTIONS, UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
+
+const log = createScopedLogger('ProfileScreen');
 
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const { settings, updateSettings } = useSettings();
+  const { sync } = useSync();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [showBehaviorSelector, setShowBehaviorSelector] = useState(false);
   const [showUnitSelector, setShowUnitSelector] = useState(false);
@@ -30,15 +34,15 @@ export function ProfileScreen() {
   const handleSignOut = async () => {
     try {
       setIsSigningOut(true);
-      console.log('🔄 Syncing before sign out...');
+      log.info('Syncing before sign out');
 
       // Try to sync all unsaved changes before signing out
-      await syncQueue.syncNow();
+      await sync();
 
-      console.log('✅ Sync complete, signing out...');
+      log.success('Sync complete, signing out');
       await signOut();
     } catch (error) {
-      console.error('❌ Error during sign out:', error);
+      log.error('Error during sign out', error);
 
       // Ask user if they still want to sign out despite sync failure
       Alert.alert(

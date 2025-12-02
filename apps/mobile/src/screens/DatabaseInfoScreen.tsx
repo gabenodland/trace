@@ -10,7 +10,7 @@ import { useNavigation } from '../shared/contexts/NavigationContext';
 import { useNavigationMenu } from '../shared/hooks/useNavigationMenu';
 import { TopBar } from '../components/layout/TopBar';
 import { localDB } from '../shared/db/localDB';
-import { syncQueue } from '../shared/sync/syncQueue';
+import { useSync, getSyncStatus } from '../shared/sync';
 import { deletePhotoFromLocalStorage } from '../modules/photos/mobilePhotoApi';
 import Svg, { Path } from 'react-native-svg';
 
@@ -27,6 +27,7 @@ interface CloudCounts {
 export function DatabaseInfoScreen() {
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { sync, forcePull } = useSync();
   const [activeTab, setActiveTab] = useState<TabType>('status');
   const [entries, setEntries] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -89,7 +90,7 @@ export function DatabaseInfoScreen() {
       setSyncLogs(logs);
 
       // Get sync status
-      const status = await syncQueue.getSyncStatus();
+      const status = await getSyncStatus();
       setSyncStatus(status);
 
       // Get schema version
@@ -199,7 +200,7 @@ export function DatabaseInfoScreen() {
           text: 'Normal Sync',
           onPress: async () => {
             try {
-              await syncQueue.syncNow();
+              await sync();
               Alert.alert('Success', 'Manual sync triggered');
               setRefreshKey(prev => prev + 1);
             } catch (error) {
@@ -211,7 +212,7 @@ export function DatabaseInfoScreen() {
           text: 'Force Pull',
           onPress: async () => {
             try {
-              await syncQueue.forcePull();
+              await forcePull();
               Alert.alert('Success', 'Pulled all data from Cloud');
               setRefreshKey(prev => prev + 1);
             } catch (error) {

@@ -23,7 +23,6 @@ import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { LocationPicker } from "../../locations/components/LocationPicker";
 import { compressPhoto, savePhotoToLocalStorage, deletePhoto } from "../../photos/mobilePhotoApi";
 import { localDB } from "../../../shared/db/localDB";
-import { syncQueue } from "../../../shared/sync/syncQueue";
 import * as Crypto from "expo-crypto";
 
 import type { ReturnContext } from "../../../screens/EntryScreen";
@@ -874,10 +873,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         returnCategoryName = "Uncategorized";
       }
 
-      // Trigger sync in background after save (non-blocking)
-      syncQueue.processQueue().catch(err => {
-        console.error('Background sync failed:', err);
-      });
+      // Note: Sync is triggered automatically in mobileEntryApi after save
 
       // Navigate back based on returnContext
       if (returnContext) {
