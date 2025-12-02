@@ -1625,11 +1625,11 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           setShowLocationPicker(false);
         }}
         mode={(() => {
-          // view: location already selected (either editing existing or user already picked one)
-          // select: no location yet, user needs to pick
-          const hasLocation = locationData && (locationData.name || (locationData.latitude && locationData.longitude));
-          const pickerMode = hasLocation ? 'view' : 'select';
-          console.log('[CaptureForm] mode check:', { isEditMode, captureLocation, hasLocationData: !!locationData, hasLocation, pickerMode });
+          // view: location with a name already selected (either editing existing or user already picked one)
+          // select: no location name yet (GPS-only or nothing), user needs to pick/create a location
+          const hasNamedLocation = locationData && locationData.name;
+          const pickerMode = hasNamedLocation ? 'view' : 'select';
+          console.log('[CaptureForm] mode check:', { isEditMode, captureLocation, hasLocationData: !!locationData, hasNamedLocation, pickerMode });
           return pickerMode as 'select' | 'view';
         })()}
         onSelect={(location: LocationType | null) => {

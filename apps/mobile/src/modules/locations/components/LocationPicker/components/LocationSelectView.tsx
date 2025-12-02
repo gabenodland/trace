@@ -402,7 +402,9 @@ export function LocationSelectView({
               </Svg>
             </View>
             <View style={styles.poiInfo}>
-              <Text style={styles.poiName}>Current Pin</Text>
+              <Text style={styles.poiName}>
+                {selection.location?.name || 'Selected Location'}
+              </Text>
               <Text style={styles.poiCategory} numberOfLines={1}>{getSubtitleText()}</Text>
             </View>
             {/* Use button - consistent with Select buttons */}
