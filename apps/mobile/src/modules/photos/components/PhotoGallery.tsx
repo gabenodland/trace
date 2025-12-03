@@ -54,7 +54,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
   useEffect(() => {
     if (pendingPhotos !== undefined) {
       // Use pending photos (new entry, not saved to DB yet)
-      console.log('📸 PhotoGallery using', pendingPhotos.length, 'pending photos from state');
+      // Note: No logging here to avoid noise on every render
       setLoading(false);
 
       // Build URIs map from pending photos
@@ -90,7 +90,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
     };
   }, [entryId, refreshKey, pendingPhotos]);
 
-  const loadPhotos = async (mounted: boolean = true) => {
+  const loadPhotos = async (mounted: boolean = true, retryCount: number = 0) => {
     try {
       setLoading(true);
       const entryPhotos = await localDB.getPhotosForEntry(entryId);
@@ -108,8 +108,6 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
       const downloadStatus: Record<string, boolean> = {};
 
       for (const photo of entryPhotos) {
-        console.log(`🖼️ PhotoGallery loading photo ${photo.photo_id}...`);
-
         // Check if photo is downloaded locally
         let isDownloaded = false;
         if (photo.local_path) {
@@ -126,19 +124,22 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
         const uri = await getPhotoUri(photo.photo_id);
         if (uri) {
           uris[photo.photo_id] = uri;
-          console.log(`✅ PhotoGallery got URI for ${photo.photo_id} (${isDownloaded ? 'local' : 'cloud'})`);
-        } else {
-          console.log(`ℹ️ PhotoGallery could not get URI for ${photo.photo_id} (file may be missing)`);
         }
+        // Note: Removed per-photo logging to reduce noise
       }
-
-      console.log(`🖼️ PhotoGallery loaded ${Object.keys(uris).length} of ${entryPhotos.length} photos`);
 
       if (!mounted) return; // Final check before setState
 
       setPhotoUris(uris);
       setPhotoDownloadStatus(downloadStatus);
     } catch (error) {
+      // Handle SQLite concurrent access errors with retry
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('shared object that was already released') && retryCount < 2) {
+        // Wait a bit and retry (stagger concurrent DB access)
+        await new Promise(resolve => setTimeout(resolve, 100 * (retryCount + 1)));
+        return loadPhotos(mounted, retryCount + 1);
+      }
       console.error('Error loading photos:', error);
     } finally {
       if (mounted) {

@@ -73,8 +73,6 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     fetchLocations();
   }, []);
 
-  console.log("EntryListScreen - selectedCategoryName:", selectedCategoryName);
-
   // Build breadcrumbs from selected category
   const breadcrumbs = useMemo((): BreadcrumbSegment[] => {
     // If a category is selected, walk up the parent tree

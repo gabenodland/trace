@@ -337,8 +337,15 @@ class SyncService {
         }
       }
 
-      // Invalidate React Query cache
-      this.invalidateQueryCache();
+      // Calculate totals
+      const totalPushed = result.pushed.entries + result.pushed.categories + result.pushed.locations + result.pushed.photos;
+      const totalPulled = result.pulled.entries + result.pulled.categories + result.pulled.locations + result.pulled.photos;
+
+      // Only invalidate React Query cache if we pulled new data from server
+      // (Push-only syncs don't need invalidation since mutations already did it)
+      if (totalPulled > 0) {
+        this.invalidateQueryCache();
+      }
 
       // Start background photo download (non-blocking)
       this.startBackgroundPhotoDownload();
@@ -349,8 +356,6 @@ class SyncService {
       // Log to sync_logs table
       await this.logSyncResult(trigger, result);
 
-      const totalPushed = result.pushed.entries + result.pushed.categories + result.pushed.locations + result.pushed.photos;
-      const totalPulled = result.pulled.entries + result.pulled.categories + result.pulled.locations + result.pulled.photos;
       log.debug(`SYNC COMPLETE in ${(result.duration / 1000).toFixed(1)}s | pushed: ${totalPushed} | pulled: ${totalPulled}`);
 
     } catch (error) {
