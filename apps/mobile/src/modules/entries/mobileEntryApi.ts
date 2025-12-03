@@ -247,3 +247,105 @@ export async function deleteEntry(id: string): Promise<void> {
   // Trigger sync in background (non-blocking)
   triggerPushSync();
 }
+
+/**
+ * Copy an entry (offline-first)
+ * Creates a new entry with copied attributes, current date/time, and fresh GPS
+ */
+export async function copyEntry(
+  id: string,
+  gpsCoords?: { latitude: number; longitude: number; accuracy?: number }
+): Promise<Entry> {
+  // Get the original entry
+  const originalEntry = await localDB.getEntry(id);
+  if (!originalEntry) throw new Error('Entry not found');
+
+  // Get user ID
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  // Generate new entry ID
+  const entry_id = generateUUID();
+
+  // Determine if original entry included time (has non-zero milliseconds or specific time)
+  // Check if time was set by looking at whether it's midnight UTC
+  // Default to current time if no entry_date on original
+  let hasTime = true;
+  if (originalEntry.entry_date) {
+    const originalDate = new Date(originalEntry.entry_date);
+    hasTime = originalDate.getUTCHours() !== 0 ||
+              originalDate.getUTCMinutes() !== 0 ||
+              originalDate.getUTCSeconds() !== 0 ||
+              originalDate.getUTCMilliseconds() !== 0;
+  }
+
+  // Create new date - if original had time, use current time; otherwise just use current date at midnight
+  let newEntryDate: string;
+  if (hasTime) {
+    newEntryDate = new Date().toISOString();
+  } else {
+    // Set to midnight UTC for date-only entries
+    const now = new Date();
+    now.setUTCHours(0, 0, 0, 0);
+    newEntryDate = now.toISOString();
+  }
+
+  // Create new title
+  const newTitle = originalEntry.title
+    ? `Copy of ${originalEntry.title}`
+    : 'Copy of Untitled';
+
+  // Create the copied entry
+  const entry: Entry = {
+    entry_id,
+    user_id: user.id,
+    title: newTitle,
+    content: originalEntry.content,
+    tags: originalEntry.tags || [],
+    mentions: originalEntry.mentions || [],
+    category_id: originalEntry.category_id,
+    // Fresh GPS coordinates
+    entry_latitude: gpsCoords?.latitude || null,
+    entry_longitude: gpsCoords?.longitude || null,
+    location_accuracy: gpsCoords?.accuracy || null,
+    // Keep the same location reference if set
+    location_id: originalEntry.location_id,
+    // Copy status and task-related fields
+    status: originalEntry.status || 'none',
+    due_date: originalEntry.due_date,
+    completed_at: null, // New copy is not completed
+    entry_date: newEntryDate,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    attachments: null, // Don't copy attachments
+    // Copy priority, rating, but not pinned state
+    priority: originalEntry.priority || 0,
+    rating: originalEntry.rating || 0.00,
+    is_pinned: false, // New copy is not pinned
+    local_only: originalEntry.local_only || 0,
+    synced: 0,
+    sync_action: 'create',
+    // Conflict resolution fields
+    version: 1,
+    base_version: 1,
+    conflict_status: null,
+    conflict_backup: null,
+    last_edited_by: user.email || null,
+    last_edited_device: getDeviceName(),
+  };
+
+  log.debug('Copying entry', {
+    originalId: id,
+    newId: entry_id,
+    hasTime,
+    hasGps: !!gpsCoords,
+  });
+
+  // Save to SQLite immediately
+  const savedEntry = await localDB.saveEntry(entry);
+
+  // Trigger sync in background
+  triggerPushSync();
+
+  return savedEntry;
+}

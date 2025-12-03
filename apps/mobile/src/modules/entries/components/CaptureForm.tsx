@@ -84,7 +84,6 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const titleInputRef = useRef<TextInput>(null);
   const photoCaptureRef = useRef<PhotoCaptureRef>(null);
   const isInitialLoad = useRef(true); // Track if this is first load
-  const lastTitleTap = useRef<number | null>(null); // Track last tap time for double-tap detection
   const [photoCount, setPhotoCount] = useState(0); // Track photo position for ordering
   const [photosCollapsed, setPhotosCollapsed] = useState(false); // Start expanded
   const [tempEntryId] = useState(() => entryId || Crypto.randomUUID()); // Temp ID for new entries;
@@ -320,15 +319,10 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     }
   }, [onProfilePress]);
 
-  // Enter edit mode, optionally placing cursor at tap coordinates
-  const enterEditMode = (tapCoordinates?: { x: number; y: number }) => {
+  // Enter edit mode - RichTextEditor handles focus automatically
+  // when editor receives focus while in read-only UI mode
+  const enterEditMode = () => {
     setIsEditMode(true);
-    // If we have tap coordinates, focus the editor at that position after a brief delay
-    if (tapCoordinates) {
-      setTimeout(() => {
-        editorRef.current?.focusAtPosition(tapCoordinates.x, tapCoordinates.y);
-      }, 100);
-    }
   };
 
   // Show snackbar notification
@@ -349,26 +343,18 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     ]).start(() => setSnackbarMessage(null));
   };
 
-  // Handle double-tap on formData.title to enter edit mode
+  // Handle tap on title to enter edit mode
   const handleTitlePress = () => {
-    const now = Date.now();
-    const DOUBLE_PRESS_DELAY = 300; // ms
-
-    if (lastTitleTap.current && (now - lastTitleTap.current) < DOUBLE_PRESS_DELAY) {
-      // Double tap detected
-      if (!isEditMode) {
-        enterEditMode();
-        // Focus the formData.title input after a short delay to ensure edit mode is active
-        setTimeout(() => {
-          titleInputRef.current?.focus();
-        }, 100);
-      }
-      lastTitleTap.current = null;
-    } else {
-      // Single tap
-      lastTitleTap.current = now;
-      setIsTitleExpanded(true);
+    if (!isEditMode) {
+      // Clear any pending body focus - we're focusing the title instead
+      editorRef.current?.clearPendingFocus?.();
+      enterEditMode();
+      // Focus the title input after a short delay to ensure edit mode is active
+      setTimeout(() => {
+        titleInputRef.current?.focus();
+      }, 100);
     }
+    setIsTitleExpanded(true);
   };
 
   // Determine if formData.title should be collapsed
@@ -643,11 +629,12 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       (e) => {
         setKeyboardHeight(e.endCoordinates.height);
 
-        // Scroll cursor into view when keyboard appears in edit mode
-        if (isEditMode && editorRef.current) {
+        // Scroll cursor into view when keyboard appears
+        // Use a longer delay to ensure edit mode transition is complete
+        if (editorRef.current) {
           setTimeout(() => {
             editorRef.current?.scrollToCursor();
-          }, 150);
+          }, 300);
         }
       }
     );
@@ -998,6 +985,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               blurOnSubmit={false}
               onFocus={() => {
                 setIsTitleExpanded(true);
+                // Clear any pending body focus - title is being focused instead
+                editorRef.current?.clearPendingFocus?.();
               }}
               onPressIn={handleTitlePress}
             />

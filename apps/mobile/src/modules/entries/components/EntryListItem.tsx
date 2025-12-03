@@ -19,6 +19,7 @@ interface EntryListItemProps {
   onCategoryPress?: (categoryId: string | null, categoryName: string) => void;
   onToggleComplete?: (entryId: string, currentStatus: "incomplete" | "in_progress" | "complete") => void;
   onMove?: (entryId: string) => void;
+  onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
   onResolveConflict?: (entryId: string) => void; // Dismiss conflict banner
@@ -29,7 +30,7 @@ interface EntryListItemProps {
   onMenuToggle?: () => void; // Toggle menu visibility
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, onPin, onResolveConflict, categoryName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onCopy, onDelete, onPin, onResolveConflict, categoryName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(0);
   const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
@@ -74,6 +75,14 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
       onPress: () => {
         if (onMove) {
           onMove(entry.entry_id);
+        }
+      },
+    },
+    {
+      label: "Copy",
+      onPress: () => {
+        if (onCopy) {
+          onCopy(entry.entry_id);
         }
       },
     },

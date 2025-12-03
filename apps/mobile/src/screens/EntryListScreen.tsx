@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { View, StyleSheet, Alert } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
+import * as Location from "expo-location";
 import { useAuthState, type LocationEntity } from "@trace/core";
 import { useEntries, useEntry, MobileEntryFilter } from "../modules/entries/mobileEntryHooks";
 import { getLocation as getLocationById } from "../modules/locations/mobileLocationApi";
@@ -402,6 +403,53 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     }
   };
 
+  const handleCopyEntry = async (entryId: string) => {
+    try {
+      // Try to get current GPS coordinates
+      let gpsCoords: { latitude: number; longitude: number; accuracy?: number } | undefined;
+
+      try {
+        // Check permission first
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === "granted") {
+          // Try last known position first (fast)
+          let location = await Location.getLastKnownPositionAsync();
+          if (!location) {
+            location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Low,
+            });
+          }
+          if (location) {
+            gpsCoords = {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              accuracy: location.coords.accuracy ?? undefined,
+            };
+          }
+        }
+      } catch (locError) {
+        console.warn("Could not get location for copy:", locError);
+        // Continue without GPS - not critical
+      }
+
+      // Copy the entry
+      const copiedEntry = await entryMutations.copyEntry(entryId, gpsCoords);
+
+      // Navigate to the copied entry
+      navigate("capture", {
+        entryId: copiedEntry.entry_id,
+        returnContext: {
+          screen: "inbox",
+          categoryId: selectedCategoryId,
+          categoryName: selectedCategoryName
+        }
+      });
+    } catch (error) {
+      console.error("Failed to copy entry:", error);
+      Alert.alert("Error", "Failed to copy entry");
+    }
+  };
+
   // Get current category of entry being moved
   const entryToMoveData = entryToMove ? entries.find(e => e.entry_id === entryToMove) : null;
   const entryToMoveCategoryId = entryToMoveData?.category_id || null;
@@ -439,6 +487,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         onMentionPress={handleMentionPress}
         onCategoryPress={handleCategoryPress}
         onMove={handleMoveEntry}
+        onCopy={handleCopyEntry}
         onDelete={handleDeleteEntry}
         onPin={handlePinEntry}
         onResolveConflict={handleResolveConflict}

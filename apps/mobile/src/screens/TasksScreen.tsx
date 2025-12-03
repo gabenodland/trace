@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
+import * as Location from "expo-location";
 import { type Entry, isTaskOverdue, isDueToday, isDueThisWeek, getTaskStats } from "@trace/core";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
@@ -124,6 +125,49 @@ export function TasksScreen() {
     }
   };
 
+  const handleCopyEntry = async (entryId: string) => {
+    try {
+      // Try to get current GPS coordinates
+      let gpsCoords: { latitude: number; longitude: number; accuracy?: number } | undefined;
+
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === "granted") {
+          let location = await Location.getLastKnownPositionAsync();
+          if (!location) {
+            location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Low,
+            });
+          }
+          if (location) {
+            gpsCoords = {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              accuracy: location.coords.accuracy ?? undefined,
+            };
+          }
+        }
+      } catch (locError) {
+        console.warn("Could not get location for copy:", locError);
+      }
+
+      // Copy the entry
+      const copiedEntry = await entryMutations.copyEntry(entryId, gpsCoords);
+
+      // Navigate to the copied entry
+      navigate("capture", {
+        entryId: copiedEntry.entry_id,
+        returnContext: {
+          screen: "tasks",
+          taskFilter: filter
+        }
+      });
+    } catch (error) {
+      console.error("Failed to copy entry:", error);
+      Alert.alert("Error", "Failed to copy entry");
+    }
+  };
+
   const handleAddEntry = () => {
     navigate("capture", {
       returnContext: {
@@ -242,6 +286,7 @@ export function TasksScreen() {
                       }
                     })}
                     onToggleComplete={handleToggleComplete}
+                    onCopy={handleCopyEntry}
                     onResolveConflict={handleResolveConflict}
                   />
                 ))}

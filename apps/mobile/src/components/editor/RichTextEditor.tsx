@@ -7,6 +7,14 @@ import {
   CoreBridge,
 } from "@10play/tentap-editor";
 
+// Debug logging for editor focus issues
+const DEBUG_FOCUS = false;
+const log = (msg: string, data?: any) => {
+  if (DEBUG_FOCUS) {
+    console.log(`[RichTextEditor] ${msg}`, data ? JSON.stringify(data) : '');
+  }
+};
+
 interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
@@ -26,12 +34,10 @@ export const RichTextEditor = forwardRef(({
 }: RichTextEditorProps, ref) => {
   const isLocalChange = useRef(false);
   const lastContent = useRef(value);
-  const lastTap = useRef<number | null>(null);
-  const wasReadOnly = useRef(!editable);
-  const touchStartY = useRef<number | null>(null);
-  const touchStartX = useRef<number | null>(null);
   const containerRef = useRef<View>(null);
-  const containerLayout = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const prevEditable = useRef(editable);
+  // Track if focus was requested during read-only mode (before editable transition)
+  const pendingFocusRequest = useRef(false);
 
   const customCSS = `
     * {
@@ -116,11 +122,12 @@ export const RichTextEditor = forwardRef(({
     }
   `;
 
+  // Editor is always editable internally - we control interaction via overlay
   const editor = useEditorBridge({
-    autofocus: false, // Never autofocus - we manage focus manually to avoid stealing from title input
+    autofocus: false,
     avoidIosKeyboard: true,
     initialContent: value,
-    editable: editable,
+    editable: true, // Always editable internally
     bridgeExtensions: [
       ...TenTapStartKit,
       CoreBridge.configureCSS(customCSS),
@@ -191,60 +198,38 @@ export const RichTextEditor = forwardRef(({
     focus: () => editor.focus(),
     getHTML: () => editor.getHTML(),
     setContent: (html: string) => editor.setContent(html),
-    // Focus editor and place cursor at given coordinates (relative to editor)
-    focusAtPosition: (x: number, y: number) => {
-      editor.focus();
-      // Inject JavaScript to simulate a click at the coordinates to place cursor
-      try {
-        const webview = (editor as any).webviewRef?.current;
-        if (webview && typeof webview.injectJavaScript === 'function') {
-          webview.injectJavaScript(`
-            (function() {
-              // Get the element at the coordinates
-              const element = document.elementFromPoint(${x}, ${y});
-              if (!element) return;
-
-              // Try to use caretPositionFromPoint (standard) or caretRangeFromPoint (webkit)
-              let range;
-              if (document.caretPositionFromPoint) {
-                const pos = document.caretPositionFromPoint(${x}, ${y});
-                if (pos) {
-                  range = document.createRange();
-                  range.setStart(pos.offsetNode, pos.offset);
-                  range.collapse(true);
-                }
-              } else if (document.caretRangeFromPoint) {
-                range = document.caretRangeFromPoint(${x}, ${y});
-              }
-
-              if (range) {
-                const selection = window.getSelection();
-                selection.removeAllRanges();
-                selection.addRange(range);
-
-                // Also update ProseMirror's selection if available
-                if (window.editor?.view) {
-                  const view = window.editor.view;
-                  const pos = view.posAtCoords({ left: ${x}, top: ${y} });
-                  if (pos) {
-                    const tr = view.state.tr.setSelection(
-                      view.state.selection.constructor.near(view.state.doc.resolve(pos.pos))
-                    );
-                    view.dispatch(tr);
-                  }
-                }
-              }
-            })();
-            true;
-          `);
-        }
-      } catch (e) {
-        // Silently fail, editor is still focused
+    // Clear any pending focus request (use when title gets focus instead)
+    clearPendingFocus: () => {
+      log('clearPendingFocus called');
+      pendingFocusRequest.current = false;
+    },
+    // Request focus synchronously - must be called in user gesture context
+    // This triggers the native WebView requestFocus which shows the keyboard
+    requestFocusSync: () => {
+      log('requestFocusSync called');
+      const webview = (editor as any).webviewRef?.current;
+      if (webview) {
+        // Call requestFocus synchronously to show keyboard (iOS requirement)
+        webview.requestFocus();
+        // Then focus the editor content
+        editor.focus('end');
       }
+    },
+    // Mark that focus should happen when editable becomes true
+    markPendingFocus: () => {
+      log('markPendingFocus called');
+      pendingFocusRequest.current = true;
     },
     // Force scroll to cursor position
     scrollToCursor: () => {
-      editor.focus();
+      // Check if editor has focus - if not, don't scroll (avoid stealing focus from title)
+      const editorState = editor.getEditorState();
+      if (!editorState.isFocused) {
+        log('scrollToCursor: editor not focused, skipping');
+        return;
+      }
+
+      log('scrollToCursor: scrolling cursor into view');
 
       // Inject JavaScript to scroll the cursor into view in the webview
       try {
@@ -252,23 +237,36 @@ export const RichTextEditor = forwardRef(({
         if (webview && typeof webview.injectJavaScript === 'function') {
           webview.injectJavaScript(`
             (function() {
-              const selection = window.getSelection();
-              if (!selection || selection.rangeCount === 0) return;
-
-              const range = selection.getRangeAt(0);
-              const element = range.startContainer.nodeType === 3
-                ? range.startContainer.parentElement
-                : range.startContainer;
-
-              if (element && element.scrollIntoView) {
-                element.scrollIntoView({ behavior: 'auto', block: 'center' });
-              }
-
-              // Also try ProseMirror scrollIntoView
+              // Use ProseMirror's built-in scrollIntoView first
               if (window.editor?.view) {
                 window.editor.view.dispatch(
                   window.editor.view.state.tr.scrollIntoView()
                 );
+              }
+
+              // Also scroll the selection into view
+              const selection = window.getSelection();
+              if (!selection || selection.rangeCount === 0) return;
+
+              const range = selection.getRangeAt(0);
+
+              // Get the cursor position rect
+              const rect = range.getBoundingClientRect();
+              if (rect) {
+                // Calculate if cursor is visible considering keyboard
+                const viewportHeight = window.innerHeight;
+                const cursorBottom = rect.bottom;
+
+                // If cursor is below the middle of the viewport, scroll it up
+                if (cursorBottom > viewportHeight * 0.6) {
+                  const element = range.startContainer.nodeType === 3
+                    ? range.startContainer.parentElement
+                    : range.startContainer;
+
+                  if (element && element.scrollIntoView) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }
               }
             })();
             true;
@@ -279,23 +277,6 @@ export const RichTextEditor = forwardRef(({
       }
     },
   }));
-
-  // Double-press handler for entering edit mode from read-only
-  const handlePress = () => {
-    const now = Date.now();
-    const DOUBLE_PRESS_DELAY = 300; // ms
-
-    if (lastTap.current && (now - lastTap.current) < DOUBLE_PRESS_DELAY) {
-      // Double press detected
-      if (onDoublePress) {
-        onDoublePress();
-      }
-      lastTap.current = null;
-    } else {
-      // Single press
-      lastTap.current = now;
-    }
-  };
 
   useEffect(() => {
     // Subscribe to content changes with debouncing
@@ -322,75 +303,55 @@ export const RichTextEditor = forwardRef(({
     isLocalChange.current = false;
   }, [value, editor]);
 
-  // Track editable state transitions (don't auto-focus - let user tap where they want)
+  // Handle transition to editable UI mode
   useEffect(() => {
-    if (wasReadOnly.current && editable) {
-      // Don't auto-focus here - user may be focusing title input or another element
-      // They can tap the editor to focus it
-      wasReadOnly.current = false;
-    } else if (!editable) {
-      wasReadOnly.current = true;
+    log('editable useEffect', {
+      prevEditable: prevEditable.current,
+      editable,
+      pendingFocusRequest: pendingFocusRequest.current
+    });
+
+    if (!prevEditable.current && editable) {
+      // Just became editable UI mode
+      // If pendingFocusRequest is set, the editor already has focus from user tap
+      // Don't call editor.focus() - it would move cursor to end
+      if (pendingFocusRequest.current) {
+        pendingFocusRequest.current = false;
+        log('Edit mode activated, editor already focused from tap');
+        // Editor already has focus and cursor is at tap position - do nothing
+      }
+    } else if (prevEditable.current && !editable) {
+      // Just became read-only - blur the editor
+      log('Became read-only, blurring');
+      editor.blur();
     }
+
+    prevEditable.current = editable;
   }, [editable, editor]);
 
-  // Track touch start position to differentiate taps from scrolls
-  const handleTouchStart = (e: any) => {
-    const touch = e.nativeEvent.touches?.[0] || e.nativeEvent;
-    touchStartX.current = touch.pageX;
-    touchStartY.current = touch.pageY;
-  };
-
-  // Handle touch events for tap detection without triggering on scroll
-  const handleTouchEnd = (e: any) => {
-    if (!editable) {
-      const touch = e.nativeEvent.changedTouches?.[0] || e.nativeEvent;
-      const endX = touch.pageX;
-      const endY = touch.pageY;
-
-      // Calculate distance moved - if significant, it was a scroll not a tap
-      const SCROLL_THRESHOLD = 10; // pixels
-      const deltaX = Math.abs(endX - (touchStartX.current || 0));
-      const deltaY = Math.abs(endY - (touchStartY.current || 0));
-
-      // Only trigger edit mode if it was a tap (minimal movement)
-      if (deltaX < SCROLL_THRESHOLD && deltaY < SCROLL_THRESHOLD) {
-        if (onPress) {
-          // Calculate coordinates relative to container for cursor positioning
-          const layout = containerLayout.current;
-          if (layout) {
-            const relativeX = endX - layout.x;
-            const relativeY = endY - layout.y;
-            onPress({ x: relativeX, y: relativeY });
-          } else {
-            onPress();
-          }
-        } else if (onDoublePress) {
-          // Fallback to double-press behavior if onPress not provided
-          handlePress();
-        }
+  // Subscribe to editor focus state changes
+  // When user taps editor in read-only UI mode, detect it and enter edit mode
+  useEffect(() => {
+    // Check if editor focus changed - if focused while in read-only UI mode, trigger onPress
+    const checkFocus = () => {
+      const state = editor.getEditorState();
+      if (state.isFocused && !editable && onPress) {
+        log('Editor focused while in read-only UI mode, triggering onPress');
+        // Don't blur - let the focus stay so keyboard shows
+        // Cursor is already at tap position - just mark that we triggered edit mode
+        pendingFocusRequest.current = true;
+        onPress();
       }
-    }
+    };
 
-    // Reset touch tracking
-    touchStartX.current = null;
-    touchStartY.current = null;
-  };
+    // Poll for focus changes (editor state subscription)
+    const interval = setInterval(checkFocus, 100);
 
-  // Capture container layout for coordinate calculations
-  const handleLayout = () => {
-    containerRef.current?.measureInWindow((x, y, width, height) => {
-      containerLayout.current = { x, y, width, height };
-    });
-  };
+    return () => clearInterval(interval);
+  }, [editable, editor, onPress]);
 
   return (
-    <View
-      ref={containerRef}
-      style={styles.container}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onLayout={handleLayout}
-    >
+    <View ref={containerRef} style={styles.container}>
       <RichText
         editor={editor}
         showsVerticalScrollIndicator={true}

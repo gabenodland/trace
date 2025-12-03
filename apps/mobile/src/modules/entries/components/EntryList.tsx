@@ -24,6 +24,7 @@ interface EntryListProps {
   onMentionPress?: (mention: string) => void;
   onCategoryPress?: (categoryId: string | null, categoryName: string) => void;
   onMove?: (entryId: string) => void;
+  onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
   onResolveConflict?: (entryId: string) => void; // Dismiss conflict banner
@@ -33,7 +34,7 @@ interface EntryListProps {
   displayMode?: EntryDisplayMode; // Display mode for entry items
 }
 
-export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, onMove, onDelete, onPin, onResolveConflict, ListHeaderComponent, categories, locations, displayMode }: EntryListProps) {
+export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, onMove, onCopy, onDelete, onPin, onResolveConflict, ListHeaderComponent, categories, locations, displayMode }: EntryListProps) {
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
   // Create a lookup map for categories (using full_path)
@@ -69,6 +70,7 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
             onMentionPress={onMentionPress}
             onCategoryPress={onCategoryPress}
             onMove={onMove}
+            onCopy={onCopy}
             onDelete={onDelete}
             onPin={onPin}
             onResolveConflict={onResolveConflict}
@@ -114,6 +116,7 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
           onMentionPress={onMentionPress}
           onCategoryPress={onCategoryPress}
           onMove={onMove}
+          onCopy={onCopy}
           onDelete={onDelete}
           onPin={onPin}
           onResolveConflict={onResolveConflict}

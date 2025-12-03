@@ -10,6 +10,7 @@ import {
   getEntry,
   updateEntry,
   deleteEntry,
+  copyEntry,
   getUnsyncedCount,
   getTags,
   getMentions,
@@ -104,6 +105,25 @@ function useDeleteEntryMutation() {
 }
 
 /**
+ * Internal: Mutation hook for copying an entry
+ */
+function useCopyEntryMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, gpsCoords }: { id: string; gpsCoords?: { latitude: number; longitude: number; accuracy?: number } }) =>
+      copyEntry(id, gpsCoords),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
+      queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+      queryClient.invalidateQueries({ queryKey: ['mentions'] });
+    },
+  });
+}
+
+/**
  * SINGLE SOURCE OF TRUTH: Main hook for entry operations (mobile version)
  * Uses local SQLite database for offline-first functionality
  */
@@ -112,6 +132,7 @@ export function useEntries(filter?: MobileEntryFilter) {
   const createMutation = useCreateEntryMutation();
   const updateMutation = useUpdateEntryMutation();
   const deleteMutation = useDeleteEntryMutation();
+  const copyMutation = useCopyEntryMutation();
 
   return {
     // Data
@@ -131,6 +152,10 @@ export function useEntries(filter?: MobileEntryFilter) {
 
       deleteEntry: async (id: string) => {
         return deleteMutation.mutateAsync(id);
+      },
+
+      copyEntry: async (id: string, gpsCoords?: { latitude: number; longitude: number; accuracy?: number }) => {
+        return copyMutation.mutateAsync({ id, gpsCoords });
       },
     },
 
