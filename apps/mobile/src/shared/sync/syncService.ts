@@ -18,8 +18,8 @@ import type { QueryClient } from '@tanstack/react-query';
 import { uploadPhotoToSupabase, downloadPhotosInBackground } from '../../modules/photos/mobilePhotoApi';
 import { createScopedLogger } from '../utils/logger';
 
-// Create scoped logger for sync operations
-const log = createScopedLogger('Sync');
+// Create scoped logger for sync operations with sync icon
+const log = createScopedLogger('Sync', '🔄');
 
 // ============================================================================
 // TYPES
@@ -181,7 +181,26 @@ class SyncService {
       // Only update if server is newer
       if (serverTime > localTime) {
         await localDB.updateEntry(entryId, {
-          ...serverEntry,
+          title: serverEntry.title,
+          content: serverEntry.content,
+          category_id: serverEntry.category_id,
+          tags: serverEntry.tags || [],
+          mentions: serverEntry.mentions || [],
+          entry_date: serverEntry.entry_date,
+          entry_latitude: serverEntry.entry_latitude,
+          entry_longitude: serverEntry.entry_longitude,
+          location_accuracy: serverEntry.location_accuracy,
+          location_id: serverEntry.location_id,
+          status: (serverEntry.status as Entry['status']) || 'none',
+          due_date: serverEntry.due_date,
+          completed_at: serverEntry.completed_at,
+          attachments: serverEntry.attachments,
+          priority: serverEntry.priority || 0,
+          rating: serverEntry.rating || 0,
+          is_pinned: serverEntry.is_pinned || false,
+          updated_at: serverEntry.updated_at,
+          deleted_at: serverEntry.deleted_at,
+          version: serverEntry.version || 1,
           synced: 1,
           sync_action: null,
           base_version: serverEntry.version || 1,
@@ -247,15 +266,11 @@ class SyncService {
     }
 
     this.isSyncing = true;
-    log.group(`Sync (${trigger})`);
-    log.info('Starting sync', { trigger, options });
-    log.time('Total sync');
+    log.info(`SYNC STARTED (${trigger})`);
 
     try {
       // PUSH: Local → Server
       if (options.push) {
-        log.time('Push phase');
-
         // Step 1: Push categories (entries depend on them)
         const categoryResult = await this.pushCategories();
         result.pushed.categories = categoryResult.success;
@@ -281,12 +296,15 @@ class SyncService {
         result.pushed.entries += deleteResult.success;
         result.errors.entries += deleteResult.errors;
 
-        log.timeEnd('Push phase');
+        // Log push summary
+        const totalPushed = result.pushed.entries + result.pushed.categories + result.pushed.locations + result.pushed.photos;
+        if (totalPushed > 0) {
+          log.info(`PUSHED ${totalPushed} items`, result.pushed);
+        }
       }
 
       // PULL: Server → Local
       if (options.pull) {
-        log.time('Pull phase');
         const forceFullPull = options.forceFullPull || false;
         const pullStartTime = new Date();
 
@@ -309,7 +327,11 @@ class SyncService {
         // Save pull timestamp for incremental sync
         await this.saveLastPullTimestamp(pullStartTime);
 
-        log.timeEnd('Pull phase');
+        // Log pull summary
+        const totalPulled = result.pulled.entries + result.pulled.categories + result.pulled.locations + result.pulled.photos;
+        if (totalPulled > 0) {
+          log.info(`PULLED ${totalPulled} items`, result.pulled);
+        }
       }
 
       // Invalidate React Query cache
@@ -324,23 +346,18 @@ class SyncService {
       // Log to sync_logs table
       await this.logSyncResult(trigger, result);
 
-      log.timeEnd('Total sync');
-      log.success('Sync completed', {
-        duration: `${(result.duration / 1000).toFixed(1)}s`,
-        pushed: result.pushed,
-        pulled: result.pulled,
-        errors: result.errors,
-      });
+      const totalPushed = result.pushed.entries + result.pushed.categories + result.pushed.locations + result.pushed.photos;
+      const totalPulled = result.pulled.entries + result.pulled.categories + result.pulled.locations + result.pulled.photos;
+      log.info(`SYNC COMPLETE in ${(result.duration / 1000).toFixed(1)}s | pushed: ${totalPushed} | pulled: ${totalPulled}`);
 
     } catch (error) {
       result.duration = Date.now() - startTime;
-      log.error('Sync failed', error);
+      log.error('SYNC FAILED', error);
 
       await localDB.addSyncLog('error', 'sync', `Sync failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       this.isSyncing = false;
       this.lastSyncTime = Date.now();
-      log.groupEnd();
     }
 
     return result;
@@ -353,13 +370,11 @@ class SyncService {
   private async pushCategories(): Promise<{ success: number; errors: number }> {
     const unsyncedCategories = await localDB.getUnsyncedCategories();
     if (unsyncedCategories.length === 0) {
-      log.debug('No categories to push');
       return { success: 0, errors: 0 };
     }
 
     // Sort by depth (parents before children)
     const sortedCategories = [...unsyncedCategories].sort((a, b) => a.depth - b.depth);
-    log.debug('Pushing categories', { count: sortedCategories.length });
 
     let success = 0;
     let errors = 0;
@@ -375,18 +390,14 @@ class SyncService {
       }
     }
 
-    log.debug('Categories pushed', { success, errors });
     return { success, errors };
   }
 
   private async pushLocations(): Promise<{ success: number; errors: number }> {
     const unsyncedLocations = await localDB.getUnsyncedLocations();
     if (unsyncedLocations.length === 0) {
-      log.debug('No locations to push');
       return { success: 0, errors: 0 };
     }
-
-    log.debug('Pushing locations', { count: unsyncedLocations.length });
 
     let success = 0;
     let errors = 0;
@@ -401,7 +412,6 @@ class SyncService {
       }
     }
 
-    log.debug('Locations pushed', { success, errors });
     return { success, errors };
   }
 
@@ -410,11 +420,8 @@ class SyncService {
     const entriesToPush = unsyncedEntries.filter(e => e.sync_action !== 'delete');
 
     if (entriesToPush.length === 0) {
-      log.debug('No entries to push');
       return { success: 0, errors: 0 };
     }
-
-    log.debug('Pushing entries', { count: entriesToPush.length });
 
     let success = 0;
     let errors = 0;
@@ -430,7 +437,6 @@ class SyncService {
       }
     }
 
-    log.debug('Entries pushed', { success, errors });
     return { success, errors };
   }
 
@@ -439,11 +445,8 @@ class SyncService {
     const entriesToDelete = unsyncedEntries.filter(e => e.sync_action === 'delete');
 
     if (entriesToDelete.length === 0) {
-      log.debug('No entry deletes to push');
       return { success: 0, errors: 0 };
     }
-
-    log.debug('Pushing entry deletes', { count: entriesToDelete.length });
 
     let success = 0;
     let errors = 0;
@@ -459,7 +462,6 @@ class SyncService {
       }
     }
 
-    log.debug('Entry deletes pushed', { success, errors });
     return { success, errors };
   }
 
@@ -570,8 +572,6 @@ class SyncService {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { new: 0, updated: 0 };
 
-    log.debug('Pulling categories');
-
     const { data: remoteCategories, error } = await supabase
       .from('categories')
       .select('*')
@@ -623,15 +623,12 @@ class SyncService {
       }
     }
 
-    log.debug('Categories pulled', { new: newCount, updated: updatedCount });
     return { new: newCount, updated: updatedCount };
   }
 
   private async pullLocations(forceFullPull: boolean): Promise<{ new: number; updated: number }> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { new: 0, updated: 0 };
-
-    log.debug('Pulling locations');
 
     const { data: remoteLocations, error } = await supabase
       .from('locations')
@@ -657,7 +654,24 @@ class SyncService {
         const localLocation = await localDB.getLocation(remoteLocation.location_id);
 
         const location: LocationEntity = {
-          ...remoteLocation,
+          location_id: remoteLocation.location_id,
+          user_id: remoteLocation.user_id,
+          name: remoteLocation.name,
+          latitude: remoteLocation.latitude,
+          longitude: remoteLocation.longitude,
+          source: remoteLocation.source,
+          address: remoteLocation.address,
+          neighborhood: remoteLocation.neighborhood,
+          postal_code: remoteLocation.postal_code,
+          city: remoteLocation.city,
+          subdivision: remoteLocation.subdivision,
+          region: remoteLocation.region,
+          country: remoteLocation.country,
+          mapbox_place_id: remoteLocation.mapbox_place_id,
+          foursquare_fsq_id: remoteLocation.foursquare_fsq_id,
+          created_at: remoteLocation.created_at || new Date().toISOString(),
+          updated_at: remoteLocation.updated_at || new Date().toISOString(),
+          deleted_at: remoteLocation.deleted_at,
           synced: 1,
           sync_action: null,
         };
@@ -685,7 +699,6 @@ class SyncService {
       }
     }
 
-    log.debug('Locations pulled', { new: newCount, updated: updatedCount });
     return { new: newCount, updated: updatedCount };
   }
 
@@ -696,17 +709,10 @@ class SyncService {
     // Check if database is empty - force full pull
     const entryCount = await localDB.getAllEntries();
     if (entryCount.length === 0 && !forceFullPull) {
-      log.debug('Database is empty, forcing full pull');
       forceFullPull = true;
     }
 
     const lastPullTimestamp = forceFullPull ? null : await this.getLastPullTimestamp();
-
-    if (lastPullTimestamp) {
-      log.debug('Incremental pull', { since: lastPullTimestamp.toISOString() });
-    } else {
-      log.debug('Full pull');
-    }
 
     let query = supabase
       .from('entries')
@@ -729,8 +735,6 @@ class SyncService {
     if (!remoteEntries || remoteEntries.length === 0) {
       return { new: 0, updated: 0, deleted: 0 };
     }
-
-    log.debug('Processing entries', { count: remoteEntries.length });
 
     let newCount = 0;
     let updatedCount = 0;
@@ -761,7 +765,7 @@ class SyncService {
           entry_longitude: remoteEntry.entry_longitude || null,
           location_accuracy: remoteEntry.location_accuracy || null,
           location_id: remoteEntry.location_id || null,
-          status: remoteEntry.status || 'none',
+          status: (remoteEntry.status as Entry['status']) || 'none',
           due_date: remoteEntry.due_date,
           completed_at: remoteEntry.completed_at,
           entry_date: remoteEntry.entry_date || remoteEntry.created_at,
@@ -777,8 +781,8 @@ class SyncService {
           sync_action: null,
           version: remoteEntry.version || 1,
           base_version: remoteEntry.version || 1,
-          conflict_status: remoteEntry.conflict_status || null,
-          conflict_backup: remoteEntry.conflict_backup || null,
+          conflict_status: (remoteEntry.conflict_status as Entry['conflict_status']) || null,
+          conflict_backup: typeof remoteEntry.conflict_backup === 'string' ? remoteEntry.conflict_backup : null,
           last_edited_by: remoteEntry.last_edited_by || null,
           last_edited_device: remoteEntry.last_edited_device || null,
         };
@@ -788,13 +792,26 @@ class SyncService {
           await localDB.markSynced(entry.entry_id);
           newCount++;
         } else {
-          const remoteTime = new Date(remoteEntry.updated_at).getTime();
-          const localTime = new Date(localEntry.updated_at).getTime();
+          // Skip if local has unsynced changes (don't overwrite pending edits)
+          if (localEntry.synced === 0) {
+            log.debug('Skipping entry with unsynced local changes', { entryId: entry.entry_id });
+            continue;
+          }
 
-          if (remoteTime > localTime) {
+          // Use version comparison instead of timestamp to avoid false updates
+          // when server auto-updates updated_at via trigger
+          const remoteVersion = remoteEntry.version || 1;
+          const localBaseVersion = localEntry.base_version || 1;
+
+          if (remoteVersion > localBaseVersion) {
             await localDB.updateEntry(entry.entry_id, entry);
             await localDB.markSynced(entry.entry_id);
             updatedCount++;
+            log.debug('Entry updated from server', {
+              entryId: entry.entry_id,
+              remoteVersion,
+              localBaseVersion
+            });
           }
         }
       } catch (error) {
@@ -802,15 +819,12 @@ class SyncService {
       }
     }
 
-    log.debug('Entries pulled', { new: newCount, updated: updatedCount, deleted: deletedCount });
     return { new: newCount, updated: updatedCount, deleted: deletedCount };
   }
 
   private async pullPhotos(forceFullPull: boolean): Promise<{ new: number; updated: number }> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { new: 0, updated: 0 };
-
-    log.debug('Pulling photos');
 
     const { data: remotePhotos, error } = await supabase
       .from('photos')
@@ -843,11 +857,11 @@ class SyncService {
           entry_id: remotePhoto.entry_id,
           user_id: remotePhoto.user_id,
           file_path: remotePhoto.file_path,
-          local_path: localPhoto?.local_path || null,
+          local_path: localPhoto?.local_path || undefined,
           mime_type: remotePhoto.mime_type,
-          file_size: remotePhoto.file_size || null,
-          width: remotePhoto.width || null,
-          height: remotePhoto.height || null,
+          file_size: remotePhoto.file_size || undefined,
+          width: remotePhoto.width || undefined,
+          height: remotePhoto.height || undefined,
           position: remotePhoto.position,
           created_at: new Date(remotePhoto.created_at).getTime(),
           updated_at: new Date(remotePhoto.updated_at).getTime(),
@@ -874,7 +888,6 @@ class SyncService {
       }
     }
 
-    log.debug('Photos pulled', { new: newCount, updated: updatedCount });
     return { new: newCount, updated: updatedCount };
   }
 
@@ -923,8 +936,8 @@ class SyncService {
       deleted_at: entry.deleted_at && (typeof entry.deleted_at === 'number'
         ? new Date(entry.deleted_at).toISOString()
         : entry.deleted_at),
-      version: entry.version || 1,
-      base_version: entry.base_version || 1,
+      // Note: version is NOT sent - server trigger auto-increments it on content changes
+      // base_version is used for conflict detection on the client side only
       conflict_status: entry.conflict_status || null,
       conflict_backup: entry.conflict_backup || null,
       last_edited_by: entry.last_edited_by || null,
@@ -987,16 +1000,21 @@ class SyncService {
         }
       }
 
-      const { error } = await supabase
+      const { data: upsertedEntry, error } = await supabase
         .from('entries')
-        .upsert(supabaseData, { onConflict: 'entry_id' });
+        .upsert(supabaseData, { onConflict: 'entry_id' })
+        .select('version')
+        .single();
 
       if (error) {
         throw new Error(`Supabase upsert failed: ${error.message}`);
       }
 
+      // Update local base_version to match server's new version (set by trigger)
+      const serverVersion = upsertedEntry?.version || 1;
       await localDB.updateEntry(entry.entry_id, {
-        base_version: entry.version || 1,
+        version: serverVersion,
+        base_version: serverVersion,
         synced: 1,
         sync_action: null,
       });
@@ -1129,40 +1147,34 @@ class SyncService {
 
       this.realtimeChannel = supabase
         .channel('db-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'entries', filter: `user_id=eq.${user.id}` }, (payload) => {
-          log.debug('Realtime entry update', { event: payload.eventType });
-          this.handleRealtimeChange();
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'entries', filter: `user_id=eq.${user.id}` }, () => {
+          this.handleRealtimeChange('entries');
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: `user_id=eq.${user.id}` }, (payload) => {
-          log.debug('Realtime category update', { event: payload.eventType });
-          this.handleRealtimeChange();
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: `user_id=eq.${user.id}` }, () => {
+          this.handleRealtimeChange('categories');
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'photos', filter: `user_id=eq.${user.id}` }, (payload) => {
-          log.debug('Realtime photo update', { event: payload.eventType });
-          this.handleRealtimeChange();
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'photos', filter: `user_id=eq.${user.id}` }, () => {
+          this.handleRealtimeChange('photos');
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'locations', filter: `user_id=eq.${user.id}` }, (payload) => {
-          log.debug('Realtime location update', { event: payload.eventType });
-          this.handleRealtimeChange();
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'locations', filter: `user_id=eq.${user.id}` }, () => {
+          this.handleRealtimeChange('locations');
         })
         .subscribe();
-
-      log.info('Realtime subscription active');
     } catch (error) {
       log.error('Failed to set up realtime subscription', error);
     }
   }
 
-  private handleRealtimeChange(): void {
+  private handleRealtimeChange(table: string): void {
     if (this.realtimeDebounceTimer) {
       clearTimeout(this.realtimeDebounceTimer);
     }
 
     this.realtimeDebounceTimer = setTimeout(() => {
       if (this.isSyncing) {
-        log.debug('Realtime sync skipped (already syncing)');
         return;
       }
+      log.info(`Server change detected (${table}), syncing...`);
       this.fullSync('realtime').catch(console.error);
     }, 2000);
   }

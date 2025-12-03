@@ -21,7 +21,7 @@ import { DatabaseInfoScreen } from "./src/screens/DatabaseInfoScreen";
 import { LocationsScreen } from "./src/screens/LocationsScreen";
 import { MapScreen } from "./src/screens/MapScreen";
 import { localDB } from "./src/shared/db/localDB";
-import { syncQueue } from "./src/shared/sync/syncQueue";
+import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
 
 // Create a query client
@@ -75,16 +75,10 @@ function AuthGate() {
       localDB.init()
         .then(() => {
           console.log('✅ Database initialized');
-          return syncQueue.initialize(queryClient); // Pass queryClient for cache invalidation
-        })
-        .then(async () => {
-          console.log('✅ Sync queue initialized');
-
-          // Note: syncQueue.initialize() already triggers an initial sync which includes pull
-          // No need to manually call pullFromSupabase here
+          return initializeSync(queryClient);
         })
         .then(() => {
-          console.log('✅ Initialization complete');
+          console.log('✅ Sync initialized');
           setDbInitialized(true);
         })
         .catch((error) => {
@@ -95,7 +89,7 @@ function AuthGate() {
     // Cleanup on unmount
     return () => {
       if (dbInitialized) {
-        syncQueue.destroy();
+        destroySync();
       }
     };
   }, [isAuthenticated, dbInitialized, queryClient]);

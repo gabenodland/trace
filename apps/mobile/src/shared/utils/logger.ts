@@ -137,28 +137,79 @@ export const logger = new Logger();
 export type { LogContext };
 
 /**
- * Create a scoped logger with a fixed prefix
+ * Create a scoped logger with a fixed prefix and optional custom icon
  * Useful for logging from a specific module/component
  *
  * @example
  * const log = createScopedLogger('SyncQueue');
  * log.info('Starting sync'); // Output: ℹ️ [SyncQueue] Starting sync
+ *
+ * const syncLog = createScopedLogger('Sync', '🔄');
+ * syncLog.info('Starting sync'); // Output: 🔄 [Sync] Starting sync
  */
-export function createScopedLogger(scope: string) {
+export function createScopedLogger(scope: string, icon?: string) {
+  const formatMessage = (message: string) => {
+    return icon ? `${icon} [${scope}] ${message}` : `[${scope}] ${message}`;
+  };
+
   return {
-    debug: (message: string, context?: LogContext) =>
-      logger.debug(`[${scope}] ${message}`, context),
-    info: (message: string, context?: LogContext) =>
-      logger.info(`[${scope}] ${message}`, context),
-    warn: (message: string, context?: LogContext) =>
-      logger.warn(`[${scope}] ${message}`, context),
-    error: (message: string, error?: Error | unknown, context?: LogContext) =>
-      logger.error(`[${scope}] ${message}`, error, context),
-    success: (message: string, context?: LogContext) =>
-      logger.success(`[${scope}] ${message}`, context),
+    debug: (message: string, context?: LogContext) => {
+      if (icon) {
+        // Use console directly to avoid double emoji
+        if (logger['currentLevel'] <= LogLevel.DEBUG) {
+          console.log(formatMessage(message), context || '');
+        }
+      } else {
+        logger.debug(`[${scope}] ${message}`, context);
+      }
+    },
+    info: (message: string, context?: LogContext) => {
+      if (icon) {
+        if (logger['currentLevel'] <= LogLevel.INFO) {
+          console.log(formatMessage(message), context || '');
+        }
+      } else {
+        logger.info(`[${scope}] ${message}`, context);
+      }
+    },
+    warn: (message: string, context?: LogContext) => {
+      if (icon) {
+        if (logger['currentLevel'] <= LogLevel.WARN) {
+          console.warn(formatMessage(message), context || '');
+        }
+      } else {
+        logger.warn(`[${scope}] ${message}`, context);
+      }
+    },
+    error: (message: string, error?: Error | unknown, context?: LogContext) => {
+      if (icon) {
+        if (logger['currentLevel'] <= LogLevel.ERROR) {
+          console.error(formatMessage(message), error || '', context || '');
+        }
+      } else {
+        logger.error(`[${scope}] ${message}`, error, context);
+      }
+    },
+    success: (message: string, context?: LogContext) => {
+      if (icon) {
+        if (logger['currentLevel'] <= LogLevel.INFO) {
+          console.log(formatMessage(message), context || '');
+        }
+      } else {
+        logger.success(`[${scope}] ${message}`, context);
+      }
+    },
     time: (label: string) => logger.time(`[${scope}] ${label}`),
     timeEnd: (label: string) => logger.timeEnd(`[${scope}] ${label}`),
-    group: (label: string) => logger.group(`[${scope}] ${label}`),
+    group: (label: string) => {
+      if (icon) {
+        if (logger['currentLevel'] <= LogLevel.DEBUG) {
+          console.group(formatMessage(label));
+        }
+      } else {
+        logger.group(`[${scope}] ${label}`);
+      }
+    },
     groupEnd: () => logger.groupEnd(),
   };
 }
