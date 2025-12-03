@@ -432,12 +432,12 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         // Continue without GPS - not critical
       }
 
-      // Copy the entry
-      const copiedEntry = await entryMutations.copyEntry(entryId, gpsCoords);
+      // Copy the entry (returns in-memory data, not saved to DB yet)
+      const copiedEntryData = await entryMutations.copyEntry(entryId, gpsCoords);
 
-      // Navigate to the copied entry
+      // Navigate to capture form with copied data (will be saved when user clicks save)
       navigate("capture", {
-        entryId: copiedEntry.entry_id,
+        copiedEntryData,
         returnContext: {
           screen: "inbox",
           categoryId: selectedCategoryId,

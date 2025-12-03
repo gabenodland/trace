@@ -15,12 +15,13 @@ import {
   getTags,
   getMentions,
   MobileEntryFilter,
+  CopiedEntryData,
 } from './mobileEntryApi';
 import { CreateEntryInput, Entry } from '@trace/core';
 import * as entryHelpers from '@trace/core/src/modules/entries/entryHelpers';
 
-// Re-export MobileEntryFilter for consumers
-export type { MobileEntryFilter } from './mobileEntryApi';
+// Re-export types for consumers
+export type { MobileEntryFilter, CopiedEntryData } from './mobileEntryApi';
 
 /**
  * Internal: Query hook for fetching entries from local SQLite
@@ -106,20 +107,15 @@ function useDeleteEntryMutation() {
 
 /**
  * Internal: Mutation hook for copying an entry
+ * Note: copyEntry no longer saves to DB - it returns in-memory data for CaptureForm
+ * No query invalidation needed since nothing is persisted yet
  */
 function useCopyEntryMutation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ id, gpsCoords }: { id: string; gpsCoords?: { latitude: number; longitude: number; accuracy?: number } }) =>
       copyEntry(id, gpsCoords),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entries'] });
-      queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
-      queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
-      queryClient.invalidateQueries({ queryKey: ['tags'] });
-      queryClient.invalidateQueries({ queryKey: ['mentions'] });
-    },
+    // No onSuccess - entry is not saved to DB yet, so no queries to invalidate
+    // The actual save happens in CaptureForm when user clicks save
   });
 }
 
@@ -154,7 +150,7 @@ export function useEntries(filter?: MobileEntryFilter) {
         return deleteMutation.mutateAsync(id);
       },
 
-      copyEntry: async (id: string, gpsCoords?: { latitude: number; longitude: number; accuracy?: number }) => {
+      copyEntry: async (id: string, gpsCoords?: { latitude: number; longitude: number; accuracy?: number }): Promise<CopiedEntryData> => {
         return copyMutation.mutateAsync({ id, gpsCoords });
       },
     },

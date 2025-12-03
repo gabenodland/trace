@@ -1,6 +1,7 @@
 import { View, StyleSheet } from "react-native";
 import { CaptureForm, type ReturnContext } from "../modules/entries/components/CaptureForm";
 import { type Location as LocationType } from "@trace/core";
+import type { CopiedEntryData } from "../modules/entries/mobileEntryHooks";
 
 // Re-export ReturnContext for backwards compatibility
 export type { ReturnContext };
@@ -13,9 +14,11 @@ interface EntryScreenProps {
   initialDate?: string;
   initialLocation?: LocationType;
   returnContext?: ReturnContext;
+  /** Copied entry data - when provided, opens form with pre-filled data (not saved to DB yet) */
+  copiedEntryData?: CopiedEntryData;
 }
 
-export function EntryScreen({ entryId, initialCategoryId, initialCategoryName, initialContent, initialDate, initialLocation, returnContext }: EntryScreenProps = {}) {
+export function EntryScreen({ entryId, initialCategoryId, initialCategoryName, initialContent, initialDate, initialLocation, returnContext, copiedEntryData }: EntryScreenProps = {}) {
   return (
     <View style={styles.container}>
       <CaptureForm
@@ -26,6 +29,7 @@ export function EntryScreen({ entryId, initialCategoryId, initialCategoryName, i
         initialDate={initialDate}
         initialLocation={initialLocation}
         returnContext={returnContext}
+        copiedEntryData={copiedEntryData}
       />
     </View>
   );

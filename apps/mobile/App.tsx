@@ -173,6 +173,7 @@ function AuthGate() {
             initialDate={navParams.initialDate}
             initialLocation={navParams.initialLocation}
             returnContext={navParams.returnContext}
+            copiedEntryData={navParams.copiedEntryData}
           />
         );
       case "inbox":

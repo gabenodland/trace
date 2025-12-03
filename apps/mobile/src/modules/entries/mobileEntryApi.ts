@@ -16,8 +16,10 @@ import { localDB } from '../../shared/db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
+import * as FileSystem from 'expo-file-system/legacy';
 import { triggerPushSync, refreshEntryFromServer } from '../../shared/sync';
 import { createScopedLogger } from '../../shared/utils/logger';
+import type { PendingPhoto } from './components/hooks/useCaptureFormState';
 
 const log = createScopedLogger('EntryApi');
 
@@ -249,13 +251,24 @@ export async function deleteEntry(id: string): Promise<void> {
 }
 
 /**
- * Copy an entry (offline-first)
- * Creates a new entry with copied attributes, current date/time, and fresh GPS
+ * Result of copying an entry - returns unsaved entry data and copied photos
+ * Entry is NOT saved to database until user clicks save in CaptureForm
+ */
+export interface CopiedEntryData {
+  entry: Entry;
+  pendingPhotos: PendingPhoto[];
+  hasTime: boolean;
+}
+
+/**
+ * Copy an entry (in-memory only - not saved until user confirms)
+ * Creates a new entry object with copied attributes, current date/time, fresh GPS, and duplicated photos
+ * Does NOT save to database - returns data for CaptureForm to display and save later
  */
 export async function copyEntry(
   id: string,
   gpsCoords?: { latitude: number; longitude: number; accuracy?: number }
-): Promise<Entry> {
+): Promise<CopiedEntryData> {
   // Get the original entry
   const originalEntry = await localDB.getEntry(id);
   if (!originalEntry) throw new Error('Entry not found');
@@ -295,7 +308,7 @@ export async function copyEntry(
     ? `Copy of ${originalEntry.title}`
     : 'Copy of Untitled';
 
-  // Create the copied entry
+  // Create the copied entry (NOT saved to DB)
   const entry: Entry = {
     entry_id,
     user_id: user.id,
@@ -334,18 +347,94 @@ export async function copyEntry(
     last_edited_device: getDeviceName(),
   };
 
-  log.debug('Copying entry', {
+  // Copy photos from the original entry
+  const pendingPhotos = await copyPhotosForEntry(id, entry_id, user.id);
+
+  log.debug('Copying entry (in-memory)', {
     originalId: id,
     newId: entry_id,
     hasTime,
     hasGps: !!gpsCoords,
+    photoCount: pendingPhotos.length,
   });
 
-  // Save to SQLite immediately
-  const savedEntry = await localDB.saveEntry(entry);
+  // DO NOT save to database - return unsaved data for CaptureForm
+  return {
+    entry,
+    pendingPhotos,
+    hasTime,
+  };
+}
 
-  // Trigger sync in background
-  triggerPushSync();
+/**
+ * Copy photos from one entry to a new entry
+ * Duplicates the actual photo files to new paths and returns PendingPhoto objects
+ */
+async function copyPhotosForEntry(
+  originalEntryId: string,
+  newEntryId: string,
+  userId: string
+): Promise<PendingPhoto[]> {
+  const pendingPhotos: PendingPhoto[] = [];
 
-  return savedEntry;
+  try {
+    // Get photos from the original entry
+    const originalPhotos = await localDB.getPhotosForEntry(originalEntryId);
+
+    if (originalPhotos.length === 0) {
+      return pendingPhotos;
+    }
+
+    log.debug('Copying photos', { originalEntryId, newEntryId, count: originalPhotos.length });
+
+    // Create directory for new entry's photos
+    const newDirPath = `${FileSystem.documentDirectory}photos/${userId}/${newEntryId}/`;
+    await FileSystem.makeDirectoryAsync(newDirPath, { intermediates: true });
+
+    for (const photo of originalPhotos) {
+      // Generate new photo ID
+      const newPhotoId = generateUUID();
+
+      // Check if source file exists
+      if (!photo.local_path) {
+        log.warn('Photo has no local path, skipping', { photoId: photo.photo_id });
+        continue;
+      }
+
+      const sourceFileInfo = await FileSystem.getInfoAsync(photo.local_path);
+      if (!sourceFileInfo.exists) {
+        log.warn('Photo file not found, skipping', { photoId: photo.photo_id, path: photo.local_path });
+        continue;
+      }
+
+      // Copy the file to new location
+      const newLocalPath = `${newDirPath}${newPhotoId}.jpg`;
+      await FileSystem.copyAsync({
+        from: photo.local_path,
+        to: newLocalPath,
+      });
+
+      // Create pending photo object
+      const pendingPhoto: PendingPhoto = {
+        photoId: newPhotoId,
+        localPath: newLocalPath,
+        filePath: `${userId}/${newEntryId}/${newPhotoId}.jpg`,
+        mimeType: photo.mime_type || 'image/jpeg',
+        fileSize: photo.file_size || 0,
+        width: photo.width || 0,
+        height: photo.height || 0,
+        position: photo.position || pendingPhotos.length,
+      };
+
+      pendingPhotos.push(pendingPhoto);
+      log.debug('Photo copied', { originalId: photo.photo_id, newId: newPhotoId });
+    }
+
+    log.info('Photos copied successfully', { count: pendingPhotos.length });
+  } catch (error) {
+    log.error('Failed to copy photos', error);
+    // Don't throw - copying photos is non-critical, entry can still be created
+  }
+
+  return pendingPhotos;
 }

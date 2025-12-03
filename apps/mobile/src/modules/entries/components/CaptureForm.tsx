@@ -46,11 +46,19 @@ interface CaptureFormProps {
   initialDate?: string;
   initialLocation?: LocationType;
   returnContext?: ReturnContext;
+  /** Copied entry data - when provided, opens form with pre-filled data (not saved to DB yet) */
+  copiedEntryData?: {
+    entry: import('@trace/core').Entry;
+    pendingPhotos: import('./hooks/useCaptureFormState').PendingPhoto[];
+    hasTime: boolean;
+  };
 }
 
-export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, initialContent, initialDate, initialLocation, returnContext }: CaptureFormProps = {}) {
+export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, initialContent, initialDate, initialLocation, returnContext, copiedEntryData }: CaptureFormProps = {}) {
   // Determine if we're editing an existing entry or creating a new one
-  const isEditing = !!entryId;
+  // Note: copied entries are NOT editing - they're new entries with pre-filled data
+  const isEditing = !!entryId && !copiedEntryData;
+  const isCopiedEntry = !!copiedEntryData;
 
   // Get user settings for default GPS capture behavior
   const { settings } = useSettings();
@@ -86,7 +94,9 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const isInitialLoad = useRef(true); // Track if this is first load
   const [photoCount, setPhotoCount] = useState(0); // Track photo position for ordering
   const [photosCollapsed, setPhotosCollapsed] = useState(false); // Start expanded
-  const [tempEntryId] = useState(() => entryId || Crypto.randomUUID()); // Temp ID for new entries;
+  // For copied entries, use the pre-generated entry_id from copiedEntryData
+  // For new entries, generate a temp ID. For editing, use the existing entryId.
+  const [tempEntryId] = useState(() => copiedEntryData?.entry.entry_id || entryId || Crypto.randomUUID());
 
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
@@ -525,6 +535,78 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       isInitialLoad.current = false;
     }
   }, [entry, isEditing, categories]);
+
+  // Load copied entry data (for copy workflow - entry is NOT saved to DB yet)
+  useEffect(() => {
+    if (isCopiedEntry && copiedEntryData) {
+      const { entry: copiedEntry, pendingPhotos, hasTime } = copiedEntryData;
+
+      // Load all entry fields
+      updateField("title", copiedEntry.title || "");
+      updateField("content", copiedEntry.content);
+      updateField("categoryId", copiedEntry.category_id || null);
+      updateField("status", copiedEntry.status || "none");
+      updateField("dueDate", copiedEntry.due_date || null);
+      updateField("rating", copiedEntry.rating || 0);
+      updateField("priority", copiedEntry.priority || 0);
+      updateField("entryDate", copiedEntry.entry_date || new Date().toISOString());
+      updateField("includeTime", hasTime);
+
+      // Load location data if available
+      if (copiedEntry.location_id) {
+        getLocationById(copiedEntry.location_id).then(locationEntity => {
+          if (locationEntity) {
+            const location: LocationType = {
+              location_id: locationEntity.location_id,
+              latitude: locationEntity.latitude,
+              longitude: locationEntity.longitude,
+              name: locationEntity.name,
+              source: (locationEntity.source as any) || 'user_custom',
+              address: locationEntity.address || null,
+              neighborhood: locationEntity.neighborhood || null,
+              postalCode: locationEntity.postal_code || null,
+              city: locationEntity.city || null,
+              subdivision: locationEntity.subdivision || null,
+              region: locationEntity.region || null,
+              country: locationEntity.country || null,
+            };
+            updateField("locationData", location);
+            updateField("captureLocation", true);
+          }
+        }).catch(err => {
+          console.error('Failed to load location for copied entry:', err);
+        });
+      } else if (copiedEntry.entry_latitude && copiedEntry.entry_longitude) {
+        // Entry has GPS coordinates but no location_id
+        const gpsLocation: LocationType = {
+          latitude: copiedEntry.entry_latitude,
+          longitude: copiedEntry.entry_longitude,
+          name: null,
+          source: 'user_custom',
+        };
+        updateField("locationData", gpsLocation);
+        updateField("captureLocation", true);
+      }
+
+      // Look up category name
+      if (copiedEntry.category_id && categories.length > 0) {
+        const category = categories.find(c => c.category_id === copiedEntry.category_id);
+        updateField("categoryName", category?.name || null);
+      }
+
+      // Load the copied photos as pending photos
+      if (pendingPhotos.length > 0) {
+        // Add each photo to pending photos
+        for (const photo of pendingPhotos) {
+          addPendingPhoto(photo);
+        }
+        setPhotoCount(pendingPhotos.length);
+      }
+
+      // Mark initial load complete
+      isInitialLoad.current = false;
+    }
+  }, [isCopiedEntry, copiedEntryData, categories]);
 
   // Update original photo count when photos load
   useEffect(() => {
