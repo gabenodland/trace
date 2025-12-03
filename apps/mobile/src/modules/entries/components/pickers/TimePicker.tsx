@@ -3,6 +3,7 @@
  * Extracted from CaptureForm for maintainability
  */
 
+import { useState } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
@@ -14,8 +15,6 @@ interface TimePickerProps {
   entryDate: string;
   onEntryDateChange: (date: string) => void;
   onIncludeTimeChange: (include: boolean) => void;
-  showNativePicker: boolean;
-  onShowNativePickerChange: (show: boolean) => void;
 }
 
 export function TimePicker({
@@ -24,9 +23,10 @@ export function TimePicker({
   entryDate,
   onEntryDateChange,
   onIncludeTimeChange,
-  showNativePicker,
-  onShowNativePickerChange,
 }: TimePickerProps) {
+  // Native picker state managed internally
+  const [showNativePicker, setShowNativePicker] = useState(false);
+
   return (
     <>
       <TopBarDropdownContainer visible={visible} onClose={onClose}>
@@ -40,7 +40,7 @@ export function TimePicker({
               onClose();
               // Show native picker after a small delay
               setTimeout(() => {
-                onShowNativePickerChange(true);
+                setShowNativePicker(true);
               }, 100);
             }}
           >
@@ -88,7 +88,7 @@ export function TimePicker({
               selectedDate.setMilliseconds(0);
               onEntryDateChange(selectedDate.toISOString());
             }
-            onShowNativePickerChange(false);
+            setShowNativePicker(false);
           }}
         />
       )}

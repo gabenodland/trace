@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
 import * as Location from "expo-location";
 import { extractTagsAndMentions, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput, locationToEntryGpsFields } from "@trace/core";
@@ -12,7 +12,6 @@ import { CategoryPicker } from "../../categories/components/CategoryPicker";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdownContainer";
 import { useNavigationMenu } from "../../../shared/hooks/useNavigationMenu";
-import Svg, { Path, Circle } from "react-native-svg";
 import { SimpleDatePicker } from "./SimpleDatePicker";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
@@ -28,7 +27,17 @@ import { MetadataBar } from "./MetadataBar";
 import { EditorToolbar } from "./EditorToolbar";
 import { CaptureFormHeader } from "./CaptureFormHeader";
 
-import type { ReturnContext } from "../../../screens/EntryScreen";
+export interface ReturnContext {
+  screen: "inbox" | "calendar" | "tasks";
+  // For inbox
+  categoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
+  categoryName?: string;
+  // For calendar
+  selectedDate?: string;
+  zoomLevel?: "day" | "week" | "month" | "year";
+  // For tasks
+  taskFilter?: "all" | "incomplete" | "complete";
+}
 
 interface CaptureFormProps {
   entryId?: string | null;
@@ -48,7 +57,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const { settings } = useSettings();
 
   // Single form data state hook (consolidates form field state + pending photos)
-  const { formData, updateField, updateMultipleFields, addPendingPhoto, removePendingPhoto } = useCaptureFormState({
+  const { formData, updateField, addPendingPhoto, removePendingPhoto } = useCaptureFormState({
     isEditing,
     initialCategoryId,
     initialCategoryName,
@@ -61,22 +70,15 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   // UI State (NOT form data - keep as individual useState)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showRatingPicker, setShowRatingPicker] = useState(false);
-  const [showPriorityPicker, setShowPriorityPicker] = useState(false);
-  const [showAttributesPicker, setShowAttributesPicker] = useState(false);
-  const [showNativePicker, setShowNativePicker] = useState(false);
-  const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
-  const [showEntryDatePicker, setShowEntryDatePicker] = useState(false);
-  const [showTimeModal, setShowTimeModal] = useState(false);
+
+  // Consolidated picker visibility state - only one picker can be open at a time
+  type ActivePicker = 'category' | 'location' | 'dueDate' | 'rating' | 'priority' | 'attributes' | 'entryDate' | 'time' | null;
+  const [activePicker, setActivePicker] = useState<ActivePicker>(null);
 
   // Original category for cancel navigation (for edited entries)
   const [originalCategoryId, setOriginalCategoryId] = useState<string | null>(null);
   const [originalCategoryName, setOriginalCategoryName] = useState<string | null>(null);
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
-  const [locationIconBlink, setLocationIconBlink] = useState(true);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const snackbarOpacity = useRef(new Animated.Value(0)).current;
   const editorRef = useRef<any>(null);
@@ -90,7 +92,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
-  const { user, signOut } = useAuthState();
+  const { user } = useAuthState();
   const { categories } = useCategories();
   const { navigate, setBeforeBackHandler } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
@@ -247,6 +249,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   };
 
   // Handle navigation with unsaved changes check
+  // Note: Not memoized to avoid circular dependency with handleSave
   const handleNavigationWithUnsavedCheck = (navigateCallback: () => void) => {
     if (!hasUnsavedChanges()) {
       navigateCallback();
@@ -296,7 +299,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   };
 
   // Wrap menu items to check for unsaved changes before navigation
-  const wrappedMenuItems = menuItems.map(item => {
+  const wrappedMenuItems = useMemo(() => menuItems.map(item => {
     if (item.isDivider || !item.onPress) {
       return item; // Don't wrap dividers or items without onPress
     }
@@ -309,14 +312,14 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         });
       },
     };
-  });
+  }), [menuItems]);
 
   // Wrap profile press to check for unsaved changes
-  const wrappedOnProfilePress = () => {
+  const wrappedOnProfilePress = useCallback(() => {
     if (onProfilePress) {
       handleNavigationWithUnsavedCheck(onProfilePress);
     }
-  };
+  }, [onProfilePress]);
 
   // Enter edit mode, optionally placing cursor at tap coordinates
   const enterEditMode = (tapCoordinates?: { x: number; y: number }) => {
@@ -372,29 +375,51 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   // Determine if formData.title should be collapsed
   const shouldCollapse = !formData.title.trim() && formData.content.trim().length > 0 && !isTitleExpanded;
 
-  const currentDate = new Date().toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  });
+  // Location picker mode: 'view' if already has named location, 'select' to pick/create
+  const locationPickerMode: 'select' | 'view' = formData.locationData?.name ? 'view' : 'select';
 
-  // Blinking animation for location loading
-  useEffect(() => {
-    // Only blink if location capture is on AND we don't have any location data yet
-    // If we have a name OR coordinates, don't blink (location is already set)
-    const hasLocationData = formData.locationData && (formData.locationData.name || (formData.locationData.latitude && formData.locationData.longitude));
-
-    if (formData.captureLocation && !hasLocationData) {
-      // Start blinking by toggling state
-      const interval = setInterval(() => {
-        setLocationIconBlink(prev => !prev);
-      }, 600);
-      return () => clearInterval(interval);
-    } else {
-      setLocationIconBlink(true);
+  // Helper to navigate back based on returnContext
+  const navigateBack = useCallback((options?: { useCurrentCategory?: boolean }) => {
+    if (returnContext) {
+      if (returnContext.screen === "calendar") {
+        navigate("calendar", {
+          returnDate: returnContext.selectedDate || formData.entryDate,
+          returnZoomLevel: returnContext.zoomLevel
+        });
+        return;
+      } else if (returnContext.screen === "tasks") {
+        navigate("tasks");
+        return;
+      } else if (returnContext.screen === "inbox") {
+        navigate("inbox", {
+          returnCategoryId: returnContext.categoryId || null,
+          returnCategoryName: returnContext.categoryName || "Uncategorized"
+        });
+        return;
+      }
     }
-  }, [formData.captureLocation, formData.locationData?.name, formData.locationData?.latitude, formData.locationData?.longitude]);
+
+    // Default: go to inbox
+    if (options?.useCurrentCategory) {
+      // Use current form category (after save)
+      let returnCategoryId: string | null = formData.categoryId || null;
+      let returnCategoryName: string = formData.categoryName || "Uncategorized";
+      // Edge case: If returning to a filter view, switch to Uncategorized
+      if (returnCategoryId === "all" || returnCategoryId === "tasks" ||
+          returnCategoryId === "events" || returnCategoryId === "categories" ||
+          returnCategoryId === "tags" || returnCategoryId === "people" ||
+          (typeof returnCategoryId === 'string' && (returnCategoryId.startsWith("tag:") || returnCategoryId.startsWith("mention:")))) {
+        returnCategoryId = null;
+        returnCategoryName = "Uncategorized";
+      }
+      navigate("inbox", { returnCategoryId, returnCategoryName });
+    } else {
+      // Use original category (for cancel/back)
+      const returnCategoryId = isEditing ? originalCategoryId : (formData.categoryId || null);
+      const returnCategoryName = isEditing ? originalCategoryName : (formData.categoryName || "Uncategorized");
+      navigate("inbox", { returnCategoryId, returnCategoryName });
+    }
+  }, [returnContext, navigate, formData.entryDate, formData.categoryId, formData.categoryName, isEditing, originalCategoryId, originalCategoryName]);
 
   // Auto-collapse formData.title when user starts typing in body without a formData.title
   useEffect(() => {
@@ -548,8 +573,6 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       return;
     }
 
-    console.log('[CaptureForm] 📍 Starting GPS fetch for new entry...');
-
     let timeoutId: NodeJS.Timeout;
     let isCancelled = false;
     let hasLocation = false;
@@ -557,12 +580,10 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     const fetchLocation = async () => {
       try {
         const { status: permissionStatus } = await Location.requestForegroundPermissionsAsync();
-        console.log('[CaptureForm] GPS permission status:', permissionStatus);
         if (permissionStatus === "granted" && !isCancelled) {
           // Set timeout to give up after 15 seconds
           timeoutId = setTimeout(() => {
             if (!isCancelled && !hasLocation) {
-              console.log("Location fetch timeout - giving up");
               updateField("captureLocation", false);
               Alert.alert(
                 "Location Unavailable",
@@ -584,11 +605,6 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
           if (location && !isCancelled) {
             hasLocation = true;
-            console.log('[CaptureForm] ✅ GPS acquired:', {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              accuracy: location.coords.accuracy
-            });
             updateField("locationData", {
               latitude: location.coords.latitude,
               longitude: location.coords.longitude,
@@ -600,7 +616,6 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           }
         }
       } catch (geoError) {
-        console.log("Location not available:", geoError);
         if (!isCancelled) {
           updateField("captureLocation", false);
           Alert.alert(
@@ -652,30 +667,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
   // Cancel handler
   const handleCancel = () => {
-    // Navigate back based on returnContext
-    if (returnContext) {
-      if (returnContext.screen === "calendar") {
-        navigate("calendar", {
-          returnDate: formData.entryDate,
-          returnZoomLevel: returnContext.zoomLevel
-        });
-        return;
-      } else if (returnContext.screen === "tasks") {
-        navigate("tasks");
-        return;
-      } else if (returnContext.screen === "inbox") {
-        navigate("inbox", {
-          returnCategoryId: returnContext.categoryId || null,
-          returnCategoryName: returnContext.categoryName || "Uncategorized"
-        });
-        return;
-      }
-    }
-
-    // Default: go to inbox with original category (for edited entries) or current category
-    const returnCategoryId = isEditing ? originalCategoryId : (formData.categoryId || null);
-    const returnCategoryName = isEditing ? originalCategoryName : (formData.categoryName || "Uncategorized");
-    navigate("inbox", { returnCategoryId, returnCategoryName });
+    navigateBack();
   };
 
   // Save handler
@@ -711,21 +703,16 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         if (formData.locationData.location_id) {
           // Reuse existing location
           location_id = formData.locationData.location_id;
-          console.log('[CaptureForm] 📍 Reusing existing location:', location_id);
         } else {
           // Create a new location in the locations table
           const locationInput = locationToCreateInput(formData.locationData);
-          console.log('[CaptureForm] 📍 Creating new location:', locationInput);
           const savedLocation = await createLocation(locationInput);
           location_id = savedLocation.location_id;
-          console.log('[CaptureForm] ✅ Location created with ID:', location_id);
         }
       }
 
       if (isEditing) {
         // Update existing entry
-        console.log('[CaptureForm] 💾 Updating entry with location_id:', location_id);
-
         await singleEntryMutations.updateEntry({
           title: formData.title.trim() || null,
           content: formData.content,
@@ -740,12 +727,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           location_id,
           ...gpsFields,
         });
-
-        console.log('[CaptureForm] ✅ Entry updated successfully');
       } else {
         // Create new entry
-        console.log('[CaptureForm] 💾 Saving entry with location_id:', location_id);
-
         const newEntry = await entryMutations.createEntry({
           title: formData.title.trim() || null,
           content: formData.content,
@@ -760,8 +743,6 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           location_id,
           ...gpsFields,
         });
-
-        console.log('[CaptureForm] ✅ Entry saved successfully with ID:', newEntry.entry_id);
 
         // CRITICAL: Save all pending photos to DB with the real entry_id
         if (formData.pendingPhotos.length > 0) {
@@ -810,47 +791,13 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         updateField("priority", 0);
       }
 
-      // Navigate back to inbox with the category that was set
-      // This ensures the list shows the category where the entry was saved
-      // If category is a filter (all, tasks, etc.), default to Uncategorized
-      let returnCategoryId: string | null = formData.categoryId || null;
-      let returnCategoryName: string = formData.categoryName || "Uncategorized";
-
-      // Edge case: If returning to a filter view, switch to Uncategorized instead
-      if (returnCategoryId === "all" || returnCategoryId === "tasks" ||
-          returnCategoryId === "events" || returnCategoryId === "categories" ||
-          returnCategoryId === "tags" || returnCategoryId === "people" ||
-          (typeof returnCategoryId === 'string' && (returnCategoryId.startsWith("tag:") || returnCategoryId.startsWith("mention:")))) {
-        returnCategoryId = null;
-        returnCategoryName = "Uncategorized";
-      }
-
       // Trigger sync in background after save (non-blocking)
-      syncQueue.processQueue().catch(err => {
-        console.error('Background sync failed:', err);
+      syncQueue.processQueue().catch(() => {
+        // Silently handle sync failures
       });
 
-      // Navigate back based on returnContext
-      if (returnContext) {
-        if (returnContext.screen === "calendar") {
-          navigate("calendar", {
-            returnDate: formData.entryDate,
-            returnZoomLevel: returnContext.zoomLevel
-          });
-          return;
-        } else if (returnContext.screen === "tasks") {
-          navigate("tasks");
-          return;
-        } else if (returnContext.screen === "inbox") {
-          navigate("inbox", {
-            returnCategoryId: returnContext.categoryId || null,
-            returnCategoryName: returnContext.categoryName || "Uncategorized"
-          });
-          return;
-        }
-      }
-
-      navigate("inbox", { returnCategoryId, returnCategoryName });
+      // Navigate back with current category
+      navigateBack({ useCurrentCategory: true });
     } catch (error) {
       console.error(`Failed to ${isEditing ? 'update' : 'create'} entry:`, error);
       Alert.alert("Error", `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -895,9 +842,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       }
 
       // Compress photo using quality setting
-      console.log(`📸 Compressing photo with quality setting: ${settings.imageQuality}`);
       const compressed = await compressPhoto(uri, settings.imageQuality);
-      console.log(`📸 Compressed result: ${compressed.width}x${compressed.height}, ${(compressed.file_size / 1024 / 1024).toFixed(2)} MB`);
 
       // Generate IDs
       const photoId = Crypto.randomUUID();
@@ -1003,30 +948,10 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         includeTime={formData.includeTime}
         onTitleChange={(text) => updateField("title", text)}
         onCancel={handleCancel}
-        onBack={() => handleNavigationWithUnsavedCheck(() => {
-          if (returnContext) {
-            if (returnContext.screen === "calendar") {
-              navigate("calendar", {
-                returnDate: returnContext.selectedDate,
-                returnZoomLevel: returnContext.zoomLevel
-              });
-            } else if (returnContext.screen === "tasks") {
-              navigate("tasks");
-            } else if (returnContext.screen === "inbox") {
-              navigate("inbox", {
-                returnCategoryId: returnContext.categoryId || null,
-                returnCategoryName: returnContext.categoryName || "Uncategorized"
-              });
-            } else {
-              navigate("inbox");
-            }
-          } else {
-            navigate("inbox");
-          }
-        })}
+        onBack={() => handleNavigationWithUnsavedCheck(navigateBack)}
         onSave={handleSave}
-        onDatePress={() => setShowEntryDatePicker(true)}
-        onTimePress={() => setShowTimeModal(true)}
+        onDatePress={() => setActivePicker('entryDate')}
+        onTimePress={() => setActivePicker('time')}
         onAddTime={() => {
           updateField("includeTime", true);
           const date = new Date(formData.entryDate);
@@ -1104,8 +1029,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           showPhotos={showPhotos}
           isEditMode={isEditMode}
           enterEditMode={enterEditMode}
-          onCategoryPress={() => setShowCategoryPicker(!showCategoryPicker)}
-          onLocationPress={() => setShowLocationPicker(!showLocationPicker)}
+          onCategoryPress={() => setActivePicker(activePicker === 'category' ? null : 'category')}
+          onLocationPress={() => setActivePicker(activePicker === 'location' ? null : 'location')}
           onStatusPress={() => {
             // Cycle through statuses
             if (formData.status === "incomplete") updateField("status", "in_progress");
@@ -1113,11 +1038,11 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             else updateField("status", "none");
             if (!isEditMode) enterEditMode();
           }}
-          onDueDatePress={() => setShowDatePicker(!showDatePicker)}
-          onRatingPress={() => setShowRatingPicker(true)}
-          onPriorityPress={() => setShowPriorityPicker(true)}
+          onDueDatePress={() => setActivePicker(activePicker === 'dueDate' ? null : 'dueDate')}
+          onRatingPress={() => setActivePicker('rating')}
+          onPriorityPress={() => setActivePicker('priority')}
           onPhotosPress={() => setPhotosCollapsed(false)}
-          onMenuPress={() => setShowAttributesPicker(true)}
+          onMenuPress={() => setActivePicker('attributes')}
           editorRef={editorRef}
         />
       )}
@@ -1178,12 +1103,12 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
       {/* Category Picker Dropdown */}
       <TopBarDropdownContainer
-        visible={showCategoryPicker}
-        onClose={() => setShowCategoryPicker(false)}
+        visible={activePicker === 'category'}
+        onClose={() => setActivePicker(null)}
       >
         <CategoryPicker
-          visible={showCategoryPicker}
-          onClose={() => setShowCategoryPicker(false)}
+          visible={activePicker === 'category'}
+          onClose={() => setActivePicker(null)}
           onSelect={(id, name) => {
             const hadCategory = !!formData.categoryId;
             const isRemoving = !id;
@@ -1206,26 +1131,15 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
       {/* Location Picker (fullscreen modal) */}
       <LocationPicker
-        visible={showLocationPicker}
-        onClose={() => {
-          console.log('[CaptureForm] LocationPicker closed');
-          setShowLocationPicker(false);
-        }}
-        mode={(() => {
-          // view: location with a name already selected (either editing existing or user already picked one)
-          // select: no location name yet (GPS-only or nothing), user needs to pick/create a location
-          const hasNamedLocation = formData.locationData && formData.locationData.name;
-          const pickerMode = hasNamedLocation ? 'view' : 'select';
-          console.log('[CaptureForm] mode check:', { isEditMode, captureLocation: formData.captureLocation, hasLocationData: !!formData.locationData, hasNamedLocation, pickerMode });
-          return pickerMode as 'select' | 'view';
-        })()}
+        visible={activePicker === 'location'}
+        onClose={() => setActivePicker(null)}
+        mode={locationPickerMode}
         onSelect={(location: LocationType | null) => {
           // If location is null (user selected "None"), clear location data
           if (location === null) {
-            console.log('[CaptureForm] 📍 User selected "None" - clearing location data');
             updateField("locationData", null);
             updateField("captureLocation", false);
-            setShowLocationPicker(false);
+            setActivePicker(null);
             showSnackbar('You removed the location');
             if (!isEditMode) {
               enterEditMode();
@@ -1233,23 +1147,11 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             return;
           }
 
-          console.log('[CaptureForm] 📍 Received location from LocationPicker:', {
-            name: location.name,
-            latitude: location.latitude,
-            longitude: location.longitude,
-            city: location.city,
-            region: location.region,
-            country: location.country,
-            neighborhood: location.neighborhood,
-            postalCode: location.postalCode,
-            subdivision: location.subdivision,
-          });
-
           // Show snackbar based on whether we're adding or updating
           const isUpdating = !!formData.locationData;
           updateField("locationData", location);
           updateField("captureLocation", true);
-          setShowLocationPicker(false);
+          setActivePicker(null);
           showSnackbar(isUpdating ? 'Success! You updated the location.' : 'Success! You added the location.');
           if (!isEditMode) {
             enterEditMode();
@@ -1260,8 +1162,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
       {/* Date Picker Dropdown (Due Date) */}
       <TopBarDropdownContainer
-        visible={showDatePicker}
-        onClose={() => setShowDatePicker(false)}
+        visible={activePicker === 'dueDate'}
+        onClose={() => setActivePicker(null)}
       >
         <SimpleDatePicker
           value={formData.dueDate ? new Date(formData.dueDate) : null}
@@ -1277,14 +1179,14 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               }
             }
           }}
-          onClose={() => setShowDatePicker(false)}
+          onClose={() => setActivePicker(null)}
         />
       </TopBarDropdownContainer>
 
       {/* Entry Date Picker Dropdown */}
       <TopBarDropdownContainer
-        visible={showEntryDatePicker}
-        onClose={() => setShowEntryDatePicker(false)}
+        visible={activePicker === 'entryDate'}
+        onClose={() => setActivePicker(null)}
       >
         <SimpleDatePicker
           value={new Date(formData.entryDate)}
@@ -1296,33 +1198,24 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
               updateField("entryDate", date.toISOString());
             }
           }}
-          onClose={() => setShowEntryDatePicker(false)}
+          onClose={() => setActivePicker(null)}
           allowClear={false}
         />
       </TopBarDropdownContainer>
 
       {/* Time Picker Modal */}
       <TimePicker
-        visible={showTimeModal}
-        onClose={() => setShowTimeModal(false)}
+        visible={activePicker === 'time'}
+        onClose={() => setActivePicker(null)}
         entryDate={formData.entryDate}
         onEntryDateChange={(date) => updateField("entryDate", date)}
         onIncludeTimeChange={(include) => updateField("includeTime", include)}
-        showNativePicker={showNativePicker && pickerMode === "time"}
-        onShowNativePickerChange={(show) => {
-          if (show) {
-            setPickerMode("time");
-            setShowNativePicker(true);
-          } else {
-            setShowNativePicker(false);
-          }
-        }}
       />
 
       {/* Rating Picker Modal */}
       <RatingPicker
-        visible={showRatingPicker}
-        onClose={() => setShowRatingPicker(false)}
+        visible={activePicker === 'rating'}
+        onClose={() => setActivePicker(null)}
         rating={formData.rating}
         onRatingChange={(value) => updateField("rating", value)}
         onSnackbar={showSnackbar}
@@ -1330,8 +1223,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
       {/* Priority Picker Modal */}
       <PriorityPicker
-        visible={showPriorityPicker}
-        onClose={() => setShowPriorityPicker(false)}
+        visible={activePicker === 'priority'}
+        onClose={() => setActivePicker(null)}
         priority={formData.priority}
         onPriorityChange={(value) => updateField("priority", value)}
         onSnackbar={showSnackbar}
@@ -1339,8 +1232,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
       {/* Entry Menu */}
       <AttributesPicker
-        visible={showAttributesPicker}
-        onClose={() => setShowAttributesPicker(false)}
+        visible={activePicker === 'attributes'}
+        onClose={() => setActivePicker(null)}
         isEditing={isEditing}
         isEditMode={isEditMode}
         enterEditMode={enterEditMode}
@@ -1357,11 +1250,11 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         rating={formData.rating}
         priority={formData.priority}
         photoCount={photoCount}
-        onShowLocationPicker={() => setShowLocationPicker(true)}
+        onShowLocationPicker={() => setActivePicker('location')}
         onStatusChange={(status) => updateField("status", status)}
-        onShowDatePicker={() => setShowDatePicker(true)}
-        onShowRatingPicker={() => setShowRatingPicker(true)}
-        onShowPriorityPicker={() => setShowPriorityPicker(true)}
+        onShowDatePicker={() => setActivePicker('dueDate')}
+        onShowRatingPicker={() => setActivePicker('rating')}
+        onShowPriorityPicker={() => setActivePicker('priority')}
         onAddPhoto={() => photoCaptureRef.current?.openMenu()}
         onDelete={handleDelete}
         onSnackbar={showSnackbar}
