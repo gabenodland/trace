@@ -21,6 +21,7 @@ interface EntryListItemProps {
   onMove?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
+  onResolveConflict?: (entryId: string) => void; // Dismiss conflict banner
   categoryName?: string | null; // Category name to display
   locationName?: string | null; // Location name to display
   displayMode?: EntryDisplayMode; // Display mode for content rendering
@@ -28,7 +29,7 @@ interface EntryListItemProps {
   onMenuToggle?: () => void; // Toggle menu visibility
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, onPin, categoryName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onDelete, onPin, onResolveConflict, categoryName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(0);
   const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
@@ -151,15 +152,21 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
           />
           {/* Conflict Warning Banner */}
           {entry.conflict_status === 'conflicted' && (
-            <View style={styles.conflictBanner}>
+            <TouchableOpacity
+              style={styles.conflictBanner}
+              onPress={(e) => {
+                e.stopPropagation();
+                onResolveConflict?.(entry.entry_id);
+              }}
+            >
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
                 <Path d="M12 2L2 7l10 5 10-5-10-5z" fill="#f59e0b" />
                 <Path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#f59e0b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
               </Svg>
               <Text style={styles.conflictText}>
-                Changes merged - tap to review
+                Changes merged - tap to dismiss
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
 
           {/* Title or Preview based on display mode */}

@@ -391,6 +391,19 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     }
   };
 
+  const handleResolveConflict = async (entryId: string) => {
+    try {
+      // Clear conflict status - user acknowledges the merge
+      await entryMutations.updateEntry(entryId, {
+        conflict_status: null,
+        conflict_backup: null,
+      });
+    } catch (error) {
+      console.error("Failed to resolve conflict:", error);
+      Alert.alert("Error", "Failed to dismiss conflict");
+    }
+  };
+
   // Get current category of entry being moved
   const entryToMoveData = entryToMove ? entries.find(e => e.entry_id === entryToMove) : null;
   const entryToMoveCategoryId = entryToMoveData?.category_id || null;
@@ -430,6 +443,7 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         onMove={handleMoveEntry}
         onDelete={handleDeleteEntry}
         onPin={handlePinEntry}
+        onResolveConflict={handleResolveConflict}
         categories={categories}
         locations={locations}
         displayMode={displayMode}

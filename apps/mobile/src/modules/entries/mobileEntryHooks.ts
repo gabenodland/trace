@@ -28,6 +28,8 @@ function useEntriesQuery(filter?: MobileEntryFilter) {
   return useQuery({
     queryKey: ['entries', filter],
     queryFn: () => getEntries(filter),
+    // Override global staleTime to ensure list always shows fresh data
+    staleTime: 0,
   });
 }
 
@@ -39,6 +41,8 @@ function useEntryQuery(id: string | null) {
     queryKey: ['entry', id],
     queryFn: () => (id ? getEntry(id) : Promise.resolve(null)),
     enabled: !!id,
+    // Override global staleTime to ensure entry always shows fresh data
+    staleTime: 0,
   });
 }
 

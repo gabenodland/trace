@@ -170,7 +170,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     last_edited_device: getDeviceName(),
   };
 
-  log.info('Creating entry', { entryId: entry_id, hasTitle: !!entry.title });
+  log.debug('Creating entry', { entryId: entry_id, hasTitle: !!entry.title });
 
   // Save to SQLite immediately (always succeeds, works offline)
   const savedEntry = await localDB.saveEntry(entry);
@@ -212,13 +212,23 @@ export async function updateEntry(
     updatesWithSync.last_edited_device = getDeviceName();
   }
 
-  log.info('Updating entry', { entryId: id, isUserEdit });
+  log.debug('Updating entry', {
+    entryId: id,
+    isUserEdit,
+    synced: updatesWithSync.synced,
+    sync_action: updatesWithSync.sync_action,
+    version: updatesWithSync.version,
+    currentBaseVersion: currentEntry.base_version,
+  });
 
   // Update in SQLite
   const updated = await localDB.updateEntry(id, updatesWithSync);
 
+  log.debug('Entry updated in SQLite', { entryId: id, synced: updated.synced });
+
   // Trigger sync in background (non-blocking)
   if (isUserEdit) {
+    log.debug('Triggering push sync for user edit');
     triggerPushSync();
   }
 
@@ -229,7 +239,7 @@ export async function updateEntry(
  * Delete an entry (offline-first, soft delete)
  */
 export async function deleteEntry(id: string): Promise<void> {
-  log.info('Deleting entry', { entryId: id });
+  log.debug('Deleting entry', { entryId: id });
 
   // Delete from SQLite (soft delete)
   await localDB.deleteEntry(id);

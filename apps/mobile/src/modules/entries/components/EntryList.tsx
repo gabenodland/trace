@@ -26,13 +26,14 @@ interface EntryListProps {
   onMove?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
+  onResolveConflict?: (entryId: string) => void; // Dismiss conflict banner
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
   categories?: Category[]; // Optional categories for displaying category names
   locations?: Location[]; // Optional locations for displaying location names
   displayMode?: EntryDisplayMode; // Display mode for entry items
 }
 
-export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, onMove, onDelete, onPin, ListHeaderComponent, categories, locations, displayMode }: EntryListProps) {
+export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, onMove, onDelete, onPin, onResolveConflict, ListHeaderComponent, categories, locations, displayMode }: EntryListProps) {
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
   // Create a lookup map for categories (using full_path)
@@ -70,6 +71,7 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
             onMove={onMove}
             onDelete={onDelete}
             onPin={onPin}
+            onResolveConflict={onResolveConflict}
             categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
             locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
             displayMode={displayMode}
@@ -114,6 +116,7 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
           onMove={onMove}
           onDelete={onDelete}
           onPin={onPin}
+          onResolveConflict={onResolveConflict}
           categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
           locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
           displayMode={displayMode}

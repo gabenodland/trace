@@ -1097,64 +1097,68 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         </BottomBar>
       )}
 
-      {/* Category Picker Dropdown */}
-      <TopBarDropdownContainer
-        visible={activePicker === 'category'}
-        onClose={() => setActivePicker(null)}
-      >
-        <CategoryPicker
-          visible={activePicker === 'category'}
+      {/* Category Picker Dropdown - only render when active to avoid unnecessary hook calls */}
+      {activePicker === 'category' && (
+        <TopBarDropdownContainer
+          visible={true}
           onClose={() => setActivePicker(null)}
-          onSelect={(id, name) => {
-            const hadCategory = !!formData.categoryId;
-            const isRemoving = !id;
-            updateField("categoryId", id);
-            updateField("categoryName", name);
-            if (isRemoving && hadCategory) {
-              showSnackbar('You removed the category');
-            } else if (hadCategory) {
-              showSnackbar('Success! You updated the category.');
-            } else {
-              showSnackbar('Success! You added the category.');
+        >
+          <CategoryPicker
+            visible={true}
+            onClose={() => setActivePicker(null)}
+            onSelect={(id, name) => {
+              const hadCategory = !!formData.categoryId;
+              const isRemoving = !id;
+              updateField("categoryId", id);
+              updateField("categoryName", name);
+              if (isRemoving && hadCategory) {
+                showSnackbar('You removed the category');
+              } else if (hadCategory) {
+                showSnackbar('Success! You updated the category.');
+              } else {
+                showSnackbar('Success! You added the category.');
+              }
+              if (!isEditMode) {
+                enterEditMode();
+              }
+            }}
+            selectedCategoryId={formData.categoryId}
+          />
+        </TopBarDropdownContainer>
+      )}
+
+      {/* Location Picker (fullscreen modal) - only render when active to avoid unnecessary hook calls */}
+      {activePicker === 'location' && (
+        <LocationPicker
+          visible={true}
+          onClose={() => setActivePicker(null)}
+          mode={locationPickerMode}
+          onSelect={(location: LocationType | null) => {
+            // If location is null (user selected "None"), clear location data
+            if (location === null) {
+              updateField("locationData", null);
+              updateField("captureLocation", false);
+              setActivePicker(null);
+              showSnackbar('You removed the location');
+              if (!isEditMode) {
+                enterEditMode();
+              }
+              return;
             }
+
+            // Show snackbar based on whether we're adding or updating
+            const isUpdating = !!formData.locationData;
+            updateField("locationData", location);
+            updateField("captureLocation", true);
+            setActivePicker(null);
+            showSnackbar(isUpdating ? 'Success! You updated the location.' : 'Success! You added the location.');
             if (!isEditMode) {
               enterEditMode();
             }
           }}
-          selectedCategoryId={formData.categoryId}
+          initialLocation={formData.locationData}
         />
-      </TopBarDropdownContainer>
-
-      {/* Location Picker (fullscreen modal) */}
-      <LocationPicker
-        visible={activePicker === 'location'}
-        onClose={() => setActivePicker(null)}
-        mode={locationPickerMode}
-        onSelect={(location: LocationType | null) => {
-          // If location is null (user selected "None"), clear location data
-          if (location === null) {
-            updateField("locationData", null);
-            updateField("captureLocation", false);
-            setActivePicker(null);
-            showSnackbar('You removed the location');
-            if (!isEditMode) {
-              enterEditMode();
-            }
-            return;
-          }
-
-          // Show snackbar based on whether we're adding or updating
-          const isUpdating = !!formData.locationData;
-          updateField("locationData", location);
-          updateField("captureLocation", true);
-          setActivePicker(null);
-          showSnackbar(isUpdating ? 'Success! You updated the location.' : 'Success! You added the location.');
-          if (!isEditMode) {
-            enterEditMode();
-          }
-        }}
-        initialLocation={formData.locationData}
-      />
+      )}
 
       {/* Date Picker Dropdown (Due Date) */}
       <TopBarDropdownContainer

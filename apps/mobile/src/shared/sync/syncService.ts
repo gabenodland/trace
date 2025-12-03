@@ -12,7 +12,7 @@
 import { localDB } from '../db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
 import { Entry, LocationEntity } from '@trace/core';
-import { AppState, AppStateStatus } from 'react-native';
+// AppState import removed - not currently used but may be needed for foreground sync
 import NetInfo from '@react-native-community/netinfo';
 import type { QueryClient } from '@tanstack/react-query';
 import { uploadPhotoToSupabase, downloadPhotosInBackground } from '../../modules/photos/mobilePhotoApi';
@@ -67,7 +67,6 @@ class SyncService {
   private realtimeChannel: any = null;
   private realtimeDebounceTimer: NodeJS.Timeout | null = null;
   private lastSyncTime: number | null = null;
-  private readonly SYNC_THROTTLE_MS = 30000; // 30 seconds
 
   // ==========================================================================
   // INITIALIZATION
@@ -87,7 +86,7 @@ class SyncService {
       this.queryClient = queryClient;
     }
 
-    log.info('Initializing sync service');
+    log.debug('Initializing sync service');
 
     // Clean up data from previous users
     await this.cleanupWrongUserData();
@@ -95,7 +94,7 @@ class SyncService {
     // Set up realtime subscription for server changes
     await this.setupRealtimeSubscription();
 
-    log.success('Sync service initialized');
+    log.debug('Sync service initialized');
   }
 
   /**
@@ -110,7 +109,7 @@ class SyncService {
       log.debug('Realtime subscription removed');
     }
     this.isInitialized = false;
-    log.info('Sync service destroyed');
+    log.debug('Sync service destroyed');
   }
 
   // ==========================================================================
@@ -205,7 +204,7 @@ class SyncService {
           sync_action: null,
           base_version: serverEntry.version || 1,
         });
-        log.info('Entry pulled from server', { entryId });
+        log.debug('Entry pulled from server', { entryId });
         return true;
       }
 
@@ -220,7 +219,7 @@ class SyncService {
    * Force full pull (ignores incremental timestamps)
    */
   async forcePull(): Promise<SyncResult> {
-    log.info('Force pull requested');
+    log.debug('Force pull requested');
     return this.executeSync('manual', { push: false, pull: true, forceFullPull: true });
   }
 
@@ -266,9 +265,24 @@ class SyncService {
     }
 
     this.isSyncing = true;
-    log.info(`SYNC STARTED (${trigger})`);
+    log.debug(`SYNC STARTED (${trigger})`);
 
     try {
+      const forceFullPull = options.forceFullPull || false;
+      const pullStartTime = new Date();
+
+      // PULL FIRST: Server → Local (for categories/locations that entries depend on)
+      // This ensures we detect remotely-deleted categories BEFORE trying to push entries
+      if (options.pull) {
+        // Step 1: Pull categories (and clean up orphans)
+        const categoryResult = await this.pullCategories(forceFullPull);
+        result.pulled.categories = categoryResult.new + categoryResult.updated;
+
+        // Step 2: Pull locations
+        const locationResult = await this.pullLocations(forceFullPull);
+        result.pulled.locations = locationResult.new + locationResult.updated;
+      }
+
       // PUSH: Local → Server
       if (options.push) {
         // Step 1: Push categories (entries depend on them)
@@ -299,23 +313,12 @@ class SyncService {
         // Log push summary
         const totalPushed = result.pushed.entries + result.pushed.categories + result.pushed.locations + result.pushed.photos;
         if (totalPushed > 0) {
-          log.info(`PUSHED ${totalPushed} items`, result.pushed);
+          log.debug(`PUSHED ${totalPushed} items`, result.pushed);
         }
       }
 
-      // PULL: Server → Local
+      // PULL REMAINING: Server → Local (entries and photos)
       if (options.pull) {
-        const forceFullPull = options.forceFullPull || false;
-        const pullStartTime = new Date();
-
-        // Step 1: Pull categories
-        const categoryResult = await this.pullCategories(forceFullPull);
-        result.pulled.categories = categoryResult.new + categoryResult.updated;
-
-        // Step 2: Pull locations
-        const locationResult = await this.pullLocations(forceFullPull);
-        result.pulled.locations = locationResult.new + locationResult.updated;
-
         // Step 3: Pull entries
         const entryResult = await this.pullEntries(forceFullPull, pullStartTime);
         result.pulled.entries = entryResult.new + entryResult.updated;
@@ -330,7 +333,7 @@ class SyncService {
         // Log pull summary
         const totalPulled = result.pulled.entries + result.pulled.categories + result.pulled.locations + result.pulled.photos;
         if (totalPulled > 0) {
-          log.info(`PULLED ${totalPulled} items`, result.pulled);
+          log.debug(`PULLED ${totalPulled} items`, result.pulled);
         }
       }
 
@@ -348,7 +351,7 @@ class SyncService {
 
       const totalPushed = result.pushed.entries + result.pushed.categories + result.pushed.locations + result.pushed.photos;
       const totalPulled = result.pulled.entries + result.pulled.categories + result.pulled.locations + result.pulled.photos;
-      log.info(`SYNC COMPLETE in ${(result.duration / 1000).toFixed(1)}s | pushed: ${totalPushed} | pulled: ${totalPulled}`);
+      log.debug(`SYNC COMPLETE in ${(result.duration / 1000).toFixed(1)}s | pushed: ${totalPushed} | pulled: ${totalPulled}`);
 
     } catch (error) {
       result.duration = Date.now() - startTime;
@@ -428,11 +431,6 @@ class SyncService {
 
     for (const entry of entriesToPush) {
       try {
-        // Ensure category exists on server before pushing entry
-        if (entry.category_id) {
-          await this.ensureCategoryExistsOnServer(entry.category_id);
-        }
-
         await this.syncEntry(entry);
         success++;
       } catch (error) {
@@ -443,59 +441,6 @@ class SyncService {
     }
 
     return { success, errors };
-  }
-
-  /**
-   * Ensure a category exists on the server before pushing entries that reference it.
-   * If the category exists locally but not on server, push it first.
-   */
-  private async ensureCategoryExistsOnServer(categoryId: string): Promise<void> {
-    // Check if category exists on server
-    const { data: serverCategory } = await supabase
-      .from('categories')
-      .select('category_id')
-      .eq('category_id', categoryId)
-      .single();
-
-    if (serverCategory) {
-      return; // Already exists on server
-    }
-
-    // Category doesn't exist on server - try to push it from local
-    const localCategory = await localDB.getCategory(categoryId);
-    if (!localCategory) {
-      log.warn('Category not found locally or on server', { categoryId });
-      return; // Can't do anything - let entry push fail with FK error
-    }
-
-    log.info('Pushing missing category before entry', { categoryId, name: localCategory.name });
-
-    // Push the category (and its parent chain if needed)
-    await this.syncCategoryWithParents(localCategory);
-  }
-
-  /**
-   * Sync a category and ensure all its parent categories exist first
-   */
-  private async syncCategoryWithParents(category: any): Promise<void> {
-    // If category has a parent, ensure parent exists first
-    if (category.parent_id) {
-      const { data: parentOnServer } = await supabase
-        .from('categories')
-        .select('category_id')
-        .eq('category_id', category.parent_id)
-        .single();
-
-      if (!parentOnServer) {
-        const parentCategory = await localDB.getCategory(category.parent_id);
-        if (parentCategory) {
-          await this.syncCategoryWithParents(parentCategory);
-        }
-      }
-    }
-
-    // Now sync this category
-    await this.syncCategory(category);
   }
 
   private async pushEntryDeletes(): Promise<{ success: number; errors: number }> {
@@ -626,9 +571,9 @@ class SyncService {
   // PULL OPERATIONS
   // ==========================================================================
 
-  private async pullCategories(forceFullPull: boolean): Promise<{ new: number; updated: number }> {
+  private async pullCategories(forceFullPull: boolean): Promise<{ new: number; updated: number; deleted: number }> {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { new: 0, updated: 0 };
+    if (!user) return { new: 0, updated: 0, deleted: 0 };
 
     const { data: remoteCategories, error } = await supabase
       .from('categories')
@@ -638,17 +583,19 @@ class SyncService {
 
     if (error) {
       log.error('Failed to fetch categories', error);
-      return { new: 0, updated: 0 };
-    }
-
-    if (!remoteCategories || remoteCategories.length === 0) {
-      return { new: 0, updated: 0 };
+      return { new: 0, updated: 0, deleted: 0 };
     }
 
     let newCount = 0;
     let updatedCount = 0;
 
-    for (const remoteCategory of remoteCategories) {
+    // Build set of server category IDs for missing category detection
+    const serverCategoryIds = new Set<string>(
+      (remoteCategories || []).map(c => c.category_id)
+    );
+
+    // Process categories from server
+    for (const remoteCategory of (remoteCategories || [])) {
       try {
         const localCategory = await localDB.getCategory(remoteCategory.category_id);
 
@@ -681,7 +628,45 @@ class SyncService {
       }
     }
 
-    return { new: newCount, updated: updatedCount };
+    // Detect local categories that exist but are missing from server
+    // These could be: (1) deleted on server, or (2) never successfully pushed
+    // We mark them for re-push rather than deleting - let the push logic handle them
+    try {
+      const localCategories = await localDB.getAllCategories();
+      let markedForPush = 0;
+
+      for (const localCategory of localCategories) {
+        // Skip categories already pending sync
+        if (localCategory.synced === 0) {
+          continue;
+        }
+
+        // If category exists locally (marked synced) but not on server,
+        // it was likely never pushed successfully - mark for re-push
+        if (!serverCategoryIds.has(localCategory.category_id)) {
+          log.warn('Category missing from server, marking for re-push', {
+            categoryId: localCategory.category_id,
+            name: localCategory.name,
+          });
+
+          // Mark for re-push with 'create' action
+          await localDB.runCustomQuery(
+            'UPDATE categories SET synced = 0, sync_action = \'create\' WHERE category_id = ?',
+            [localCategory.category_id]
+          );
+
+          markedForPush++;
+        }
+      }
+
+      if (markedForPush > 0) {
+        log.debug(`Marked ${markedForPush} missing categories for re-push`);
+      }
+    } catch (error) {
+      log.warn('Failed to check for missing categories', { error });
+    }
+
+    return { new: newCount, updated: updatedCount, deleted: 0 };
   }
 
   private async pullLocations(forceFullPull: boolean): Promise<{ new: number; updated: number }> {
@@ -1232,8 +1217,15 @@ class SyncService {
       if (this.isSyncing) {
         return;
       }
-      log.info(`Server change detected (${table}), syncing...`);
-      this.fullSync('realtime').catch(console.error);
+
+      // Realtime events come from ALL changes to the database, including our own pushes.
+      // We only want to pull when ANOTHER device made changes.
+      //
+      // Strategy: Do a pull-only sync. If we have unsynced local changes, the pull
+      // will skip those entries (synced=0 check in pullEntries). If the server has
+      // newer data from another device, we'll get it.
+      log.debug(`Server change detected (${table}), pulling remote changes...`);
+      this.pullChanges('realtime').catch(console.error);
     }, 2000);
   }
 
@@ -1262,7 +1254,7 @@ class SyncService {
       );
 
       if (wrongUserEntries.length > 0) {
-        log.info('Cleaning up entries from previous user', { count: wrongUserEntries.length });
+        log.debug('Cleaning up entries from previous user', { count: wrongUserEntries.length });
         await localDB.runCustomQuery('DELETE FROM entries WHERE user_id != ?', [user.id]);
       }
 
@@ -1272,7 +1264,7 @@ class SyncService {
       );
 
       if (wrongUserCategories.length > 0) {
-        log.info('Cleaning up categories from previous user', { count: wrongUserCategories.length });
+        log.debug('Cleaning up categories from previous user', { count: wrongUserCategories.length });
         await localDB.runCustomQuery('DELETE FROM categories WHERE user_id != ?', [user.id]);
       }
 
@@ -1282,7 +1274,7 @@ class SyncService {
       );
 
       if (wrongUserPhotos.length > 0) {
-        log.info('Cleaning up photos from previous user', { count: wrongUserPhotos.length });
+        log.debug('Cleaning up photos from previous user', { count: wrongUserPhotos.length });
         await localDB.runCustomQuery('DELETE FROM photos WHERE user_id != ?', [user.id]);
       }
 
@@ -1292,7 +1284,7 @@ class SyncService {
       );
 
       if (wrongUserLocations.length > 0) {
-        log.info('Cleaning up locations from previous user', { count: wrongUserLocations.length });
+        log.debug('Cleaning up locations from previous user', { count: wrongUserLocations.length });
         await localDB.runCustomQuery('DELETE FROM locations WHERE user_id != ?', [user.id]);
       }
     } catch (error) {
@@ -1324,7 +1316,7 @@ class SyncService {
 
   private invalidateQueryCache(): void {
     if (this.queryClient) {
-      log.debug('Invalidating React Query cache');
+      log.debug('Invalidating React Query cache (if visible, debug works)');
       this.queryClient.invalidateQueries({ queryKey: ['entries'] });
       this.queryClient.invalidateQueries({ queryKey: ['categories'] });
       this.queryClient.invalidateQueries({ queryKey: ['categoryTree'] });

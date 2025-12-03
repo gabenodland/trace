@@ -52,32 +52,23 @@ export function useNearbyPOIs(
 ): UseQueryResult<POIItem[], Error> {
   const enabled = !!request && locationHelpers.isValidCoordinates(request);
 
-  console.log('[useNearbyPOIs] Hook called with request:', request);
-  console.log('[useNearbyPOIs] Enabled:', enabled);
-  console.log('[useNearbyPOIs] Is valid coordinates:', request ? locationHelpers.isValidCoordinates(request) : 'N/A');
-
   return useQuery({
     queryKey: request
       ? locationKeys.nearby(request.latitude, request.longitude, request.radius || 500)
       : ['locations', 'nearby', 'disabled'],
     queryFn: async () => {
-      try {
-        console.log('[useNearbyPOIs] queryFn executing...');
-        const response = await locationApi.searchNearbyPOIs(request!);
-        console.log('[useNearbyPOIs] Received', response.results.length, 'results from API');
+      // This only logs when the query actually executes (cache miss), not on every render
+      console.log('📍 [NearbyPOIs] Fetching POIs for', request?.latitude.toFixed(4), request?.longitude.toFixed(4));
 
-        // Note: Quality filtering (stats, popularity, rating) requires premium API tier
-        // For now, return all results - may add filtering later if premium access is enabled
+      const response = await locationApi.searchNearbyPOIs(request!);
 
-        // Convert Foursquare places to POI items
-        const pois = response.results.map(place => locationHelpers.foursquareToPOI(place));
+      // Note: Quality filtering (stats, popularity, rating) requires premium API tier
+      // For now, return all results - may add filtering later if premium access is enabled
 
-        console.log('[useNearbyPOIs] ✅ Successfully converted', pois.length, 'POIs');
-        return pois;
-      } catch (error) {
-        console.error('[useNearbyPOIs] ❌ Error in queryFn:', error);
-        throw error;
-      }
+      // Convert Foursquare places to POI items
+      const pois = response.results.map(place => locationHelpers.foursquareToPOI(place));
+      console.log('📍 [NearbyPOIs] Received', pois.length, 'POIs');
+      return pois;
     },
     enabled,
     staleTime: 7 * 24 * 60 * 60 * 1000, // 7 days - matches API cache

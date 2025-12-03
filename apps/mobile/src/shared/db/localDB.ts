@@ -491,9 +491,13 @@ class LocalDatabase {
         entry_latitude, entry_longitude, location_accuracy,
         location_id,
         status, due_date, completed_at, created_at, updated_at,
+        deleted_at,
         priority, rating, is_pinned,
-        local_only, synced, sync_action
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        local_only, synced, sync_action,
+        version, base_version,
+        conflict_status, conflict_backup,
+        last_edited_by, last_edited_device
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -512,12 +516,19 @@ class LocalDatabase {
         entry.completed_at ? Date.parse(entry.completed_at) : null,
         entry.created_at ? Date.parse(entry.created_at) : now,
         entry.updated_at ? Date.parse(entry.updated_at) : now,
+        entry.deleted_at ? Date.parse(entry.deleted_at) : null,
         entry.priority !== undefined ? entry.priority : 0,
         entry.rating !== undefined ? entry.rating : 0.00,
         entry.is_pinned ? 1 : 0,
         entry.local_only !== undefined ? entry.local_only : 0,
         entry.synced !== undefined ? entry.synced : 0,
-        entry.sync_action !== undefined ? entry.sync_action : 'create'
+        entry.sync_action !== undefined ? entry.sync_action : 'create',
+        entry.version !== undefined ? entry.version : 1,
+        entry.base_version !== undefined ? entry.base_version : 1,
+        entry.conflict_status || null,
+        entry.conflict_backup || null,
+        entry.last_edited_by || null,
+        entry.last_edited_device || null
       ]
     );
 
@@ -650,7 +661,11 @@ class LocalDatabase {
         location_id = ?,
         status = ?, due_date = ?, completed_at = ?,
         priority = ?, rating = ?, is_pinned = ?,
-        updated_at = ?, local_only = ?, synced = ?, sync_action = ?
+        updated_at = ?, deleted_at = ?,
+        local_only = ?, synced = ?, sync_action = ?,
+        version = ?, base_version = ?,
+        conflict_status = ?, conflict_backup = ?,
+        last_edited_by = ?, last_edited_device = ?
       WHERE entry_id = ?`,
       [
         updated.title || null,
@@ -670,9 +685,16 @@ class LocalDatabase {
         updated.rating !== undefined ? updated.rating : 0.00,
         updated.is_pinned ? 1 : 0,
         Date.parse(updated.updated_at),
+        updated.deleted_at ? Date.parse(updated.deleted_at) : null,
         updated.local_only !== undefined ? updated.local_only : 0,
         updated.synced !== undefined ? updated.synced : 0,
         updated.sync_action !== undefined ? updated.sync_action : 'update',
+        updated.version !== undefined ? updated.version : 1,
+        updated.base_version !== undefined ? updated.base_version : 1,
+        updated.conflict_status || null,
+        updated.conflict_backup || null,
+        updated.last_edited_by || null,
+        updated.last_edited_device || null,
         entryId
       ]
     );
@@ -823,6 +845,13 @@ class LocalDatabase {
       synced: row.synced,
       sync_action: row.sync_action,
       sync_error: row.sync_error,
+      // Version tracking fields
+      version: row.version !== undefined ? row.version : 1,
+      base_version: row.base_version !== undefined ? row.base_version : 1,
+      conflict_status: row.conflict_status || null,
+      conflict_backup: row.conflict_backup || null,
+      last_edited_by: row.last_edited_by || null,
+      last_edited_device: row.last_edited_device || null,
     } as Entry;
   }
 

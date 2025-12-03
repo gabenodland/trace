@@ -113,6 +113,17 @@ export function TasksScreen() {
     }
   };
 
+  const handleResolveConflict = async (entryId: string) => {
+    try {
+      await entryMutations.updateEntry(entryId, {
+        conflict_status: null,
+        conflict_backup: null,
+      });
+    } catch (error) {
+      console.error("Failed to resolve conflict:", error);
+    }
+  };
+
   const handleAddEntry = () => {
     navigate("capture", {
       returnContext: {
@@ -231,6 +242,7 @@ export function TasksScreen() {
                       }
                     })}
                     onToggleComplete={handleToggleComplete}
+                    onResolveConflict={handleResolveConflict}
                   />
                 ))}
               </View>

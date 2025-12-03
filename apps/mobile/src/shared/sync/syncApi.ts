@@ -93,7 +93,7 @@ export async function refreshEntryFromServer(entryId: string): Promise<boolean> 
  * Push local changes, then pull remote changes
  */
 export async function fullSync(): Promise<SyncResult> {
-  log.info('Full sync requested');
+  log.debug('Full sync requested');
   return await syncService.fullSync('manual');
 }
 
@@ -102,7 +102,7 @@ export async function fullSync(): Promise<SyncResult> {
  * Useful for debugging or recovering from sync issues
  */
 export async function forcePull(): Promise<SyncResult> {
-  log.info('Force pull requested');
+  log.debug('Force pull requested');
   return await syncService.forcePull();
 }
 
