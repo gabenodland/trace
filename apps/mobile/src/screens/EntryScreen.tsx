@@ -1,18 +1,9 @@
 import { View, StyleSheet } from "react-native";
-import { CaptureForm } from "../modules/entries/components/CaptureForm";
+import { CaptureForm, type ReturnContext } from "../modules/entries/components/CaptureForm";
 import { type Location as LocationType } from "@trace/core";
 
-export interface ReturnContext {
-  screen: "inbox" | "calendar" | "tasks";
-  // For inbox
-  categoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
-  categoryName?: string;
-  // For calendar
-  selectedDate?: string;
-  zoomLevel?: "day" | "week" | "month" | "year";
-  // For tasks
-  taskFilter?: "all" | "incomplete" | "complete";
-}
+// Re-export ReturnContext for backwards compatibility
+export type { ReturnContext };
 
 interface EntryScreenProps {
   entryId?: string | null;
