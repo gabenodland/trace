@@ -428,6 +428,11 @@ class SyncService {
 
     for (const entry of entriesToPush) {
       try {
+        // Ensure category exists on server before pushing entry
+        if (entry.category_id) {
+          await this.ensureCategoryExistsOnServer(entry.category_id);
+        }
+
         await this.syncEntry(entry);
         success++;
       } catch (error) {
@@ -438,6 +443,59 @@ class SyncService {
     }
 
     return { success, errors };
+  }
+
+  /**
+   * Ensure a category exists on the server before pushing entries that reference it.
+   * If the category exists locally but not on server, push it first.
+   */
+  private async ensureCategoryExistsOnServer(categoryId: string): Promise<void> {
+    // Check if category exists on server
+    const { data: serverCategory } = await supabase
+      .from('categories')
+      .select('category_id')
+      .eq('category_id', categoryId)
+      .single();
+
+    if (serverCategory) {
+      return; // Already exists on server
+    }
+
+    // Category doesn't exist on server - try to push it from local
+    const localCategory = await localDB.getCategory(categoryId);
+    if (!localCategory) {
+      log.warn('Category not found locally or on server', { categoryId });
+      return; // Can't do anything - let entry push fail with FK error
+    }
+
+    log.info('Pushing missing category before entry', { categoryId, name: localCategory.name });
+
+    // Push the category (and its parent chain if needed)
+    await this.syncCategoryWithParents(localCategory);
+  }
+
+  /**
+   * Sync a category and ensure all its parent categories exist first
+   */
+  private async syncCategoryWithParents(category: any): Promise<void> {
+    // If category has a parent, ensure parent exists first
+    if (category.parent_id) {
+      const { data: parentOnServer } = await supabase
+        .from('categories')
+        .select('category_id')
+        .eq('category_id', category.parent_id)
+        .single();
+
+      if (!parentOnServer) {
+        const parentCategory = await localDB.getCategory(category.parent_id);
+        if (parentCategory) {
+          await this.syncCategoryWithParents(parentCategory);
+        }
+      }
+    }
+
+    // Now sync this category
+    await this.syncCategory(category);
   }
 
   private async pushEntryDeletes(): Promise<{ success: number; errors: number }> {
