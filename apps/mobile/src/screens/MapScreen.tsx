@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, Alert, Modal, ScrollView } from "react-native";
 import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
+import { useCategories, getAllChildCategoryIds } from "../modules/categories/mobileCategoryHooks";
 import { TopBar } from "../components/layout/TopBar";
 import { localDB } from "../shared/db/localDB";
 import { theme } from "../shared/theme/theme";
 import Svg, { Path, Circle } from "react-native-svg";
-import { formatRelativeTime, type Entry } from "@trace/core";
+import { formatRelativeTime, type Entry, type Category } from "@trace/core";
 
 // Cluster entries that are close together
 interface EntryCluster {
@@ -77,10 +78,15 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
 export function MapScreen() {
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { categories, categoryTree } = useCategories();
 
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const [allEntries, setAllEntries] = useState<Entry[]>([]); // All entries with GPS
   const [locationNames, setLocationNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+
+  // Category filter state
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>("all"); // "all" = show all
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [region, setRegion] = useState<Region>({
     latitude: 39.0997,
     longitude: -94.5786,
@@ -98,12 +104,12 @@ export function MapScreen() {
     const loadEntries = async () => {
       try {
         setIsLoading(true);
-        const allEntries = await localDB.getAllEntries();
+        const fetchedEntries = await localDB.getAllEntries();
         // Filter entries that have GPS coordinates
-        const entriesWithGPS = allEntries.filter(
+        const entriesWithGPS = fetchedEntries.filter(
           (entry) => entry.entry_latitude && entry.entry_longitude
         );
-        setEntries(entriesWithGPS);
+        setAllEntries(entriesWithGPS);
 
         // Fetch location names for entries with location_id
         const locationIds = [...new Set(
@@ -136,6 +142,35 @@ export function MapScreen() {
 
     loadEntries();
   }, []);
+
+  // Get child category IDs for hierarchical filtering
+  const childCategoryIds = useMemo(() => {
+    if (selectedCategoryId && selectedCategoryId !== "all" && selectedCategoryId !== "uncategorized") {
+      return getAllChildCategoryIds(categoryTree, selectedCategoryId);
+    }
+    return [];
+  }, [selectedCategoryId, categoryTree]);
+
+  // Filter entries by selected category
+  const entries = useMemo(() => {
+    if (selectedCategoryId === "all") {
+      return allEntries;
+    }
+    if (selectedCategoryId === "uncategorized") {
+      return allEntries.filter(entry => !entry.category_id);
+    }
+    // Filter by selected category and its children
+    const categoryIds = [selectedCategoryId, ...childCategoryIds];
+    return allEntries.filter(entry => entry.category_id && categoryIds.includes(entry.category_id));
+  }, [allEntries, selectedCategoryId, childCategoryIds]);
+
+  // Get selected category name for display
+  const selectedCategoryName = useMemo(() => {
+    if (selectedCategoryId === "all") return "All Categories";
+    if (selectedCategoryId === "uncategorized") return "Uncategorized";
+    const category = categories.find(c => c.category_id === selectedCategoryId);
+    return category?.name || "All Categories";
+  }, [selectedCategoryId, categories]);
 
   // Calculate map bounds to fit all entries
   const calculateBounds = (entries: Entry[]): Region => {
@@ -252,6 +287,35 @@ export function MapScreen() {
 
     setVisibleEntries(visible);
   }, [entries]); // Remove region from dependencies
+
+  // Recalculate visible entries when entries change (e.g., category filter changed)
+  useEffect(() => {
+    const currentRegion = regionRef.current;
+
+    // Filter entries within the visible region
+    const visible = entries.filter(entry => {
+      const lat = entry.entry_latitude!;
+      const lng = entry.entry_longitude!;
+      const latDelta = currentRegion.latitudeDelta / 2;
+      const lngDelta = currentRegion.longitudeDelta / 2;
+
+      return (
+        lat >= currentRegion.latitude - latDelta &&
+        lat <= currentRegion.latitude + latDelta &&
+        lng >= currentRegion.longitude - lngDelta &&
+        lng <= currentRegion.longitude + lngDelta
+      );
+    });
+
+    // Sort by date (newest first)
+    visible.sort((a, b) => {
+      const dateA = new Date(a.entry_date || a.created_at).getTime();
+      const dateB = new Date(b.entry_date || b.created_at).getTime();
+      return dateB - dateA;
+    });
+
+    setVisibleEntries(visible);
+  }, [entries]);
 
   // Go to user's current location
   const goToCurrentLocation = async () => {
@@ -466,11 +530,25 @@ export function MapScreen() {
         )}
       </View>
 
-      {/* Entry count in view */}
+      {/* Entry count and category filter */}
       <View style={styles.countBar}>
         <Text style={styles.countText}>
           {visibleEntries.length} {visibleEntries.length === 1 ? "entry" : "entries"} in view
         </Text>
+        <TouchableOpacity
+          style={styles.categoryFilterButton}
+          onPress={() => setShowCategoryPicker(true)}
+        >
+          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
+            <Path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+          <Text style={styles.categoryFilterText} numberOfLines={1}>
+            {selectedCategoryName}
+          </Text>
+          <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
+            <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
       </View>
 
       {/* Entry List */}
@@ -507,6 +585,114 @@ export function MapScreen() {
           }
         />
       )}
+
+      {/* Category Picker Modal */}
+      <Modal
+        visible={showCategoryPicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCategoryPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCategoryPicker(false)}
+        >
+          <View style={styles.categoryPickerContainer}>
+            <View style={styles.categoryPickerHeader}>
+              <Text style={styles.categoryPickerTitle}>Filter by Category</Text>
+              <TouchableOpacity onPress={() => setShowCategoryPicker(false)}>
+                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth={2}>
+                  <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.categoryPickerList}>
+              {/* All Categories option */}
+              <TouchableOpacity
+                style={[
+                  styles.categoryPickerItem,
+                  selectedCategoryId === "all" && styles.categoryPickerItemSelected
+                ]}
+                onPress={() => {
+                  setSelectedCategoryId("all");
+                  setShowCategoryPicker(false);
+                }}
+              >
+                <Text style={[
+                  styles.categoryPickerItemText,
+                  selectedCategoryId === "all" && styles.categoryPickerItemTextSelected
+                ]}>
+                  All Categories
+                </Text>
+                {selectedCategoryId === "all" && (
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
+                    <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                )}
+              </TouchableOpacity>
+
+              {/* Uncategorized option */}
+              <TouchableOpacity
+                style={[
+                  styles.categoryPickerItem,
+                  selectedCategoryId === "uncategorized" && styles.categoryPickerItemSelected
+                ]}
+                onPress={() => {
+                  setSelectedCategoryId("uncategorized");
+                  setShowCategoryPicker(false);
+                }}
+              >
+                <Text style={[
+                  styles.categoryPickerItemText,
+                  selectedCategoryId === "uncategorized" && styles.categoryPickerItemTextSelected
+                ]}>
+                  Uncategorized
+                </Text>
+                {selectedCategoryId === "uncategorized" && (
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
+                    <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                )}
+              </TouchableOpacity>
+
+              {/* Separator */}
+              <View style={styles.categoryPickerSeparator} />
+
+              {/* Category list */}
+              {categories.map(category => (
+                <TouchableOpacity
+                  key={category.category_id}
+                  style={[
+                    styles.categoryPickerItem,
+                    selectedCategoryId === category.category_id && styles.categoryPickerItemSelected
+                  ]}
+                  onPress={() => {
+                    setSelectedCategoryId(category.category_id);
+                    setShowCategoryPicker(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.categoryPickerItemText,
+                      selectedCategoryId === category.category_id && styles.categoryPickerItemTextSelected,
+                      { paddingLeft: (category.depth || 0) * 16 }
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {category.name}
+                  </Text>
+                  {selectedCategoryId === category.category_id && (
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
+                      <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -598,11 +784,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border.light,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   countText: {
     fontSize: 13,
     color: theme.colors.text.tertiary,
     fontWeight: "500",
+  },
+  categoryFilterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: theme.colors.background.secondary,
+  },
+  categoryFilterText: {
+    fontSize: 13,
+    color: theme.colors.text.secondary,
+    fontWeight: "500",
+    maxWidth: 120,
   },
   entryList: {
     flex: 1,
@@ -685,5 +889,67 @@ const styles = StyleSheet.create({
   emptyListSubtext: {
     fontSize: 14,
     color: "#9ca3af",
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  categoryPickerContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    width: "100%",
+    maxWidth: 400,
+    maxHeight: "70%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  categoryPickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border.light,
+  },
+  categoryPickerTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: theme.colors.text.primary,
+  },
+  categoryPickerList: {
+    maxHeight: 400,
+  },
+  categoryPickerItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border.light,
+  },
+  categoryPickerItemSelected: {
+    backgroundColor: "#f0f9ff",
+  },
+  categoryPickerItemText: {
+    fontSize: 15,
+    color: theme.colors.text.primary,
+    flex: 1,
+  },
+  categoryPickerItemTextSelected: {
+    color: "#3b82f6",
+    fontWeight: "500",
+  },
+  categoryPickerSeparator: {
+    height: 8,
+    backgroundColor: theme.colors.background.secondary,
   },
 });
