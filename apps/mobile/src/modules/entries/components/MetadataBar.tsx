@@ -11,7 +11,7 @@ import type { Location as LocationType } from "@trace/core";
 
 interface MetadataBarProps {
   // Form data
-  categoryName: string | null;
+  streamName: string | null;
   captureLocation: boolean;
   locationData: LocationType | null;
   status: "none" | "incomplete" | "in_progress" | "complete";
@@ -31,7 +31,7 @@ interface MetadataBarProps {
   isEditMode: boolean;
   enterEditMode: () => void;
   // Callbacks
-  onCategoryPress: () => void;
+  onStreamPress: () => void;
   onLocationPress: () => void;
   onStatusPress: () => void;
   onDueDatePress: () => void;
@@ -44,7 +44,7 @@ interface MetadataBarProps {
 }
 
 export function MetadataBar({
-  categoryName,
+  streamName,
   captureLocation,
   locationData,
   status,
@@ -61,7 +61,7 @@ export function MetadataBar({
   showPhotos,
   isEditMode,
   enterEditMode,
-  onCategoryPress,
+  onStreamPress,
   onLocationPress,
   onStatusPress,
   onDueDatePress,
@@ -82,10 +82,10 @@ export function MetadataBar({
 
   return (
     <View style={styles.metadataBar}>
-      {/* Category - always shown */}
+      {/* Stream - always shown */}
       <TouchableOpacity
         style={styles.metadataLink}
-        onPress={() => handlePress(onCategoryPress)}
+        onPress={() => handlePress(onStreamPress)}
       >
         <View style={styles.metadataLinkContent}>
           <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
@@ -94,7 +94,7 @@ export function MetadataBar({
             <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
           <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-            {categoryName || "Uncategorized"}
+            {streamName || "No Stream"}
           </Text>
         </View>
       </TouchableOpacity>

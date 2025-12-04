@@ -279,7 +279,7 @@ export function MapScreen() {
     setVisibleEntries(visible);
   }, [entries]); // Remove region from dependencies
 
-  // Recalculate visible entries when entries change (e.g., category filter changed)
+  // Recalculate visible entries when entries change (e.g., stream filter changed)
   useEffect(() => {
     const currentRegion = regionRef.current;
 

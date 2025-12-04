@@ -57,8 +57,7 @@ export function useSync() {
       queryClient.invalidateQueries({ queryKey: ['syncStatus'] });
       // Invalidate data queries to refresh UI
       queryClient.invalidateQueries({ queryKey: ['entries'] });
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
+      queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['locations'] });
     },
   });
@@ -69,8 +68,7 @@ export function useSync() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['syncStatus'] });
       queryClient.invalidateQueries({ queryKey: ['entries'] });
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
+      queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['locations'] });
     },
   });

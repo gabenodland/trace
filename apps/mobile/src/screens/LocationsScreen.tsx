@@ -342,8 +342,8 @@ function LocationTreeNode({ node, depth, searchQuery, navigate }: LocationTreeNo
     if (node.locationId) {
       // Navigate to entries filtered by this location
       navigate("inbox", {
-        returnCategoryId: `location:${node.locationId}`,
-        returnCategoryName: node.name
+        returnStreamId: `location:${node.locationId}`,
+        returnStreamName: node.name
       });
     } else if (hasChildren) {
       // Hierarchy nodes just expand/collapse

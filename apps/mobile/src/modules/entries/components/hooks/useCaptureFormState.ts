@@ -24,8 +24,8 @@ export interface PendingPhoto {
 export interface CaptureFormData {
   title: string;
   content: string;
-  categoryId: string | null;
-  categoryName: string | null;
+  streamId: string | null;
+  streamName: string | null;
   status: "none" | "incomplete" | "in_progress" | "complete";
   dueDate: string | null;
   rating: number;
@@ -39,8 +39,8 @@ export interface CaptureFormData {
 
 interface UseCaptureFormStateOptions {
   isEditing: boolean;
-  initialCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
-  initialCategoryName?: string;
+  initialStreamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people";
+  initialStreamName?: string;
   initialContent?: string;
   initialDate?: string;
   initialLocation?: LocationType;
@@ -48,33 +48,33 @@ interface UseCaptureFormStateOptions {
 }
 
 /**
- * Helper to determine initial category ID
- * Filters out non-category values like "all", "tasks", "tag:xyz", etc.
+ * Helper to determine initial stream ID
+ * Filters out non-stream values like "all", "tasks", "tag:xyz", etc.
  */
-function getInitialCategoryId(
+function getInitialStreamId(
   isEditing: boolean,
-  initialCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people"
+  initialStreamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people"
 ): string | null {
   if (isEditing) return null; // Will be loaded from entry
 
-  // For new entries, use initialCategoryId if it's a real category (not a filter)
+  // For new entries, use initialStreamId if it's a real stream (not a filter)
   if (
-    !initialCategoryId ||
-    typeof initialCategoryId !== "string" ||
-    initialCategoryId === "all" ||
-    initialCategoryId === "tasks" ||
-    initialCategoryId === "events" ||
-    initialCategoryId === "categories" ||
-    initialCategoryId === "tags" ||
-    initialCategoryId === "people" ||
-    initialCategoryId.startsWith("tag:") ||
-    initialCategoryId.startsWith("mention:") ||
-    initialCategoryId.startsWith("location:")
+    !initialStreamId ||
+    typeof initialStreamId !== "string" ||
+    initialStreamId === "all" ||
+    initialStreamId === "tasks" ||
+    initialStreamId === "events" ||
+    initialStreamId === "streams" ||
+    initialStreamId === "tags" ||
+    initialStreamId === "people" ||
+    initialStreamId.startsWith("tag:") ||
+    initialStreamId.startsWith("mention:") ||
+    initialStreamId.startsWith("location:")
   ) {
     return null; // Default to Uncategorized for filters
   }
 
-  return initialCategoryId;
+  return initialStreamId;
 }
 
 /**
@@ -101,8 +101,8 @@ function getInitialEntryDate(initialDate?: string): string {
 export function useCaptureFormState(options: UseCaptureFormStateOptions) {
   const {
     isEditing,
-    initialCategoryId,
-    initialCategoryName,
+    initialStreamId,
+    initialStreamName,
     initialContent,
     initialDate,
     initialLocation,
@@ -110,17 +110,17 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
   } = options;
 
   // Calculate initial values
-  const initialCatId = getInitialCategoryId(isEditing, initialCategoryId);
+  const initialStrId = getInitialStreamId(isEditing, initialStreamId);
   const initialEntryDate = getInitialEntryDate(initialDate);
 
   // SINGLE STATE OBJECT - per CLAUDE.md pattern
   const [formData, setFormData] = useState<CaptureFormData>({
     title: "",
     content: initialContent || "",
-    categoryId: initialCatId,
-    categoryName:
-      !isEditing && initialCategoryName && initialCatId !== null
-        ? initialCategoryName
+    streamId: initialStrId,
+    streamName:
+      !isEditing && initialStreamName && initialStrId !== null
+        ? initialStreamName
         : null,
     status: "none",
     dueDate: null,
@@ -175,10 +175,10 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
     setFormData({
       title: "",
       content: initialContent || "",
-      categoryId: initialCatId,
-      categoryName:
-        !isEditing && initialCategoryName && initialCatId !== null
-          ? initialCategoryName
+      streamId: initialStrId,
+      streamName:
+        !isEditing && initialStreamName && initialStrId !== null
+          ? initialStreamName
           : null,
       status: "none",
       dueDate: null,
@@ -194,9 +194,9 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
     });
   }, [
     initialContent,
-    initialCatId,
+    initialStrId,
     isEditing,
-    initialCategoryName,
+    initialStreamName,
     initialDate,
     initialLocation,
     captureGpsLocationSetting,

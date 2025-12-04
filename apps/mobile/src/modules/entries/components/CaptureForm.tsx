@@ -29,8 +29,8 @@ import { CaptureFormHeader } from "./CaptureFormHeader";
 export interface ReturnContext {
   screen: "inbox" | "calendar" | "tasks";
   // For inbox
-  categoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
-  categoryName?: string;
+  streamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people";
+  streamName?: string;
   // For calendar
   selectedDate?: string;
   zoomLevel?: "day" | "week" | "month" | "year";
@@ -40,8 +40,8 @@ export interface ReturnContext {
 
 interface CaptureFormProps {
   entryId?: string | null;
-  initialCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
-  initialCategoryName?: string;
+  initialStreamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people";
+  initialStreamName?: string;
   initialContent?: string;
   initialDate?: string;
   initialLocation?: LocationType;
@@ -54,7 +54,7 @@ interface CaptureFormProps {
   };
 }
 
-export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, initialContent, initialDate, initialLocation, returnContext, copiedEntryData }: CaptureFormProps = {}) {
+export function CaptureForm({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, initialLocation, returnContext, copiedEntryData }: CaptureFormProps = {}) {
   // Determine if we're editing an existing entry or creating a new one
   // Note: copied entries are NOT editing - they're new entries with pre-filled data
   const isEditing = !!entryId && !copiedEntryData;
@@ -66,8 +66,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   // Single form data state hook (consolidates form field state + pending photos)
   const { formData, updateField, addPendingPhoto, removePendingPhoto } = useCaptureFormState({
     isEditing,
-    initialCategoryId,
-    initialCategoryName,
+    initialStreamId,
+    initialStreamName,
     initialContent,
     initialDate,
     initialLocation,
@@ -79,12 +79,12 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Consolidated picker visibility state - only one picker can be open at a time
-  type ActivePicker = 'category' | 'location' | 'dueDate' | 'rating' | 'priority' | 'attributes' | 'entryDate' | 'time' | null;
+  type ActivePicker = 'stream' | 'location' | 'dueDate' | 'rating' | 'priority' | 'attributes' | 'entryDate' | 'time' | null;
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
 
-  // Original category for cancel navigation (for edited entries)
-  const [originalCategoryId, setOriginalCategoryId] = useState<string | null>(null);
-  const [originalCategoryName, setOriginalCategoryName] = useState<string | null>(null);
+  // Original stream for cancel navigation (for edited entries)
+  const [originalStreamId, setOriginalStreamId] = useState<string | null>(null);
+  const [originalStreamName, setOriginalStreamName] = useState<string | null>(null);
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const snackbarOpacity = useRef(new Animated.Value(0)).current;
@@ -107,7 +107,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const [showMenu, setShowMenu] = useState(false);
 
   // Get current stream for visibility controls
-  const currentStream = streams.find(s => s.stream_id === formData.categoryId);
+  const currentStream = streams.find(s => s.stream_id === formData.streamId);
 
   // Stream-based visibility
   // If no stream: show all fields (default true)
@@ -126,7 +126,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const originalValues = useRef<{
     title: string;
     content: string;
-    categoryId: string | null;
+    streamId: string | null;
     status: "none" | "incomplete" | "in_progress" | "complete";
     dueDate: string | null;
     rating: number;
@@ -148,7 +148,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       originalValues.current = {
         title: formData.title,
         content: formData.content,
-        categoryId: formData.categoryId,
+        streamId: formData.streamId,
         status: formData.status,
         dueDate: formData.dueDate,
         rating: formData.rating,
@@ -217,7 +217,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     return () => {
       setBeforeBackHandler(null);
     };
-  }, [unsavedChangesBehavior, formData.title, formData.content, formData.categoryId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode]);
+  }, [unsavedChangesBehavior, formData.title, formData.content, formData.streamId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode]);
 
   // Check if there are unsaved changes
   const hasUnsavedChanges = (): boolean => {
@@ -231,7 +231,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     // Compare current values with original
     if (formData.title !== orig.title) return true;
     if (formData.content !== orig.content) return true;
-    if (formData.categoryId !== orig.categoryId) return true;
+    if (formData.streamId !== orig.streamId) return true;
     if (formData.status !== orig.status) return true;
     if (formData.dueDate !== orig.dueDate) return true;
     if (formData.entryDate !== orig.entryDate) return true;
@@ -374,7 +374,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const locationPickerMode: 'select' | 'view' = formData.locationData?.name ? 'view' : 'select';
 
   // Helper to navigate back based on returnContext
-  const navigateBack = useCallback((options?: { useCurrentCategory?: boolean }) => {
+  const navigateBack = useCallback((options?: { useCurrentStream?: boolean }) => {
     if (returnContext) {
       if (returnContext.screen === "calendar") {
         navigate("calendar", {
@@ -387,34 +387,34 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         return;
       } else if (returnContext.screen === "inbox") {
         navigate("inbox", {
-          returnCategoryId: returnContext.categoryId || null,
-          returnCategoryName: returnContext.categoryName || "Uncategorized"
+          returnStreamId: returnContext.streamId || null,
+          returnStreamName: returnContext.streamName || "Uncategorized"
         });
         return;
       }
     }
 
     // Default: go to inbox
-    if (options?.useCurrentCategory) {
-      // Use current form category (after save)
-      let returnCategoryId: string | null = formData.categoryId || null;
-      let returnCategoryName: string = formData.categoryName || "Uncategorized";
+    if (options?.useCurrentStream) {
+      // Use current form stream (after save)
+      let returnStreamId: string | null = formData.streamId || null;
+      let returnStreamName: string = formData.streamName || "Uncategorized";
       // Edge case: If returning to a filter view, switch to Uncategorized
-      if (returnCategoryId === "all" || returnCategoryId === "tasks" ||
-          returnCategoryId === "events" || returnCategoryId === "categories" ||
-          returnCategoryId === "tags" || returnCategoryId === "people" ||
-          (typeof returnCategoryId === 'string' && (returnCategoryId.startsWith("tag:") || returnCategoryId.startsWith("mention:")))) {
-        returnCategoryId = null;
-        returnCategoryName = "Uncategorized";
+      if (returnStreamId === "all" || returnStreamId === "tasks" ||
+          returnStreamId === "events" || returnStreamId === "streams" ||
+          returnStreamId === "tags" || returnStreamId === "people" ||
+          (typeof returnStreamId === 'string' && (returnStreamId.startsWith("tag:") || returnStreamId.startsWith("mention:")))) {
+        returnStreamId = null;
+        returnStreamName = "Uncategorized";
       }
-      navigate("inbox", { returnCategoryId, returnCategoryName });
+      navigate("inbox", { returnStreamId, returnStreamName });
     } else {
-      // Use original category (for cancel/back)
-      const returnCategoryId = isEditing ? originalCategoryId : (formData.categoryId || null);
-      const returnCategoryName = isEditing ? originalCategoryName : (formData.categoryName || "Uncategorized");
-      navigate("inbox", { returnCategoryId, returnCategoryName });
+      // Use original stream (for cancel/back)
+      const returnStreamId = isEditing ? originalStreamId : (formData.streamId || null);
+      const returnStreamName = isEditing ? originalStreamName : (formData.streamName || "Uncategorized");
+      navigate("inbox", { returnStreamId, returnStreamName });
     }
-  }, [returnContext, navigate, formData.entryDate, formData.categoryId, formData.categoryName, isEditing, originalCategoryId, originalCategoryName]);
+  }, [returnContext, navigate, formData.entryDate, formData.streamId, formData.streamName, isEditing, originalStreamId, originalStreamName]);
 
   // Auto-collapse formData.title when user starts typing in body without a formData.title
   useEffect(() => {
@@ -430,7 +430,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     if (entry && isEditing) {
       updateField("title", entry.title || "");
       updateField("content", entry.content);
-      updateField("categoryId", entry.stream_id || null);
+      updateField("streamId", entry.stream_id || null);
       updateField("status", entry.status);
       updateField("dueDate", entry.due_date);
       updateField("rating", entry.rating || 0);
@@ -505,15 +505,15 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       // Look up stream name from streams list
       if (entry.stream_id && streams.length > 0) {
         const stream = streams.find(s => s.stream_id === entry.stream_id);
-        updateField("categoryName", stream?.name || null);
+        updateField("streamName", stream?.name || null);
         // Store original stream for cancel navigation
-        setOriginalCategoryId(entry.stream_id);
-        setOriginalCategoryName(stream?.name || null);
+        setOriginalStreamId(entry.stream_id);
+        setOriginalStreamName(stream?.name || null);
       } else {
-        updateField("categoryName", null);
+        updateField("streamName", null);
         // Store original stream (No Stream) for cancel navigation
-        setOriginalCategoryId(null);
-        setOriginalCategoryName(null);
+        setOriginalStreamId(null);
+        setOriginalStreamName(null);
       }
 
       // Store original values for change detection (after all state is set)
@@ -521,7 +521,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       originalValues.current = {
         title: entry.title || "",
         content: entry.content,
-        categoryId: entry.stream_id || null,
+        streamId: entry.stream_id || null,
         status: entry.status,
         dueDate: entry.due_date,
         rating: entry.rating || 0,
@@ -544,7 +544,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       // Load all entry fields
       updateField("title", copiedEntry.title || "");
       updateField("content", copiedEntry.content);
-      updateField("categoryId", copiedEntry.stream_id || null);
+      updateField("streamId", copiedEntry.stream_id || null);
       updateField("status", copiedEntry.status || "none");
       updateField("dueDate", copiedEntry.due_date || null);
       updateField("rating", copiedEntry.rating || 0);
@@ -591,7 +591,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       // Look up stream name
       if (copiedEntry.stream_id && streams.length > 0) {
         const stream = streams.find(s => s.stream_id === copiedEntry.stream_id);
-        updateField("categoryName", stream?.name || null);
+        updateField("streamName", stream?.name || null);
       }
 
       // Load the copied photos as pending photos
@@ -786,7 +786,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           content: formData.content,
           tags,
           mentions,
-          stream_id: formData.categoryId,
+          stream_id: formData.streamId,
           entry_date: formData.entryDate,
           status: formData.status,
           due_date: formData.dueDate,
@@ -803,7 +803,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           tags,
           mentions,
           entry_date: formData.entryDate,
-          stream_id: formData.categoryId,
+          stream_id: formData.streamId,
           status: formData.status,
           due_date: formData.dueDate,
           rating: formData.rating || 0,
@@ -850,8 +850,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         // Clear form only when creating
         updateField("title", "");
         updateField("content", "");
-        updateField("categoryId", null);
-        updateField("categoryName", null);
+        updateField("streamId", null);
+        updateField("streamName", null);
         updateField("locationData", null);
         updateField("status", "none");
         updateField("dueDate", null);
@@ -861,8 +861,8 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
 
       // Note: Sync is triggered automatically in mobileEntryApi after save
 
-      // Navigate back with current category
-      navigateBack({ useCurrentCategory: true });
+      // Navigate back with current stream
+      navigateBack({ useCurrentStream: true });
     } catch (error) {
       console.error(`Failed to ${isEditing ? 'update' : 'create'} entry:`, error);
       Alert.alert("Error", `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -1079,7 +1079,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       {/* Metadata Bar - Only shows SET values (hidden in full-screen mode) */}
       {!isFullScreen && (
         <MetadataBar
-          categoryName={formData.categoryName}
+          streamName={formData.streamName}
           captureLocation={formData.captureLocation}
           locationData={formData.locationData}
           status={formData.status}
@@ -1096,7 +1096,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           showPhotos={showPhotos}
           isEditMode={isEditMode}
           enterEditMode={enterEditMode}
-          onCategoryPress={() => setActivePicker(activePicker === 'category' ? null : 'category')}
+          onStreamPress={() => setActivePicker(activePicker === 'stream' ? null : 'stream')}
           onLocationPress={() => setActivePicker(activePicker === 'location' ? null : 'location')}
           onStatusPress={() => {
             // Cycle through statuses
@@ -1169,7 +1169,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       )}
 
       {/* Stream Picker Dropdown - only render when active to avoid unnecessary hook calls */}
-      {activePicker === 'category' && (
+      {activePicker === 'stream' && (
         <TopBarDropdownContainer
           visible={true}
           onClose={() => setActivePicker(null)}
@@ -1178,10 +1178,10 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
             visible={true}
             onClose={() => setActivePicker(null)}
             onSelect={(id, name) => {
-              const hadStream = !!formData.categoryId;
+              const hadStream = !!formData.streamId;
               const isRemoving = !id;
-              updateField("categoryId", id);
-              updateField("categoryName", name);
+              updateField("streamId", id);
+              updateField("streamName", name);
               if (isRemoving && hadStream) {
                 showSnackbar('You removed the stream');
               } else if (hadStream) {
@@ -1193,7 +1193,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
                 enterEditMode();
               }
             }}
-            selectedStreamId={formData.categoryId}
+            selectedStreamId={formData.streamId}
           />
         </TopBarDropdownContainer>
       )}

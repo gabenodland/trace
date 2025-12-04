@@ -167,8 +167,8 @@ function AuthGate() {
         return (
           <EntryScreen
             entryId={navParams.entryId}
-            initialCategoryId={navParams.initialCategoryId}
-            initialCategoryName={navParams.initialCategoryName}
+            initialStreamId={navParams.initialStreamId}
+            initialStreamName={navParams.initialStreamName}
             initialContent={navParams.initialContent}
             initialDate={navParams.initialDate}
             initialLocation={navParams.initialLocation}

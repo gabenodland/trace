@@ -167,8 +167,8 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
       entryId,
       returnContext: {
         screen: "inbox",
-        categoryId: selectedStreamId,
-        categoryName: selectedStreamName
+        streamId: selectedStreamId,
+        streamName: selectedStreamName
       }
     });
   };
@@ -207,14 +207,14 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
     }
 
     navigate("capture", {
-      initialCategoryId: selectedStreamId,
-      initialCategoryName: selectedStreamName,
+      initialStreamId: selectedStreamId,
+      initialStreamName: selectedStreamName,
       initialContent,
       initialLocation,
       returnContext: {
         screen: "inbox",
-        categoryId: selectedStreamId,
-        categoryName: selectedStreamName
+        streamId: selectedStreamId,
+        streamName: selectedStreamName
       }
     });
   };
@@ -353,8 +353,8 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
         copiedEntryData,
         returnContext: {
           screen: "inbox",
-          categoryId: selectedStreamId,
-          categoryName: selectedStreamName
+          streamId: selectedStreamId,
+          streamName: selectedStreamName
         }
       });
     } catch (error) {

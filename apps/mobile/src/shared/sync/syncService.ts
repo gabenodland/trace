@@ -271,12 +271,12 @@ class SyncService {
       const forceFullPull = options.forceFullPull || false;
       const pullStartTime = new Date();
 
-      // PULL FIRST: Server → Local (for categories/locations that entries depend on)
-      // This ensures we detect remotely-deleted categories BEFORE trying to push entries
+      // PULL FIRST: Server → Local (for streams/locations that entries depend on)
+      // This ensures we detect remotely-deleted streams BEFORE trying to push entries
       if (options.pull) {
-        // Step 1: Pull categories (and clean up orphans)
-        const categoryResult = await this.pullStreams(forceFullPull);
-        result.pulled.streams = categoryResult.new + categoryResult.updated;
+        // Step 1: Pull streams (and clean up orphans)
+        const streamResult = await this.pullStreams(forceFullPull);
+        result.pulled.streams = streamResult.new + streamResult.updated;
 
         // Step 2: Pull locations
         const locationResult = await this.pullLocations(forceFullPull);
@@ -285,10 +285,10 @@ class SyncService {
 
       // PUSH: Local → Server
       if (options.push) {
-        // Step 1: Push categories (entries depend on them)
-        const categoryResult = await this.pushStreams();
-        result.pushed.streams = categoryResult.success;
-        result.errors.streams = categoryResult.errors;
+        // Step 1: Push streams (entries depend on them)
+        const streamResult = await this.pushStreams();
+        result.pushed.streams = streamResult.success;
+        result.errors.streams = streamResult.errors;
 
         // Step 2: Push locations (entries reference them)
         const locationResult = await this.pushLocations();

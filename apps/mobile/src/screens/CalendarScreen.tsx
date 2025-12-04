@@ -154,11 +154,11 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
   };
 
   const handleTagPress = (tag: string) => {
-    navigate("inbox", { returnCategoryId: `tag:${tag}`, returnCategoryName: `#${tag}` });
+    navigate("inbox", { returnStreamId: `tag:${tag}`, returnStreamName: `#${tag}` });
   };
 
   const handleMentionPress = (mention: string) => {
-    navigate("inbox", { returnCategoryId: `mention:${mention}`, returnCategoryName: `@${mention}` });
+    navigate("inbox", { returnStreamId: `mention:${mention}`, returnStreamName: `@${mention}` });
   };
 
   const handleAddEntry = () => {

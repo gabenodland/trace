@@ -8,8 +8,8 @@ export type { ReturnContext };
 
 interface EntryScreenProps {
   entryId?: string | null;
-  initialCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
-  initialCategoryName?: string;
+  initialStreamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people";
+  initialStreamName?: string;
   initialContent?: string;
   initialDate?: string;
   initialLocation?: LocationType;
@@ -18,13 +18,13 @@ interface EntryScreenProps {
   copiedEntryData?: CopiedEntryData;
 }
 
-export function EntryScreen({ entryId, initialCategoryId, initialCategoryName, initialContent, initialDate, initialLocation, returnContext, copiedEntryData }: EntryScreenProps = {}) {
+export function EntryScreen({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, initialLocation, returnContext, copiedEntryData }: EntryScreenProps = {}) {
   return (
     <View style={styles.container}>
       <CaptureForm
         entryId={entryId}
-        initialCategoryId={initialCategoryId}
-        initialCategoryName={initialCategoryName}
+        initialStreamId={initialStreamId}
+        initialStreamName={initialStreamName}
         initialContent={initialContent}
         initialDate={initialDate}
         initialLocation={initialLocation}

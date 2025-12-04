@@ -59,7 +59,7 @@ function useCreateEntryMutation() {
     onSuccess: () => {
       // Invalidate queries to trigger refresh
       queryClient.invalidateQueries({ queryKey: ['entries'] });
-      queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
+      queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
@@ -79,7 +79,7 @@ function useUpdateEntryMutation() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['entry', data.entry_id] });
-      queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
+      queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
@@ -97,7 +97,7 @@ function useDeleteEntryMutation() {
     mutationFn: deleteEntry,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
-      queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
+      queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
