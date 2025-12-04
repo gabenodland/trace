@@ -21,7 +21,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
       content: data.content,
       tags: data.tags || [],
       mentions: data.mentions || [],
-      category_id: data.category_id || null,
+      stream_id: data.stream_id || null,
       entry_date: data.entry_date || null,
       entry_latitude: data.entry_latitude || null,
       entry_longitude: data.entry_longitude || null,
@@ -54,11 +54,11 @@ export async function getEntries(filter?: EntryFilter): Promise<Entry[]> {
 
   // Apply filters
   if (filter) {
-    if (filter.category_id !== undefined) {
-      if (filter.category_id === null) {
-        query = query.is("category_id", null);
+    if (filter.stream_id !== undefined) {
+      if (filter.stream_id === null) {
+        query = query.is("stream_id", null);
       } else {
-        query = query.eq("category_id", filter.category_id);
+        query = query.eq("stream_id", filter.stream_id);
       }
     }
 

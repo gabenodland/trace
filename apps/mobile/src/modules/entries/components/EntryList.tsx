@@ -3,10 +3,9 @@ import { useState } from "react";
 import type { Entry } from "@trace/core";
 import { EntryListItem } from "./EntryListItem";
 
-interface Category {
-  category_id: string;
+interface Stream {
+  stream_id: string;
   name: string;
-  full_path: string;
 }
 
 interface Location {
@@ -22,24 +21,24 @@ interface EntryListProps {
   onEntryPress: (entryId: string) => void;
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
-  onCategoryPress?: (categoryId: string | null, categoryName: string) => void;
+  onStreamPress?: (streamId: string | null, streamName: string) => void;
   onMove?: (entryId: string) => void;
   onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
   onResolveConflict?: (entryId: string) => void; // Dismiss conflict banner
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
-  categories?: Category[]; // Optional categories for displaying category names
+  streams?: Stream[]; // Optional streams for displaying stream names
   locations?: Location[]; // Optional locations for displaying location names
   displayMode?: EntryDisplayMode; // Display mode for entry items
 }
 
-export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onCategoryPress, onMove, onCopy, onDelete, onPin, onResolveConflict, ListHeaderComponent, categories, locations, displayMode }: EntryListProps) {
+export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onResolveConflict, ListHeaderComponent, streams, locations, displayMode }: EntryListProps) {
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
-  // Create a lookup map for categories (using full_path)
-  const categoryMap = categories?.reduce((map, cat) => {
-    map[cat.category_id] = cat.full_path;
+  // Create a lookup map for streams
+  const streamMap = streams?.reduce((map, s) => {
+    map[s.stream_id] = s.name;
     return map;
   }, {} as Record<string, string>);
 
@@ -68,13 +67,13 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
             onPress={() => onEntryPress(item.entry_id)}
             onTagPress={onTagPress}
             onMentionPress={onMentionPress}
-            onCategoryPress={onCategoryPress}
+            onStreamPress={onStreamPress}
             onMove={onMove}
             onCopy={onCopy}
             onDelete={onDelete}
             onPin={onPin}
             onResolveConflict={onResolveConflict}
-            categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
+            streamName={item.stream_id && streamMap ? streamMap[item.stream_id] : null}
             locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
             displayMode={displayMode}
             showMenu={openMenuEntryId === item.entry_id}
@@ -114,13 +113,13 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
           onPress={() => onEntryPress(item.entry_id)}
           onTagPress={onTagPress}
           onMentionPress={onMentionPress}
-          onCategoryPress={onCategoryPress}
+          onStreamPress={onStreamPress}
           onMove={onMove}
           onCopy={onCopy}
           onDelete={onDelete}
           onPin={onPin}
           onResolveConflict={onResolveConflict}
-          categoryName={item.category_id && categoryMap ? categoryMap[item.category_id] : null}
+          streamName={item.stream_id && streamMap ? streamMap[item.stream_id] : null}
           locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
           displayMode={displayMode}
           showMenu={openMenuEntryId === item.entry_id}

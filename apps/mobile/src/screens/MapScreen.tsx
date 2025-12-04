@@ -4,12 +4,12 @@ import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
-import { useCategories, getAllChildCategoryIds } from "../modules/categories/mobileCategoryHooks";
+import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { TopBar } from "../components/layout/TopBar";
 import { localDB } from "../shared/db/localDB";
 import { theme } from "../shared/theme/theme";
 import Svg, { Path, Circle } from "react-native-svg";
-import { formatRelativeTime, type Entry, type Category } from "@trace/core";
+import { formatRelativeTime, type Entry, type Stream } from "@trace/core";
 
 // Cluster entries that are close together
 interface EntryCluster {
@@ -78,15 +78,15 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
 export function MapScreen() {
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
-  const { categories, categoryTree } = useCategories();
+  const { streams } = useStreams();
 
   const [allEntries, setAllEntries] = useState<Entry[]>([]); // All entries with GPS
   const [locationNames, setLocationNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
 
-  // Category filter state
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>("all"); // "all" = show all
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  // Stream filter state
+  const [selectedStreamId, setSelectedStreamId] = useState<string | null>("all"); // "all" = show all
+  const [showStreamPicker, setShowStreamPicker] = useState(false);
   const [region, setRegion] = useState<Region>({
     latitude: 39.0997,
     longitude: -94.5786,
@@ -143,34 +143,25 @@ export function MapScreen() {
     loadEntries();
   }, []);
 
-  // Get child category IDs for hierarchical filtering
-  const childCategoryIds = useMemo(() => {
-    if (selectedCategoryId && selectedCategoryId !== "all" && selectedCategoryId !== "uncategorized") {
-      return getAllChildCategoryIds(categoryTree, selectedCategoryId);
-    }
-    return [];
-  }, [selectedCategoryId, categoryTree]);
-
-  // Filter entries by selected category
+  // Filter entries by selected stream (flat - no hierarchy)
   const entries = useMemo(() => {
-    if (selectedCategoryId === "all") {
+    if (selectedStreamId === "all") {
       return allEntries;
     }
-    if (selectedCategoryId === "uncategorized") {
-      return allEntries.filter(entry => !entry.category_id);
+    if (selectedStreamId === "no-stream") {
+      return allEntries.filter(entry => !entry.stream_id);
     }
-    // Filter by selected category and its children
-    const categoryIds = [selectedCategoryId, ...childCategoryIds];
-    return allEntries.filter(entry => entry.category_id && categoryIds.includes(entry.category_id));
-  }, [allEntries, selectedCategoryId, childCategoryIds]);
+    // Filter by selected stream
+    return allEntries.filter(entry => entry.stream_id === selectedStreamId);
+  }, [allEntries, selectedStreamId]);
 
-  // Get selected category name for display
-  const selectedCategoryName = useMemo(() => {
-    if (selectedCategoryId === "all") return "All Categories";
-    if (selectedCategoryId === "uncategorized") return "Uncategorized";
-    const category = categories.find(c => c.category_id === selectedCategoryId);
-    return category?.name || "All Categories";
-  }, [selectedCategoryId, categories]);
+  // Get selected stream name for display
+  const selectedStreamName = useMemo(() => {
+    if (selectedStreamId === "all") return "All Streams";
+    if (selectedStreamId === "no-stream") return "Unassigned";
+    const stream = streams.find(s => s.stream_id === selectedStreamId);
+    return stream?.name || "All Streams";
+  }, [selectedStreamId, streams]);
 
   // Calculate map bounds to fit all entries
   const calculateBounds = (entries: Entry[]): Region => {
@@ -530,20 +521,20 @@ export function MapScreen() {
         )}
       </View>
 
-      {/* Entry count and category filter */}
+      {/* Entry count and stream filter */}
       <View style={styles.countBar}>
         <Text style={styles.countText}>
           {visibleEntries.length} {visibleEntries.length === 1 ? "entry" : "entries"} in view
         </Text>
         <TouchableOpacity
-          style={styles.categoryFilterButton}
-          onPress={() => setShowCategoryPicker(true)}
+          style={styles.streamFilterButton}
+          onPress={() => setShowStreamPicker(true)}
         >
           <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
             <Path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={styles.categoryFilterText} numberOfLines={1}>
-            {selectedCategoryName}
+          <Text style={styles.streamFilterText} numberOfLines={1}>
+            {selectedStreamName}
           </Text>
           <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
             <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -586,70 +577,70 @@ export function MapScreen() {
         />
       )}
 
-      {/* Category Picker Modal */}
+      {/* Stream Picker Modal */}
       <Modal
-        visible={showCategoryPicker}
+        visible={showStreamPicker}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setShowCategoryPicker(false)}
+        onRequestClose={() => setShowStreamPicker(false)}
       >
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={() => setShowCategoryPicker(false)}
+          onPress={() => setShowStreamPicker(false)}
         >
-          <View style={styles.categoryPickerContainer}>
-            <View style={styles.categoryPickerHeader}>
-              <Text style={styles.categoryPickerTitle}>Filter by Category</Text>
-              <TouchableOpacity onPress={() => setShowCategoryPicker(false)}>
+          <View style={styles.streamPickerContainer}>
+            <View style={styles.streamPickerHeader}>
+              <Text style={styles.streamPickerTitle}>Filter by Stream</Text>
+              <TouchableOpacity onPress={() => setShowStreamPicker(false)}>
                 <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth={2}>
                   <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.categoryPickerList}>
-              {/* All Categories option */}
+            <ScrollView style={styles.streamPickerList}>
+              {/* All Streams option */}
               <TouchableOpacity
                 style={[
-                  styles.categoryPickerItem,
-                  selectedCategoryId === "all" && styles.categoryPickerItemSelected
+                  styles.streamPickerItem,
+                  selectedStreamId === "all" && styles.streamPickerItemSelected
                 ]}
                 onPress={() => {
-                  setSelectedCategoryId("all");
-                  setShowCategoryPicker(false);
+                  setSelectedStreamId("all");
+                  setShowStreamPicker(false);
                 }}
               >
                 <Text style={[
-                  styles.categoryPickerItemText,
-                  selectedCategoryId === "all" && styles.categoryPickerItemTextSelected
+                  styles.streamPickerItemText,
+                  selectedStreamId === "all" && styles.streamPickerItemTextSelected
                 ]}>
-                  All Categories
+                  All Streams
                 </Text>
-                {selectedCategoryId === "all" && (
+                {selectedStreamId === "all" && (
                   <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
                     <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
                 )}
               </TouchableOpacity>
 
-              {/* Uncategorized option */}
+              {/* Unassigned option */}
               <TouchableOpacity
                 style={[
-                  styles.categoryPickerItem,
-                  selectedCategoryId === "uncategorized" && styles.categoryPickerItemSelected
+                  styles.streamPickerItem,
+                  selectedStreamId === "no-stream" && styles.streamPickerItemSelected
                 ]}
                 onPress={() => {
-                  setSelectedCategoryId("uncategorized");
-                  setShowCategoryPicker(false);
+                  setSelectedStreamId("no-stream");
+                  setShowStreamPicker(false);
                 }}
               >
                 <Text style={[
-                  styles.categoryPickerItemText,
-                  selectedCategoryId === "uncategorized" && styles.categoryPickerItemTextSelected
+                  styles.streamPickerItemText,
+                  selectedStreamId === "no-stream" && styles.streamPickerItemTextSelected
                 ]}>
-                  Uncategorized
+                  Unassigned
                 </Text>
-                {selectedCategoryId === "uncategorized" && (
+                {selectedStreamId === "no-stream" && (
                   <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
                     <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
@@ -657,32 +648,31 @@ export function MapScreen() {
               </TouchableOpacity>
 
               {/* Separator */}
-              <View style={styles.categoryPickerSeparator} />
+              <View style={styles.streamPickerSeparator} />
 
-              {/* Category list */}
-              {categories.map(category => (
+              {/* Stream list */}
+              {streams.map(stream => (
                 <TouchableOpacity
-                  key={category.category_id}
+                  key={stream.stream_id}
                   style={[
-                    styles.categoryPickerItem,
-                    selectedCategoryId === category.category_id && styles.categoryPickerItemSelected
+                    styles.streamPickerItem,
+                    selectedStreamId === stream.stream_id && styles.streamPickerItemSelected
                   ]}
                   onPress={() => {
-                    setSelectedCategoryId(category.category_id);
-                    setShowCategoryPicker(false);
+                    setSelectedStreamId(stream.stream_id);
+                    setShowStreamPicker(false);
                   }}
                 >
                   <Text
                     style={[
-                      styles.categoryPickerItemText,
-                      selectedCategoryId === category.category_id && styles.categoryPickerItemTextSelected,
-                      { paddingLeft: (category.depth || 0) * 16 }
+                      styles.streamPickerItemText,
+                      selectedStreamId === stream.stream_id && styles.streamPickerItemTextSelected
                     ]}
                     numberOfLines={1}
                   >
-                    {category.name}
+                    {stream.name}
                   </Text>
-                  {selectedCategoryId === category.category_id && (
+                  {selectedStreamId === stream.stream_id && (
                     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
                       <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
@@ -793,7 +783,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text.tertiary,
     fontWeight: "500",
   },
-  categoryFilterButton: {
+  streamFilterButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -802,7 +792,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: theme.colors.background.secondary,
   },
-  categoryFilterText: {
+  streamFilterText: {
     fontSize: 13,
     color: theme.colors.text.secondary,
     fontWeight: "500",
@@ -898,7 +888,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-  categoryPickerContainer: {
+  streamPickerContainer: {
     backgroundColor: "#fff",
     borderRadius: 12,
     width: "100%",
@@ -910,7 +900,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  categoryPickerHeader: {
+  streamPickerHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -919,15 +909,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border.light,
   },
-  categoryPickerTitle: {
+  streamPickerTitle: {
     fontSize: 17,
     fontWeight: "600",
     color: theme.colors.text.primary,
   },
-  categoryPickerList: {
+  streamPickerList: {
     maxHeight: 400,
   },
-  categoryPickerItem: {
+  streamPickerItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -936,19 +926,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border.light,
   },
-  categoryPickerItemSelected: {
+  streamPickerItemSelected: {
     backgroundColor: "#f0f9ff",
   },
-  categoryPickerItemText: {
+  streamPickerItemText: {
     fontSize: 15,
     color: theme.colors.text.primary,
     flex: 1,
   },
-  categoryPickerItemTextSelected: {
+  streamPickerItemTextSelected: {
     color: "#3b82f6",
     fontWeight: "500",
   },
-  categoryPickerSeparator: {
+  streamPickerSeparator: {
     height: 8,
     backgroundColor: theme.colors.background.secondary,
   },

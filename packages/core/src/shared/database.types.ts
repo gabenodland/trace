@@ -14,115 +14,10 @@ export type Database = {
   }
   public: {
     Tables: {
-      categories: {
-        Row: {
-          base_version: number | null
-          category_id: string
-          color: string | null
-          conflict_backup: Json | null
-          conflict_status: string | null
-          created_at: string
-          depth: number
-          entry_content_template: string | null
-          entry_content_type: string
-          entry_count: number
-          entry_title_template: string | null
-          entry_use_duedates: boolean
-          entry_use_location: boolean
-          entry_use_photos: boolean
-          entry_use_priority: boolean
-          entry_use_rating: boolean
-          entry_use_status: boolean
-          full_path: string
-          icon: string | null
-          is_localonly: boolean
-          is_private: boolean
-          last_edited_by: string | null
-          last_edited_device: string | null
-          name: string
-          parent_category_id: string | null
-          parent_id: string | null
-          updated_at: string
-          user_id: string
-          version: number | null
-        }
-        Insert: {
-          base_version?: number | null
-          category_id?: string
-          color?: string | null
-          conflict_backup?: Json | null
-          conflict_status?: string | null
-          created_at?: string
-          depth?: number
-          entry_content_template?: string | null
-          entry_content_type?: string
-          entry_count?: number
-          entry_title_template?: string | null
-          entry_use_duedates?: boolean
-          entry_use_location?: boolean
-          entry_use_photos?: boolean
-          entry_use_priority?: boolean
-          entry_use_rating?: boolean
-          entry_use_status?: boolean
-          full_path: string
-          icon?: string | null
-          is_localonly?: boolean
-          is_private?: boolean
-          last_edited_by?: string | null
-          last_edited_device?: string | null
-          name: string
-          parent_category_id?: string | null
-          parent_id?: string | null
-          updated_at?: string
-          user_id: string
-          version?: number | null
-        }
-        Update: {
-          base_version?: number | null
-          category_id?: string
-          color?: string | null
-          conflict_backup?: Json | null
-          conflict_status?: string | null
-          created_at?: string
-          depth?: number
-          entry_content_template?: string | null
-          entry_content_type?: string
-          entry_count?: number
-          entry_title_template?: string | null
-          entry_use_duedates?: boolean
-          entry_use_location?: boolean
-          entry_use_photos?: boolean
-          entry_use_priority?: boolean
-          entry_use_rating?: boolean
-          entry_use_status?: boolean
-          full_path?: string
-          icon?: string | null
-          is_localonly?: boolean
-          is_private?: boolean
-          last_edited_by?: string | null
-          last_edited_device?: string | null
-          name?: string
-          parent_category_id?: string | null
-          parent_id?: string | null
-          updated_at?: string
-          user_id?: string
-          version?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "categories_parent_category_id_fkey"
-            columns: ["parent_category_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["category_id"]
-          },
-        ]
-      }
       entries: {
         Row: {
           attachments: Json | null
           base_version: number | null
-          category_id: string | null
           completed_at: string | null
           conflict_backup: Json | null
           conflict_status: string | null
@@ -143,6 +38,7 @@ export type Database = {
           priority: number
           rating: number
           status: string
+          stream_id: string | null
           tags: string[] | null
           title: string | null
           updated_at: string
@@ -152,7 +48,6 @@ export type Database = {
         Insert: {
           attachments?: Json | null
           base_version?: number | null
-          category_id?: string | null
           completed_at?: string | null
           conflict_backup?: Json | null
           conflict_status?: string | null
@@ -173,6 +68,7 @@ export type Database = {
           priority?: number
           rating?: number
           status?: string
+          stream_id?: string | null
           tags?: string[] | null
           title?: string | null
           updated_at?: string
@@ -182,7 +78,6 @@ export type Database = {
         Update: {
           attachments?: Json | null
           base_version?: number | null
-          category_id?: string | null
           completed_at?: string | null
           conflict_backup?: Json | null
           conflict_status?: string | null
@@ -203,6 +98,7 @@ export type Database = {
           priority?: number
           rating?: number
           status?: string
+          stream_id?: string | null
           tags?: string[] | null
           title?: string | null
           updated_at?: string
@@ -211,18 +107,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "entries_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["category_id"]
-          },
-          {
             foreignKeyName: "entries_location_id_fkey"
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
             referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "entries_stream_id_fkey"
+            columns: ["stream_id"]
+            isOneToOne: false
+            referencedRelation: "streams"
+            referencedColumns: ["stream_id"]
           },
         ]
       }
@@ -345,6 +241,90 @@ export type Database = {
           },
         ]
       }
+      streams: {
+        Row: {
+          base_version: number | null
+          color: string | null
+          conflict_backup: Json | null
+          conflict_status: string | null
+          created_at: string
+          entry_content_template: string | null
+          entry_content_type: string
+          entry_count: number
+          entry_title_template: string | null
+          entry_use_duedates: boolean
+          entry_use_location: boolean
+          entry_use_photos: boolean
+          entry_use_priority: boolean
+          entry_use_rating: boolean
+          entry_use_status: boolean
+          icon: string | null
+          is_localonly: boolean
+          is_private: boolean
+          last_edited_by: string | null
+          last_edited_device: string | null
+          name: string
+          stream_id: string
+          updated_at: string
+          user_id: string
+          version: number | null
+        }
+        Insert: {
+          base_version?: number | null
+          color?: string | null
+          conflict_backup?: Json | null
+          conflict_status?: string | null
+          created_at?: string
+          entry_content_template?: string | null
+          entry_content_type?: string
+          entry_count?: number
+          entry_title_template?: string | null
+          entry_use_duedates?: boolean
+          entry_use_location?: boolean
+          entry_use_photos?: boolean
+          entry_use_priority?: boolean
+          entry_use_rating?: boolean
+          entry_use_status?: boolean
+          icon?: string | null
+          is_localonly?: boolean
+          is_private?: boolean
+          last_edited_by?: string | null
+          last_edited_device?: string | null
+          name: string
+          stream_id?: string
+          updated_at?: string
+          user_id: string
+          version?: number | null
+        }
+        Update: {
+          base_version?: number | null
+          color?: string | null
+          conflict_backup?: Json | null
+          conflict_status?: string | null
+          created_at?: string
+          entry_content_template?: string | null
+          entry_content_type?: string
+          entry_count?: number
+          entry_title_template?: string | null
+          entry_use_duedates?: boolean
+          entry_use_location?: boolean
+          entry_use_photos?: boolean
+          entry_use_priority?: boolean
+          entry_use_rating?: boolean
+          entry_use_status?: boolean
+          icon?: string | null
+          is_localonly?: boolean
+          is_private?: boolean
+          last_edited_by?: string | null
+          last_edited_device?: string | null
+          name?: string
+          stream_id?: string
+          updated_at?: string
+          user_id?: string
+          version?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -374,8 +354,8 @@ export type Database = {
           user_id: string
         }[]
       }
-      is_category_owner: { Args: { p_category_id: string }; Returns: boolean }
       is_entry_owner: { Args: { p_entry_id: string }; Returns: boolean }
+      is_stream_owner: { Args: { p_stream_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

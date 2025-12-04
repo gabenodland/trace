@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
-import { useCategories } from "../modules/categories/mobileCategoryHooks";
+import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
@@ -81,7 +81,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
 
   // Data hooks
   const { entries } = useEntries({});
-  const { categories } = useCategories();
+  const { streams } = useStreams();
 
   // Entry counts
   const entryCounts = useMemo(() => {
@@ -139,9 +139,9 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     });
   }, [entries, monthViewYear, selectedMonth]);
 
-  // Category map
-  const categoryMap = categories?.reduce((map, cat) => {
-    map[cat.category_id] = cat.full_path;
+  // Stream map
+  const streamMap = streams?.reduce((map, stream) => {
+    map[stream.stream_id] = stream.name;
     return map;
   }, {} as Record<string, string>);
 
@@ -342,7 +342,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
                   onPress={() => handleEntryPress(entry.entry_id)}
                   onTagPress={handleTagPress}
                   onMentionPress={handleMentionPress}
-                  categoryName={entry.category_id && categoryMap ? categoryMap[entry.category_id] : null}
+                  streamName={entry.stream_id && streamMap ? streamMap[entry.stream_id] : null}
                   showMenu={openMenuEntryId === entry.entry_id}
                   onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
                 />
@@ -459,7 +459,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
                       onPress={() => handleEntryPress(entry.entry_id)}
                       onTagPress={handleTagPress}
                       onMentionPress={handleMentionPress}
-                      categoryName={entry.category_id && categoryMap ? categoryMap[entry.category_id] : null}
+                      streamName={entry.stream_id && streamMap ? streamMap[entry.stream_id] : null}
                       showMenu={openMenuEntryId === entry.entry_id}
                       onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
                     />
@@ -577,7 +577,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
                       onPress={() => handleEntryPress(entry.entry_id)}
                       onTagPress={handleTagPress}
                       onMentionPress={handleMentionPress}
-                      categoryName={entry.category_id && categoryMap ? categoryMap[entry.category_id] : null}
+                      streamName={entry.stream_id && streamMap ? streamMap[entry.stream_id] : null}
                       showMenu={openMenuEntryId === entry.entry_id}
                       onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
                     />

@@ -14,12 +14,12 @@ import { useSync, getSyncStatus } from '../shared/sync';
 import { deletePhotoFromLocalStorage } from '../modules/photos/mobilePhotoApi';
 import Svg, { Path } from 'react-native-svg';
 
-type TabType = 'status' | 'entries' | 'categories' | 'locations' | 'photos' | 'logs';
+type TabType = 'status' | 'entries' | 'streams' | 'locations' | 'photos' | 'logs';
 type SyncFilter = 'all' | 'synced' | 'unsynced' | 'errors';
 
 interface CloudCounts {
   entries: number;
-  categories: number;
+  streams: number;
   locations: number;
   photos: number;
 }
@@ -30,14 +30,14 @@ export function DatabaseInfoScreen() {
   const { sync, forcePull } = useSync();
   const [activeTab, setActiveTab] = useState<TabType>('status');
   const [entries, setEntries] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [streams, setStreams] = useState<any[]>([]);
   const [photos, setPhotos] = useState<any[]>([]);
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
-  const [cloudCounts, setCloudCounts] = useState<CloudCounts>({ entries: 0, categories: 0, locations: 0, photos: 0 });
+  const [cloudCounts, setCloudCounts] = useState<CloudCounts>({ entries: 0, streams: 0, locations: 0, photos: 0 });
   const [syncStatus, setSyncStatus] = useState<any>(null);
   const [entrySyncFilter, setEntrySyncFilter] = useState<SyncFilter>('all');
-  const [categorySyncFilter, setCategorySyncFilter] = useState<SyncFilter>('all');
+  const [streamSyncFilter, setStreamSyncFilter] = useState<SyncFilter>('all');
   const [locationSyncFilter, setLocationSyncFilter] = useState<SyncFilter>('all');
   const [photoSyncFilter, setPhotoSyncFilter] = useState<SyncFilter>('all');
   const [refreshKey, setRefreshKey] = useState(0);
@@ -57,9 +57,9 @@ export function DatabaseInfoScreen() {
       const allEntries = await localDB.getAllEntries();
       setEntries(allEntries);
 
-      // Get all categories from SQLite
-      const allCategories = await localDB.runCustomQuery('SELECT * FROM categories ORDER BY name');
-      setCategories(allCategories);
+      // Get all streams from SQLite
+      const allStreams = await localDB.runCustomQuery('SELECT * FROM streams ORDER BY name');
+      setStreams(allStreams);
 
       // Get all photos from SQLite
       const allPhotos = await localDB.runCustomQuery('SELECT * FROM photos ORDER BY created_at DESC');
@@ -103,13 +103,13 @@ export function DatabaseInfoScreen() {
       // Get counts from Cloud
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const [entriesCount, categoriesCount, locationsCount, photosCount] = await Promise.all([
+        const [entriesCount, streamsCount, locationsCount, photosCount] = await Promise.all([
           supabase
             .from('entries')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', user.id),
           supabase
-            .from('categories')
+            .from('streams')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', user.id),
           supabase
@@ -124,7 +124,7 @@ export function DatabaseInfoScreen() {
 
         setCloudCounts({
           entries: entriesCount.count || 0,
-          categories: categoriesCount.count || 0,
+          streams: streamsCount.count || 0,
           locations: locationsCount.count || 0,
           photos: photosCount.count || 0,
         });
@@ -148,15 +148,15 @@ export function DatabaseInfoScreen() {
     }
   });
 
-  // Filter categories based on sync filter
-  const filteredCategories = categories.filter(category => {
-    switch (categorySyncFilter) {
+  // Filter streams based on sync filter
+  const filteredStreams = streams.filter(stream => {
+    switch (streamSyncFilter) {
       case 'synced':
-        return category.synced;
+        return stream.synced;
       case 'unsynced':
-        return !category.synced;
+        return !stream.synced;
       case 'errors':
-        return category.sync_error;
+        return stream.sync_error;
       default:
         return true;
     }
@@ -254,22 +254,22 @@ export function DatabaseInfoScreen() {
     );
   };
 
-  const handleClearLocalCategories = () => {
+  const handleClearLocalStreams = () => {
     Alert.alert(
-      'Clear Local Categories',
-      'This will delete all categories from local SQLite. They will automatically re-sync on next sync.',
+      'Clear Local Streams',
+      'This will delete all streams from local SQLite. They will automatically re-sync on next sync.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear Categories',
+          text: 'Clear Streams',
           style: 'destructive',
           onPress: async () => {
             try {
-              await localDB.runCustomQuery('DELETE FROM categories');
+              await localDB.runCustomQuery('DELETE FROM streams');
               setRefreshKey(prev => prev + 1);
-              Alert.alert('Success', 'All local categories cleared. Next sync will re-download from Cloud.');
+              Alert.alert('Success', 'All local streams cleared. Next sync will re-download from Cloud.');
             } catch (error) {
-              Alert.alert('Error', `Failed to clear categories: ${error}`);
+              Alert.alert('Error', `Failed to clear streams: ${error}`);
             }
           },
         },
@@ -612,7 +612,7 @@ export function DatabaseInfoScreen() {
   const handleClearDatabase = () => {
     Alert.alert(
       'Clear Database',
-      'Are you sure? This will delete ALL local data (entries, categories, metadata)!',
+      'Are you sure? This will delete ALL local data (entries, streams, metadata)!',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -667,11 +667,11 @@ export function DatabaseInfoScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'categories' && styles.tabActive]}
-          onPress={() => setActiveTab('categories')}
+          style={[styles.tab, activeTab === 'streams' && styles.tabActive]}
+          onPress={() => setActiveTab('streams')}
         >
-          <Text style={[styles.tabText, activeTab === 'categories' && styles.tabTextActive]}>
-            Categories
+          <Text style={[styles.tabText, activeTab === 'streams' && styles.tabTextActive]}>
+            Streams
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -773,29 +773,29 @@ export function DatabaseInfoScreen() {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Categories</Text>
+              <Text style={styles.sectionTitle}>Streams</Text>
               <View style={styles.statsRow}>
                 <View style={[styles.infoBox, styles.statsBox]}>
                   <Text style={styles.statsLabel}>Local</Text>
-                  <Text style={styles.statsCount}>{categories.length}</Text>
+                  <Text style={styles.statsCount}>{streams.length}</Text>
                   <Text style={styles.infoText}>
-                    Synced: {categories.filter(c => c.synced).length}
+                    Synced: {streams.filter(s => s.synced).length}
                   </Text>
                   <Text style={styles.infoText}>
-                    Unsynced: {categories.filter(c => !c.synced).length}
+                    Unsynced: {streams.filter(s => !s.synced).length}
                   </Text>
                   <Text style={styles.infoText}>
-                    Errors: {categories.filter(c => c.sync_error).length}
+                    Errors: {streams.filter(s => s.sync_error).length}
                   </Text>
-                  <TouchableOpacity onPress={handleClearLocalCategories} style={styles.smallClearButton}>
+                  <TouchableOpacity onPress={handleClearLocalStreams} style={styles.smallClearButton}>
                     <Text style={styles.smallClearButtonText}>Clear Local</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={[styles.infoBox, styles.statsBox]}>
                   <Text style={styles.statsLabel}>Cloud</Text>
-                  <Text style={styles.statsCount}>{cloudCounts.categories}</Text>
+                  <Text style={styles.statsCount}>{cloudCounts.streams}</Text>
                   <Text style={styles.infoText}>
-                    Diff: {cloudCounts.categories - categories.length}
+                    Diff: {cloudCounts.streams - streams.length}
                   </Text>
                 </View>
               </View>
@@ -953,80 +953,75 @@ export function DatabaseInfoScreen() {
           </>
         )}
 
-        {/* CATEGORIES TAB */}
-        {activeTab === 'categories' && (
+        {/* STREAMS TAB */}
+        {activeTab === 'streams' && (
           <>
             {/* Filter Tabs */}
             <View style={styles.filterContainer}>
               <TouchableOpacity
-                style={[styles.filterTab, categorySyncFilter === 'all' && styles.filterTabActive]}
-                onPress={() => setCategorySyncFilter('all')}
+                style={[styles.filterTab, streamSyncFilter === 'all' && styles.filterTabActive]}
+                onPress={() => setStreamSyncFilter('all')}
               >
-                <Text style={[styles.filterTabText, categorySyncFilter === 'all' && styles.filterTabTextActive]}>
-                  All ({categories.length})
+                <Text style={[styles.filterTabText, streamSyncFilter === 'all' && styles.filterTabTextActive]}>
+                  All ({streams.length})
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.filterTab, categorySyncFilter === 'synced' && styles.filterTabActive]}
-                onPress={() => setCategorySyncFilter('synced')}
+                style={[styles.filterTab, streamSyncFilter === 'synced' && styles.filterTabActive]}
+                onPress={() => setStreamSyncFilter('synced')}
               >
-                <Text style={[styles.filterTabText, categorySyncFilter === 'synced' && styles.filterTabTextActive]}>
-                  Synced ({categories.filter(c => c.synced).length})
+                <Text style={[styles.filterTabText, streamSyncFilter === 'synced' && styles.filterTabTextActive]}>
+                  Synced ({streams.filter(s => s.synced).length})
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.filterTab, categorySyncFilter === 'unsynced' && styles.filterTabActive]}
-                onPress={() => setCategorySyncFilter('unsynced')}
+                style={[styles.filterTab, streamSyncFilter === 'unsynced' && styles.filterTabActive]}
+                onPress={() => setStreamSyncFilter('unsynced')}
               >
-                <Text style={[styles.filterTabText, categorySyncFilter === 'unsynced' && styles.filterTabTextActive]}>
-                  Unsynced ({categories.filter(c => !c.synced).length})
+                <Text style={[styles.filterTabText, streamSyncFilter === 'unsynced' && styles.filterTabTextActive]}>
+                  Unsynced ({streams.filter(s => !s.synced).length})
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.filterTab, categorySyncFilter === 'errors' && styles.filterTabActive]}
-                onPress={() => setCategorySyncFilter('errors')}
+                style={[styles.filterTab, streamSyncFilter === 'errors' && styles.filterTabActive]}
+                onPress={() => setStreamSyncFilter('errors')}
               >
-                <Text style={[styles.filterTabText, categorySyncFilter === 'errors' && styles.filterTabTextActive]}>
-                  Errors ({categories.filter(c => c.sync_error).length})
+                <Text style={[styles.filterTabText, streamSyncFilter === 'errors' && styles.filterTabTextActive]}>
+                  Errors ({streams.filter(s => s.sync_error).length})
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {/* Categories List */}
+            {/* Streams List */}
             <View style={styles.section}>
-              {filteredCategories.map((category, index) => (
+              {filteredStreams.map((stream, index) => (
                 <TouchableOpacity
-                  key={category.category_id}
-                  style={styles.categoryCard}
-                  onLongPress={() => showJsonModal(category, `Category: ${category.name}`)}
+                  key={stream.stream_id}
+                  style={styles.streamCard}
+                  onLongPress={() => showJsonModal(stream, `Stream: ${stream.name}`)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.categoryName}>
-                    {index + 1}. {category.name}
+                  <Text style={styles.streamName}>
+                    {index + 1}. {stream.name}
                   </Text>
-                  {category.parent_id && (
-                    <Text style={styles.categoryMeta}>
-                      Parent ID: {category.parent_id.slice(0, 8)}...
-                    </Text>
-                  )}
                   <View style={styles.entryMeta}>
-                    <Text style={[styles.badge, category.synced ? styles.syncedBadge : styles.unsyncedBadge]}>
-                      {category.synced ? '✅ Synced' : '⏳ Unsynced'}
+                    <Text style={[styles.badge, stream.synced ? styles.syncedBadge : styles.unsyncedBadge]}>
+                      {stream.synced ? '✅ Synced' : '⏳ Unsynced'}
                     </Text>
-                    {category.local_only ? (
+                    {stream.local_only ? (
                       <Text style={[styles.badge, styles.localBadge]}>🔒 Local</Text>
                     ) : null}
-                    {category.sync_action && (
-                      <Text style={styles.badge}>📝 {category.sync_action}</Text>
+                    {stream.sync_action && (
+                      <Text style={styles.badge}>📝 {stream.sync_action}</Text>
                     )}
-                    {category.sync_error && (
+                    {stream.sync_error && (
                       <Text style={[styles.badge, styles.errorBadge]}>❌ Error</Text>
                     )}
                   </View>
-                  {category.sync_error && (
-                    <Text style={styles.errorMessage}>{category.sync_error}</Text>
+                  {stream.sync_error && (
+                    <Text style={styles.errorMessage}>{stream.sync_error}</Text>
                   )}
-                  <Text style={styles.categoryId}>ID: {category.category_id.slice(0, 8)}...</Text>
+                  <Text style={styles.streamId}>ID: {stream.stream_id.slice(0, 8)}...</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1275,7 +1270,7 @@ export function DatabaseInfoScreen() {
                       <Text style={styles.logOperation}>{log.operation}</Text>
                       <Text style={styles.logMessage}>{log.message}</Text>
 
-                      {(log.entries_pushed > 0 || log.entries_errors > 0 || log.categories_pushed > 0 || log.categories_errors > 0) && (
+                      {(log.entries_pushed > 0 || log.entries_errors > 0 || log.streams_pushed > 0 || log.streams_errors > 0) && (
                         <View style={styles.logStats}>
                           {log.entries_pushed > 0 && (
                             <Text style={styles.logStat}>📤 Entries: {log.entries_pushed}</Text>
@@ -1283,11 +1278,11 @@ export function DatabaseInfoScreen() {
                           {log.entries_errors > 0 && (
                             <Text style={[styles.logStat, styles.logStatError]}>❌ Entry Errors: {log.entries_errors}</Text>
                           )}
-                          {log.categories_pushed > 0 && (
-                            <Text style={styles.logStat}>📁 Categories: {log.categories_pushed}</Text>
+                          {log.streams_pushed > 0 && (
+                            <Text style={styles.logStat}>📁 Streams: {log.streams_pushed}</Text>
                           )}
-                          {log.categories_errors > 0 && (
-                            <Text style={[styles.logStat, styles.logStatError]}>❌ Category Errors: {log.categories_errors}</Text>
+                          {log.streams_errors > 0 && (
+                            <Text style={[styles.logStat, styles.logStatError]}>❌ Stream Errors: {log.streams_errors}</Text>
                           )}
                         </View>
                       )}
@@ -1568,7 +1563,7 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontFamily: 'monospace',
   },
-  categoryCard: {
+  streamCard: {
     backgroundColor: '#ffffff',
     padding: 12,
     borderRadius: 8,
@@ -1576,18 +1571,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
-  categoryName: {
+  streamName: {
     fontSize: 14,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 4,
   },
-  categoryMeta: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  categoryId: {
+  streamId: {
     fontSize: 10,
     color: '#9ca3af',
     fontFamily: 'monospace',

@@ -5,8 +5,8 @@
  * This is an INTERNAL module - use syncApi.ts for public functions.
  *
  * Sync Order (respects foreign key dependencies):
- * PUSH: Categories → Locations → Entries → Photos → Deletes
- * PULL: Categories → Locations → Entries → Photos
+ * PUSH: Streams → Locations → Entries → Photos → Deletes
+ * PULL: Streams → Locations → Entries → Photos
  */
 
 import { localDB } from '../db/localDB';
@@ -29,19 +29,19 @@ export interface SyncResult {
   success: boolean;
   pushed: {
     entries: number;
-    categories: number;
+    streams: number;
     locations: number;
     photos: number;
   };
   pulled: {
     entries: number;
-    categories: number;
+    streams: number;
     locations: number;
     photos: number;
   };
   errors: {
     entries: number;
-    categories: number;
+    streams: number;
     locations: number;
     photos: number;
   };
@@ -182,7 +182,7 @@ class SyncService {
         await localDB.updateEntry(entryId, {
           title: serverEntry.title,
           content: serverEntry.content,
-          category_id: serverEntry.category_id,
+          stream_id: serverEntry.stream_id,
           tags: serverEntry.tags || [],
           mentions: serverEntry.mentions || [],
           entry_date: serverEntry.entry_date,
@@ -246,9 +246,9 @@ class SyncService {
     const startTime = Date.now();
     const result: SyncResult = {
       success: false,
-      pushed: { entries: 0, categories: 0, locations: 0, photos: 0 },
-      pulled: { entries: 0, categories: 0, locations: 0, photos: 0 },
-      errors: { entries: 0, categories: 0, locations: 0, photos: 0 },
+      pushed: { entries: 0, streams: 0, locations: 0, photos: 0 },
+      pulled: { entries: 0, streams: 0, locations: 0, photos: 0 },
+      errors: { entries: 0, streams: 0, locations: 0, photos: 0 },
       duration: 0,
     };
 
@@ -275,8 +275,8 @@ class SyncService {
       // This ensures we detect remotely-deleted categories BEFORE trying to push entries
       if (options.pull) {
         // Step 1: Pull categories (and clean up orphans)
-        const categoryResult = await this.pullCategories(forceFullPull);
-        result.pulled.categories = categoryResult.new + categoryResult.updated;
+        const categoryResult = await this.pullStreams(forceFullPull);
+        result.pulled.streams = categoryResult.new + categoryResult.updated;
 
         // Step 2: Pull locations
         const locationResult = await this.pullLocations(forceFullPull);
@@ -286,9 +286,9 @@ class SyncService {
       // PUSH: Local → Server
       if (options.push) {
         // Step 1: Push categories (entries depend on them)
-        const categoryResult = await this.pushCategories();
-        result.pushed.categories = categoryResult.success;
-        result.errors.categories = categoryResult.errors;
+        const categoryResult = await this.pushStreams();
+        result.pushed.streams = categoryResult.success;
+        result.errors.streams = categoryResult.errors;
 
         // Step 2: Push locations (entries reference them)
         const locationResult = await this.pushLocations();
@@ -311,7 +311,7 @@ class SyncService {
         result.errors.entries += deleteResult.errors;
 
         // Log push summary
-        const totalPushed = result.pushed.entries + result.pushed.categories + result.pushed.locations + result.pushed.photos;
+        const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.photos;
         if (totalPushed > 0) {
           log.debug(`PUSHED ${totalPushed} items`, result.pushed);
         }
@@ -331,15 +331,15 @@ class SyncService {
         await this.saveLastPullTimestamp(pullStartTime);
 
         // Log pull summary
-        const totalPulled = result.pulled.entries + result.pulled.categories + result.pulled.locations + result.pulled.photos;
+        const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.photos;
         if (totalPulled > 0) {
           log.debug(`PULLED ${totalPulled} items`, result.pulled);
         }
       }
 
       // Calculate totals
-      const totalPushed = result.pushed.entries + result.pushed.categories + result.pushed.locations + result.pushed.photos;
-      const totalPulled = result.pulled.entries + result.pulled.categories + result.pulled.locations + result.pulled.photos;
+      const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.photos;
+      const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.photos;
 
       // Only invalidate React Query cache if we pulled new data from server
       // (Push-only syncs don't need invalidation since mutations already did it)
@@ -375,25 +375,22 @@ class SyncService {
   // PUSH OPERATIONS
   // ==========================================================================
 
-  private async pushCategories(): Promise<{ success: number; errors: number }> {
-    const unsyncedCategories = await localDB.getUnsyncedCategories();
-    if (unsyncedCategories.length === 0) {
+  private async pushStreams(): Promise<{ success: number; errors: number }> {
+    const unsyncedStreams = await localDB.getUnsyncedStreams();
+    if (unsyncedStreams.length === 0) {
       return { success: 0, errors: 0 };
     }
-
-    // Sort by depth (parents before children)
-    const sortedCategories = [...unsyncedCategories].sort((a, b) => a.depth - b.depth);
 
     let success = 0;
     let errors = 0;
 
-    for (const category of sortedCategories) {
+    for (const stream of unsyncedStreams) {
       try {
-        await this.syncCategory(category);
+        await this.syncStream(stream);
         success++;
       } catch (error) {
-        log.warn('Failed to push category', { categoryId: category.category_id, error });
-        await localDB.recordCategorySyncError(category.category_id, error instanceof Error ? error.message : String(error));
+        log.warn('Failed to push stream', { streamId: stream.stream_id, error });
+        await localDB.recordStreamSyncError(stream.stream_id, error instanceof Error ? error.message : String(error));
         errors++;
       }
     }
@@ -576,88 +573,86 @@ class SyncService {
   // PULL OPERATIONS
   // ==========================================================================
 
-  private async pullCategories(forceFullPull: boolean): Promise<{ new: number; updated: number; deleted: number }> {
+  private async pullStreams(forceFullPull: boolean): Promise<{ new: number; updated: number; deleted: number }> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { new: 0, updated: 0, deleted: 0 };
 
-    const { data: remoteCategories, error } = await supabase
-      .from('categories')
+    const { data: remoteStreams, error } = await supabase
+      .from('streams')
       .select('*')
       .eq('user_id', user.id)
-      .order('full_path');
+      .order('name');
 
     if (error) {
-      log.error('Failed to fetch categories', error);
+      log.error('Failed to fetch streams', error);
       return { new: 0, updated: 0, deleted: 0 };
     }
 
     let newCount = 0;
     let updatedCount = 0;
 
-    // Build set of server category IDs for missing category detection
-    const serverCategoryIds = new Set<string>(
-      (remoteCategories || []).map(c => c.category_id)
+    // Build set of server stream IDs for missing stream detection
+    const serverStreamIds = new Set<string>(
+      (remoteStreams || []).map(s => s.stream_id)
     );
 
-    // Process categories from server
-    for (const remoteCategory of (remoteCategories || [])) {
+    // Process streams from server
+    for (const remoteStream of (remoteStreams || [])) {
       try {
-        const localCategory = await localDB.getCategory(remoteCategory.category_id);
+        const localStream = await localDB.getStream(remoteStream.stream_id);
 
-        const category = {
-          ...remoteCategory,
+        const stream = {
+          ...remoteStream,
           synced: 1,
           sync_action: null,
         };
 
-        if (!localCategory) {
-          await localDB.saveCategory(category);
-          await localDB.markCategorySynced(category.category_id);
+        if (!localStream) {
+          await localDB.saveStream(stream);
+          await localDB.markStreamSynced(stream.stream_id);
           newCount++;
-        } else if (localCategory.synced !== 0) {
+        } else if (localStream.synced !== 0) {
           const hasChanged =
-            localCategory.name !== category.name ||
-            localCategory.full_path !== category.full_path ||
-            localCategory.parent_category_id !== category.parent_category_id ||
-            localCategory.color !== category.color ||
-            localCategory.icon !== category.icon;
+            localStream.name !== stream.name ||
+            localStream.color !== stream.color ||
+            localStream.icon !== stream.icon;
 
           if (hasChanged) {
-            await localDB.updateCategory(category.category_id, category);
-            await localDB.markCategorySynced(category.category_id);
+            await localDB.updateStream(stream.stream_id, stream);
+            await localDB.markStreamSynced(stream.stream_id);
             updatedCount++;
           }
         }
       } catch (error) {
-        log.warn('Failed to process category', { categoryId: remoteCategory.category_id, error });
+        log.warn('Failed to process stream', { streamId: remoteStream.stream_id, error });
       }
     }
 
-    // Detect local categories that exist but are missing from server
+    // Detect local streams that exist but are missing from server
     // These could be: (1) deleted on server, or (2) never successfully pushed
     // We mark them for re-push rather than deleting - let the push logic handle them
     try {
-      const localCategories = await localDB.getAllCategories();
+      const localStreams = await localDB.getAllStreams();
       let markedForPush = 0;
 
-      for (const localCategory of localCategories) {
-        // Skip categories already pending sync
-        if (localCategory.synced === 0) {
+      for (const localStream of localStreams) {
+        // Skip streams already pending sync
+        if (localStream.synced === 0) {
           continue;
         }
 
-        // If category exists locally (marked synced) but not on server,
+        // If stream exists locally (marked synced) but not on server,
         // it was likely never pushed successfully - mark for re-push
-        if (!serverCategoryIds.has(localCategory.category_id)) {
-          log.warn('Category missing from server, marking for re-push', {
-            categoryId: localCategory.category_id,
-            name: localCategory.name,
+        if (!serverStreamIds.has(localStream.stream_id)) {
+          log.warn('Stream missing from server, marking for re-push', {
+            streamId: localStream.stream_id,
+            name: localStream.name,
           });
 
           // Mark for re-push with 'create' action
           await localDB.runCustomQuery(
-            'UPDATE categories SET synced = 0, sync_action = \'create\' WHERE category_id = ?',
-            [localCategory.category_id]
+            'UPDATE streams SET synced = 0, sync_action = \'create\' WHERE stream_id = ?',
+            [localStream.stream_id]
           );
 
           markedForPush++;
@@ -665,10 +660,10 @@ class SyncService {
       }
 
       if (markedForPush > 0) {
-        log.debug(`Marked ${markedForPush} missing categories for re-push`);
+        log.debug(`Marked ${markedForPush} missing streams for re-push`);
       }
     } catch (error) {
-      log.warn('Failed to check for missing categories', { error });
+      log.warn('Failed to check for missing streams', { error });
     }
 
     return { new: newCount, updated: updatedCount, deleted: 0 };
@@ -808,7 +803,7 @@ class SyncService {
           content: remoteEntry.content,
           tags: remoteEntry.tags || [],
           mentions: remoteEntry.mentions || [],
-          category_id: remoteEntry.category_id,
+          stream_id: remoteEntry.stream_id,
           entry_latitude: remoteEntry.entry_latitude || null,
           entry_longitude: remoteEntry.entry_longitude || null,
           location_accuracy: remoteEntry.location_accuracy || null,
@@ -965,7 +960,7 @@ class SyncService {
       content: entry.content,
       tags: entry.tags,
       mentions: entry.mentions,
-      category_id: entry.category_id,
+      stream_id: entry.stream_id,
       entry_latitude: entry.entry_latitude,
       entry_longitude: entry.entry_longitude,
       location_accuracy: entry.location_accuracy,
@@ -1092,47 +1087,44 @@ class SyncService {
     }
   }
 
-  private async syncCategory(category: any): Promise<void> {
-    const { sync_action } = category;
+  private async syncStream(stream: any): Promise<void> {
+    const { sync_action } = stream;
 
     const supabaseData = {
-      category_id: category.category_id,
-      user_id: category.user_id,
-      name: category.name,
-      full_path: category.full_path,
-      parent_category_id: category.parent_category_id,
-      depth: category.depth,
-      entry_count: category.entry_count,
-      color: category.color,
-      icon: category.icon,
-      created_at: typeof category.created_at === 'number'
-        ? new Date(category.created_at).toISOString()
-        : category.created_at,
-      updated_at: typeof (category.updated_at || category.created_at) === 'number'
-        ? new Date(category.updated_at || category.created_at).toISOString()
-        : (category.updated_at || category.created_at),
+      stream_id: stream.stream_id,
+      user_id: stream.user_id,
+      name: stream.name,
+      entry_count: stream.entry_count || 0,
+      color: stream.color,
+      icon: stream.icon,
+      created_at: typeof stream.created_at === 'number'
+        ? new Date(stream.created_at).toISOString()
+        : stream.created_at,
+      updated_at: typeof (stream.updated_at || stream.created_at) === 'number'
+        ? new Date(stream.updated_at || stream.created_at).toISOString()
+        : (stream.updated_at || stream.created_at),
     };
 
     if (sync_action === 'create' || sync_action === 'update') {
       const { error } = await supabase
-        .from('categories')
-        .upsert(supabaseData, { onConflict: 'category_id' });
+        .from('streams')
+        .upsert(supabaseData, { onConflict: 'stream_id' });
 
       if (error) {
         throw new Error(`Supabase upsert failed: ${error.message}`);
       }
     } else if (sync_action === 'delete') {
       const { error } = await supabase
-        .from('categories')
+        .from('streams')
         .delete()
-        .eq('category_id', category.category_id);
+        .eq('stream_id', stream.stream_id);
 
       if (error) {
         throw new Error(`Supabase delete failed: ${error.message}`);
       }
     }
 
-    await localDB.markCategorySynced(category.category_id);
+    await localDB.markStreamSynced(stream.stream_id);
   }
 
   private async syncLocation(location: LocationEntity): Promise<void> {
@@ -1198,8 +1190,8 @@ class SyncService {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'entries', filter: `user_id=eq.${user.id}` }, () => {
           this.handleRealtimeChange('entries');
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: `user_id=eq.${user.id}` }, () => {
-          this.handleRealtimeChange('categories');
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'streams', filter: `user_id=eq.${user.id}` }, () => {
+          this.handleRealtimeChange('streams');
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'photos', filter: `user_id=eq.${user.id}` }, () => {
           this.handleRealtimeChange('photos');
@@ -1263,14 +1255,14 @@ class SyncService {
         await localDB.runCustomQuery('DELETE FROM entries WHERE user_id != ?', [user.id]);
       }
 
-      const wrongUserCategories = await localDB.runCustomQuery(
-        'SELECT category_id FROM categories WHERE user_id != ?',
+      const wrongUserStreams = await localDB.runCustomQuery(
+        'SELECT stream_id FROM streams WHERE user_id != ?',
         [user.id]
       );
 
-      if (wrongUserCategories.length > 0) {
-        log.debug('Cleaning up categories from previous user', { count: wrongUserCategories.length });
-        await localDB.runCustomQuery('DELETE FROM categories WHERE user_id != ?', [user.id]);
+      if (wrongUserStreams.length > 0) {
+        log.debug('Cleaning up streams from previous user', { count: wrongUserStreams.length });
+        await localDB.runCustomQuery('DELETE FROM streams WHERE user_id != ?', [user.id]);
       }
 
       const wrongUserPhotos = await localDB.runCustomQuery(
@@ -1323,8 +1315,7 @@ class SyncService {
     if (this.queryClient) {
       log.debug('Invalidating React Query cache (if visible, debug works)');
       this.queryClient.invalidateQueries({ queryKey: ['entries'] });
-      this.queryClient.invalidateQueries({ queryKey: ['categories'] });
-      this.queryClient.invalidateQueries({ queryKey: ['categoryTree'] });
+      this.queryClient.invalidateQueries({ queryKey: ['streams'] });
       this.queryClient.invalidateQueries({ queryKey: ['locations'] });
       this.queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
     }
@@ -1339,15 +1330,15 @@ class SyncService {
   }
 
   private async logSyncResult(trigger: SyncTrigger, result: SyncResult): Promise<void> {
-    const hasErrors = result.errors.entries > 0 || result.errors.categories > 0 ||
+    const hasErrors = result.errors.entries > 0 || result.errors.streams > 0 ||
                       result.errors.locations > 0 || result.errors.photos > 0;
     const logLevel = hasErrors ? 'warning' : 'info';
 
-    const totalPushed = result.pushed.entries + result.pushed.categories +
+    const totalPushed = result.pushed.entries + result.pushed.streams +
                         result.pushed.locations + result.pushed.photos;
-    const totalPulled = result.pulled.entries + result.pulled.categories +
+    const totalPulled = result.pulled.entries + result.pulled.streams +
                         result.pulled.locations + result.pulled.photos;
-    const totalErrors = result.errors.entries + result.errors.categories +
+    const totalErrors = result.errors.entries + result.errors.streams +
                         result.errors.locations + result.errors.photos;
 
     let message = `Sync (${trigger}) completed in ${(result.duration / 1000).toFixed(1)}s`;
@@ -1358,8 +1349,8 @@ class SyncService {
     await localDB.addSyncLog(logLevel, 'sync', message, {
       entries_pushed: result.pushed.entries,
       entries_errors: result.errors.entries,
-      categories_pushed: result.pushed.categories,
-      categories_errors: result.errors.categories,
+      streams_pushed: result.pushed.streams,
+      streams_errors: result.errors.streams,
       photos_pushed: result.pushed.photos,
       photos_errors: result.errors.photos,
       entries_pulled: result.pulled.entries,

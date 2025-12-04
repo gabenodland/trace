@@ -12,7 +12,7 @@ import type { EntrySortOrder } from '../types/EntrySortOrder';
 export function sortEntries(
   entries: Entry[],
   sortMode: EntrySortMode,
-  categoryMap?: Record<string, string>,
+  streamMap?: Record<string, string>,
   order: EntrySortOrder = 'desc',
   showPinnedFirst: boolean = false
 ): Entry[] {
@@ -33,7 +33,7 @@ export function sortEntries(
         return titleA.localeCompare(titleB) * (order === 'asc' ? 1 : -1);
       });
 
-    case 'category':
+    case 'stream':
       return sorted.sort((a, b) => {
         // Optionally, pinned entries come first
         if (showPinnedFirst) {
@@ -41,13 +41,13 @@ export function sortEntries(
           if (!a.is_pinned && b.is_pinned) return 1;
         }
 
-        const catA = a.category_id && categoryMap ? categoryMap[a.category_id] || '' : '';
-        const catB = b.category_id && categoryMap ? categoryMap[b.category_id] || '' : '';
-        // Sort by category, then by entry_date within category
-        if (catA === catB) {
+        const streamA = a.stream_id && streamMap ? streamMap[a.stream_id] || '' : '';
+        const streamB = b.stream_id && streamMap ? streamMap[b.stream_id] || '' : '';
+        // Sort by stream, then by entry_date within stream
+        if (streamA === streamB) {
           return (new Date(b.entry_date || b.created_at).getTime() - new Date(a.entry_date || a.created_at).getTime()) * multiplier;
         }
-        return catA.localeCompare(catB) * (order === 'asc' ? 1 : -1);
+        return streamA.localeCompare(streamB) * (order === 'asc' ? 1 : -1);
       });
 
     case 'entry_date':

@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { useEntries, useTags, useMentions } from "../../modules/entries/mobileEntryHooks";
-import { useCategories } from "../../modules/categories/mobileCategoryHooks";
+import { useStreams } from "../../modules/streams/mobileStreamHooks";
 import Svg, { Path, Circle } from "react-native-svg";
-import { CategoryTree as CategoryTreeComponent } from "../../modules/categories/components/CategoryTree";
+import { StreamList } from "../../modules/streams/components/StreamList";
 import { TagList } from "../../modules/entries/components/TagList";
 import { PeopleList } from "../../modules/entries/components/PeopleList";
 import { theme } from "../../shared/theme/theme";
@@ -13,11 +13,11 @@ import type { LocationEntity } from "@trace/core";
 interface EntryNavigatorProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people", categoryName: string) => void;
-  selectedCategoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people";
+  onSelect: (streamId: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people", streamName: string) => void;
+  selectedStreamId: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people";
 }
 
-type SegmentType = "categories" | "locations" | "tags" | "mentions";
+type SegmentType = "streams" | "locations" | "tags" | "mentions";
 
 // Location data structure for display
 interface LocationItem {
@@ -26,12 +26,12 @@ interface LocationItem {
   locationId: string; // location_id from locations table
 }
 
-export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId }: EntryNavigatorProps) {
-  const { categories, categoryTree, isLoading } = useCategories();
+export function EntryNavigator({ visible, onClose, onSelect, selectedStreamId }: EntryNavigatorProps) {
+  const { streams, isLoading } = useStreams();
   const { tags, isLoading: isLoadingTags } = useTags();
   const { mentions, isLoading: isLoadingMentions } = useMentions();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSegment, setSelectedSegment] = useState<SegmentType>("categories");
+  const [selectedSegment, setSelectedSegment] = useState<SegmentType>("streams");
   const scrollViewRef = useRef<ScrollView>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
@@ -75,51 +75,51 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
   }, [locations, searchQuery]);
 
   // Get entry counts
-  const { entries: uncategorizedEntries } = useEntries({ category_id: null });
-  const uncategorizedCount = uncategorizedEntries.length;
+  const { entries: noStreamEntries } = useEntries({ stream_id: null });
+  const noStreamCount = noStreamEntries.length;
   const { entries: allEntries } = useEntries({});
   const allEntriesCount = allEntries.length;
 
   // Set correct tab and scroll to selected when modal first opens
   useEffect(() => {
     if (visible) {
-      // Determine which tab to show based on selectedCategoryId (only on first open)
-      if (typeof selectedCategoryId === 'string') {
-        if (selectedCategoryId.startsWith('tag:')) {
+      // Determine which tab to show based on selectedStreamId (only on first open)
+      if (typeof selectedStreamId === 'string') {
+        if (selectedStreamId.startsWith('tag:')) {
           setSelectedSegment('tags');
-        } else if (selectedCategoryId.startsWith('mention:')) {
+        } else if (selectedStreamId.startsWith('mention:')) {
           setSelectedSegment('mentions');
-        } else if (selectedCategoryId.startsWith('location:')) {
+        } else if (selectedStreamId.startsWith('location:')) {
           setSelectedSegment('locations');
         } else {
-          setSelectedSegment('categories');
+          setSelectedSegment('streams');
         }
       } else {
-        setSelectedSegment('categories');
+        setSelectedSegment('streams');
       }
 
       // Scroll to selected item after a brief delay
       setTimeout(() => {
-        if (scrollViewRef.current && selectedCategoryId) {
+        if (scrollViewRef.current && selectedStreamId) {
           // Estimate scroll position based on item height (~60px per item)
           const itemHeight = 60;
           let scrollOffset = 0;
 
-          if (selectedSegment === 'categories') {
-            // Find index in category tree
-            const flatCategories = [{ category_id: 'all' }, { category_id: null }, ...categories];
-            const index = flatCategories.findIndex(c => c.category_id === selectedCategoryId);
+          if (selectedSegment === 'streams') {
+            // Find index in stream list
+            const flatStreams = [{ stream_id: 'all' }, { stream_id: null }, ...streams];
+            const index = flatStreams.findIndex(s => s.stream_id === selectedStreamId);
             if (index >= 0) {
               scrollOffset = index * itemHeight;
             }
-          } else if (selectedSegment === 'tags' && typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('tag:')) {
-            const tag = selectedCategoryId.substring(4);
+          } else if (selectedSegment === 'tags' && typeof selectedStreamId === 'string' && selectedStreamId.startsWith('tag:')) {
+            const tag = selectedStreamId.substring(4);
             const index = tags.findIndex(t => t.tag === tag);
             if (index >= 0) {
               scrollOffset = index * itemHeight;
             }
-          } else if (selectedSegment === 'mentions' && typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('mention:')) {
-            const mention = selectedCategoryId.substring(8);
+          } else if (selectedSegment === 'mentions' && typeof selectedStreamId === 'string' && selectedStreamId.startsWith('mention:')) {
+            const mention = selectedStreamId.substring(8);
             const index = mentions.findIndex(m => m.mention === mention);
             if (index >= 0) {
               scrollOffset = index * itemHeight;
@@ -132,14 +132,13 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
     }
   }, [visible]); // Only run when visible changes
 
-  // Filter categories, tags, and mentions based on search query
-  // When searching, search all types globally (ignore selectedSegment)
-  const filteredCategories = useMemo(() => {
+  // Filter streams based on search query
+  const filteredStreams = useMemo(() => {
     if (!searchQuery) return [];
-    return categories.filter((category) =>
-      category.display_path.toLowerCase().includes(searchQuery.toLowerCase())
+    return streams.filter((stream) =>
+      stream.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [categories, searchQuery]);
+  }, [streams, searchQuery]);
 
   // Filter tags - match tag name or #tag format
   const filteredTags = useMemo(() => {
@@ -163,8 +162,8 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
     );
   }, [mentions, searchQuery]);
 
-  const handleSelect = (categoryId: string | null, categoryName: string) => {
-    onSelect(categoryId, categoryName);
+  const handleSelect = (streamId: string | null, streamName: string) => {
+    onSelect(streamId, streamName);
     setSearchQuery("");
     onClose();
   };
@@ -205,18 +204,18 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
           <TouchableOpacity
             style={[
               styles.tab,
-              selectedSegment === "categories" && styles.tabActive
+              selectedSegment === "streams" && styles.tabActive
             ]}
             onPress={() => {
-              setSelectedSegment("categories");
+              setSelectedSegment("streams");
               setSearchQuery("");
             }}
           >
             <Text style={[
               styles.tabText,
-              selectedSegment === "categories" && styles.tabTextActive
+              selectedSegment === "streams" && styles.tabTextActive
             ]}>
-              Cat
+              Stream
             </Text>
           </TouchableOpacity>
 
@@ -287,25 +286,26 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
       >
         {searchQuery === "" ? (
           <>
-            {/* Categories View */}
-            {selectedSegment === "categories" && (
+            {/* Streams View */}
+            {selectedSegment === "streams" && (
               <>
-                {/* Home > Uncategorized */}
+                {/* Home > Unassigned */}
                 <View style={styles.homeContainer}>
-                  {/* All - Clickable */}
+                  {/* All Entries - Clickable */}
                   <TouchableOpacity
                     style={[
-                      styles.categoryItem,
-                      selectedCategoryId === "all" && styles.categoryItemSelected,
+                      styles.streamItem,
+                      selectedStreamId === "all" && styles.streamItemSelected,
                     ]}
-                    onPress={() => handleSelect("all", "Home")}
+                    onPress={() => handleSelect("all", "All Entries")}
                   >
-                    <View style={styles.categoryContent}>
-                      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === "all" ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
-                        <Path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" strokeLinecap="round" strokeLinejoin="round" />
+                    <View style={styles.streamContent}>
+                      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedStreamId === "all" ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
+                        <Path d="M22 12h-6l-2 3h-4l-2-3H2" strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" strokeLinecap="round" strokeLinejoin="round" />
                       </Svg>
-                      <Text style={[styles.categoryName, selectedCategoryId === "all" && styles.categoryNameSelected]}>
-                        All
+                      <Text style={[styles.streamName, selectedStreamId === "all" && styles.streamNameSelected]}>
+                        All Entries
                       </Text>
                     </View>
                     {allEntriesCount > 0 && (
@@ -315,49 +315,51 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                     )}
                   </TouchableOpacity>
 
-                  {/* Uncategorized */}
+                  {/* Unassigned */}
                   <TouchableOpacity
                     style={[
-                      styles.categoryItem,
-                      selectedCategoryId === null && styles.categoryItemSelected,
+                      styles.streamItem,
+                      selectedStreamId === null && styles.streamItemSelected,
                     ]}
-                    onPress={() => handleSelect(null, "Uncategorized")}
+                    onPress={() => handleSelect(null, "Unassigned")}
                   >
-                    <View style={styles.categoryContent}>
-                      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === null ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
-                        <Path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" strokeLinecap="round" strokeLinejoin="round" />
+                    <View style={styles.streamContent}>
+                      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedStreamId === null ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={1.5}>
+                        <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 2" />
+                        <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 2" />
+                        <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 2" />
                       </Svg>
-                      <Text style={[styles.categoryName, selectedCategoryId === null && styles.categoryNameSelected]}>
-                        Uncategorized
+                      <Text style={[styles.streamName, selectedStreamId === null && styles.streamNameSelected]}>
+                        Unassigned
                       </Text>
                     </View>
-                    {uncategorizedCount > 0 && (
+                    {noStreamCount > 0 && (
                       <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{uncategorizedCount}</Text>
+                        <Text style={styles.badgeText}>{noStreamCount}</Text>
                       </View>
                     )}
                   </TouchableOpacity>
                 </View>
 
-                {/* Category Tree - always expanded */}
-                {!isLoading && categoryTree.length > 0 && (
-                  <View style={styles.categoryTreeWrapper}>
-                    <CategoryTreeComponent
-                      tree={categoryTree}
-                      onCategoryPress={(categoryId) => {
-                        const category = categories.find((c) => c.category_id === categoryId);
-                        handleSelect(categoryId, category?.name || "Unknown");
+                {/* Stream List - flat list */}
+                {!isLoading && streams.length > 0 && (
+                  <View style={styles.streamListWrapper}>
+                    <StreamList
+                      streams={streams}
+                      onStreamPress={(streamId) => {
+                        const stream = streams.find((s) => s.stream_id === streamId);
+                        handleSelect(streamId, stream?.name || "Unknown");
                       }}
                       selectedId={
-                        selectedCategoryId === null ||
-                        selectedCategoryId === "all" ||
-                        selectedCategoryId === "tasks" ||
-                        selectedCategoryId === "events" ||
-                        selectedCategoryId === "categories" ||
-                        selectedCategoryId === "tags" ||
-                        selectedCategoryId === "people"
+                        selectedStreamId === null ||
+                        selectedStreamId === "all" ||
+                        selectedStreamId === "tasks" ||
+                        selectedStreamId === "events" ||
+                        selectedStreamId === "streams" ||
+                        selectedStreamId === "tags" ||
+                        selectedStreamId === "people"
                           ? null
-                          : selectedCategoryId
+                          : selectedStreamId
                       }
                     />
                   </View>
@@ -372,22 +374,22 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                   <View style={styles.listWrapper}>
                     {locations.map((location) => {
                       const locationFilterId = `location:${location.locationId}`;
-                      const isSelected = selectedCategoryId === locationFilterId;
+                      const isSelected = selectedStreamId === locationFilterId;
                       return (
                         <TouchableOpacity
                           key={location.locationId}
                           style={[
-                            styles.categoryItem,
-                            isSelected && styles.categoryItemSelected,
+                            styles.streamItem,
+                            isSelected && styles.streamItemSelected,
                           ]}
                           onPress={() => handleSelect(locationFilterId, location.name)}
                         >
-                          <View style={styles.categoryContent}>
+                          <View style={styles.streamContent}>
                             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
                               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
                               <Circle cx={12} cy={10} r={3} />
                             </Svg>
-                            <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
+                            <Text style={[styles.streamName, isSelected && styles.streamNameSelected]}>
                               {location.name}
                             </Text>
                           </View>
@@ -422,8 +424,8 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                         handleSelect(`tag:${tag}`, `#${tag}`);
                       }}
                       selectedTag={
-                        typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('tag:')
-                          ? selectedCategoryId.substring(4)
+                        typeof selectedStreamId === 'string' && selectedStreamId.startsWith('tag:')
+                          ? selectedStreamId.substring(4)
                           : null
                       }
                     />
@@ -448,8 +450,8 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
                         handleSelect(`mention:${mention}`, `@${mention}`);
                       }}
                       selectedPerson={
-                        typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('mention:')
-                          ? selectedCategoryId.substring(8)
+                        typeof selectedStreamId === 'string' && selectedStreamId.startsWith('mention:')
+                          ? selectedStreamId.substring(8)
                           : null
                       }
                     />
@@ -465,25 +467,27 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
           </>
         ) : (
           <>
-            {/* Global Search Results - All categories, tags, and mentions together */}
+            {/* Global Search Results - All streams, tags, and mentions together */}
 
-            {/* Categories */}
-            {filteredCategories.map((category) => (
+            {/* Streams */}
+            {filteredStreams.map((stream) => (
               <TouchableOpacity
-                key={category.category_id}
+                key={stream.stream_id}
                 style={[
-                  styles.categoryItem,
-                  selectedCategoryId === category.category_id && styles.categoryItemSelected,
+                  styles.streamItem,
+                  selectedStreamId === stream.stream_id && styles.streamItemSelected,
                 ]}
-                onPress={() => handleSelect(category.category_id, category.name)}
+                onPress={() => handleSelect(stream.stream_id, stream.name)}
               >
-                <View style={styles.categoryContent}>
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedCategoryId === category.category_id ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
-                    <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+                <View style={styles.streamContent}>
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedStreamId === stream.stream_id ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
+                    <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
-                  <View style={styles.categoryTextContainer}>
-                    <Text style={[styles.categoryPath, selectedCategoryId === category.category_id && styles.categoryPathSelected]}>
-                      {category.display_path}
+                  <View style={styles.streamTextContainer}>
+                    <Text style={[styles.streamPath, selectedStreamId === stream.stream_id && styles.streamPathSelected]}>
+                      {stream.name}
                     </Text>
                   </View>
                 </View>
@@ -493,22 +497,22 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
             {/* Locations */}
             {filteredLocations.map((location) => {
               const locationFilterId = `location:${location.locationId}`;
-              const isSelected = selectedCategoryId === locationFilterId;
+              const isSelected = selectedStreamId === locationFilterId;
               return (
                 <TouchableOpacity
                   key={location.locationId}
                   style={[
-                    styles.categoryItem,
-                    isSelected && styles.categoryItemSelected,
+                    styles.streamItem,
+                    isSelected && styles.streamItemSelected,
                   ]}
                   onPress={() => handleSelect(locationFilterId, location.name)}
                 >
-                  <View style={styles.categoryContent}>
+                  <View style={styles.streamContent}>
                     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
                       <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
                       <Circle cx={12} cy={10} r={3} />
                     </Svg>
-                    <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
+                    <Text style={[styles.streamName, isSelected && styles.streamNameSelected]}>
                       {location.name}
                     </Text>
                   </View>
@@ -522,21 +526,21 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
             {/* Tags */}
             {filteredTags.map((tag) => {
               const tagId = `tag:${tag.tag}`;
-              const isSelected = selectedCategoryId === tagId;
+              const isSelected = selectedStreamId === tagId;
               return (
                 <TouchableOpacity
                   key={tagId}
                   style={[
-                    styles.categoryItem,
-                    isSelected && styles.categoryItemSelected,
+                    styles.streamItem,
+                    isSelected && styles.streamItemSelected,
                   ]}
                   onPress={() => handleSelect(tagId, `#${tag.tag}`)}
                 >
-                  <View style={styles.categoryContent}>
+                  <View style={styles.streamContent}>
                     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
                       <Path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18" strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
-                    <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
+                    <Text style={[styles.streamName, isSelected && styles.streamNameSelected]}>
                       #{tag.tag}
                     </Text>
                   </View>
@@ -550,21 +554,21 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
             {/* Mentions */}
             {filteredMentions.map((mention) => {
               const mentionId = `mention:${mention.mention}`;
-              const isSelected = selectedCategoryId === mentionId;
+              const isSelected = selectedStreamId === mentionId;
               return (
                 <TouchableOpacity
                   key={mentionId}
                   style={[
-                    styles.categoryItem,
-                    isSelected && styles.categoryItemSelected,
+                    styles.streamItem,
+                    isSelected && styles.streamItemSelected,
                   ]}
                   onPress={() => handleSelect(mentionId, `@${mention.mention}`)}
                 >
-                  <View style={styles.categoryContent}>
+                  <View style={styles.streamContent}>
                     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? theme.colors.text.primary : theme.colors.text.tertiary} strokeWidth={2}>
                       <Path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
-                    <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
+                    <Text style={[styles.streamName, isSelected && styles.streamNameSelected]}>
                       @{mention.mention}
                     </Text>
                   </View>
@@ -576,7 +580,7 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedCategoryId 
             })}
 
             {/* No results */}
-            {filteredCategories.length === 0 && filteredLocations.length === 0 && filteredTags.length === 0 && filteredMentions.length === 0 && (
+            {filteredStreams.length === 0 && filteredLocations.length === 0 && filteredTags.length === 0 && filteredMentions.length === 0 && (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No results found</Text>
                 <Text style={styles.emptySubtext}>Try a different search term</Text>
@@ -652,52 +656,37 @@ const styles = StyleSheet.create({
   homeContainer: {
     paddingTop: theme.spacing.sm,
   },
-  homeTitleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-  },
-  homeTitle: {
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.semibold,
-  },
-  indentSpacer: {
-    width: 20,
-  },
-  categoryTreeWrapper: {
-    paddingLeft: 20,
+  streamListWrapper: {
+    paddingLeft: 0,
   },
   listWrapper: {
     paddingTop: theme.spacing.sm,
   },
-  categoryItem: {
+  streamItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.lg,
   },
-  categoryItemSelected: {
+  streamItemSelected: {
     backgroundColor: theme.colors.background.tertiary,
   },
-  categoryContent: {
+  streamContent: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.sm,
     flex: 1,
   },
-  categoryTextContainer: {
+  streamTextContainer: {
     flex: 1,
   },
-  categoryName: {
+  streamName: {
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.text.secondary,
     fontWeight: theme.typography.fontWeight.medium,
   },
-  categoryNameSelected: {
+  streamNameSelected: {
     color: theme.colors.text.primary,
     fontWeight: theme.typography.fontWeight.semibold,
   },
@@ -714,12 +703,12 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.text.tertiary,
   },
-  categoryPath: {
+  streamPath: {
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.text.secondary,
     fontWeight: theme.typography.fontWeight.medium,
   },
-  categoryPathSelected: {
+  streamPathSelected: {
     color: theme.colors.text.primary,
     fontWeight: theme.typography.fontWeight.semibold,
   },

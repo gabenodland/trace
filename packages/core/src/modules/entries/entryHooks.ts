@@ -42,7 +42,7 @@ function useCreateEntryMutation() {
     mutationFn: createEntry,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entries"] });
-      queryClient.invalidateQueries({ queryKey: ["categoryTree"] }); // Entry counts may change
+      queryClient.invalidateQueries({ queryKey: ["streams"] }); // Entry counts may change
     },
   });
 }
@@ -59,7 +59,7 @@ function useUpdateEntryMutation() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["entries"] });
       queryClient.invalidateQueries({ queryKey: ["entry", data.entry_id] });
-      queryClient.invalidateQueries({ queryKey: ["categoryTree"] }); // Entry counts may change
+      queryClient.invalidateQueries({ queryKey: ["streams"] }); // Entry counts may change
     },
   });
 }
@@ -74,7 +74,7 @@ function useDeleteEntryMutation() {
     mutationFn: deleteEntry,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entries"] });
-      queryClient.invalidateQueries({ queryKey: ["categoryTree"] }); // Entry counts may change
+      queryClient.invalidateQueries({ queryKey: ["streams"] }); // Entry counts may change
     },
   });
 }

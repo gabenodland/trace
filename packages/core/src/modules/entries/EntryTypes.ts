@@ -7,7 +7,7 @@ export interface Entry {
   user_id: string;
   title: string | null;
   content: string;
-  category_id: string | null;
+  stream_id: string | null;
   tags: string[];
   mentions: string[];
   created_at: string;
@@ -47,7 +47,7 @@ export interface CreateEntryInput {
   content: string;
   tags?: string[];
   mentions?: string[];
-  category_id?: string | null;
+  stream_id?: string | null;
   entry_date?: string | null; // When the memory/event actually happened
   entry_latitude?: number | null;
   entry_longitude?: number | null;
@@ -65,7 +65,7 @@ export interface UpdateEntryInput {
   content?: string;
   tags?: string[];
   mentions?: string[];
-  category_id?: string | null;
+  stream_id?: string | null;
   entry_date?: string | null; // When the memory/event actually happened
   entry_latitude?: number | null;
   entry_longitude?: number | null;
@@ -80,7 +80,7 @@ export interface UpdateEntryInput {
 }
 
 export interface EntryFilter {
-  category_id?: string | null;
+  stream_id?: string | null;
   tags?: string[];
   tag?: string; // Filter by single tag
   mention?: string; // Filter by single mention

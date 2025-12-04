@@ -25,11 +25,9 @@ const log = createScopedLogger('EntryApi');
 
 /**
  * Mobile-specific entry filter that extends core EntryFilter
- * Adds mobile-only fields for category hierarchy filtering
  */
 export interface MobileEntryFilter extends EntryFilter {
-  includeChildren?: boolean;
-  childCategoryIds?: string[];
+  // Extends core EntryFilter which now uses stream_id
 }
 
 /**
@@ -142,7 +140,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     content: data.content,
     tags: data.tags || [],
     mentions: data.mentions || [],
-    category_id: data.category_id || null,
+    stream_id: data.stream_id || null,
     // GPS coordinates (where user was when creating entry)
     entry_latitude: data.entry_latitude || null,
     entry_longitude: data.entry_longitude || null,
@@ -316,7 +314,7 @@ export async function copyEntry(
     content: originalEntry.content,
     tags: originalEntry.tags || [],
     mentions: originalEntry.mentions || [],
-    category_id: originalEntry.category_id,
+    stream_id: originalEntry.stream_id,
     // Fresh GPS coordinates
     entry_latitude: gpsCoords?.latitude || null,
     entry_longitude: gpsCoords?.longitude || null,

@@ -1,12 +1,9 @@
-// Category types for hierarchical organization
+// Stream types for flat organization (no hierarchy)
 
-export interface Category {
-  category_id: string;
+export interface Stream {
+  stream_id: string;
   user_id: string;
   name: string;
-  full_path: string;
-  parent_category_id: string | null;
-  depth: number;
   entry_count: number;
   color: string | null;
   icon: string | null;
@@ -17,7 +14,7 @@ export interface Category {
   entry_title_template?: string | null;
   entry_content_template?: string | null;
 
-  // Feature toggles - enable/disable features per category
+  // Feature toggles - enable/disable features per stream
   entry_use_rating?: boolean;
   entry_use_priority?: boolean;
   entry_use_status?: boolean;
@@ -31,24 +28,16 @@ export interface Category {
   is_localonly?: boolean;
 }
 
-export interface CategoryWithPath extends Category {
-  display_path: string; // "House/Furnace/Filter" (capitalized)
-}
-
-export interface CategoryTree {
-  category: CategoryWithPath;
-  children: CategoryTree[];
-  entry_count: number;
-}
-
-export interface CreateCategoryInput {
+export interface CreateStreamInput {
   name: string;
-  parent_category_id?: string | null;
+  color?: string | null;
+  icon?: string | null;
 }
 
-export interface UpdateCategoryInput {
+export interface UpdateStreamInput {
   name?: string;
-  parent_category_id?: string | null;
+  color?: string | null;
+  icon?: string | null;
 
   // Template fields
   entry_title_template?: string | null;

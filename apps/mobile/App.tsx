@@ -12,14 +12,14 @@ import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { EntryScreen } from "./src/screens/EntryScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
-import { CategoriesScreen } from "./src/screens/CategoriesScreen";
-import { CategoryPropertiesScreen } from "./src/screens/CategoryPropertiesScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { TasksScreen } from "./src/screens/TasksScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { DatabaseInfoScreen } from "./src/screens/DatabaseInfoScreen";
 import { LocationsScreen } from "./src/screens/LocationsScreen";
 import { MapScreen } from "./src/screens/MapScreen";
+import { StreamsScreen } from "./src/screens/StreamsScreen";
+import { StreamPropertiesScreen } from "./src/screens/StreamPropertiesScreen";
 import { localDB } from "./src/shared/db/localDB";
 import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
@@ -179,14 +179,10 @@ function AuthGate() {
       case "inbox":
         return (
           <EntryListScreen
-            returnCategoryId={navParams.returnCategoryId}
-            returnCategoryName={navParams.returnCategoryName}
+            returnStreamId={navParams.returnStreamId}
+            returnStreamName={navParams.returnStreamName}
           />
         );
-      case "categories":
-        return <CategoriesScreen />;
-      case "category-properties":
-        return <CategoryPropertiesScreen categoryId={navParams.categoryId} />;
       case "calendar":
         return <CalendarScreen returnDate={navParams.returnDate} />;
       case "tasks":
@@ -199,6 +195,10 @@ function AuthGate() {
         return <LocationsScreen />;
       case "map":
         return <MapScreen />;
+      case "streams":
+        return <StreamsScreen />;
+      case "stream-properties":
+        return <StreamPropertiesScreen streamId={navParams.streamId} />;
       case "location-builder":
         // Dynamically load LocationBuilderScreen to avoid loading MapView at startup
         if (!LocationBuilderComponent) {
@@ -216,8 +216,8 @@ function AuthGate() {
       default:
         return (
           <EntryListScreen
-            returnCategoryId={navParams.returnCategoryId}
-            returnCategoryName={navParams.returnCategoryName}
+            returnStreamId={navParams.returnStreamId}
+            returnStreamName={navParams.returnStreamName}
           />
         );
     }

@@ -140,33 +140,6 @@ class LocalDatabase {
       console.error('Migration error (locations table):', error);
     }
 
-    // Migration: Add category properties columns
-    try {
-      const propertyCheck = await this.db.getFirstAsync<{ name: string }>(
-        `SELECT name FROM pragma_table_info('categories') WHERE name = 'entry_title_template'`
-      );
-
-      if (!propertyCheck) {
-        console.log('📦 Running migration: Adding category properties columns...');
-        await this.db.execAsync(`
-          ALTER TABLE categories ADD COLUMN entry_title_template TEXT;
-          ALTER TABLE categories ADD COLUMN entry_content_template TEXT;
-          ALTER TABLE categories ADD COLUMN entry_use_rating INTEGER DEFAULT 0;
-          ALTER TABLE categories ADD COLUMN entry_use_priority INTEGER DEFAULT 0;
-          ALTER TABLE categories ADD COLUMN entry_use_status INTEGER DEFAULT 1;
-          ALTER TABLE categories ADD COLUMN entry_use_duedates INTEGER DEFAULT 0;
-          ALTER TABLE categories ADD COLUMN entry_use_location INTEGER DEFAULT 1;
-          ALTER TABLE categories ADD COLUMN entry_use_photos INTEGER DEFAULT 1;
-          ALTER TABLE categories ADD COLUMN entry_content_type TEXT DEFAULT 'richformat';
-          ALTER TABLE categories ADD COLUMN is_private INTEGER DEFAULT 0;
-          ALTER TABLE categories ADD COLUMN is_localonly INTEGER DEFAULT 0;
-        `);
-        console.log('✅ Migration complete: category properties added');
-      }
-    } catch (error) {
-      console.error('Migration error (category properties):', error);
-    }
-
     // Migration: Update status CHECK constraint to include 'in_progress'
     // SQLite doesn't allow altering CHECK constraints, so we need to recreate the table
     try {
@@ -193,7 +166,7 @@ class LocalDatabase {
           content TEXT NOT NULL,
           tags TEXT,
           mentions TEXT,
-          category_id TEXT,
+          stream_id TEXT,
           entry_date INTEGER,
           entry_latitude REAL,
           entry_longitude REAL,
@@ -224,7 +197,7 @@ class LocalDatabase {
 
         // Build explicit column list for INSERT (only columns that exist in both old and new tables)
         const newTableColumnNames = [
-          'entry_id', 'user_id', 'title', 'content', 'tags', 'mentions', 'category_id',
+          'entry_id', 'user_id', 'title', 'content', 'tags', 'mentions', 'stream_id',
           'entry_date', 'entry_latitude', 'entry_longitude', 'location_accuracy', 'location_id',
           'status', 'due_date', 'completed_at', 'created_at', 'updated_at', 'deleted_at',
           'priority', 'rating', 'is_pinned', 'local_only', 'synced', 'sync_action',
@@ -309,7 +282,7 @@ class LocalDatabase {
         content TEXT NOT NULL,
         tags TEXT,                    -- JSON array: '["tag1","tag2"]'
         mentions TEXT,                -- JSON array: '["person1","person2"]'
-        category_id TEXT,
+        stream_id TEXT,
         entry_date INTEGER,           -- Unix timestamp for calendar grouping
 
         -- GPS coordinates (where user was when creating entry)
@@ -351,17 +324,25 @@ class LocalDatabase {
 
       -- Indexes for entries are created in createIndexes() after migrations
 
-      -- Categories table
-      CREATE TABLE IF NOT EXISTS categories (
-        category_id TEXT PRIMARY KEY,
+      -- Streams table (flat organization, no hierarchy)
+      CREATE TABLE IF NOT EXISTS streams (
+        stream_id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
-        full_path TEXT NOT NULL,
-        parent_category_id TEXT,
-        depth INTEGER NOT NULL,
         entry_count INTEGER DEFAULT 0,
         color TEXT,
         icon TEXT,
+        entry_title_template TEXT,
+        entry_content_template TEXT,
+        entry_use_rating INTEGER DEFAULT 0,
+        entry_use_priority INTEGER DEFAULT 0,
+        entry_use_status INTEGER DEFAULT 1,
+        entry_use_duedates INTEGER DEFAULT 0,
+        entry_use_location INTEGER DEFAULT 1,
+        entry_use_photos INTEGER DEFAULT 1,
+        entry_content_type TEXT DEFAULT 'richformat',
+        is_private INTEGER DEFAULT 0,
+        is_localonly INTEGER DEFAULT 0,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         synced INTEGER DEFAULT 0,
@@ -375,7 +356,7 @@ class LocalDatabase {
         last_edited_device TEXT
       );
 
-      -- Indexes for categories are created in createIndexes() after migrations
+      -- Indexes for streams are created in createIndexes() after migrations
 
       -- Photos table
       CREATE TABLE IF NOT EXISTS photos (
@@ -416,8 +397,8 @@ class LocalDatabase {
         details TEXT,
         entries_pushed INTEGER DEFAULT 0,
         entries_errors INTEGER DEFAULT 0,
-        categories_pushed INTEGER DEFAULT 0,
-        categories_errors INTEGER DEFAULT 0,
+        streams_pushed INTEGER DEFAULT 0,
+        streams_errors INTEGER DEFAULT 0,
         photos_pushed INTEGER DEFAULT 0,
         photos_errors INTEGER DEFAULT 0,
         entries_pulled INTEGER DEFAULT 0
@@ -447,16 +428,15 @@ class LocalDatabase {
       CREATE INDEX IF NOT EXISTS idx_entries_updated_at ON entries(updated_at DESC);
       CREATE INDEX IF NOT EXISTS idx_entries_deleted_at ON entries(deleted_at);
       CREATE INDEX IF NOT EXISTS idx_entries_entry_date ON entries(entry_date);
-      CREATE INDEX IF NOT EXISTS idx_entries_category_id ON entries(category_id);
+      CREATE INDEX IF NOT EXISTS idx_entries_stream_id ON entries(stream_id);
       CREATE INDEX IF NOT EXISTS idx_entries_location_id ON entries(location_id);
       CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status);
       CREATE INDEX IF NOT EXISTS idx_entries_synced ON entries(synced);
       CREATE INDEX IF NOT EXISTS idx_entries_local_only ON entries(local_only);
 
-      -- Indexes for categories
-      CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
-      CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_category_id);
-      CREATE INDEX IF NOT EXISTS idx_categories_synced ON categories(synced);
+      -- Indexes for streams
+      CREATE INDEX IF NOT EXISTS idx_streams_user_id ON streams(user_id);
+      CREATE INDEX IF NOT EXISTS idx_streams_synced ON streams(synced);
 
       -- Indexes for photos
       CREATE INDEX IF NOT EXISTS idx_photos_entry_id ON photos(entry_id);
@@ -487,7 +467,7 @@ class LocalDatabase {
     await this.db.runAsync(
       `INSERT OR REPLACE INTO entries (
         entry_id, user_id, title, content, tags, mentions,
-        category_id, entry_date,
+        stream_id, entry_date,
         entry_latitude, entry_longitude, location_accuracy,
         location_id,
         status, due_date, completed_at, created_at, updated_at,
@@ -505,7 +485,7 @@ class LocalDatabase {
         entry.content,
         JSON.stringify(entry.tags || []),
         JSON.stringify(entry.mentions || []),
-        entry.category_id || null,
+        entry.stream_id || null,
         entry.entry_date ? Date.parse(entry.entry_date) : (entry.created_at ? Date.parse(entry.created_at) : now),
         entry.entry_latitude || null,
         entry.entry_longitude || null,
@@ -562,14 +542,12 @@ class LocalDatabase {
    * Excludes soft-deleted entries by default
    */
   async getAllEntries(filter?: {
-    category_id?: string | null;
+    stream_id?: string | null;
     status?: string;
     tag?: string;
     mention?: string;
     location_id?: string;
     includeDeleted?: boolean;
-    includeChildren?: boolean;
-    childCategoryIds?: string[];
   }): Promise<Entry[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
@@ -587,16 +565,12 @@ class LocalDatabase {
     }
 
     if (filter) {
-      if (filter.category_id !== undefined) {
-        if (filter.category_id === null) {
-          query += ' AND category_id IS NULL';
-        } else if (filter.includeChildren && filter.childCategoryIds && filter.childCategoryIds.length > 0) {
-          const placeholders = filter.childCategoryIds.map(() => '?').join(',');
-          query += ` AND category_id IN (?, ${placeholders})`;
-          params.push(filter.category_id, ...filter.childCategoryIds);
+      if (filter.stream_id !== undefined) {
+        if (filter.stream_id === null) {
+          query += ' AND stream_id IS NULL';
         } else {
-          query += ' AND category_id = ?';
-          params.push(filter.category_id);
+          query += ' AND stream_id = ?';
+          params.push(filter.stream_id);
         }
       }
 
@@ -656,7 +630,7 @@ class LocalDatabase {
     await this.db.runAsync(
       `UPDATE entries SET
         title = ?, content = ?, tags = ?, mentions = ?,
-        category_id = ?, entry_date = ?,
+        stream_id = ?, entry_date = ?,
         entry_latitude = ?, entry_longitude = ?, location_accuracy = ?,
         location_id = ?,
         status = ?, due_date = ?, completed_at = ?,
@@ -672,7 +646,7 @@ class LocalDatabase {
         updated.content,
         JSON.stringify(updated.tags || []),
         JSON.stringify(updated.mentions || []),
-        updated.category_id || null,
+        updated.stream_id || null,
         updated.entry_date ? Date.parse(updated.entry_date) : null,
         updated.entry_latitude || null,
         updated.entry_longitude || null,
@@ -825,7 +799,7 @@ class LocalDatabase {
       content: row.content,
       tags: row.tags ? JSON.parse(row.tags) : [],
       mentions: row.mentions ? JSON.parse(row.mentions) : [],
-      category_id: row.category_id,
+      stream_id: row.stream_id,
       entry_date: row.entry_date ? new Date(row.entry_date).toISOString() : null,
       entry_latitude: row.entry_latitude,
       entry_longitude: row.entry_longitude,
@@ -1106,38 +1080,38 @@ class LocalDatabase {
   }
 
   // ========================================
-  // CATEGORY OPERATIONS
+  // STREAM OPERATIONS
   // ========================================
 
   /**
-   * Get all categories
+   * Get all streams
    */
-  async getAllCategories(): Promise<any[]> {
+  async getAllStreams(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
     let query = `
       SELECT
-        c.*,
+        s.*,
         COALESCE(COUNT(e.entry_id), 0) as entry_count
-      FROM categories c
-      LEFT JOIN entries e ON c.category_id = e.category_id
+      FROM streams s
+      LEFT JOIN entries e ON s.stream_id = e.stream_id
         AND (e.deleted_at IS NULL OR e.deleted_at = '')
     `;
 
     const params: any[] = [];
 
     if (this.currentUserId) {
-      query += ` WHERE (c.sync_action IS NULL OR c.sync_action != 'delete')
-        AND c.user_id = ?`;
+      query += ` WHERE (s.sync_action IS NULL OR s.sync_action != 'delete')
+        AND s.user_id = ?`;
       params.push(this.currentUserId);
     } else {
-      query += ` WHERE c.sync_action IS NULL OR c.sync_action != 'delete'`;
+      query += ` WHERE s.sync_action IS NULL OR s.sync_action != 'delete'`;
     }
 
     query += `
-      GROUP BY c.category_id
-      ORDER BY c.full_path
+      GROUP BY s.stream_id
+      ORDER BY s.name
     `;
 
     const rows = await this.db.getAllAsync<any>(query, params);
@@ -1157,22 +1131,22 @@ class LocalDatabase {
   }
 
   /**
-   * Get a single category by ID
+   * Get a single stream by ID
    */
-  async getCategory(categoryId: string): Promise<any | null> {
+  async getStream(streamId: string): Promise<any | null> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
     const row = await this.db.getFirstAsync<any>(
       `SELECT
-        c.*,
+        s.*,
         COALESCE(COUNT(e.entry_id), 0) as entry_count
-      FROM categories c
-      LEFT JOIN entries e ON c.category_id = e.category_id
+      FROM streams s
+      LEFT JOIN entries e ON s.stream_id = e.stream_id
         AND (e.deleted_at IS NULL OR e.deleted_at = '')
-      WHERE c.category_id = ?
-      GROUP BY c.category_id`,
-      [categoryId]
+      WHERE s.stream_id = ?
+      GROUP BY s.stream_id`,
+      [streamId]
     );
 
     if (!row) return null;
@@ -1192,30 +1166,41 @@ class LocalDatabase {
   }
 
   /**
-   * Save a category
+   * Save a stream
    */
-  async saveCategory(category: any): Promise<void> {
+  async saveStream(stream: any): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.runAsync(
-      `INSERT OR REPLACE INTO categories (
-        category_id, user_id, name, full_path, parent_category_id,
-        depth, entry_count, color, icon, created_at, updated_at,
-        synced, sync_action
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO streams (
+        stream_id, user_id, name, entry_count, color, icon,
+        entry_title_template, entry_content_template,
+        entry_use_rating, entry_use_priority, entry_use_status,
+        entry_use_duedates, entry_use_location, entry_use_photos,
+        entry_content_type, is_private, is_localonly,
+        created_at, updated_at, synced, sync_action
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        category.category_id,
-        category.user_id,
-        category.name,
-        category.full_path,
-        category.parent_category_id || null,
-        category.depth,
-        category.entry_count || 0,
-        category.color || null,
-        category.icon || null,
-        Date.parse(category.created_at),
-        Date.parse(category.updated_at || category.created_at),
+        stream.stream_id,
+        stream.user_id,
+        stream.name,
+        stream.entry_count || 0,
+        stream.color || null,
+        stream.icon || null,
+        stream.entry_title_template || null,
+        stream.entry_content_template || null,
+        stream.entry_use_rating ? 1 : 0,
+        stream.entry_use_priority ? 1 : 0,
+        stream.entry_use_status !== false ? 1 : 0,
+        stream.entry_use_duedates ? 1 : 0,
+        stream.entry_use_location !== false ? 1 : 0,
+        stream.entry_use_photos !== false ? 1 : 0,
+        stream.entry_content_type || 'richformat',
+        stream.is_private ? 1 : 0,
+        stream.is_localonly ? 1 : 0,
+        Date.parse(stream.created_at),
+        Date.parse(stream.updated_at || stream.created_at),
         0,
         'create'
       ]
@@ -1223,9 +1208,9 @@ class LocalDatabase {
   }
 
   /**
-   * Update a category
+   * Update a stream
    */
-  async updateCategory(categoryId: string, updates: any): Promise<void> {
+  async updateStream(streamId: string, updates: any): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
@@ -1238,11 +1223,8 @@ class LocalDatabase {
     const syncAction = updates.sync_action !== undefined ? updates.sync_action : 'update';
 
     await this.db.runAsync(
-      `UPDATE categories SET
+      `UPDATE streams SET
         name = ?,
-        full_path = ?,
-        parent_category_id = ?,
-        depth = ?,
         color = ?,
         icon = ?,
         entry_title_template = ?,
@@ -1259,12 +1241,9 @@ class LocalDatabase {
         updated_at = ?,
         synced = ?,
         sync_action = ?
-      WHERE category_id = ?`,
+      WHERE stream_id = ?`,
       [
         updates.name,
-        updates.full_path,
-        updates.parent_category_id !== undefined ? updates.parent_category_id : null,
-        updates.depth !== undefined ? updates.depth : 0,
         updates.color || null,
         updates.icon || null,
         updates.entry_title_template !== undefined ? updates.entry_title_template : null,
@@ -1281,95 +1260,85 @@ class LocalDatabase {
         updatedAt,
         synced,
         syncAction,
-        categoryId
+        streamId
       ]
     );
   }
 
   /**
-   * Delete a category
+   * Delete a stream (moves entries to Uncategorized)
    */
-  async deleteCategory(categoryId: string): Promise<void> {
+  async deleteStream(streamId: string): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    const category = await this.getCategory(categoryId);
-    if (!category) return;
+    const stream = await this.getStream(streamId);
+    if (!stream) return;
 
-    const parentCategoryId = category.parent_category_id;
-
-    // Move entries to parent
+    // Move entries to Uncategorized (null stream_id)
     await this.db.runAsync(
       `UPDATE entries
-       SET category_id = ?, synced = 0
-       WHERE category_id = ?`,
-      [parentCategoryId, categoryId]
-    );
-
-    // Move child categories to parent
-    await this.db.runAsync(
-      `UPDATE categories
-       SET parent_category_id = ?, synced = 0
-       WHERE parent_category_id = ?`,
-      [parentCategoryId, categoryId]
+       SET stream_id = NULL, synced = 0
+       WHERE stream_id = ?`,
+      [streamId]
     );
 
     // Mark for deletion
     await this.db.runAsync(
-      `UPDATE categories SET synced = 0, sync_action = 'delete' WHERE category_id = ?`,
-      [categoryId]
+      `UPDATE streams SET synced = 0, sync_action = 'delete' WHERE stream_id = ?`,
+      [streamId]
     );
   }
 
   /**
-   * Get unsynced categories
+   * Get unsynced streams
    */
-  async getUnsyncedCategories(): Promise<any[]> {
+  async getUnsyncedStreams(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
     const rows = await this.db.getAllAsync<any>(
-      'SELECT * FROM categories WHERE synced = 0'
+      'SELECT * FROM streams WHERE synced = 0'
     );
 
     return rows;
   }
 
   /**
-   * Mark category as synced
+   * Mark stream as synced
    */
-  async markCategorySynced(categoryId: string): Promise<void> {
+  async markStreamSynced(streamId: string): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    const category = await this.getCategory(categoryId);
+    const stream = await this.getStream(streamId);
 
-    if (category && category.sync_action === 'delete') {
-      await this.db.runAsync('DELETE FROM categories WHERE category_id = ?', [categoryId]);
+    if (stream && stream.sync_action === 'delete') {
+      await this.db.runAsync('DELETE FROM streams WHERE stream_id = ?', [streamId]);
     } else {
       await this.db.runAsync(
-        `UPDATE categories SET
+        `UPDATE streams SET
           synced = 1,
           sync_action = NULL,
           sync_error = NULL
-        WHERE category_id = ?`,
-        [categoryId]
+        WHERE stream_id = ?`,
+        [streamId]
       );
     }
   }
 
   /**
-   * Record category sync error
+   * Record stream sync error
    */
-  async recordCategorySyncError(categoryId: string, error: string): Promise<void> {
+  async recordStreamSyncError(streamId: string, error: string): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.runAsync(
-      `UPDATE categories SET
+      `UPDATE streams SET
         sync_error = ?
-      WHERE category_id = ?`,
-      [error, categoryId]
+      WHERE stream_id = ?`,
+      [error, streamId]
     );
   }
 
@@ -1471,8 +1440,8 @@ class LocalDatabase {
     details?: {
       entries_pushed?: number;
       entries_errors?: number;
-      categories_pushed?: number;
-      categories_errors?: number;
+      streams_pushed?: number;
+      streams_errors?: number;
       photos_pushed?: number;
       photos_errors?: number;
       entries_pulled?: number;
@@ -1484,7 +1453,7 @@ class LocalDatabase {
     await this.db.runAsync(
       `INSERT INTO sync_logs (
         timestamp, log_level, operation, message,
-        entries_pushed, entries_errors, categories_pushed, categories_errors, entries_pulled
+        entries_pushed, entries_errors, streams_pushed, streams_errors, entries_pulled
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         Date.now(),
@@ -1493,8 +1462,8 @@ class LocalDatabase {
         message,
         details?.entries_pushed || 0,
         details?.entries_errors || 0,
-        details?.categories_pushed || 0,
-        details?.categories_errors || 0,
+        details?.streams_pushed || 0,
+        details?.streams_errors || 0,
         details?.entries_pulled || 0,
       ]
     );
@@ -1513,8 +1482,8 @@ class LocalDatabase {
     message: string;
     entries_pushed: number;
     entries_errors: number;
-    categories_pushed: number;
-    categories_errors: number;
+    streams_pushed: number;
+    streams_errors: number;
     entries_pulled: number;
   }>> {
     await this.init();
@@ -1940,7 +1909,7 @@ class LocalDatabase {
     await this.db.execAsync(`
       DELETE FROM photos;
       DELETE FROM entries;
-      DELETE FROM categories;
+      DELETE FROM streams;
       DELETE FROM locations;
       DELETE FROM sync_metadata;
       DELETE FROM sync_logs;

@@ -16,21 +16,21 @@ interface EntryListItemProps {
   onPress: () => void;
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
-  onCategoryPress?: (categoryId: string | null, categoryName: string) => void;
+  onStreamPress?: (streamId: string | null, streamName: string) => void;
   onToggleComplete?: (entryId: string, currentStatus: "incomplete" | "in_progress" | "complete") => void;
   onMove?: (entryId: string) => void;
   onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
   onResolveConflict?: (entryId: string) => void; // Dismiss conflict banner
-  categoryName?: string | null; // Category name to display
+  streamName?: string | null; // Stream name to display
   locationName?: string | null; // Location name to display
   displayMode?: EntryDisplayMode; // Display mode for content rendering
   showMenu?: boolean; // Whether menu is shown for this entry
   onMenuToggle?: () => void; // Toggle menu visibility
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCategoryPress, onToggleComplete, onMove, onCopy, onDelete, onPin, onResolveConflict, categoryName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onStreamPress, onToggleComplete, onMove, onCopy, onDelete, onPin, onResolveConflict, streamName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(0);
   const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
@@ -335,21 +335,15 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
               </View>
             )}
 
-            {/* Category Badge */}
+            {/* Stream Badge */}
             <TouchableOpacity
-              style={styles.category}
+              style={styles.stream}
               onPress={(e) => {
                 e.stopPropagation();
-                if (onCategoryPress) {
-                  // If entry has a category, use it; otherwise navigate to Uncategorized
-                  const categoryId = entry.category_id || null;
-                  // Extract just the node name (last segment of path) for title bar
-                  let displayName = "Uncategorized";
-                  if (categoryName) {
-                    const segments = categoryName.split("/");
-                    displayName = segments[segments.length - 1];
-                  }
-                  onCategoryPress(categoryId, displayName);
+                if (onStreamPress) {
+                  const streamId = entry.stream_id || null;
+                  const displayName = streamName || "Unassigned";
+                  onStreamPress(streamId, displayName);
                 }
               }}
               activeOpacity={0.7}
@@ -357,7 +351,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onCa
               <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                 <Path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
               </Svg>
-              <Text style={styles.categoryText}>{categoryName || "Uncategorized"}</Text>
+              <Text style={styles.streamText}>{streamName || "Unassigned"}</Text>
             </TouchableOpacity>
 
             {/* Due Date Badge */}
@@ -546,7 +540,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text.tertiary,
     fontWeight: theme.typography.fontWeight.medium,
   },
-  category: {
+  stream: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
@@ -555,7 +549,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xs - 2,
     borderRadius: theme.borderRadius.full,
   },
-  categoryText: {
+  streamText: {
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.text.tertiary,
     fontWeight: theme.typography.fontWeight.medium,

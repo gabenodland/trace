@@ -3,11 +3,11 @@ import { View, StyleSheet, Alert } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import * as Location from "expo-location";
 import { useAuthState, type LocationEntity } from "@trace/core";
-import { useEntries, useEntry, MobileEntryFilter } from "../modules/entries/mobileEntryHooks";
+import { useEntries, MobileEntryFilter } from "../modules/entries/mobileEntryHooks";
 import { getLocation as getLocationById } from "../modules/locations/mobileLocationApi";
 import { type Location as LocationType } from "@trace/core";
 import { localDB } from "../shared/db/localDB";
-import { useCategories, getAllChildCategoryIds } from "../modules/categories/mobileCategoryHooks";
+import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { usePersistedState } from "../shared/hooks/usePersistedState";
@@ -20,7 +20,7 @@ import { EntryNavigator } from "../components/navigation/EntryNavigator";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
 import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
 import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
-import { CategoryPicker } from "../modules/categories/components/CategoryPicker";
+import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import type { EntryDisplayMode } from "../modules/entries/types/EntryDisplayMode";
 import { DEFAULT_DISPLAY_MODE, ENTRY_DISPLAY_MODES } from "../modules/entries/types/EntryDisplayMode";
 import type { EntrySortMode } from "../modules/entries/types/EntrySortMode";
@@ -31,35 +31,35 @@ import { sortEntries } from "../modules/entries/helpers/entrySortHelpers";
 import { theme } from "../shared/theme/theme";
 
 interface EntryListScreenProps {
-  returnCategoryId?: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people"; // Also supports "tag:tagname" and "mention:mentionname"
-  returnCategoryName?: string;
+  returnStreamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people"; // Also supports "tag:tagname" and "mention:mentionname"
+  returnStreamName?: string;
 }
 
-export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryListScreenProps = {}) {
+export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListScreenProps = {}) {
   const { navigate } = useNavigation();
-  const { categories, categoryTree } = useCategories();
+  const { streams } = useStreams();
   const { user } = useAuthState();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showStreamDropdown, setShowStreamDropdown] = useState(false);
   const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
   const [showSortModeSelector, setShowSortModeSelector] = useState(false);
-  const [showMoveCategoryPicker, setShowMoveCategoryPicker] = useState(false);
+  const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people">("all");
-  const [selectedCategoryName, setSelectedCategoryName] = useState<string>("Home");
+  const [selectedStreamId, setSelectedStreamId] = useState<string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people">("all");
+  const [selectedStreamName, setSelectedStreamName] = useState<string>("Home");
   const [displayMode, setDisplayMode] = usePersistedState<EntryDisplayMode>('@entryListDisplayMode', DEFAULT_DISPLAY_MODE);
   const [sortMode, setSortMode] = usePersistedState<EntrySortMode>('@entryListSortMode', DEFAULT_SORT_MODE);
   const [orderMode, setOrderMode] = usePersistedState<EntrySortOrder>('@entryListOrderMode', DEFAULT_SORT_ORDER);
   const [showPinnedFirst, setShowPinnedFirst] = usePersistedState<boolean>('@entryListShowPinnedFirst', false);
   const [locations, setLocations] = useState<LocationEntity[]>([]);
 
-  // Update category when returning from entry screen
+  // Update stream when returning from entry screen
   useEffect(() => {
-    if (returnCategoryId !== undefined && returnCategoryName !== undefined) {
-      setSelectedCategoryId(returnCategoryId);
-      setSelectedCategoryName(returnCategoryName);
+    if (returnStreamId !== undefined && returnStreamName !== undefined) {
+      setSelectedStreamId(returnStreamId);
+      setSelectedStreamName(returnStreamName);
     }
-  }, [returnCategoryId, returnCategoryName]);
+  }, [returnStreamId, returnStreamName]);
 
   // Fetch locations for displaying location names
   useEffect(() => {
@@ -74,56 +74,31 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     fetchLocations();
   }, []);
 
-  // Build breadcrumbs from selected category
+  // Build breadcrumbs from selected stream (flat - no hierarchy)
   const breadcrumbs = useMemo((): BreadcrumbSegment[] => {
-    // If a category is selected, walk up the parent tree
-    if (selectedCategoryId && typeof selectedCategoryId === 'string' && !selectedCategoryId.startsWith("tag:") && !selectedCategoryId.startsWith("mention:") && !selectedCategoryId.startsWith("location:") && selectedCategoryId !== "all") {
-      // Start with Home
-      const crumbs: BreadcrumbSegment[] = [{ id: "all", label: "Home" }];
-
-      const categoryPath: BreadcrumbSegment[] = [];
-      let currentCategory = categories.find(c => c.category_id === selectedCategoryId);
-
-      // Walk up the parent chain
-      while (currentCategory) {
-        categoryPath.unshift({
-          id: currentCategory.category_id,
-          label: currentCategory.name
-        });
-
-        // Move to parent
-        if (currentCategory.parent_category_id) {
-          currentCategory = categories.find(c => c.category_id === currentCategory!.parent_category_id);
-        } else {
-          currentCategory = undefined;
-        }
+    // If a stream is selected - show only stream name (no Home >)
+    if (selectedStreamId && typeof selectedStreamId === 'string' && !selectedStreamId.startsWith("tag:") && !selectedStreamId.startsWith("mention:") && !selectedStreamId.startsWith("location:") && selectedStreamId !== "all") {
+      const stream = streams.find(s => s.stream_id === selectedStreamId);
+      if (stream) {
+        return [{ id: stream.stream_id, label: stream.name }];
       }
+    }
 
-      // Add all categories to breadcrumb
-      crumbs.push(...categoryPath);
-      return crumbs;
-    } else if (selectedCategoryId === "all") {
-      // "All" as the only segment
-      return [{ id: "all", label: "All" }];
-    } else if (selectedCategoryId === null) {
-      // Uncategorized - only segment
-      return [{ id: null, label: "Uncategorized" }];
-    } else if (typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith("tag:")) {
-      // Tag filter - show tag in breadcrumb
-      const tag = selectedCategoryId.substring(4);
-      return [{ id: "all", label: "Home" }, { id: selectedCategoryId, label: `#${tag}` }];
-    } else if (typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith("mention:")) {
-      // Mention filter - show mention in breadcrumb
-      const mention = selectedCategoryId.substring(8);
-      return [{ id: "all", label: "Home" }, { id: selectedCategoryId, label: `@${mention}` }];
-    } else if (typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith("location:")) {
-      // Location filter - show location in breadcrumb with icon
-      // Use selectedCategoryName which contains the actual location name
+    if (selectedStreamId === "all") {
+      return [{ id: "all", label: "All Entries" }];
+    } else if (selectedStreamId === null) {
+      return [{ id: null, label: "Unassigned" }];
+    } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith("tag:")) {
+      const tag = selectedStreamId.substring(4);
+      return [{ id: selectedStreamId, label: `#${tag}` }];
+    } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith("mention:")) {
+      const mention = selectedStreamId.substring(8);
+      return [{ id: selectedStreamId, label: `@${mention}` }];
+    } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith("location:")) {
       return [
-        { id: "all", label: "Home" },
         {
-          id: selectedCategoryId,
-          label: selectedCategoryName || "Location",
+          id: selectedStreamId,
+          label: selectedStreamName || "Location",
           icon: (
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
@@ -134,79 +109,53 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
       ];
     }
 
-    // Default: just All
-    return [{ id: "all", label: "All" }];
-  }, [selectedCategoryId, selectedCategoryName, categories]);
+    return [{ id: "all", label: "All Entries" }];
+  }, [selectedStreamId, selectedStreamName, streams]);
 
-  // Get child category IDs for hierarchical filtering
-  const childCategoryIds = useMemo(() => {
-    if (selectedCategoryId && typeof selectedCategoryId === 'string' && !selectedCategoryId.startsWith("tag:") && !selectedCategoryId.startsWith("mention:") && !selectedCategoryId.startsWith("location:") && selectedCategoryId !== "all") {
-      return getAllChildCategoryIds(categoryTree, selectedCategoryId);
-    }
-    return [];
-  }, [selectedCategoryId, categoryTree]);
+  // Determine filter based on selected stream
+  let streamFilter: MobileEntryFilter = {};
 
-  // Determine filter based on selected category
-  let categoryFilter: MobileEntryFilter = {};
-
-  if (selectedCategoryId === "all") {
-    // "All" / "Home" - fetch all entries (inbox + categorized)
-    // Don't set any category_id filter to show everything
-    // categoryFilter stays empty
-  } else if (selectedCategoryId === null) {
-    // Uncategorized - show only entries without a category
-    categoryFilter = { category_id: null };
-  } else if (selectedCategoryId === "categories") {
-    // "Categories" - show all categorized entries
-    // Don't set category_id filter (will show all, but "categories" is just a nav item)
-    // Actually, this should probably not be used as a filter - it's just the collapsible section
-    // For now, treat it like "all"
-  } else if (selectedCategoryId === "tasks" || selectedCategoryId === "events") {
+  if (selectedStreamId === "all") {
+    // "All" / "Home" - fetch all entries
+    // streamFilter stays empty
+  } else if (selectedStreamId === null) {
+    // No Stream - show only entries without a stream
+    streamFilter = { stream_id: null };
+  } else if (selectedStreamId === "streams") {
+    // Just a nav item, treat like "all"
+  } else if (selectedStreamId === "tasks" || selectedStreamId === "events") {
     // TODO: Filter by tasks or events when those are implemented
-    // For now, show all entries
-  } else if (selectedCategoryId === "tags") {
-    // "Tags" - just the collapsible section, not a filter
-    // For now, show all entries (noop)
-  } else if (selectedCategoryId === "people") {
-    // "People" - just the collapsible section, not a filter
-    // For now, show all entries (noop)
-  } else if (typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('tag:')) {
-    // Filter by specific tag
-    const tag = selectedCategoryId.substring(4); // Remove "tag:" prefix
-    categoryFilter = { tag };
-  } else if (typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('mention:')) {
-    // Filter by specific mention
-    const mention = selectedCategoryId.substring(8); // Remove "mention:" prefix
-    categoryFilter = { mention };
-  } else if (typeof selectedCategoryId === 'string' && selectedCategoryId.startsWith('location:')) {
-    // Filter by specific location using location_id
-    const locationId = selectedCategoryId.substring(9); // Remove "location:" prefix
-    categoryFilter = { location_id: locationId };
-  } else if (selectedCategoryId !== null) {
-    // Specific category ID - include all children hierarchically
-    categoryFilter = {
-      category_id: selectedCategoryId,
-      includeChildren: true,
-      childCategoryIds: childCategoryIds
-    };
+  } else if (selectedStreamId === "tags" || selectedStreamId === "people") {
+    // Just nav items, noop
+  } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith('tag:')) {
+    const tag = selectedStreamId.substring(4);
+    streamFilter = { tag };
+  } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith('mention:')) {
+    const mention = selectedStreamId.substring(8);
+    streamFilter = { mention };
+  } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith('location:')) {
+    const locationId = selectedStreamId.substring(9);
+    streamFilter = { location_id: locationId };
+  } else if (selectedStreamId !== null) {
+    // Specific stream ID (flat - no children)
+    streamFilter = { stream_id: selectedStreamId };
   } else {
-    // Default: Uncategorized (uncategorized entries only, no children)
-    categoryFilter = { category_id: null };
+    streamFilter = { stream_id: null };
   }
 
-  const { entries, isLoading, entryMutations } = useEntries(categoryFilter);
+  const { entries, isLoading, entryMutations } = useEntries(streamFilter);
 
-  // Sort entries based on selected sort mode
-  const categoryMap = useMemo(() => {
-    return categories.reduce((map, cat) => {
-      map[cat.category_id] = cat.full_path;
+  // Create stream map for sorting
+  const streamMap = useMemo(() => {
+    return streams.reduce((map, s) => {
+      map[s.stream_id] = s.name;
       return map;
     }, {} as Record<string, string>);
-  }, [categories]);
+  }, [streams]);
 
   const sortedEntries = useMemo(() => {
-    return sortEntries(entries, sortMode, categoryMap, orderMode, showPinnedFirst);
-  }, [entries, sortMode, categoryMap, orderMode, showPinnedFirst]);
+    return sortEntries(entries, sortMode, streamMap, orderMode, showPinnedFirst);
+  }, [entries, sortMode, streamMap, orderMode, showPinnedFirst]);
 
   // Get display labels
   const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Smashed';
@@ -218,27 +167,25 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
       entryId,
       returnContext: {
         screen: "inbox",
-        categoryId: selectedCategoryId,
-        categoryName: selectedCategoryName
+        categoryId: selectedStreamId,
+        categoryName: selectedStreamName
       }
     });
   };
 
   const handleAddEntry = async () => {
-    // Auto-insert tag or mention into body if viewing a tag/mention filter
     let initialContent = "";
     let initialLocation: LocationType | undefined = undefined;
 
-    if (typeof selectedCategoryId === 'string') {
-      if (selectedCategoryId.startsWith('tag:')) {
-        const tag = selectedCategoryId.substring(4);
+    if (typeof selectedStreamId === 'string') {
+      if (selectedStreamId.startsWith('tag:')) {
+        const tag = selectedStreamId.substring(4);
         initialContent = `#${tag} `;
-      } else if (selectedCategoryId.startsWith('mention:')) {
-        const mention = selectedCategoryId.substring(8);
+      } else if (selectedStreamId.startsWith('mention:')) {
+        const mention = selectedStreamId.substring(8);
         initialContent = `@${mention} `;
-      } else if (selectedCategoryId.startsWith('location:')) {
-        // Get location data from the locations table
-        const locationId = selectedCategoryId.substring(9);
+      } else if (selectedStreamId.startsWith('location:')) {
+        const locationId = selectedStreamId.substring(9);
         const locationEntity = await getLocationById(locationId);
         if (locationEntity) {
           initialLocation = {
@@ -260,14 +207,14 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     }
 
     navigate("capture", {
-      initialCategoryId: selectedCategoryId,
-      initialCategoryName: selectedCategoryName,
+      initialCategoryId: selectedStreamId,
+      initialCategoryName: selectedStreamName,
       initialContent,
       initialLocation,
       returnContext: {
         screen: "inbox",
-        categoryId: selectedCategoryId,
-        categoryName: selectedCategoryName
+        categoryId: selectedStreamId,
+        categoryName: selectedStreamName
       }
     });
   };
@@ -275,75 +222,54 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
   const handleTagPress = (tag: string) => {
     const tagId = `tag:${tag}`;
     const tagName = `#${tag}`;
-    setSelectedCategoryId(tagId);
-    setSelectedCategoryName(tagName);
+    setSelectedStreamId(tagId);
+    setSelectedStreamName(tagName);
   };
 
   const handleMentionPress = (mention: string) => {
     const mentionId = `mention:${mention}`;
     const mentionName = `@${mention}`;
-    setSelectedCategoryId(mentionId);
-    setSelectedCategoryName(mentionName);
+    setSelectedStreamId(mentionId);
+    setSelectedStreamName(mentionName);
   };
 
-  const handleCategoryPress = (categoryId: string | null, categoryName: string) => {
-    setSelectedCategoryId(categoryId);
-    setSelectedCategoryName(categoryName);
+  const handleStreamPress = (streamId: string | null, streamName: string) => {
+    setSelectedStreamId(streamId);
+    setSelectedStreamName(streamName);
   };
 
-  const handleCategorySelect = (categoryId: string | null | "all" | "tasks" | "events" | "categories" | "tags" | "people", categoryName: string) => {
-    setSelectedCategoryId(categoryId);
-    setSelectedCategoryName(categoryName);
+  const handleStreamSelect = (streamId: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people", streamName: string) => {
+    setSelectedStreamId(streamId);
+    setSelectedStreamName(streamName);
   };
 
   const handleBreadcrumbPress = (segment: BreadcrumbSegment) => {
-    // Navigate to the clicked breadcrumb level
     if (segment.id === "all") {
-      // Home - show all entries
-      setSelectedCategoryId("all");
-      setSelectedCategoryName("Home");
+      setSelectedStreamId("all");
+      setSelectedStreamName("Home");
     } else if (segment.id === null) {
-      // Uncategorized
-      setSelectedCategoryId(null);
-      setSelectedCategoryName("Uncategorized");
-    } else if (typeof segment.id === 'string' && segment.id.startsWith("tag:")) {
-      // Tag segment
-      setSelectedCategoryId(segment.id);
-      setSelectedCategoryName(segment.label);
-    } else if (typeof segment.id === 'string' && segment.id.startsWith("mention:")) {
-      // Mention segment
-      setSelectedCategoryId(segment.id);
-      setSelectedCategoryName(segment.label);
-    } else if (typeof segment.id === 'string' && segment.id.startsWith("location:")) {
-      // Location segment
-      setSelectedCategoryId(segment.id);
-      setSelectedCategoryName(segment.label);
-    } else {
-      // Category segment - has valid category_id
-      setSelectedCategoryId(segment.id);
-      setSelectedCategoryName(segment.label);
+      setSelectedStreamId(null);
+      setSelectedStreamName("Unassigned");
+    } else if (typeof segment.id === 'string') {
+      setSelectedStreamId(segment.id);
+      setSelectedStreamName(segment.label);
     }
   };
 
   const handleMoveEntry = (entryId: string) => {
     setEntryToMove(entryId);
-    setShowMoveCategoryPicker(true);
+    setShowMoveStreamPicker(true);
   };
 
-  const handleMoveCategorySelect = async (categoryId: string | null, categoryName: string | null) => {
+  const handleMoveStreamSelect = async (streamId: string | null, streamName: string | null) => {
     if (!entryToMove) return;
 
     try {
-      // Find the entry to get its current data
-      const entry = entries.find(e => e.entry_id === entryToMove);
-      if (!entry) return;
-
-      // Update the entry with the new category
       await entryMutations.updateEntry(entryToMove, {
-        category_id: categoryId,
+        stream_id: streamId,
       });
 
-      setShowMoveCategoryPicker(false);
+      setShowMoveStreamPicker(false);
       setEntryToMove(null);
     } catch (error) {
       console.error("Failed to move entry:", error);
@@ -375,15 +301,9 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
 
   const handlePinEntry = async (entryId: string, currentPinned: boolean) => {
     try {
-      console.log('📌 [EntryListScreen] handlePinEntry called:', {
-        entryId,
-        currentPinned,
-        newValue: !currentPinned
-      });
       await entryMutations.updateEntry(entryId, {
         is_pinned: !currentPinned,
       });
-      console.log('✅ [EntryListScreen] Pin update complete');
     } catch (error) {
       console.error("Failed to pin/unpin entry:", error);
       Alert.alert("Error", "Failed to pin/unpin entry");
@@ -392,7 +312,6 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
 
   const handleResolveConflict = async (entryId: string) => {
     try {
-      // Clear conflict status - user acknowledges the merge
       await entryMutations.updateEntry(entryId, {
         conflict_status: null,
         conflict_backup: null,
@@ -405,14 +324,11 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
 
   const handleCopyEntry = async (entryId: string) => {
     try {
-      // Try to get current GPS coordinates
       let gpsCoords: { latitude: number; longitude: number; accuracy?: number } | undefined;
 
       try {
-        // Check permission first
         const { status } = await Location.getForegroundPermissionsAsync();
         if (status === "granted") {
-          // Try last known position first (fast)
           let location = await Location.getLastKnownPositionAsync();
           if (!location) {
             location = await Location.getCurrentPositionAsync({
@@ -429,19 +345,16 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         }
       } catch (locError) {
         console.warn("Could not get location for copy:", locError);
-        // Continue without GPS - not critical
       }
 
-      // Copy the entry (returns in-memory data, not saved to DB yet)
       const copiedEntryData = await entryMutations.copyEntry(entryId, gpsCoords);
 
-      // Navigate to capture form with copied data (will be saved when user clicks save)
       navigate("capture", {
         copiedEntryData,
         returnContext: {
           screen: "inbox",
-          categoryId: selectedCategoryId,
-          categoryName: selectedCategoryName
+          categoryId: selectedStreamId,
+          categoryName: selectedStreamName
         }
       });
     } catch (error) {
@@ -450,16 +363,16 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
     }
   };
 
-  // Get current category of entry being moved
+  // Get current stream of entry being moved
   const entryToMoveData = entryToMove ? entries.find(e => e.entry_id === entryToMove) : null;
-  const entryToMoveCategoryId = entryToMoveData?.category_id || null;
+  const entryToMoveStreamId = entryToMoveData?.stream_id || null;
 
   return (
     <View style={styles.container}>
       <TopBar
         breadcrumbs={breadcrumbs}
         onBreadcrumbPress={handleBreadcrumbPress}
-        onBreadcrumbDropdownPress={() => setShowCategoryDropdown(true)}
+        onBreadcrumbDropdownPress={() => setShowStreamDropdown(true)}
         badge={sortedEntries.length}
         menuItems={menuItems}
         userEmail={userEmail}
@@ -485,27 +398,27 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         onEntryPress={handleEntryPress}
         onTagPress={handleTagPress}
         onMentionPress={handleMentionPress}
-        onCategoryPress={handleCategoryPress}
+        onStreamPress={handleStreamPress}
         onMove={handleMoveEntry}
         onCopy={handleCopyEntry}
         onDelete={handleDeleteEntry}
         onPin={handlePinEntry}
         onResolveConflict={handleResolveConflict}
-        categories={categories}
+        streams={streams}
         locations={locations}
         displayMode={displayMode}
       />
 
-      {/* Category Navigator Dropdown */}
+      {/* Stream Navigator Dropdown */}
       <TopBarDropdownContainer
-        visible={showCategoryDropdown}
-        onClose={() => setShowCategoryDropdown(false)}
+        visible={showStreamDropdown}
+        onClose={() => setShowStreamDropdown(false)}
       >
         <EntryNavigator
-          visible={showCategoryDropdown}
-          onClose={() => setShowCategoryDropdown(false)}
-          onSelect={handleCategorySelect}
-          selectedCategoryId={selectedCategoryId}
+          visible={showStreamDropdown}
+          onClose={() => setShowStreamDropdown(false)}
+          onSelect={handleStreamSelect}
+          selectedStreamId={selectedStreamId}
         />
       </TopBarDropdownContainer>
 
@@ -529,22 +442,22 @@ export function EntryListScreen({ returnCategoryId, returnCategoryName }: EntryL
         onShowPinnedFirstChange={setShowPinnedFirst}
       />
 
-      {/* Move Category Picker */}
+      {/* Move Stream Picker */}
       <TopBarDropdownContainer
-        visible={showMoveCategoryPicker}
+        visible={showMoveStreamPicker}
         onClose={() => {
-          setShowMoveCategoryPicker(false);
+          setShowMoveStreamPicker(false);
           setEntryToMove(null);
         }}
       >
-        <CategoryPicker
-          visible={showMoveCategoryPicker}
+        <StreamPicker
+          visible={showMoveStreamPicker}
           onClose={() => {
-            setShowMoveCategoryPicker(false);
+            setShowMoveStreamPicker(false);
             setEntryToMove(null);
           }}
-          onSelect={handleMoveCategorySelect}
-          selectedCategoryId={entryToMoveCategoryId}
+          onSelect={handleMoveStreamSelect}
+          selectedStreamId={entryToMoveStreamId}
         />
       </TopBarDropdownContainer>
 

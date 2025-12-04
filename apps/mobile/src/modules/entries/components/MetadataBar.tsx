@@ -89,7 +89,9 @@ export function MetadataBar({
       >
         <View style={styles.metadataLinkContent}>
           <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-            <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
           <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
             {categoryName || "Uncategorized"}

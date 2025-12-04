@@ -4,11 +4,11 @@ import * as Location from "expo-location";
 import { extractTagsAndMentions, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput, locationToEntryGpsFields } from "@trace/core";
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
-import { useCategories } from "../../categories/mobileCategoryHooks";
+import { useStreams } from "../../streams/mobileStreamHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
-import { CategoryPicker } from "../../categories/components/CategoryPicker";
+import { StreamPicker } from "../../streams/components/StreamPicker";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdownContainer";
 import { useNavigationMenu } from "../../../shared/hooks/useNavigationMenu";
@@ -101,23 +101,23 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
   const { user } = useAuthState();
-  const { categories } = useCategories();
+  const { streams } = useStreams();
   const { navigate, setBeforeBackHandler } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [showMenu, setShowMenu] = useState(false);
 
-  // Get current category for visibility controls
-  const currentCategory = categories.find(c => c.category_id === formData.categoryId);
+  // Get current stream for visibility controls
+  const currentStream = streams.find(s => s.stream_id === formData.categoryId);
 
-  // Category-based visibility
-  // If no category: show all fields (default true)
-  // If category set: only show if field is true (database converts 0/1 to false/true)
-  const showRating = !currentCategory || currentCategory.entry_use_rating === true;
-  const showPriority = !currentCategory || currentCategory.entry_use_priority === true;
-  const showStatus = !currentCategory || currentCategory.entry_use_status !== false;
-  const showDueDate = !currentCategory || currentCategory.entry_use_duedates === true;
-  const showLocation = !currentCategory || currentCategory.entry_use_location !== false;
-  const showPhotos = !currentCategory || currentCategory.entry_use_photos !== false;
+  // Stream-based visibility
+  // If no stream: show all fields (default true)
+  // If stream set: only show if field is true (database converts 0/1 to false/true)
+  const showRating = !currentStream || currentStream.entry_use_rating === true;
+  const showPriority = !currentStream || currentStream.entry_use_priority === true;
+  const showStatus = !currentStream || currentStream.entry_use_status !== false;
+  const showDueDate = !currentStream || currentStream.entry_use_duedates === true;
+  const showLocation = !currentStream || currentStream.entry_use_location !== false;
+  const showPhotos = !currentStream || currentStream.entry_use_photos !== false;
 
   // Get unsaved changes behavior from settings
   const unsavedChangesBehavior = settings.unsavedChangesBehavior;
@@ -430,7 +430,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
     if (entry && isEditing) {
       updateField("title", entry.title || "");
       updateField("content", entry.content);
-      updateField("categoryId", entry.category_id || null);
+      updateField("categoryId", entry.stream_id || null);
       updateField("status", entry.status);
       updateField("dueDate", entry.due_date);
       updateField("rating", entry.rating || 0);
@@ -502,16 +502,16 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         updateField("captureLocation", false);
       }
 
-      // Look up category name from categories list
-      if (entry.category_id && categories.length > 0) {
-        const category = categories.find(c => c.category_id === entry.category_id);
-        updateField("categoryName", category?.name || null);
-        // Store original category for cancel navigation
-        setOriginalCategoryId(entry.category_id);
-        setOriginalCategoryName(category?.name || null);
+      // Look up stream name from streams list
+      if (entry.stream_id && streams.length > 0) {
+        const stream = streams.find(s => s.stream_id === entry.stream_id);
+        updateField("categoryName", stream?.name || null);
+        // Store original stream for cancel navigation
+        setOriginalCategoryId(entry.stream_id);
+        setOriginalCategoryName(stream?.name || null);
       } else {
         updateField("categoryName", null);
-        // Store original category (Uncategorized) for cancel navigation
+        // Store original stream (No Stream) for cancel navigation
         setOriginalCategoryId(null);
         setOriginalCategoryName(null);
       }
@@ -521,7 +521,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       originalValues.current = {
         title: entry.title || "",
         content: entry.content,
-        categoryId: entry.category_id || null,
+        categoryId: entry.stream_id || null,
         status: entry.status,
         dueDate: entry.due_date,
         rating: entry.rating || 0,
@@ -534,7 +534,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       // Mark that initial load is complete
       isInitialLoad.current = false;
     }
-  }, [entry, isEditing, categories]);
+  }, [entry, isEditing, streams]);
 
   // Load copied entry data (for copy workflow - entry is NOT saved to DB yet)
   useEffect(() => {
@@ -544,7 +544,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       // Load all entry fields
       updateField("title", copiedEntry.title || "");
       updateField("content", copiedEntry.content);
-      updateField("categoryId", copiedEntry.category_id || null);
+      updateField("categoryId", copiedEntry.stream_id || null);
       updateField("status", copiedEntry.status || "none");
       updateField("dueDate", copiedEntry.due_date || null);
       updateField("rating", copiedEntry.rating || 0);
@@ -588,10 +588,10 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         updateField("captureLocation", true);
       }
 
-      // Look up category name
-      if (copiedEntry.category_id && categories.length > 0) {
-        const category = categories.find(c => c.category_id === copiedEntry.category_id);
-        updateField("categoryName", category?.name || null);
+      // Look up stream name
+      if (copiedEntry.stream_id && streams.length > 0) {
+        const stream = streams.find(s => s.stream_id === copiedEntry.stream_id);
+        updateField("categoryName", stream?.name || null);
       }
 
       // Load the copied photos as pending photos
@@ -606,7 +606,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
       // Mark initial load complete
       isInitialLoad.current = false;
     }
-  }, [isCopiedEntry, copiedEntryData, categories]);
+  }, [isCopiedEntry, copiedEntryData, streams]);
 
   // Update original photo count when photos load
   useEffect(() => {
@@ -786,7 +786,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           content: formData.content,
           tags,
           mentions,
-          category_id: formData.categoryId,
+          stream_id: formData.categoryId,
           entry_date: formData.entryDate,
           status: formData.status,
           due_date: formData.dueDate,
@@ -803,7 +803,7 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
           tags,
           mentions,
           entry_date: formData.entryDate,
-          category_id: formData.categoryId,
+          stream_id: formData.categoryId,
           status: formData.status,
           due_date: formData.dueDate,
           rating: formData.rating || 0,
@@ -1168,32 +1168,32 @@ export function CaptureForm({ entryId, initialCategoryId, initialCategoryName, i
         </BottomBar>
       )}
 
-      {/* Category Picker Dropdown - only render when active to avoid unnecessary hook calls */}
+      {/* Stream Picker Dropdown - only render when active to avoid unnecessary hook calls */}
       {activePicker === 'category' && (
         <TopBarDropdownContainer
           visible={true}
           onClose={() => setActivePicker(null)}
         >
-          <CategoryPicker
+          <StreamPicker
             visible={true}
             onClose={() => setActivePicker(null)}
             onSelect={(id, name) => {
-              const hadCategory = !!formData.categoryId;
+              const hadStream = !!formData.categoryId;
               const isRemoving = !id;
               updateField("categoryId", id);
               updateField("categoryName", name);
-              if (isRemoving && hadCategory) {
-                showSnackbar('You removed the category');
-              } else if (hadCategory) {
-                showSnackbar('Success! You updated the category.');
+              if (isRemoving && hadStream) {
+                showSnackbar('You removed the stream');
+              } else if (hadStream) {
+                showSnackbar('Success! You updated the stream.');
               } else {
-                showSnackbar('Success! You added the category.');
+                showSnackbar('Success! You added the stream.');
               }
               if (!isEditMode) {
                 enterEditMode();
               }
             }}
-            selectedCategoryId={formData.categoryId}
+            selectedStreamId={formData.categoryId}
           />
         </TopBarDropdownContainer>
       )}

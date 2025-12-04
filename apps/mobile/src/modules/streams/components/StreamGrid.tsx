@@ -1,31 +1,31 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import type { Category } from "@trace/core";
+import type { Stream } from "@trace/core";
 import { theme } from "../../../shared/theme/theme";
 
-interface CategoryGridProps {
-  categories: Category[];
-  onCategoryPress: (categoryId: string, categoryName: string) => void;
+interface StreamGridProps {
+  streams: Stream[];
+  onStreamPress: (streamId: string, streamName: string) => void;
 }
 
-export function CategoryGrid({ categories, onCategoryPress }: CategoryGridProps) {
-  if (categories.length === 0) {
+export function StreamGrid({ streams, onStreamPress }: StreamGridProps) {
+  if (streams.length === 0) {
     return null;
   }
 
   return (
     <View style={styles.container}>
-      {categories.map((category) => (
+      {streams.map((stream) => (
         <TouchableOpacity
-          key={category.category_id}
-          style={styles.categoryCard}
-          onPress={() => onCategoryPress(category.category_id, category.name)}
+          key={stream.stream_id}
+          style={styles.streamCard}
+          onPress={() => onStreamPress(stream.stream_id, stream.name)}
           activeOpacity={0.7}
         >
           <View style={styles.cardContent}>
-            <Text style={styles.categoryName}>{category.name}</Text>
-            {category.entry_count > 0 && (
+            <Text style={styles.streamName}>{stream.name}</Text>
+            {stream.entry_count > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>{category.entry_count}</Text>
+                <Text style={styles.badgeText}>{stream.entry_count}</Text>
               </View>
             )}
           </View>
@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     backgroundColor: theme.colors.background.primary,
   },
-  categoryCard: {
+  streamCard: {
     backgroundColor: theme.colors.background.secondary,
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: theme.spacing.xs,
   },
-  categoryName: {
+  streamName: {
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium,
     color: theme.colors.text.primary,
