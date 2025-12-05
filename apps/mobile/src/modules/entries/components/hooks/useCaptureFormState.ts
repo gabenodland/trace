@@ -21,6 +21,13 @@ export interface PendingPhoto {
   position: number;
 }
 
+/** GPS coordinates captured at entry creation time */
+export interface GpsData {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+}
+
 export interface CaptureFormData {
   title: string;
   content: string;
@@ -32,7 +39,9 @@ export interface CaptureFormData {
   priority: number;
   entryDate: string;
   includeTime: boolean;
-  captureLocation: boolean;
+  /** GPS coordinates - where the entry was created (device location) */
+  gpsData: GpsData | null;
+  /** Named location - where the entry "lives" in the world */
   locationData: LocationType | null;
   pendingPhotos: PendingPhoto[];
 }
@@ -43,8 +52,8 @@ interface UseCaptureFormStateOptions {
   initialStreamName?: string;
   initialContent?: string;
   initialDate?: string;
-  initialLocation?: LocationType;
-  captureGpsLocationSetting: boolean;
+  /** Whether to auto-capture GPS on new entries */
+  captureGpsSetting: boolean;
 }
 
 /**
@@ -105,8 +114,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
     initialStreamName,
     initialContent,
     initialDate,
-    initialLocation,
-    captureGpsLocationSetting,
+    captureGpsSetting,
   } = options;
 
   // Calculate initial values
@@ -114,6 +122,8 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
   const initialEntryDate = getInitialEntryDate(initialDate);
 
   // SINGLE STATE OBJECT - per CLAUDE.md pattern
+  // GPS: auto-captured on new entries if setting enabled (will be populated by CaptureForm)
+  // Location: never auto-set, user must explicitly add
   const [formData, setFormData] = useState<CaptureFormData>({
     title: "",
     content: initialContent || "",
@@ -128,10 +138,8 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
     priority: 0,
     entryDate: initialEntryDate,
     includeTime: !initialDate, // If initialDate provided, hide time initially
-    captureLocation: isEditing
-      ? !!initialLocation
-      : captureGpsLocationSetting,
-    locationData: initialLocation || null,
+    gpsData: null, // GPS will be captured by CaptureForm if setting enabled
+    locationData: null, // Location is never auto-set
     pendingPhotos: [],
   });
 
@@ -186,10 +194,8 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
       priority: 0,
       entryDate: initialEntryDate,
       includeTime: !initialDate,
-      captureLocation: isEditing
-        ? !!initialLocation
-        : captureGpsLocationSetting,
-      locationData: initialLocation || null,
+      gpsData: null, // GPS will be re-captured by CaptureForm if setting enabled
+      locationData: null,
       pendingPhotos: [],
     });
   }, [
@@ -198,8 +204,6 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
     isEditing,
     initialStreamName,
     initialDate,
-    initialLocation,
-    captureGpsLocationSetting,
     initialEntryDate,
   ]);
 

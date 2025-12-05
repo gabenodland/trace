@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
 import * as Location from "expo-location";
-import { extractTagsAndMentions, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput, locationToEntryGpsFields } from "@trace/core";
+import { extractTagsAndMentions, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput } from "@trace/core";
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
@@ -21,7 +21,8 @@ import { localDB } from "../../../shared/db/localDB";
 import * as Crypto from "expo-crypto";
 import { useCaptureFormState } from "./hooks/useCaptureFormState";
 import { styles } from "./CaptureForm.styles";
-import { RatingPicker, PriorityPicker, TimePicker, AttributesPicker } from "./pickers";
+import { RatingPicker, PriorityPicker, TimePicker, AttributesPicker, GpsPicker } from "./pickers";
+import type { GpsData } from "./hooks/useCaptureFormState";
 import { MetadataBar } from "./MetadataBar";
 import { EditorToolbar } from "./EditorToolbar";
 import { CaptureFormHeader } from "./CaptureFormHeader";
@@ -44,7 +45,6 @@ interface CaptureFormProps {
   initialStreamName?: string;
   initialContent?: string;
   initialDate?: string;
-  initialLocation?: LocationType;
   returnContext?: ReturnContext;
   /** Copied entry data - when provided, opens form with pre-filled data (not saved to DB yet) */
   copiedEntryData?: {
@@ -54,7 +54,7 @@ interface CaptureFormProps {
   };
 }
 
-export function CaptureForm({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, initialLocation, returnContext, copiedEntryData }: CaptureFormProps = {}) {
+export function CaptureForm({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, returnContext, copiedEntryData }: CaptureFormProps = {}) {
   // Determine if we're editing an existing entry or creating a new one
   // Note: copied entries are NOT editing - they're new entries with pre-filled data
   const isEditing = !!entryId && !copiedEntryData;
@@ -70,8 +70,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     initialStreamName,
     initialContent,
     initialDate,
-    initialLocation,
-    captureGpsLocationSetting: settings.captureGpsLocation,
+    captureGpsSetting: settings.captureGpsLocation,
   });
 
   // UI State (NOT form data - keep as individual useState)
@@ -79,8 +78,11 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Consolidated picker visibility state - only one picker can be open at a time
-  type ActivePicker = 'stream' | 'location' | 'dueDate' | 'rating' | 'priority' | 'attributes' | 'entryDate' | 'time' | null;
+  type ActivePicker = 'stream' | 'gps' | 'location' | 'dueDate' | 'rating' | 'priority' | 'attributes' | 'entryDate' | 'time' | null;
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
+
+  // GPS loading state (for capturing/reloading GPS)
+  const [isGpsLoading, setIsGpsLoading] = useState(false);
 
   // Original stream for cancel navigation (for edited entries)
   const [originalStreamId, setOriginalStreamId] = useState<string | null>(null);
@@ -132,6 +134,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     rating: number;
     priority: number;
     entryDate: string;
+    gpsData: GpsData | null;
     locationData: LocationType | null;
     photoCount: number;
   } | null>(null);
@@ -154,6 +157,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         rating: formData.rating,
         priority: formData.priority,
         entryDate: formData.entryDate,
+        gpsData: formData.gpsData,
         locationData: formData.locationData,
         photoCount: 0,
       };
@@ -239,6 +243,18 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     // Compare photo count
     const currentPhotoCount = isEditing ? photoCount : formData.pendingPhotos.length;
     if (currentPhotoCount !== orig.photoCount) return true;
+
+    // Compare GPS data
+    const origGps = orig.gpsData;
+    if (!formData.gpsData && !origGps) {
+      // Both null, no change
+    } else if (!formData.gpsData || !origGps) {
+      return true; // One is null, other is not
+    } else {
+      // Compare GPS fields
+      if (formData.gpsData.latitude !== origGps.latitude) return true;
+      if (formData.gpsData.longitude !== origGps.longitude) return true;
+    }
 
     // Compare location data
     const origLoc = orig.locationData;
@@ -448,7 +464,23 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         updateField("includeTime", date.getMilliseconds() !== 100);
       }
 
-      // Load location data if available from locations table
+      // Load GPS data from entry coordinates (separate from named location)
+      if (entry.entry_latitude && entry.entry_longitude) {
+        const gps: GpsData = {
+          latitude: entry.entry_latitude,
+          longitude: entry.entry_longitude,
+          accuracy: entry.location_accuracy || null,
+        };
+        updateField("gpsData", gps);
+        // Update original values for change detection
+        if (originalValues.current) {
+          originalValues.current.gpsData = gps;
+        }
+      } else {
+        updateField("gpsData", null);
+      }
+
+      // Load named location data if available from locations table
       if (entry.location_id) {
         getLocationById(entry.location_id).then(locationEntity => {
           if (locationEntity) {
@@ -468,38 +500,20 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               country: locationEntity.country || null,
             };
             updateField("locationData", location);
-            updateField("captureLocation", true);
             // Update original values for change detection
             if (originalValues.current) {
               originalValues.current.locationData = location;
             }
           } else {
             updateField("locationData", null);
-            updateField("captureLocation", false);
           }
         }).catch(err => {
           console.error('Failed to load location:', err);
           updateField("locationData", null);
-          updateField("captureLocation", false);
         });
-      } else if (entry.entry_latitude && entry.entry_longitude) {
-        // Entry has GPS coordinates but no location_id (GPS-only entry)
-        const gpsLocation: LocationType = {
-          latitude: entry.entry_latitude,
-          longitude: entry.entry_longitude,
-          name: null,
-          source: 'user_custom',
-        };
-        updateField("locationData", gpsLocation);
-        updateField("captureLocation", true);
-        // Update original values for change detection
-        if (originalValues.current) {
-          originalValues.current.locationData = gpsLocation;
-        }
       } else {
-        // No location saved - keep toggle off and clear location data
+        // No named location saved
         updateField("locationData", null);
-        updateField("captureLocation", false);
       }
 
       // Look up stream name from streams list
@@ -517,7 +531,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       }
 
       // Store original values for change detection (after all state is set)
-      // Note: formData.locationData will be set asynchronously by the getLocationById call above
+      // Note: gpsData and locationData will be set asynchronously
       originalValues.current = {
         title: entry.title || "",
         content: entry.content,
@@ -527,6 +541,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         rating: entry.rating || 0,
         priority: entry.priority || 0,
         entryDate: entry.entry_date || entry.created_at || formData.entryDate,
+        gpsData: null, // Will be updated when GPS loads
         locationData: null, // Will be updated when location loads
         photoCount: 0, // Will be updated when photos load
       };
@@ -552,7 +567,17 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       updateField("entryDate", copiedEntry.entry_date || new Date().toISOString());
       updateField("includeTime", hasTime);
 
-      // Load location data if available
+      // Load GPS data from entry coordinates
+      if (copiedEntry.entry_latitude && copiedEntry.entry_longitude) {
+        const gps: GpsData = {
+          latitude: copiedEntry.entry_latitude,
+          longitude: copiedEntry.entry_longitude,
+          accuracy: copiedEntry.location_accuracy || null,
+        };
+        updateField("gpsData", gps);
+      }
+
+      // Load named location data if available
       if (copiedEntry.location_id) {
         getLocationById(copiedEntry.location_id).then(locationEntity => {
           if (locationEntity) {
@@ -571,21 +596,10 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               country: locationEntity.country || null,
             };
             updateField("locationData", location);
-            updateField("captureLocation", true);
           }
         }).catch(err => {
           console.error('Failed to load location for copied entry:', err);
         });
-      } else if (copiedEntry.entry_latitude && copiedEntry.entry_longitude) {
-        // Entry has GPS coordinates but no location_id
-        const gpsLocation: LocationType = {
-          latitude: copiedEntry.entry_latitude,
-          longitude: copiedEntry.entry_longitude,
-          name: null,
-          source: 'user_custom',
-        };
-        updateField("locationData", gpsLocation);
-        updateField("captureLocation", true);
       }
 
       // Look up stream name
@@ -615,94 +629,99 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     }
   }, [photoCount, isEditing]);
 
-  // Fetch GPS location in background when location is enabled
-  // Fetches GPS coordinates immediately when creating new entry
-  // These coords are used by LocationPicker for POI search and privacy calculations
+  // Capture GPS coordinates for new entries when setting is enabled
+  // GPS is separate from named Location - GPS captures where entry was created
   useEffect(() => {
-    // Skip if location is not enabled for this category
-    if (!showLocation) {
+    // Only auto-capture GPS for new entries (not editing)
+    if (isEditing) {
       return;
     }
 
-    // Clear location when toggled off
-    if (!formData.captureLocation) {
-      updateField("locationData", null);
+    // Skip if GPS capture setting is disabled
+    if (!settings.captureGpsLocation) {
       return;
     }
 
-    // Skip fetching during initial load of edit screen
-    if (isEditing && isInitialLoad.current) {
+    // Skip if we already have GPS data
+    if (formData.gpsData) {
       return;
     }
 
-    // Skip fetching if we already have location data loaded
-    if (formData.locationData?.latitude && formData.locationData?.longitude) {
-      return;
-    }
+    // Capture GPS
+    captureGps();
+  }, [isEditing, settings.captureGpsLocation]);
+
+  // Helper function to capture GPS coordinates (used for initial capture and reload)
+  // forceRefresh: if true, skip cache and get fresh GPS reading with high accuracy
+  const captureGps = async (forceRefresh = false) => {
+    setIsGpsLoading(true);
 
     let timeoutId: NodeJS.Timeout;
-    let isCancelled = false;
-    let hasLocation = false;
+    let hasGps = false;
 
-    const fetchLocation = async () => {
-      try {
-        const { status: permissionStatus } = await Location.requestForegroundPermissionsAsync();
-        if (permissionStatus === "granted" && !isCancelled) {
-          // Set timeout to give up after 15 seconds
-          timeoutId = setTimeout(() => {
-            if (!isCancelled && !hasLocation) {
-              updateField("captureLocation", false);
-              Alert.alert(
-                "Location Unavailable",
-                "Could not get your location. Please check that GPS is enabled.",
-                [{ text: "OK" }]
-              );
-            }
-          }, 15000);
+    try {
+      const { status: permissionStatus } = await Location.requestForegroundPermissionsAsync();
+      if (permissionStatus !== "granted") {
+        Alert.alert(
+          "Permission Denied",
+          "GPS permission is required to capture location.",
+          [{ text: "OK" }]
+        );
+        setIsGpsLoading(false);
+        return;
+      }
 
-          // Try to get last known position first (instant)
-          let location = await Location.getLastKnownPositionAsync();
-
-          // If no cached location, get current position with low accuracy (faster)
-          if (!location && !isCancelled) {
-            location = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Low,
-            });
-          }
-
-          if (location && !isCancelled) {
-            hasLocation = true;
-            updateField("locationData", {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              accuracy: location.coords.accuracy,
-              name: null,
-              source: 'user_custom', // Will be updated when user selects a location
-            });
-            clearTimeout(timeoutId);
-          }
-        }
-      } catch (geoError) {
-        if (!isCancelled) {
-          updateField("captureLocation", false);
+      // Set timeout to give up after 15 seconds
+      timeoutId = setTimeout(() => {
+        if (!hasGps) {
+          setIsGpsLoading(false);
           Alert.alert(
-            "Location Error",
-            "Could not access your location. Please check that GPS is enabled and permissions are granted.",
+            "GPS Unavailable",
+            "Could not get your location. Please check that GPS is enabled.",
             [{ text: "OK" }]
           );
         }
+      }, 15000);
+
+      let location: Location.LocationObject | null = null;
+
+      if (forceRefresh) {
+        // Force fresh GPS reading with high accuracy (for reload button)
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+      } else {
+        // For initial capture, try cached first for speed, then fall back to fresh
+        location = await Location.getLastKnownPositionAsync();
+
+        if (!location) {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+        }
       }
-    };
 
-    fetchLocation();
-
-    return () => {
-      isCancelled = true;
-      if (timeoutId) {
+      if (location) {
+        hasGps = true;
         clearTimeout(timeoutId);
+        updateField("gpsData", {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          accuracy: location.coords.accuracy,
+        });
+        setIsGpsLoading(false);
+        if (!isEditMode) enterEditMode();
       }
-    };
-  }, [showLocation, formData.captureLocation, isEditing]);
+    } catch (geoError) {
+      clearTimeout(timeoutId!);
+      setIsGpsLoading(false);
+      Alert.alert(
+        "GPS Error",
+        "Could not access your location. Please check that GPS is enabled and permissions are granted.",
+        [{ text: "OK" }]
+      );
+    }
+  };
 
   // Keyboard listeners
   useEffect(() => {
@@ -747,22 +766,33 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
     setIsSubmitting(true);
 
-    // Check if there's something to save (formData.title, formData.content, photos, or location)
+    // Check if there's something to save (formData.title, formData.content, photos, GPS, or location)
     const textContent = formData.content.replace(/<[^>]*>/g, '').trim();
     const hasTitle = formData.title.trim().length > 0;
     const hasContent = textContent.length > 0;
     const hasPhotos = isEditing ? photoCount > 0 : formData.pendingPhotos.length > 0;
-    const hasLocation = formData.captureLocation && formData.locationData;
+    const hasGps = !!formData.gpsData;
+    const hasNamedLocation = !!formData.locationData?.name;
 
-    if (!hasTitle && !hasContent && !hasPhotos && !hasLocation) {
+    if (!hasTitle && !hasContent && !hasPhotos && !hasGps && !hasNamedLocation) {
       setIsSubmitting(false);
-      Alert.alert("Empty Entry", "Please add a formData.title, formData.content, photo, or location before saving");
+      Alert.alert("Empty Entry", "Please add a title, content, photo, or location before saving");
       return;
     }
 
     try {
       const { tags, mentions } = extractTagsAndMentions(formData.content);
-      const gpsFields = locationToEntryGpsFields(formData.locationData);
+
+      // Build GPS fields from gpsData (separate from named location)
+      const gpsFields = formData.gpsData ? {
+        entry_latitude: formData.gpsData.latitude,
+        entry_longitude: formData.gpsData.longitude,
+        location_accuracy: formData.gpsData.accuracy,
+      } : {
+        entry_latitude: null,
+        entry_longitude: null,
+        location_accuracy: null,
+      };
 
       // Get or create location if we have location data
       let location_id: string | null = null;
@@ -852,6 +882,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         updateField("content", "");
         updateField("streamId", null);
         updateField("streamName", null);
+        updateField("gpsData", null);
         updateField("locationData", null);
         updateField("status", "none");
         updateField("dueDate", null);
@@ -1080,7 +1111,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       {!isFullScreen && (
         <MetadataBar
           streamName={formData.streamName}
-          captureLocation={formData.captureLocation}
+          gpsData={formData.gpsData}
           locationData={formData.locationData}
           status={formData.status}
           dueDate={formData.dueDate}
@@ -1097,6 +1128,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           isEditMode={isEditMode}
           enterEditMode={enterEditMode}
           onStreamPress={() => setActivePicker(activePicker === 'stream' ? null : 'stream')}
+          onGpsPress={() => setActivePicker(activePicker === 'gps' ? null : 'gps')}
           onLocationPress={() => setActivePicker(activePicker === 'location' ? null : 'location')}
           onStatusPress={() => {
             // Cycle through statuses
@@ -1198,6 +1230,25 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         </TopBarDropdownContainer>
       )}
 
+      {/* GPS Picker - Read-only display with remove/reload options */}
+      <GpsPicker
+        visible={activePicker === 'gps'}
+        onClose={() => setActivePicker(null)}
+        gpsData={formData.gpsData}
+        onRemove={() => {
+          updateField("gpsData", null);
+          setActivePicker(null);
+          showSnackbar('GPS removed');
+          if (!isEditMode) enterEditMode();
+        }}
+        onReload={() => {
+          // Don't close the picker - reload in place with high accuracy
+          captureGps(true);
+        }}
+        isLoading={isGpsLoading}
+        units={settings.units}
+      />
+
       {/* Location Picker (fullscreen modal) - only render when active to avoid unnecessary hook calls */}
       {activePicker === 'location' && (
         <LocationPicker
@@ -1206,9 +1257,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           mode={locationPickerMode}
           onSelect={(location: LocationType | null) => {
             // If location is null (user selected "None"), clear location data
+            // Note: This does NOT clear GPS data - GPS is separate
             if (location === null) {
               updateField("locationData", null);
-              updateField("captureLocation", false);
               setActivePicker(null);
               showSnackbar('You removed the location');
               if (!isEditMode) {
@@ -1218,16 +1269,26 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
             }
 
             // Show snackbar based on whether we're adding or updating
-            const isUpdating = !!formData.locationData;
+            // Note: Selecting a location does NOT overwrite GPS coordinates
+            const isUpdating = !!formData.locationData?.name;
             updateField("locationData", location);
-            updateField("captureLocation", true);
             setActivePicker(null);
             showSnackbar(isUpdating ? 'Success! You updated the location.' : 'Success! You added the location.');
             if (!isEditMode) {
               enterEditMode();
             }
           }}
-          initialLocation={formData.locationData}
+          initialLocation={formData.locationData ? {
+            latitude: formData.locationData.latitude,
+            longitude: formData.locationData.longitude,
+            name: formData.locationData.name,
+            source: 'user_custom',
+          } : formData.gpsData ? {
+            latitude: formData.gpsData.latitude,
+            longitude: formData.gpsData.longitude,
+            name: null,
+            source: 'user_custom',
+          } : null}
         />
       )}
 
@@ -1314,13 +1375,16 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         showRating={showRating}
         showPriority={showPriority}
         showPhotos={showPhotos}
-        captureLocation={formData.captureLocation}
-        hasLocationData={!!formData.locationData}
+        hasGpsData={!!formData.gpsData}
+        hasLocationData={!!formData.locationData?.name}
         status={formData.status}
         dueDate={formData.dueDate}
         rating={formData.rating}
         priority={formData.priority}
         photoCount={photoCount}
+        onAddGps={() => {
+          captureGps();
+        }}
         onShowLocationPicker={() => setActivePicker('location')}
         onStatusChange={(status) => updateField("status", status)}
         onShowDatePicker={() => setActivePicker('dueDate')}

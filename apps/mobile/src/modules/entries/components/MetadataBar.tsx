@@ -8,11 +8,14 @@ import Svg, { Path, Circle, Line } from "react-native-svg";
 import { theme } from "../../../shared/theme/theme";
 import { styles } from "./CaptureForm.styles";
 import type { Location as LocationType } from "@trace/core";
+import type { GpsData } from "./hooks/useCaptureFormState";
 
 interface MetadataBarProps {
   // Form data
   streamName: string | null;
-  captureLocation: boolean;
+  /** GPS coordinates - where entry was created */
+  gpsData: GpsData | null;
+  /** Named location - where entry "lives" */
   locationData: LocationType | null;
   status: "none" | "incomplete" | "in_progress" | "complete";
   dueDate: string | null;
@@ -32,6 +35,7 @@ interface MetadataBarProps {
   enterEditMode: () => void;
   // Callbacks
   onStreamPress: () => void;
+  onGpsPress: () => void;
   onLocationPress: () => void;
   onStatusPress: () => void;
   onDueDatePress: () => void;
@@ -45,7 +49,7 @@ interface MetadataBarProps {
 
 export function MetadataBar({
   streamName,
-  captureLocation,
+  gpsData,
   locationData,
   status,
   dueDate,
@@ -62,6 +66,7 @@ export function MetadataBar({
   isEditMode,
   enterEditMode,
   onStreamPress,
+  onGpsPress,
   onLocationPress,
   onStatusPress,
   onDueDatePress,
@@ -99,8 +104,34 @@ export function MetadataBar({
         </View>
       </TouchableOpacity>
 
-      {/* Location - only if set */}
-      {showLocation && captureLocation && locationData && (
+      {/* GPS - only if coordinates are set */}
+      {gpsData && (
+        <>
+          <Text style={styles.metadataDivider}>·</Text>
+          <TouchableOpacity
+            style={styles.metadataLink}
+            onPress={() => handlePress(onGpsPress)}
+          >
+            <View style={styles.metadataLinkContent}>
+              {/* GPS Crosshair Icon */}
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+                <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
+                <Circle cx={12} cy={12} r={3} fill={theme.colors.text.primary} stroke="none" />
+                <Line x1={12} y1={2} x2={12} y2={6} strokeLinecap="round" />
+                <Line x1={12} y1={18} x2={12} y2={22} strokeLinecap="round" />
+                <Line x1={2} y1={12} x2={6} y2={12} strokeLinecap="round" />
+                <Line x1={18} y1={12} x2={22} y2={12} strokeLinecap="round" />
+              </Svg>
+              <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+                GPS
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </>
+      )}
+
+      {/* Location (named place) - only if set */}
+      {showLocation && locationData && locationData.name && (
         <>
           <Text style={styles.metadataDivider}>·</Text>
           <TouchableOpacity
@@ -108,12 +139,13 @@ export function MetadataBar({
             onPress={() => handlePress(onLocationPress)}
           >
             <View style={styles.metadataLinkContent}>
+              {/* Location Pin Icon */}
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
                 <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
                 <Circle cx={12} cy={10} r={3} fill={theme.colors.text.primary} />
               </Svg>
               <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                {locationData.name || "GPS"}
+                {locationData.name}
               </Text>
             </View>
           </TouchableOpacity>

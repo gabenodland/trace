@@ -4,8 +4,6 @@ import Svg, { Path, Circle } from "react-native-svg";
 import * as Location from "expo-location";
 import { useAuthState, type LocationEntity } from "@trace/core";
 import { useEntries, MobileEntryFilter } from "../modules/entries/mobileEntryHooks";
-import { getLocation as getLocationById } from "../modules/locations/mobileLocationApi";
-import { type Location as LocationType } from "@trace/core";
 import { localDB } from "../shared/db/localDB";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
@@ -173,9 +171,8 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
     });
   };
 
-  const handleAddEntry = async () => {
+  const handleAddEntry = () => {
     let initialContent = "";
-    let initialLocation: LocationType | undefined = undefined;
 
     if (typeof selectedStreamId === 'string') {
       if (selectedStreamId.startsWith('tag:')) {
@@ -184,33 +181,15 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
       } else if (selectedStreamId.startsWith('mention:')) {
         const mention = selectedStreamId.substring(8);
         initialContent = `@${mention} `;
-      } else if (selectedStreamId.startsWith('location:')) {
-        const locationId = selectedStreamId.substring(9);
-        const locationEntity = await getLocationById(locationId);
-        if (locationEntity) {
-          initialLocation = {
-            name: locationEntity.name,
-            latitude: locationEntity.latitude,
-            longitude: locationEntity.longitude,
-            accuracy: null,
-            source: locationEntity.source as LocationType['source'] || 'user_custom',
-            address: locationEntity.address,
-            neighborhood: locationEntity.neighborhood,
-            postalCode: locationEntity.postal_code,
-            city: locationEntity.city,
-            subdivision: locationEntity.subdivision,
-            region: locationEntity.region,
-            country: locationEntity.country,
-          };
-        }
       }
+      // Note: location: filter no longer pre-fills location
+      // GPS is auto-captured (if setting enabled), Location must be explicitly added
     }
 
     navigate("capture", {
       initialStreamId: selectedStreamId,
       initialStreamName: selectedStreamName,
       initialContent,
-      initialLocation,
       returnContext: {
         screen: "inbox",
         streamId: selectedStreamId,

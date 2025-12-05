@@ -171,7 +171,6 @@ function AuthGate() {
             initialStreamName={navParams.initialStreamName}
             initialContent={navParams.initialContent}
             initialDate={navParams.initialDate}
-            initialLocation={navParams.initialLocation}
             returnContext={navParams.returnContext}
             copiedEntryData={navParams.copiedEntryData}
           />

@@ -23,7 +23,7 @@ interface AttributesPickerProps {
   showPriority: boolean;
   showPhotos: boolean;
   // Current values
-  captureLocation: boolean;
+  hasGpsData: boolean;
   hasLocationData: boolean;
   status: "none" | "incomplete" | "in_progress" | "complete";
   dueDate: string | null;
@@ -31,6 +31,7 @@ interface AttributesPickerProps {
   priority: number;
   photoCount: number;
   // Callbacks
+  onAddGps: () => void;
   onShowLocationPicker: () => void;
   onStatusChange: (status: "none" | "incomplete" | "in_progress" | "complete") => void;
   onShowDatePicker: () => void;
@@ -53,13 +54,14 @@ export function AttributesPicker({
   showRating,
   showPriority,
   showPhotos,
-  captureLocation,
+  hasGpsData,
   hasLocationData,
   status,
   dueDate,
   rating,
   priority,
   photoCount,
+  onAddGps,
   onShowLocationPicker,
   onStatusChange,
   onShowDatePicker,
@@ -70,7 +72,8 @@ export function AttributesPicker({
   onSnackbar,
 }: AttributesPickerProps) {
   const hasUnsetAttributes =
-    (showLocation && (!captureLocation || !hasLocationData)) ||
+    !hasGpsData ||
+    (showLocation && !hasLocationData) ||
     (showStatus && status === "none") ||
     (showDueDate && !dueDate) ||
     (showRating && rating === 0) ||
@@ -85,8 +88,33 @@ export function AttributesPicker({
           <>
             <Text style={styles.attributePickerTitle}>Add Attribute</Text>
 
-            {/* Location */}
-            {showLocation && (!captureLocation || !hasLocationData) && (
+            {/* GPS */}
+            {!hasGpsData && (
+              <TouchableOpacity
+                style={styles.attributePickerItem}
+                onPress={() => {
+                  onClose();
+                  onAddGps();
+                  if (!isEditMode) enterEditMode();
+                }}
+              >
+                <View style={styles.attributePickerItemIcon}>
+                  {/* GPS Crosshair Icon */}
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                    <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
+                    <Circle cx={12} cy={12} r={3} fill="#6b7280" stroke="none" />
+                    <Line x1={12} y1={2} x2={12} y2={6} strokeLinecap="round" />
+                    <Line x1={12} y1={18} x2={12} y2={22} strokeLinecap="round" />
+                    <Line x1={2} y1={12} x2={6} y2={12} strokeLinecap="round" />
+                    <Line x1={18} y1={12} x2={22} y2={12} strokeLinecap="round" />
+                  </Svg>
+                </View>
+                <Text style={styles.attributePickerItemText}>GPS</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Location (named place) */}
+            {showLocation && !hasLocationData && (
               <TouchableOpacity
                 style={styles.attributePickerItem}
                 onPress={() => {
