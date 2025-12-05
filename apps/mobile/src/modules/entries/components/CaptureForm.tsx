@@ -83,6 +83,10 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
   // GPS loading state (for capturing/reloading GPS)
   const [isGpsLoading, setIsGpsLoading] = useState(false);
+  // Track if we're capturing GPS from a cleared state (shows Save button instead of Remove)
+  const [isNewGpsCapture, setIsNewGpsCapture] = useState(false);
+  // Pending GPS data - holds captured GPS before user confirms with Save button
+  const [pendingGpsData, setPendingGpsData] = useState<GpsData | null>(null);
 
   // Original stream for cancel navigation (for edited entries)
   const [originalStreamId, setOriginalStreamId] = useState<string | null>(null);
@@ -653,7 +657,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
   // Helper function to capture GPS coordinates (used for initial capture and reload)
   // forceRefresh: if true, skip cache and get fresh GPS reading with high accuracy
-  const captureGps = async (forceRefresh = false) => {
+  // toPending: if true, store in pendingGpsData instead of formData (for new capture flow)
+  const captureGps = async (forceRefresh = false, toPending = false) => {
     setIsGpsLoading(true);
 
     let timeoutId: NodeJS.Timeout;
@@ -704,11 +709,18 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       if (location) {
         hasGps = true;
         clearTimeout(timeoutId);
-        updateField("gpsData", {
+        const gpsData: GpsData = {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
           accuracy: location.coords.accuracy,
-        });
+        };
+        if (toPending) {
+          // Store in pending state - user must click Save to commit
+          setPendingGpsData(gpsData);
+        } else {
+          // Store directly in form data (for auto-capture on new entry)
+          updateField("gpsData", gpsData);
+        }
         setIsGpsLoading(false);
         if (!isEditMode) enterEditMode();
       }
@@ -783,16 +795,31 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     try {
       const { tags, mentions } = extractTagsAndMentions(formData.content);
 
-      // Build GPS fields from gpsData (separate from named location)
-      const gpsFields = formData.gpsData ? {
-        entry_latitude: formData.gpsData.latitude,
-        entry_longitude: formData.gpsData.longitude,
-        location_accuracy: formData.gpsData.accuracy,
-      } : {
-        entry_latitude: null,
-        entry_longitude: null,
-        location_accuracy: null,
-      };
+      // Build GPS fields - use GPS data if available, otherwise use location coordinates
+      // When a Location is set, it supersedes GPS, but we still save coords to entry_latitude/longitude
+      let gpsFields: { entry_latitude: number | null; entry_longitude: number | null; location_accuracy: number | null };
+      if (formData.gpsData) {
+        // Use captured GPS coordinates
+        gpsFields = {
+          entry_latitude: formData.gpsData.latitude,
+          entry_longitude: formData.gpsData.longitude,
+          location_accuracy: formData.gpsData.accuracy,
+        };
+      } else if (formData.locationData) {
+        // Use location coordinates (when Location supersedes GPS)
+        gpsFields = {
+          entry_latitude: formData.locationData.latitude,
+          entry_longitude: formData.locationData.longitude,
+          location_accuracy: null,
+        };
+      } else {
+        // No location data at all
+        gpsFields = {
+          entry_latitude: null,
+          entry_longitude: null,
+          location_accuracy: null,
+        };
+      }
 
       // Get or create location if we have location data
       let location_id: string | null = null;
@@ -1233,17 +1260,42 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       {/* GPS Picker - Read-only display with remove/reload options */}
       <GpsPicker
         visible={activePicker === 'gps'}
-        onClose={() => setActivePicker(null)}
-        gpsData={formData.gpsData}
+        onClose={() => {
+          setActivePicker(null);
+          setIsNewGpsCapture(false);
+          setPendingGpsData(null); // Clear pending GPS when closing without saving
+        }}
+        gpsData={isNewGpsCapture ? pendingGpsData : formData.gpsData}
         onRemove={() => {
           updateField("gpsData", null);
           setActivePicker(null);
+          setIsNewGpsCapture(false);
+          setPendingGpsData(null);
           showSnackbar('GPS removed');
           if (!isEditMode) enterEditMode();
         }}
         onReload={() => {
           // Don't close the picker - reload in place with high accuracy
-          captureGps(true);
+          // When in new capture mode, reload to pending; otherwise reload to formData
+          captureGps(true, isNewGpsCapture);
+        }}
+        onUseLocation={() => {
+          // Switch to Location picker - GPS will be cleared when location is selected
+          // If in new capture mode with pending GPS, commit it first so location picker can use it
+          if (isNewGpsCapture && pendingGpsData) {
+            updateField("gpsData", pendingGpsData);
+          }
+          setIsNewGpsCapture(false);
+          setPendingGpsData(null);
+          setTimeout(() => setActivePicker('location'), 100);
+        }}
+        onSave={(location) => {
+          // Save the GPS location (either from map tap or GPS reload)
+          updateField("gpsData", location);
+          setPendingGpsData(null);
+          setIsNewGpsCapture(false);
+          showSnackbar(location.accuracy === -1 ? 'Location saved' : 'GPS saved');
+          if (!isEditMode) enterEditMode();
         }}
         isLoading={isGpsLoading}
         units={settings.units}
@@ -1257,7 +1309,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           mode={locationPickerMode}
           onSelect={(location: LocationType | null) => {
             // If location is null (user selected "None"), clear location data
-            // Note: This does NOT clear GPS data - GPS is separate
             if (location === null) {
               updateField("locationData", null);
               setActivePicker(null);
@@ -1269,9 +1320,15 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
             }
 
             // Show snackbar based on whether we're adding or updating
-            // Note: Selecting a location does NOT overwrite GPS coordinates
             const isUpdating = !!formData.locationData?.name;
+
+            // When a Location is selected:
+            // 1. Set the location data
+            // 2. Clear GPS data (Location supersedes GPS in the UI)
+            // Note: entry_latitude/longitude will be set from locationData on save
             updateField("locationData", location);
+            updateField("gpsData", null); // Location replaces GPS
+
             setActivePicker(null);
             showSnackbar(isUpdating ? 'Success! You updated the location.' : 'Success! You added the location.');
             if (!isEditMode) {
@@ -1383,7 +1440,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         priority={formData.priority}
         photoCount={photoCount}
         onAddGps={() => {
-          captureGps();
+          setIsNewGpsCapture(true);
+          setActivePicker('gps');
+          captureGps(false, true); // Capture to pending state
         }}
         onShowLocationPicker={() => setActivePicker('location')}
         onStatusChange={(status) => updateField("status", status)}

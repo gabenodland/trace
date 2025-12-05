@@ -534,6 +534,11 @@ export const styles = StyleSheet.create({
   pickerButtonPrimary: {
     backgroundColor: "#3b82f6",
   },
+  pickerButtonSecondary: {
+    backgroundColor: theme.colors.background.secondary,
+    borderWidth: 1,
+    borderColor: theme.colors.border.medium,
+  },
   pickerButtonText: {
     fontSize: 16,
     fontWeight: theme.typography.fontWeight.medium,

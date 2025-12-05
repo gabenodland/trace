@@ -327,21 +327,19 @@ export const locationPickerStyles = StyleSheet.create({
     gap: 12,
   },
 
-  // Action buttons
+  // Action buttons - consistent with GPS picker style
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#fff',
+    borderRadius: 8,
+    backgroundColor: theme.colors.background.secondary,
   },
   actionButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
     color: theme.colors.text.primary,
     marginLeft: 8,
   },
@@ -349,31 +347,29 @@ export const locationPickerStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#fee2e2',
-    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    backgroundColor: '#fee2e2',
   },
   actionButtonDangerText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
     color: '#dc2626',
     marginLeft: 8,
   },
 
-  // Primary button (full width, bottom)
+  // Primary button (full width, bottom) - consistent with GPS picker
   primaryButton: {
     backgroundColor: '#3b82f6',
-    paddingVertical: 16,
-    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     alignItems: 'center',
-    marginTop: 8,
   },
   primaryButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#fff',
   },
 
