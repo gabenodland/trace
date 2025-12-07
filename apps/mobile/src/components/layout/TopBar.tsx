@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from "react-native";
-import Svg, { Path, Line } from "react-native-svg";
+import Svg, { Path, Line, Circle } from "react-native-svg";
 import { useState } from "react";
 import { NavigationMenu, NavigationMenuItem } from "../navigation/NavigationMenu";
 import { Breadcrumb, BreadcrumbSegment } from "./Breadcrumb";
@@ -24,6 +24,10 @@ interface TopBarProps {
   showBackButton?: boolean;
   onBackPress?: () => void;
 
+  // Search button
+  onSearchPress?: () => void;
+  isSearchActive?: boolean;
+
   // Hamburger menu (customizable menu items)
   menuItems?: NavigationMenuItem[];
   userEmail?: string;
@@ -41,6 +45,8 @@ export function TopBar({
   children,
   showBackButton = false,
   onBackPress,
+  onSearchPress,
+  isSearchActive = false,
   menuItems = [],
   userEmail,
   onProfilePress,
@@ -103,29 +109,46 @@ export function TopBar({
         </View>
       )}
 
-      {/* Hamburger Menu */}
-      {menuItems.length > 0 && (
-        <View style={styles.menuContainer}>
+      {/* Right side buttons */}
+      <View style={styles.rightButtons}>
+        {/* Search Button */}
+        {onSearchPress && (
           <TouchableOpacity
-            style={styles.menuButton}
-            onPress={() => setShowMenu(!showMenu)}
+            style={styles.iconButton}
+            onPress={onSearchPress}
+            activeOpacity={0.7}
           >
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
-              <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
-              <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
-              <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={isSearchActive ? "#3b82f6" : "#1f2937"} strokeWidth={2}>
+              <Circle cx={11} cy={11} r={8} />
+              <Line x1={21} y1={21} x2={16.65} y2={16.65} strokeLinecap="round" />
             </Svg>
           </TouchableOpacity>
+        )}
 
-          <NavigationMenu
-            visible={showMenu}
-            onClose={() => setShowMenu(false)}
-            menuItems={menuItems}
-            userEmail={userEmail}
-            onProfilePress={onProfilePress}
-          />
-        </View>
-      )}
+        {/* Hamburger Menu */}
+        {menuItems.length > 0 && (
+          <View style={styles.menuContainer}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => setShowMenu(!showMenu)}
+            >
+              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
+                <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
+                <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
+                <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
+              </Svg>
+            </TouchableOpacity>
+
+            <NavigationMenu
+              visible={showMenu}
+              onClose={() => setShowMenu(false)}
+              menuItems={menuItems}
+              userEmail={userEmail}
+              onProfilePress={onProfilePress}
+            />
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -182,10 +205,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: theme.spacing.md,
   },
+  rightButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs,
+  },
+  iconButton: {
+    padding: theme.spacing.sm,
+  },
   menuContainer: {
     position: "relative",
-  },
-  menuButton: {
-    padding: theme.spacing.sm,
   },
 });

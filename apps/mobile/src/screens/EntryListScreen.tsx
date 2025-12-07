@@ -13,6 +13,7 @@ import { TopBar } from "../components/layout/TopBar";
 import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
 import { TopBarDropdownContainer } from "../components/layout/TopBarDropdownContainer";
 import { SubBar, SubBarSelector } from "../components/layout/SubBar";
+import { SearchBar } from "../components/layout/SearchBar";
 import { EntryList } from "../modules/entries/components/EntryList";
 import { EntryNavigator } from "../components/navigation/EntryNavigator";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
@@ -45,6 +46,8 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
   const [selectedStreamId, setSelectedStreamId] = useState<string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people">("all");
   const [selectedStreamName, setSelectedStreamName] = useState<string>("Home");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [displayMode, setDisplayMode] = usePersistedState<EntryDisplayMode>('@entryListDisplayMode', DEFAULT_DISPLAY_MODE);
   const [sortMode, setSortMode] = usePersistedState<EntrySortMode>('@entryListSortMode', DEFAULT_SORT_MODE);
   const [orderMode, setOrderMode] = usePersistedState<EntrySortOrder>('@entryListOrderMode', DEFAULT_SORT_ORDER);
@@ -154,6 +157,26 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
   const sortedEntries = useMemo(() => {
     return sortEntries(entries, sortMode, streamMap, orderMode, showPinnedFirst);
   }, [entries, sortMode, streamMap, orderMode, showPinnedFirst]);
+
+  // Filter entries by search query (searches title and content)
+  const filteredEntries = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return sortedEntries;
+    }
+    const query = searchQuery.toLowerCase().trim();
+    return sortedEntries.filter(entry => {
+      // Search in title
+      if (entry.title?.toLowerCase().includes(query)) {
+        return true;
+      }
+      // Search in content (strip HTML tags for plain text search)
+      const plainContent = entry.content.replace(/<[^>]*>/g, '').toLowerCase();
+      if (plainContent.includes(query)) {
+        return true;
+      }
+      return false;
+    });
+  }, [sortedEntries, searchQuery]);
 
   // Get display labels
   const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Smashed';
@@ -352,11 +375,26 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
         breadcrumbs={breadcrumbs}
         onBreadcrumbPress={handleBreadcrumbPress}
         onBreadcrumbDropdownPress={() => setShowStreamDropdown(true)}
-        badge={sortedEntries.length}
+        badge={filteredEntries.length}
         menuItems={menuItems}
         userEmail={userEmail}
         onProfilePress={onProfilePress}
+        onSearchPress={() => setIsSearchOpen(!isSearchOpen)}
+        isSearchActive={isSearchOpen}
       />
+
+      {/* Search Bar */}
+      {isSearchOpen && (
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onClose={() => {
+            setIsSearchOpen(false);
+            setSearchQuery("");
+          }}
+          placeholder="Search title or content..."
+        />
+      )}
 
       <SubBar>
         <SubBarSelector
@@ -372,7 +410,7 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
       </SubBar>
 
       <EntryList
-        entries={sortedEntries}
+        entries={filteredEntries}
         isLoading={isLoading}
         onEntryPress={handleEntryPress}
         onTagPress={handleTagPress}
