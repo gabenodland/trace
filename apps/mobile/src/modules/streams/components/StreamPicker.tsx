@@ -1,8 +1,13 @@
-import { useState } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
+import { useState, useRef, useEffect } from "react";
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions } from "react-native";
 import { useStreams } from "../mobileStreamHooks";
 import { StreamList } from "./StreamList";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Line } from "react-native-svg";
+import { theme } from "../../../shared/theme/theme";
+
+const ITEM_HEIGHT = 45; // Approximate height of each stream item
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const MAX_LIST_HEIGHT = SCREEN_HEIGHT * 0.5; // 50% of screen height max
 
 interface StreamPickerProps {
   visible: boolean;
@@ -14,6 +19,22 @@ interface StreamPickerProps {
 export function StreamPicker({ visible, onClose, onSelect, selectedStreamId }: StreamPickerProps) {
   const { streams, isLoading } = useStreams();
   const [searchQuery, setSearchQuery] = useState("");
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Scroll to selected item when picker becomes visible
+  useEffect(() => {
+    if (visible && selectedStreamId && streams.length > 0 && scrollViewRef.current) {
+      // Find the index of the selected stream (+1 for the "Unassigned" option at the top)
+      const selectedIndex = streams.findIndex(s => s.stream_id === selectedStreamId);
+      if (selectedIndex >= 0) {
+        // Wait a bit for the ScrollView to be fully rendered
+        setTimeout(() => {
+          const scrollOffset = (selectedIndex + 1) * ITEM_HEIGHT; // +1 for Unassigned
+          scrollViewRef.current?.scrollTo({ y: scrollOffset, animated: true });
+        }, 100);
+      }
+    }
+  }, [visible, selectedStreamId, streams]);
 
   // Filter streams based on search query
   const filteredStreams = streams.filter((stream) =>
@@ -34,6 +55,17 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId }: S
 
   return (
     <View style={styles.container}>
+      {/* Header with title and close button */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Set Stream</Text>
+        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
+            <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
+          </Svg>
+        </TouchableOpacity>
+      </View>
+
       {/* Search Input */}
       <View style={styles.searchContainer}>
         <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2} style={styles.searchIcon}>
@@ -58,7 +90,11 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId }: S
       </View>
 
       {/* Content */}
-      <ScrollView style={styles.content}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.content}
+        showsVerticalScrollIndicator={true}
+      >
         {/* Unassigned Option - First item */}
         <TouchableOpacity
           style={[
@@ -130,6 +166,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
+  },
+  closeButton: {
+    padding: 4,
+  },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -152,7 +204,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   content: {
-    maxHeight: 400,
+    maxHeight: MAX_LIST_HEIGHT,
   },
   streamItem: {
     flexDirection: "row",

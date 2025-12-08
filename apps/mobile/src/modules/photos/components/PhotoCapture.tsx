@@ -2,24 +2,29 @@
  * Photo Capture Component
  *
  * Allows users to capture photos from camera or pick from gallery
+ * Styled to match other picker components (StatusPicker, RatingPicker, etc.)
  */
 
 import React, { useState, forwardRef, useImperativeHandle } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
-import {  capturePhoto, pickPhotoFromGallery } from '../mobilePhotoApi';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import Svg, { Path, Circle, Line } from 'react-native-svg';
+import { TopBarDropdownContainer } from '../../../components/layout/TopBarDropdownContainer';
+import { theme } from '../../../shared/theme/theme';
+import { capturePhoto, pickMultiplePhotosFromGallery } from '../mobilePhotoApi';
 
 interface PhotoCaptureProps {
   onPhotoSelected: (uri: string, width: number, height: number) => void;
+  onMultiplePhotosSelected?: (photos: { uri: string; width: number; height: number }[]) => void;
   disabled?: boolean;
   showButton?: boolean; // Whether to show the camera button (default true)
+  onSnackbar?: (message: string) => void;
 }
 
 export interface PhotoCaptureRef {
   openMenu: () => void;
 }
 
-export const PhotoCapture = forwardRef<PhotoCaptureRef, PhotoCaptureProps>(function PhotoCapture({ onPhotoSelected, disabled = false, showButton = true }, ref) {
+export const PhotoCapture = forwardRef<PhotoCaptureRef, PhotoCaptureProps>(function PhotoCapture({ onPhotoSelected, onMultiplePhotosSelected, disabled = false, showButton = true, onSnackbar }, ref) {
   const [showMenu, setShowMenu] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
 
@@ -36,6 +41,7 @@ export const PhotoCapture = forwardRef<PhotoCaptureRef, PhotoCaptureProps>(funct
       const result = await capturePhoto();
       if (result) {
         onPhotoSelected(result.uri, result.width, result.height);
+        onSnackbar?.("Photo captured");
       }
     } catch (error: any) {
       Alert.alert('Camera Error', error.message || 'Failed to capture photo');
@@ -49,12 +55,21 @@ export const PhotoCapture = forwardRef<PhotoCaptureRef, PhotoCaptureProps>(funct
     setIsCapturing(true);
 
     try {
-      const result = await pickPhotoFromGallery();
-      if (result) {
-        onPhotoSelected(result.uri, result.width, result.height);
+      const results = await pickMultiplePhotosFromGallery();
+      if (results.length > 0) {
+        // If multiple photos callback is provided, use it
+        if (onMultiplePhotosSelected) {
+          onMultiplePhotosSelected(results);
+        } else {
+          // Fallback: call single photo callback for each photo
+          for (const result of results) {
+            onPhotoSelected(result.uri, result.width, result.height);
+          }
+        }
+        onSnackbar?.(results.length === 1 ? "Photo added" : `${results.length} photos added`);
       }
     } catch (error: any) {
-      Alert.alert('Gallery Error', error.message || 'Failed to pick photo');
+      Alert.alert('Gallery Error', error.message || 'Failed to pick photos');
     } finally {
       setIsCapturing(false);
     }
@@ -76,52 +91,58 @@ export const PhotoCapture = forwardRef<PhotoCaptureRef, PhotoCaptureProps>(funct
         </TouchableOpacity>
       )}
 
-      {/* Photo Source Selection Modal */}
-      <Modal
+      {/* Photo Source Selection Picker */}
+      <TopBarDropdownContainer
         visible={showMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowMenu(false)}
+        onClose={() => setShowMenu(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowMenu(false)}
-        >
-          <View style={styles.menuContainer}>
+        <View style={styles.container}>
+          {/* Header with title and close button */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Select Image</Text>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setShowMenu(false)}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
+                <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
+              </Svg>
+            </TouchableOpacity>
+          </View>
+
+          {/* Options */}
+          <View style={styles.optionsContainer}>
+            {/* Take Photo */}
             <TouchableOpacity
-              style={styles.menuItem}
+              style={styles.optionButton}
               onPress={handleCameraPress}
               activeOpacity={0.7}
             >
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
-                <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" strokeLinecap="round" strokeLinejoin="round" />
-                <Circle cx={12} cy={13} r={3} strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-              <Text style={styles.menuItemText}>Take Photo</Text>
+              <View style={styles.optionIcon}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" strokeLinecap="round" strokeLinejoin="round" />
+                  <Circle cx={12} cy={13} r={3} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
+              <Text style={styles.optionText}>Take Photo</Text>
             </TouchableOpacity>
 
+            {/* Choose from Gallery */}
             <TouchableOpacity
-              style={styles.menuItem}
+              style={styles.optionButton}
               onPress={handleGalleryPress}
               activeOpacity={0.7}
             >
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
-                <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-              <Text style={styles.menuItemText}>Choose from Gallery</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.menuItem, styles.menuItemCancel]}
-              onPress={() => setShowMenu(false)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.menuItemCancelText}>Cancel</Text>
+              <View style={styles.optionIcon}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Path d="M4 16l4.586-4.586a2 2 0 0 1 2.828 0L16 16m-2-2l1.586-1.586a2 2 0 0 1 2.828 0L20 14" strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6z" strokeLinecap="round" strokeLinejoin="round" />
+                  <Circle cx={8.5} cy={8.5} r={1.5} fill="#6b7280" stroke="none" />
+                </Svg>
+              </View>
+              <Text style={styles.optionText}>Choose from Gallery</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+        </View>
+      </TopBarDropdownContainer>
     </>
   );
 });
@@ -139,49 +160,46 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.5,
   },
-  buttonText: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '500',
+  container: {
+    backgroundColor: theme.colors.background.primary,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
-  modalOverlay: {
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: theme.spacing.xs,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  optionsContainer: {
+    gap: theme.spacing.sm,
+  },
+  optionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.background.secondary,
+    gap: theme.spacing.md,
+  },
+  optionIcon: {
+    width: 24,
+    alignItems: "center",
+  },
+  optionText: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  menuContainer: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingTop: 16,
-    paddingBottom: 32,
-    paddingHorizontal: 16,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: '#f9fafb',
-    marginBottom: 12,
-  },
-  menuItemText: {
     fontSize: 16,
-    color: '#1f2937',
-    fontWeight: '500',
-  },
-  menuItemCancel: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  menuItemCancelText: {
-    fontSize: 16,
-    color: '#6b7280',
-    fontWeight: '500',
-    textAlign: 'center',
-    flex: 1,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.text.primary,
   },
 });

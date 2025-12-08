@@ -35,6 +35,7 @@ interface GpsPickerProps {
   onSave?: (location: GpsData) => void;
   isLoading?: boolean;
   units: UnitSystem;
+  onSnackbar: (message: string) => void;
 }
 
 // ============================================================================
@@ -175,6 +176,7 @@ export function GpsPicker({
   onSave,
   isLoading = false,
   units,
+  onSnackbar,
 }: GpsPickerProps) {
   const mapRef = useRef<MapView>(null);
 
@@ -233,9 +235,10 @@ export function GpsPicker({
   const handleSave = useCallback(() => {
     if (displayLocation && onSave) {
       onSave(displayLocation);
+      onSnackbar(isManuallySelected ? "Location saved" : "GPS saved");
     }
     onClose();
-  }, [displayLocation, onSave, onClose]);
+  }, [displayLocation, onSave, onClose, onSnackbar, isManuallySelected]);
 
   // Handle use location - close and trigger location picker
   const handleUseLocation = useCallback(() => {
@@ -246,20 +249,16 @@ export function GpsPicker({
   // Handle remove GPS
   const handleRemove = useCallback(() => {
     onRemove();
+    onSnackbar("GPS removed");
     onClose();
-  }, [onRemove, onClose]);
+  }, [onRemove, onSnackbar, onClose]);
 
   return (
     <TopBarDropdownContainer visible={visible} onClose={onClose}>
       <View style={styles.pickerContainer}>
         {/* Header */}
         <View style={gpsPickerStyles.header}>
-          {isManuallySelected ? (
-            <MapPinIcon color={theme.colors.text.primary} />
-          ) : (
-            <GpsIcon color={theme.colors.text.primary} />
-          )}
-          <Text style={styles.pickerTitle}>
+          <Text style={gpsPickerStyles.title}>
             {isManuallySelected ? "Selected Location" : "GPS Location"}
           </Text>
           <TouchableOpacity style={gpsPickerStyles.closeButton} onPress={onClose}>
@@ -430,11 +429,15 @@ const gpsPickerStyles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
+    justifyContent: "space-between",
+    marginBottom: theme.spacing.md,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
   },
   closeButton: {
-    marginLeft: "auto",
     padding: 4,
   },
   mapContainer: {

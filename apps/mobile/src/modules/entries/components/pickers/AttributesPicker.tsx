@@ -3,9 +3,10 @@
  * Extracted from CaptureForm for maintainability
  */
 
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
+import { theme } from "../../../../shared/theme/theme";
 import { styles } from "../CaptureForm.styles";
 import type { PhotoCaptureRef } from "../../../photos/components/PhotoCapture";
 
@@ -33,7 +34,7 @@ interface AttributesPickerProps {
   // Callbacks
   onAddGps: () => void;
   onShowLocationPicker: () => void;
-  onStatusChange: (status: "none" | "incomplete" | "in_progress" | "complete") => void;
+  onShowStatusPicker: () => void;
   onShowDatePicker: () => void;
   onShowRatingPicker: () => void;
   onShowPriorityPicker: () => void;
@@ -63,7 +64,7 @@ export function AttributesPicker({
   photoCount,
   onAddGps,
   onShowLocationPicker,
-  onStatusChange,
+  onShowStatusPicker,
   onShowDatePicker,
   onShowRatingPicker,
   onShowPriorityPicker,
@@ -82,11 +83,23 @@ export function AttributesPicker({
 
   return (
     <TopBarDropdownContainer visible={visible} onClose={onClose}>
-      <View style={styles.attributePickerContainer}>
+      <View style={localStyles.container}>
+        {/* Header with title and close button */}
+        <View style={localStyles.header}>
+          <Text style={localStyles.title}>
+            {hasUnsetAttributes ? "Add Attribute" : "Entry Options"}
+          </Text>
+          <TouchableOpacity style={localStyles.closeButton} onPress={onClose}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
+              <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
+            </Svg>
+          </TouchableOpacity>
+        </View>
+
         {/* Attributes Section - only show if there are unset attributes */}
         {hasUnsetAttributes && (
           <>
-            <Text style={styles.attributePickerTitle}>Add Attribute</Text>
 
             {/* GPS */}
             {!hasGpsData && (
@@ -137,9 +150,8 @@ export function AttributesPicker({
               <TouchableOpacity
                 style={styles.attributePickerItem}
                 onPress={() => {
-                  onStatusChange("incomplete");
                   onClose();
-                  onSnackbar("Status set to Not Started");
+                  setTimeout(() => onShowStatusPicker(), 100);
                   if (!isEditMode) enterEditMode();
                 }}
               >
@@ -233,31 +245,70 @@ export function AttributesPicker({
               </TouchableOpacity>
             )}
 
-            {/* Divider before Delete */}
-            {isEditing && <View style={styles.menuDivider} />}
           </>
         )}
 
         {/* Delete Entry - only shown for existing entries */}
         {isEditing && (
-          <TouchableOpacity
-            style={styles.attributePickerItem}
-            onPress={() => {
-              onClose();
-              setTimeout(() => onDelete(), 100);
-            }}
-          >
-            <View style={styles.attributePickerItemIcon}>
+          <>
+            {hasUnsetAttributes && <View style={localStyles.divider} />}
+            <TouchableOpacity
+              style={localStyles.deleteButton}
+              onPress={() => {
+                onClose();
+                setTimeout(() => onDelete(), 100);
+              }}
+            >
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}>
                 <Path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-            </View>
-            <Text style={[styles.attributePickerItemText, { color: "#ef4444" }]}>
-              Delete Entry
-            </Text>
-          </TouchableOpacity>
+              <Text style={localStyles.deleteButtonText}>Delete Entry</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     </TopBarDropdownContainer>
   );
 }
+
+const localStyles = StyleSheet.create({
+  container: {
+    backgroundColor: theme.colors.background.primary,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.sm,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: theme.spacing.xs,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: theme.colors.border.light,
+    marginVertical: theme.spacing.sm,
+  },
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: "#fee2e2",
+    gap: theme.spacing.md,
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: "#ef4444",
+  },
+});

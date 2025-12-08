@@ -3,3 +3,6 @@ export { PriorityPicker } from "./PriorityPicker";
 export { TimePicker } from "./TimePicker";
 export { AttributesPicker } from "./AttributesPicker";
 export { GpsPicker } from "./GpsPicker";
+export { StatusPicker } from "./StatusPicker";
+export { DueDatePicker } from "./DueDatePicker";
+export { EntryDatePicker } from "./EntryDatePicker";

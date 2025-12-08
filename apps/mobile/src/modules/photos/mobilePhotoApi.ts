@@ -79,7 +79,7 @@ export async function capturePhoto(): Promise<{ uri: string; width: number; heig
 }
 
 /**
- * Pick photo from gallery
+ * Pick photo from gallery (single selection)
  * Uses quality 1 to get full resolution - compression happens later
  */
 export async function pickPhotoFromGallery(): Promise<{ uri: string; width: number; height: number } | null> {
@@ -109,6 +109,41 @@ export async function pickPhotoFromGallery(): Promise<{ uri: string; width: numb
     width: asset.width,
     height: asset.height,
   };
+}
+
+/**
+ * Pick multiple photos from gallery
+ * Uses quality 1 to get full resolution - compression happens later
+ */
+export async function pickMultiplePhotosFromGallery(): Promise<{ uri: string; width: number; height: number }[]> {
+  const hasPermission = await requestGalleryPermissions();
+  if (!hasPermission) {
+    throw new Error('Gallery permission not granted');
+  }
+
+  log.debug('Opening gallery picker (multi-select)');
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    allowsMultipleSelection: true,
+    quality: 1,
+    exif: true,
+    selectionLimit: 10, // Reasonable limit to avoid memory issues
+  });
+
+  if (result.canceled) {
+    log.debug('Gallery picker cancelled');
+    return [];
+  }
+
+  const photos = result.assets.map(asset => ({
+    uri: asset.uri,
+    width: asset.width,
+    height: asset.height,
+  }));
+
+  log.info('Photos picked from gallery', { count: photos.length });
+
+  return photos;
 }
 
 // ============================================================================

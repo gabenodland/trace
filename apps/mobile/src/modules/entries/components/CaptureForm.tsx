@@ -12,7 +12,6 @@ import { StreamPicker } from "../../streams/components/StreamPicker";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdownContainer";
 import { useNavigationMenu } from "../../../shared/hooks/useNavigationMenu";
-import { SimpleDatePicker } from "./SimpleDatePicker";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { LocationPicker } from "../../locations/components/LocationPicker";
@@ -21,7 +20,7 @@ import { localDB } from "../../../shared/db/localDB";
 import * as Crypto from "expo-crypto";
 import { useCaptureFormState } from "./hooks/useCaptureFormState";
 import { styles } from "./CaptureForm.styles";
-import { RatingPicker, PriorityPicker, TimePicker, AttributesPicker, GpsPicker } from "./pickers";
+import { RatingPicker, PriorityPicker, TimePicker, AttributesPicker, GpsPicker, StatusPicker, DueDatePicker, EntryDatePicker } from "./pickers";
 import type { GpsData } from "./hooks/useCaptureFormState";
 import { MetadataBar } from "./MetadataBar";
 import { EditorToolbar } from "./EditorToolbar";
@@ -78,7 +77,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Consolidated picker visibility state - only one picker can be open at a time
-  type ActivePicker = 'stream' | 'gps' | 'location' | 'dueDate' | 'rating' | 'priority' | 'attributes' | 'entryDate' | 'time' | null;
+  type ActivePicker = 'stream' | 'gps' | 'location' | 'dueDate' | 'rating' | 'priority' | 'status' | 'attributes' | 'entryDate' | 'time' | null;
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
 
   // GPS loading state (for capturing/reloading GPS)
@@ -1018,6 +1017,73 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     }
   };
 
+  // Multiple photos handler (for gallery multi-select)
+  const handleMultiplePhotosSelected = async (photos: { uri: string; width: number; height: number }[]) => {
+    if (!user) {
+      Alert.alert("Error", "You must be logged in to add photos");
+      return;
+    }
+
+    try {
+      let currentPosition = photoCount;
+
+      for (const photo of photos) {
+        // Compress photo using quality setting
+        const compressed = await compressPhoto(photo.uri, settings.imageQuality);
+
+        // Generate IDs
+        const photoId = Crypto.randomUUID();
+        const userId = user.id;
+
+        if (isEditing) {
+          // EXISTING ENTRY: Save photo to DB immediately
+          const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, entryId!);
+
+          await localDB.createPhoto({
+            photo_id: photoId,
+            entry_id: entryId!,
+            user_id: userId,
+            file_path: generatePhotoPath(userId, entryId!, photoId, 'jpg'),
+            local_path: localPath,
+            mime_type: 'image/jpeg',
+            file_size: compressed.file_size,
+            width: compressed.width,
+            height: compressed.height,
+            position: currentPosition,
+            uploaded: false,
+          });
+        } else {
+          // NEW ENTRY: Store photo in state only
+          const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, tempEntryId);
+
+          addPendingPhoto({
+            photoId,
+            localPath,
+            filePath: generatePhotoPath(userId, tempEntryId, photoId, 'jpg'),
+            mimeType: 'image/jpeg',
+            fileSize: compressed.file_size,
+            width: compressed.width,
+            height: compressed.height,
+            position: currentPosition,
+          });
+        }
+
+        currentPosition++;
+      }
+
+      // Update photo count once at the end with total
+      setPhotoCount(currentPosition);
+
+      // Enter edit mode if not already in it
+      if (!isEditMode) {
+        enterEditMode();
+      }
+    } catch (error) {
+      console.error('Error adding photos:', error);
+      Alert.alert('Error', 'Failed to add some photos');
+    }
+  };
+
   // Photo deletion handler
   const handlePhotoDelete = async (photoId: string) => {
     try {
@@ -1157,13 +1223,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           onStreamPress={() => setActivePicker(activePicker === 'stream' ? null : 'stream')}
           onGpsPress={() => setActivePicker(activePicker === 'gps' ? null : 'gps')}
           onLocationPress={() => setActivePicker(activePicker === 'location' ? null : 'location')}
-          onStatusPress={() => {
-            // Cycle through statuses
-            if (formData.status === "incomplete") updateField("status", "in_progress");
-            else if (formData.status === "in_progress") updateField("status", "complete");
-            else updateField("status", "none");
-            if (!isEditMode) enterEditMode();
-          }}
+          onStatusPress={() => setActivePicker(activePicker === 'status' ? null : 'status')}
           onDueDatePress={() => setActivePicker(activePicker === 'dueDate' ? null : 'dueDate')}
           onRatingPress={() => setActivePicker('rating')}
           onPriorityPress={() => setActivePicker('priority')}
@@ -1271,7 +1331,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           setActivePicker(null);
           setIsNewGpsCapture(false);
           setPendingGpsData(null);
-          showSnackbar('GPS removed');
           if (!isEditMode) enterEditMode();
         }}
         onReload={() => {
@@ -1294,11 +1353,11 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           updateField("gpsData", location);
           setPendingGpsData(null);
           setIsNewGpsCapture(false);
-          showSnackbar(location.accuracy === -1 ? 'Location saved' : 'GPS saved');
           if (!isEditMode) enterEditMode();
         }}
         isLoading={isGpsLoading}
         units={settings.units}
+        onSnackbar={showSnackbar}
       />
 
       {/* Location Picker (fullscreen modal) - only render when active to avoid unnecessary hook calls */}
@@ -1349,48 +1408,23 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         />
       )}
 
-      {/* Date Picker Dropdown (Due Date) */}
-      <TopBarDropdownContainer
+      {/* Due Date Picker Modal */}
+      <DueDatePicker
         visible={activePicker === 'dueDate'}
         onClose={() => setActivePicker(null)}
-      >
-        <SimpleDatePicker
-          value={formData.dueDate ? new Date(formData.dueDate) : null}
-          onChange={(date) => {
-            const hadDueDate = !!formData.dueDate;
-            if (date) {
-              updateField("dueDate", date.toISOString());
-              showSnackbar(hadDueDate ? 'Success! You updated the due date.' : 'Success! You added the due date.');
-            } else {
-              updateField("dueDate", null);
-              if (hadDueDate) {
-                showSnackbar('You removed the due date');
-              }
-            }
-          }}
-          onClose={() => setActivePicker(null)}
-        />
-      </TopBarDropdownContainer>
+        dueDate={formData.dueDate}
+        onDueDateChange={(date) => updateField("dueDate", date)}
+        onSnackbar={showSnackbar}
+      />
 
-      {/* Entry Date Picker Dropdown */}
-      <TopBarDropdownContainer
+      {/* Entry Date Picker */}
+      <EntryDatePicker
         visible={activePicker === 'entryDate'}
         onClose={() => setActivePicker(null)}
-      >
-        <SimpleDatePicker
-          value={new Date(formData.entryDate)}
-          onChange={(date) => {
-            if (date) {
-              // Preserve the current time when changing date
-              const currentDate = new Date(formData.entryDate);
-              date.setHours(currentDate.getHours(), currentDate.getMinutes(), currentDate.getSeconds(), currentDate.getMilliseconds());
-              updateField("entryDate", date.toISOString());
-            }
-          }}
-          onClose={() => setActivePicker(null)}
-          allowClear={false}
-        />
-      </TopBarDropdownContainer>
+        entryDate={formData.entryDate}
+        onEntryDateChange={(date) => updateField("entryDate", date)}
+        onSnackbar={showSnackbar}
+      />
 
       {/* Time Picker Modal */}
       <TimePicker
@@ -1399,6 +1433,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         entryDate={formData.entryDate}
         onEntryDateChange={(date) => updateField("entryDate", date)}
         onIncludeTimeChange={(include) => updateField("includeTime", include)}
+        onSnackbar={showSnackbar}
+        includeTime={formData.includeTime}
       />
 
       {/* Rating Picker Modal */}
@@ -1416,6 +1452,18 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         onClose={() => setActivePicker(null)}
         priority={formData.priority}
         onPriorityChange={(value) => updateField("priority", value)}
+        onSnackbar={showSnackbar}
+      />
+
+      {/* Status Picker Modal */}
+      <StatusPicker
+        visible={activePicker === 'status'}
+        onClose={() => setActivePicker(null)}
+        status={formData.status}
+        onStatusChange={(value) => {
+          updateField("status", value);
+          if (!isEditMode) enterEditMode();
+        }}
         onSnackbar={showSnackbar}
       />
 
@@ -1445,7 +1493,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           captureGps(false, true); // Capture to pending state
         }}
         onShowLocationPicker={() => setActivePicker('location')}
-        onStatusChange={(status) => updateField("status", status)}
+        onShowStatusPicker={() => setActivePicker('status')}
         onShowDatePicker={() => setActivePicker('dueDate')}
         onShowRatingPicker={() => setActivePicker('rating')}
         onShowPriorityPicker={() => setActivePicker('priority')}
@@ -1459,6 +1507,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         ref={photoCaptureRef}
         showButton={false}
         onPhotoSelected={handlePhotoSelected}
+        onMultiplePhotosSelected={handleMultiplePhotosSelected}
+        onSnackbar={showSnackbar}
       />
 
       {/* Snackbar */}
