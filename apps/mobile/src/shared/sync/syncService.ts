@@ -11,7 +11,7 @@
 
 import { localDB } from '../db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
-import { Entry, LocationEntity } from '@trace/core';
+import { Entry, LocationEntity, isCompletedStatus } from '@trace/core';
 // AppState import removed - not currently used but may be needed for foreground sync
 import NetInfo from '@react-native-community/netinfo';
 import type { QueryClient } from '@tanstack/react-query';
@@ -941,9 +941,9 @@ class SyncService {
   private async syncEntry(entry: Entry): Promise<void> {
     const { sync_action } = entry;
 
-    // Enforce completed_at constraint
+    // Enforce completed_at constraint - set for any completed status (done, closed, cancelled)
     let completedAtValue: string | null = null;
-    if (entry.status === 'complete') {
+    if (isCompletedStatus(entry.status)) {
       if (entry.completed_at) {
         completedAtValue = typeof entry.completed_at === 'number'
           ? new Date(entry.completed_at).toISOString()

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
 import * as Location from "expo-location";
-import { extractTagsAndMentions, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput } from "@trace/core";
+import { extractTagsAndMentions, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput, type EntryStatus } from "@trace/core";
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
@@ -35,7 +35,7 @@ export interface ReturnContext {
   selectedDate?: string;
   zoomLevel?: "day" | "week" | "month" | "year";
   // For tasks
-  taskFilter?: "all" | "incomplete" | "complete";
+  taskFilter?: "all" | "actionable" | "in_progress" | "completed";
 }
 
 interface CaptureFormProps {
@@ -132,7 +132,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     title: string;
     content: string;
     streamId: string | null;
-    status: "none" | "incomplete" | "in_progress" | "complete";
+    status: EntryStatus;
     dueDate: string | null;
     rating: number;
     priority: number;
@@ -631,6 +631,25 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       originalValues.current.photoCount = photoCount;
     }
   }, [photoCount, isEditing]);
+
+  // Apply default status for new entries with an initial stream
+  // This handles the case when navigating directly to capture form with a stream preset
+  useEffect(() => {
+    // Only for new entries (not editing, not copied)
+    if (isEditing || isCopiedEntry) return;
+
+    // Only if we have an initial stream and streams are loaded
+    if (!formData.streamId || streams.length === 0) return;
+
+    // Only if status is still "none" (hasn't been set yet)
+    if (formData.status !== "none") return;
+
+    // Find the stream and apply its default status if enabled
+    const stream = streams.find(s => s.stream_id === formData.streamId);
+    if (stream?.entry_use_status && stream?.entry_default_status) {
+      updateField("status", stream.entry_default_status);
+    }
+  }, [isEditing, isCopiedEntry, formData.streamId, formData.status, streams, updateField]);
 
   // Capture GPS coordinates for new entries when setting is enabled
   // GPS is separate from named Location - GPS captures where entry was created
@@ -1301,6 +1320,18 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               const isRemoving = !id;
               updateField("streamId", id);
               updateField("streamName", name);
+
+              // Apply default status for new stream if:
+              // 1. Not editing an existing entry (new entry)
+              // 2. Current status is "none" (no status set yet)
+              // 3. New stream has status enabled and a default status
+              if (!isEditing && formData.status === "none" && id) {
+                const selectedStream = streams.find(s => s.stream_id === id);
+                if (selectedStream?.entry_use_status && selectedStream?.entry_default_status) {
+                  updateField("status", selectedStream.entry_default_status);
+                }
+              }
+
               if (isRemoving && hadStream) {
                 showSnackbar('You removed the stream');
               } else if (hadStream) {
@@ -1465,6 +1496,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           if (!isEditMode) enterEditMode();
         }}
         onSnackbar={showSnackbar}
+        allowedStatuses={currentStream?.entry_statuses}
       />
 
       {/* Entry Menu */}

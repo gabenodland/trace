@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback } from "react";
-import type { Location as LocationType } from "@trace/core";
+import type { Location as LocationType, EntryStatus } from "@trace/core";
 
 export interface PendingPhoto {
   photoId: string;
@@ -33,7 +33,7 @@ export interface CaptureFormData {
   content: string;
   streamId: string | null;
   streamName: string | null;
-  status: "none" | "incomplete" | "in_progress" | "complete";
+  status: EntryStatus;
   dueDate: string | null;
   rating: number;
   priority: number;

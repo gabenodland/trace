@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
 import * as Location from "expo-location";
-import { type Entry, isTaskOverdue, isDueToday, isDueThisWeek, getTaskStats } from "@trace/core";
+import { type Entry, type EntryStatus, isTaskOverdue, isDueToday, isDueThisWeek, getTaskStats, isTask, isCompletedStatus, isActionableStatus } from "@trace/core";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
@@ -9,7 +9,7 @@ import { TopBar } from "../components/layout/TopBar";
 import { EntryListItem } from "../modules/entries/components/EntryListItem";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
 
-type TaskFilter = "all" | "incomplete" | "in_progress" | "complete";
+type TaskFilter = "all" | "actionable" | "in_progress" | "completed";
 type TaskGroup = {
   title: string;
   entries: Entry[];
@@ -19,16 +19,12 @@ export function TasksScreen() {
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const { entries, isLoading, entryMutations } = useEntries();
-  const [filter, setFilter] = useState<TaskFilter>("incomplete");
+  const [filter, setFilter] = useState<TaskFilter>("actionable");
 
 
   // Filter entries to only tasks (any entry with a task status)
   const tasks = useMemo(() => {
-    return entries.filter(entry =>
-      entry.status === "incomplete" ||
-      entry.status === "in_progress" ||
-      entry.status === "complete"
-    );
+    return entries.filter(entry => isTask(entry.status));
   }, [entries]);
 
   // Get task statistics
@@ -37,12 +33,12 @@ export function TasksScreen() {
   // Filter tasks based on selected filter
   const filteredTasks = useMemo(() => {
     switch (filter) {
-      case "incomplete":
-        return tasks.filter(t => t.status === "incomplete");
+      case "actionable":
+        return tasks.filter(t => isActionableStatus(t.status));
       case "in_progress":
         return tasks.filter(t => t.status === "in_progress");
-      case "complete":
-        return tasks.filter(t => t.status === "complete");
+      case "completed":
+        return tasks.filter(t => isCompletedStatus(t.status));
       default:
         return tasks;
     }
@@ -57,7 +53,7 @@ export function TasksScreen() {
     const completed: Entry[] = [];
 
     filteredTasks.forEach(task => {
-      if (task.status === "complete") {
+      if (isCompletedStatus(task.status)) {
         completed.push(task);
       } else if (isTaskOverdue(task.status, task.due_date)) {
         overdue.push(task);
@@ -84,30 +80,33 @@ export function TasksScreen() {
     if (noDueDate.length > 0) {
       groups.push({ title: "No Due Date", entries: noDueDate });
     }
-    if (completed.length > 0 && filter === "complete") {
+    if (completed.length > 0 && filter === "completed") {
       groups.push({ title: "Completed", entries: completed });
     }
 
     return groups;
   }, [filteredTasks, filter]);
 
-  // Handle task completion toggle (cycles through: incomplete -> in_progress -> complete -> incomplete)
-  const handleToggleComplete = async (entryId: string, currentStatus: "incomplete" | "in_progress" | "complete") => {
+  // Handle task completion toggle (cycles through: todo -> in_progress -> done -> todo)
+  const handleToggleComplete = async (entryId: string, currentStatus: EntryStatus) => {
     try {
-      // Cycle through statuses
-      let newStatus: "incomplete" | "in_progress" | "complete";
-      if (currentStatus === "incomplete") {
+      // Cycle through basic statuses
+      let newStatus: EntryStatus;
+      if (currentStatus === "todo" || currentStatus === "new") {
         newStatus = "in_progress";
       } else if (currentStatus === "in_progress") {
-        newStatus = "complete";
+        newStatus = "done";
+      } else if (isCompletedStatus(currentStatus)) {
+        newStatus = "todo";
       } else {
-        newStatus = "incomplete";
+        // For other actionable statuses, move to in_progress
+        newStatus = "in_progress";
       }
 
       await entryMutations.updateEntry(entryId, {
         status: newStatus,
-        // Set completed_at only when status is complete
-        completed_at: newStatus === "complete" ? new Date().toISOString() : null,
+        // Set completed_at only when status is a completed status
+        completed_at: isCompletedStatus(newStatus) ? new Date().toISOString() : null,
       });
     } catch (error) {
       console.error("Failed to toggle task:", error);
@@ -182,7 +181,7 @@ export function TasksScreen() {
       <View style={styles.container}>
         <TopBar
           title="Tasks"
-          badge={stats.incomplete + stats.inProgress}
+          badge={stats.actionable}
           menuItems={menuItems}
           userEmail={userEmail}
           onProfilePress={onProfilePress}
@@ -198,7 +197,7 @@ export function TasksScreen() {
     <View style={styles.container}>
       <TopBar
         title="Tasks"
-        badge={stats.incomplete + stats.inProgress}
+        badge={stats.actionable}
         menuItems={menuItems}
         userEmail={userEmail}
         onProfilePress={onProfilePress}
@@ -208,15 +207,15 @@ export function TasksScreen() {
         {/* Filter Tabs */}
         <View style={styles.filterContainer}>
           <TouchableOpacity
-            style={[styles.filterTab, filter === "incomplete" && styles.filterTabActive]}
-            onPress={() => setFilter("incomplete")}
+            style={[styles.filterTab, filter === "actionable" && styles.filterTabActive]}
+            onPress={() => setFilter("actionable")}
             activeOpacity={0.7}
           >
-            <Text style={[styles.filterTabText, filter === "incomplete" && styles.filterTabTextActive]} numberOfLines={1}>
-              Not Started
+            <Text style={[styles.filterTabText, filter === "actionable" && styles.filterTabTextActive]} numberOfLines={1}>
+              Actionable
             </Text>
-            <Text style={[styles.filterTabCount, filter === "incomplete" && styles.filterTabCountActive]}>
-              {stats.incomplete}
+            <Text style={[styles.filterTabCount, filter === "actionable" && styles.filterTabCountActive]}>
+              {stats.actionable}
             </Text>
           </TouchableOpacity>
 
@@ -234,15 +233,15 @@ export function TasksScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterTab, filter === "complete" && styles.filterTabActive]}
-            onPress={() => setFilter("complete")}
+            style={[styles.filterTab, filter === "completed" && styles.filterTabActive]}
+            onPress={() => setFilter("completed")}
             activeOpacity={0.7}
           >
-            <Text style={[styles.filterTabText, filter === "complete" && styles.filterTabTextActive]} numberOfLines={1}>
-              Complete
+            <Text style={[styles.filterTabText, filter === "completed" && styles.filterTabTextActive]} numberOfLines={1}>
+              Completed
             </Text>
-            <Text style={[styles.filterTabCount, filter === "complete" && styles.filterTabCountActive]}>
-              {stats.complete}
+            <Text style={[styles.filterTabCount, filter === "completed" && styles.filterTabCountActive]}>
+              {stats.completed}
             </Text>
           </TouchableOpacity>
         </View>

@@ -172,7 +172,7 @@ class LocalDatabase {
           entry_longitude REAL,
           location_accuracy REAL,
           location_id TEXT,
-          status TEXT CHECK (status IN ('none', 'incomplete', 'in_progress', 'complete')) DEFAULT 'none',
+          status TEXT CHECK (status IN ('none', 'new', 'todo', 'in_progress', 'in_review', 'waiting', 'on_hold', 'done', 'closed', 'cancelled')) DEFAULT 'none',
           due_date INTEGER,
           completed_at INTEGER,
           created_at INTEGER NOT NULL,
@@ -242,6 +242,122 @@ class LocalDatabase {
     } catch (error) {
       console.error('Migration error (status in_progress constraint):', error);
     }
+
+    // Migration: Update to new 9-status system (incomplete->todo, complete->done, add new statuses)
+    try {
+      const migrationCheck = await this.db.getFirstAsync<{ value: string }>(
+        `SELECT value FROM sync_metadata WHERE key = 'migration_9_status_system_done'`
+      );
+
+      if (!migrationCheck) {
+        console.log('📦 Running migration: Converting to 9-status system...');
+
+        // Get existing column names from the entries table
+        const columns = await this.db.getAllAsync<{ name: string }>(
+          `SELECT name FROM pragma_table_info('entries')`
+        );
+        const columnNames = columns.map(c => c.name);
+        console.log(`Found ${columnNames.length} columns in entries table`);
+
+        // Define the new table columns with updated status constraint
+        const newTableColumns = `
+          entry_id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          title TEXT,
+          content TEXT NOT NULL,
+          tags TEXT,
+          mentions TEXT,
+          stream_id TEXT,
+          entry_date INTEGER,
+          entry_latitude REAL,
+          entry_longitude REAL,
+          location_accuracy REAL,
+          location_id TEXT,
+          status TEXT CHECK (status IN ('none', 'new', 'todo', 'in_progress', 'in_review', 'waiting', 'on_hold', 'done', 'closed', 'cancelled')) DEFAULT 'none',
+          due_date INTEGER,
+          completed_at INTEGER,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          deleted_at INTEGER,
+          priority INTEGER DEFAULT 0,
+          rating REAL DEFAULT 0.00,
+          is_pinned INTEGER DEFAULT 0,
+          local_only INTEGER DEFAULT 0,
+          synced INTEGER DEFAULT 0,
+          sync_action TEXT,
+          sync_error TEXT,
+          sync_retry_count INTEGER DEFAULT 0,
+          sync_last_attempt INTEGER,
+          version INTEGER DEFAULT 1,
+          base_version INTEGER DEFAULT 1,
+          conflict_status TEXT,
+          conflict_backup TEXT,
+          last_edited_by TEXT,
+          last_edited_device TEXT
+        `;
+
+        // Build explicit column list for INSERT
+        const newTableColumnNames = [
+          'entry_id', 'user_id', 'title', 'content', 'tags', 'mentions', 'stream_id',
+          'entry_date', 'entry_latitude', 'entry_longitude', 'location_accuracy', 'location_id',
+          'status', 'due_date', 'completed_at', 'created_at', 'updated_at', 'deleted_at',
+          'priority', 'rating', 'is_pinned', 'local_only', 'synced', 'sync_action',
+          'sync_error', 'sync_retry_count', 'sync_last_attempt', 'version', 'base_version',
+          'conflict_status', 'conflict_backup', 'last_edited_by', 'last_edited_device'
+        ];
+
+        const columnsToMigrate = newTableColumnNames.filter(col => columnNames.includes(col));
+        const columnsList = columnsToMigrate.join(', ');
+
+        // Build SELECT with status conversion (incomplete->todo, complete->done)
+        const selectColumns = columnsToMigrate.map(col => {
+          if (col === 'status') {
+            return `CASE
+              WHEN status = 'incomplete' THEN 'todo'
+              WHEN status = 'complete' THEN 'done'
+              ELSE status
+            END as status`;
+          }
+          return col;
+        }).join(', ');
+
+        // Recreate table with new constraint and migrate data
+        await this.db.execAsync(`
+          CREATE TABLE entries_new (${newTableColumns});
+          INSERT INTO entries_new (${columnsList}) SELECT ${selectColumns} FROM entries;
+          DROP TABLE entries;
+          ALTER TABLE entries_new RENAME TO entries;
+        `);
+
+        // Mark migration as done
+        await this.db.execAsync(`
+          INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)
+          VALUES ('migration_9_status_system_done', 'true', ${Date.now()});
+        `);
+
+        console.log('✅ Migration complete: converted to 9-status system (incomplete->todo, complete->done)');
+      }
+    } catch (error) {
+      console.error('Migration error (9-status system):', error);
+    }
+
+    // Migration: Add entry_statuses and entry_default_status columns to streams table
+    try {
+      const statusesCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('streams') WHERE name = 'entry_statuses'`
+      );
+
+      if (!statusesCheck) {
+        console.log('📦 Running migration: Adding entry_statuses and entry_default_status to streams table...');
+        await this.db.execAsync(`
+          ALTER TABLE streams ADD COLUMN entry_statuses TEXT DEFAULT '["new","todo","in_progress","done"]';
+          ALTER TABLE streams ADD COLUMN entry_default_status TEXT DEFAULT 'new';
+        `);
+        console.log('✅ Migration complete: entry_statuses and entry_default_status added to streams');
+      }
+    } catch (error) {
+      console.error('Migration error (streams status config):', error);
+    }
   }
 
   private async createTables(): Promise<void> {
@@ -293,7 +409,7 @@ class LocalDatabase {
         -- Location reference (FK to locations table)
         location_id TEXT,
 
-        status TEXT CHECK (status IN ('none', 'incomplete', 'in_progress', 'complete')) DEFAULT 'none',
+        status TEXT CHECK (status IN ('none', 'new', 'todo', 'in_progress', 'in_review', 'waiting', 'on_hold', 'done', 'closed', 'cancelled')) DEFAULT 'none',
         due_date INTEGER,             -- Unix timestamp
         completed_at INTEGER,         -- Unix timestamp
         created_at INTEGER NOT NULL,  -- Unix timestamp
@@ -341,6 +457,8 @@ class LocalDatabase {
         entry_use_location INTEGER DEFAULT 1,
         entry_use_photos INTEGER DEFAULT 1,
         entry_content_type TEXT DEFAULT 'richformat',
+        entry_statuses TEXT DEFAULT '["new","todo","in_progress","done"]',
+        entry_default_status TEXT DEFAULT 'new',
         is_private INTEGER DEFAULT 0,
         is_localonly INTEGER DEFAULT 0,
         created_at INTEGER NOT NULL,
@@ -1116,18 +1234,40 @@ class LocalDatabase {
 
     const rows = await this.db.getAllAsync<any>(query, params);
 
-    // Convert SQLite integer booleans (0/1) to proper booleans
-    return rows.map(row => ({
-      ...row,
-      entry_use_rating: !!row.entry_use_rating,
-      entry_use_priority: !!row.entry_use_priority,
-      entry_use_status: !!row.entry_use_status,
-      entry_use_duedates: !!row.entry_use_duedates,
-      entry_use_location: !!row.entry_use_location,
-      entry_use_photos: !!row.entry_use_photos,
-      is_private: !!row.is_private,
-      is_localonly: !!row.is_localonly,
-    }));
+    // Convert SQLite integer booleans (0/1) to proper booleans and parse JSON arrays
+    return rows.map(row => {
+      // Parse entry_statuses JSON array
+      // Handle double-escaped JSON (e.g., "[\"new\"]" -> ["new"])
+      let entryStatuses: string[] = ['new', 'todo', 'in_progress', 'done'];
+      if (row.entry_statuses) {
+        try {
+          let parsed = JSON.parse(row.entry_statuses);
+          // If result is still a string (double-escaped), parse again
+          if (typeof parsed === 'string') {
+            parsed = JSON.parse(parsed);
+          }
+          if (Array.isArray(parsed)) {
+            entryStatuses = parsed;
+          }
+        } catch (e) {
+          console.warn('Failed to parse entry_statuses:', e);
+        }
+      }
+
+      return {
+        ...row,
+        entry_use_rating: !!row.entry_use_rating,
+        entry_use_priority: !!row.entry_use_priority,
+        entry_use_status: !!row.entry_use_status,
+        entry_use_duedates: !!row.entry_use_duedates,
+        entry_use_location: !!row.entry_use_location,
+        entry_use_photos: !!row.entry_use_photos,
+        is_private: !!row.is_private,
+        is_localonly: !!row.is_localonly,
+        entry_statuses: entryStatuses,
+        entry_default_status: row.entry_default_status || 'new',
+      };
+    });
   }
 
   /**
@@ -1151,6 +1291,24 @@ class LocalDatabase {
 
     if (!row) return null;
 
+    // Parse entry_statuses JSON array
+    // Handle double-escaped JSON (e.g., "[\"new\"]" -> ["new"])
+    let entryStatuses: string[] = ['new', 'todo', 'in_progress', 'done'];
+    if (row.entry_statuses) {
+      try {
+        let parsed = JSON.parse(row.entry_statuses);
+        // If result is still a string (double-escaped), parse again
+        if (typeof parsed === 'string') {
+          parsed = JSON.parse(parsed);
+        }
+        if (Array.isArray(parsed)) {
+          entryStatuses = parsed;
+        }
+      } catch (e) {
+        console.warn('Failed to parse entry_statuses:', e);
+      }
+    }
+
     // Convert SQLite integer booleans (0/1) to proper booleans
     return {
       ...row,
@@ -1162,6 +1320,8 @@ class LocalDatabase {
       entry_use_photos: !!row.entry_use_photos,
       is_private: !!row.is_private,
       is_localonly: !!row.is_localonly,
+      entry_statuses: entryStatuses,
+      entry_default_status: row.entry_default_status || 'new',
     };
   }
 
@@ -1172,15 +1332,26 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
+    // Serialize entry_statuses to JSON string
+    // Handle: array (from Supabase), string (from local DB read), or undefined
+    let entryStatusesJson = '["new","todo","in_progress","done"]';
+    if (Array.isArray(stream.entry_statuses)) {
+      entryStatusesJson = JSON.stringify(stream.entry_statuses);
+    } else if (typeof stream.entry_statuses === 'string' && stream.entry_statuses.startsWith('[')) {
+      // Already a JSON string - use as-is
+      entryStatusesJson = stream.entry_statuses;
+    }
+
     await this.db.runAsync(
       `INSERT OR REPLACE INTO streams (
         stream_id, user_id, name, entry_count, color, icon,
         entry_title_template, entry_content_template,
         entry_use_rating, entry_use_priority, entry_use_status,
         entry_use_duedates, entry_use_location, entry_use_photos,
-        entry_content_type, is_private, is_localonly,
+        entry_content_type, entry_statuses, entry_default_status,
+        is_private, is_localonly,
         created_at, updated_at, synced, sync_action
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         stream.stream_id,
         stream.user_id,
@@ -1197,6 +1368,8 @@ class LocalDatabase {
         stream.entry_use_location !== false ? 1 : 0,
         stream.entry_use_photos !== false ? 1 : 0,
         stream.entry_content_type || 'richformat',
+        entryStatusesJson,
+        stream.entry_default_status || 'new',
         stream.is_private ? 1 : 0,
         stream.is_localonly ? 1 : 0,
         Date.parse(stream.created_at),
@@ -1215,53 +1388,102 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     const now = Date.now();
-    const updatedAt = updates.updated_at !== undefined
-      ? (typeof updates.updated_at === 'string' ? Date.parse(updates.updated_at) : updates.updated_at)
-      : now;
 
-    const synced = updates.synced !== undefined ? updates.synced : 0;
-    const syncAction = updates.sync_action !== undefined ? updates.sync_action : 'update';
+    // Build dynamic SET clause - only update fields that are provided
+    const setClauses: string[] = [];
+    const values: any[] = [];
+
+    if (updates.name !== undefined) {
+      setClauses.push('name = ?');
+      values.push(updates.name);
+    }
+    if (updates.color !== undefined) {
+      setClauses.push('color = ?');
+      values.push(updates.color || null);
+    }
+    if (updates.icon !== undefined) {
+      setClauses.push('icon = ?');
+      values.push(updates.icon || null);
+    }
+    if (updates.entry_title_template !== undefined) {
+      setClauses.push('entry_title_template = ?');
+      values.push(updates.entry_title_template);
+    }
+    if (updates.entry_content_template !== undefined) {
+      setClauses.push('entry_content_template = ?');
+      values.push(updates.entry_content_template);
+    }
+    if (updates.entry_use_rating !== undefined) {
+      setClauses.push('entry_use_rating = ?');
+      values.push(updates.entry_use_rating ? 1 : 0);
+    }
+    if (updates.entry_use_priority !== undefined) {
+      setClauses.push('entry_use_priority = ?');
+      values.push(updates.entry_use_priority ? 1 : 0);
+    }
+    if (updates.entry_use_status !== undefined) {
+      setClauses.push('entry_use_status = ?');
+      values.push(updates.entry_use_status ? 1 : 0);
+    }
+    if (updates.entry_use_duedates !== undefined) {
+      setClauses.push('entry_use_duedates = ?');
+      values.push(updates.entry_use_duedates ? 1 : 0);
+    }
+    if (updates.entry_use_location !== undefined) {
+      setClauses.push('entry_use_location = ?');
+      values.push(updates.entry_use_location ? 1 : 0);
+    }
+    if (updates.entry_use_photos !== undefined) {
+      setClauses.push('entry_use_photos = ?');
+      values.push(updates.entry_use_photos ? 1 : 0);
+    }
+    if (updates.entry_content_type !== undefined) {
+      setClauses.push('entry_content_type = ?');
+      values.push(updates.entry_content_type);
+    }
+    if (updates.entry_statuses !== undefined) {
+      setClauses.push('entry_statuses = ?');
+      // Handle: array (from UI), string (from sync), or other
+      if (Array.isArray(updates.entry_statuses)) {
+        values.push(JSON.stringify(updates.entry_statuses));
+      } else if (typeof updates.entry_statuses === 'string' && updates.entry_statuses.startsWith('[')) {
+        // Already a JSON string - use as-is
+        values.push(updates.entry_statuses);
+      } else {
+        values.push('["new","todo","in_progress","done"]');
+      }
+    }
+    if (updates.entry_default_status !== undefined) {
+      setClauses.push('entry_default_status = ?');
+      values.push(updates.entry_default_status);
+    }
+    if (updates.is_private !== undefined) {
+      setClauses.push('is_private = ?');
+      values.push(updates.is_private ? 1 : 0);
+    }
+    if (updates.is_localonly !== undefined) {
+      setClauses.push('is_localonly = ?');
+      values.push(updates.is_localonly ? 1 : 0);
+    }
+
+    // Always update timestamp and sync status
+    setClauses.push('updated_at = ?');
+    values.push(updates.updated_at !== undefined
+      ? (typeof updates.updated_at === 'string' ? Date.parse(updates.updated_at) : updates.updated_at)
+      : now);
+
+    setClauses.push('synced = ?');
+    values.push(updates.synced !== undefined ? updates.synced : 0);
+
+    setClauses.push('sync_action = ?');
+    values.push(updates.sync_action !== undefined ? updates.sync_action : 'update');
+
+    // Add streamId for WHERE clause
+    values.push(streamId);
 
     await this.db.runAsync(
-      `UPDATE streams SET
-        name = ?,
-        color = ?,
-        icon = ?,
-        entry_title_template = ?,
-        entry_content_template = ?,
-        entry_use_rating = ?,
-        entry_use_priority = ?,
-        entry_use_status = ?,
-        entry_use_duedates = ?,
-        entry_use_location = ?,
-        entry_use_photos = ?,
-        entry_content_type = ?,
-        is_private = ?,
-        is_localonly = ?,
-        updated_at = ?,
-        synced = ?,
-        sync_action = ?
-      WHERE stream_id = ?`,
-      [
-        updates.name,
-        updates.color || null,
-        updates.icon || null,
-        updates.entry_title_template !== undefined ? updates.entry_title_template : null,
-        updates.entry_content_template !== undefined ? updates.entry_content_template : null,
-        updates.entry_use_rating !== undefined ? (updates.entry_use_rating ? 1 : 0) : null,
-        updates.entry_use_priority !== undefined ? (updates.entry_use_priority ? 1 : 0) : null,
-        updates.entry_use_status !== undefined ? (updates.entry_use_status ? 1 : 0) : null,
-        updates.entry_use_duedates !== undefined ? (updates.entry_use_duedates ? 1 : 0) : null,
-        updates.entry_use_location !== undefined ? (updates.entry_use_location ? 1 : 0) : null,
-        updates.entry_use_photos !== undefined ? (updates.entry_use_photos ? 1 : 0) : null,
-        updates.entry_content_type !== undefined ? updates.entry_content_type : null,
-        updates.is_private !== undefined ? (updates.is_private ? 1 : 0) : null,
-        updates.is_localonly !== undefined ? (updates.is_localonly ? 1 : 0) : null,
-        updatedAt,
-        synced,
-        syncAction,
-        streamId
-      ]
+      `UPDATE streams SET ${setClauses.join(', ')} WHERE stream_id = ?`,
+      values
     );
   }
 

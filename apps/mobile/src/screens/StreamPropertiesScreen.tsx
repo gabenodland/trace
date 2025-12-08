@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,21 @@ import {
   TextInput,
   Switch,
   Alert,
+  Animated,
 } from "react-native";
+import Svg, { Path, Line } from "react-native-svg";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
-import type { Stream, UpdateStreamInput } from "@trace/core";
+import {
+  type UpdateStreamInput,
+  type EntryStatus,
+  DEFAULT_STREAM_STATUSES,
+  DEFAULT_INITIAL_STATUS,
+  getStatusLabel,
+} from "@trace/core";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
+import { StatusConfigModal } from "../modules/streams/components/StatusConfigModal";
 
 interface StreamPropertiesScreenProps {
   streamId: string;
@@ -41,6 +50,33 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   const [isLocalOnly, setIsLocalOnly] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
+  // Status configuration
+  const [entryStatuses, setEntryStatuses] = useState<EntryStatus[]>([...DEFAULT_STREAM_STATUSES]);
+  const [entryDefaultStatus, setEntryDefaultStatus] = useState<EntryStatus>(DEFAULT_INITIAL_STATUS);
+  const [showStatusConfig, setShowStatusConfig] = useState(false);
+
+  // Snackbar state
+  const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
+  const snackbarOpacity = useRef(new Animated.Value(0)).current;
+
+  // Show snackbar helper
+  const showSnackbar = (message: string) => {
+    setSnackbarMessage(message);
+    Animated.sequence([
+      Animated.timing(snackbarOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.delay(2000),
+      Animated.timing(snackbarOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setSnackbarMessage(null));
+  };
+
   // Initialize form with stream data
   useEffect(() => {
     if (stream) {
@@ -56,6 +92,9 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
       setUsePhotos(stream.entry_use_photos ?? true);
       setIsPrivate(stream.is_private ?? false);
       setIsLocalOnly(stream.is_localonly ?? false);
+      // Status configuration
+      setEntryStatuses(stream.entry_statuses ?? [...DEFAULT_STREAM_STATUSES]);
+      setEntryDefaultStatus((stream.entry_default_status as EntryStatus) ?? DEFAULT_INITIAL_STATUS);
       setHasChanges(false);
     }
   }, [stream]);
@@ -83,15 +122,31 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         entry_use_photos: usePhotos,
         is_private: isPrivate,
         is_localonly: isLocalOnly,
+        // Status configuration
+        entry_statuses: entryStatuses,
+        entry_default_status: entryDefaultStatus,
       };
 
       await streamMutations.updateStream(streamId, updates);
       setHasChanges(false);
-      Alert.alert("Success", "Stream properties saved");
+      // Navigate back to stream with snackbar message
+      navigate("inbox", { streamId, streamName: name.trim() || stream.name, snackbarMessage: "Stream settings saved" });
     } catch (error) {
       console.error("Failed to save stream:", error);
-      Alert.alert("Error", "Failed to save stream properties");
+      showSnackbar("Failed to save stream properties");
     }
+  };
+
+  // Handle status config save
+  const handleStatusConfigSave = (statuses: EntryStatus[], defaultStatus: EntryStatus) => {
+    setEntryStatuses(statuses);
+    setEntryDefaultStatus(defaultStatus);
+    markChanged();
+  };
+
+  // Format status list for display
+  const formatStatusList = () => {
+    return entryStatuses.map(s => getStatusLabel(s)).join(", ");
   };
 
   // Handle back navigation
@@ -285,7 +340,21 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
             <View style={styles.toggleInfo}>
               <Text style={styles.toggleLabel}>Status</Text>
               <Text style={styles.toggleDescription}>Track completion status</Text>
+              {useStatus && (
+                <Text style={styles.statusList}>{formatStatusList()}</Text>
+              )}
             </View>
+            {useStatus && (
+              <TouchableOpacity
+                style={styles.gearButton}
+                onPress={() => setShowStatusConfig(true)}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                  <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
+                </Svg>
+              </TouchableOpacity>
+            )}
             <Switch
               value={useStatus}
               onValueChange={(value) => {
@@ -397,6 +466,22 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
             <Text style={styles.saveButtonText}>Save Changes</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {/* Status Config Modal */}
+      <StatusConfigModal
+        visible={showStatusConfig}
+        onClose={() => setShowStatusConfig(false)}
+        selectedStatuses={entryStatuses}
+        defaultStatus={entryDefaultStatus}
+        onSave={handleStatusConfigSave}
+      />
+
+      {/* Snackbar */}
+      {snackbarMessage && (
+        <Animated.View style={[styles.snackbar, { opacity: snackbarOpacity }]}>
+          <Text style={styles.snackbarText}>{snackbarMessage}</Text>
+        </Animated.View>
       )}
     </View>
   );
@@ -510,6 +595,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#6b7280",
   },
+  gearButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  statusList: {
+    fontSize: 12,
+    color: "#3b82f6",
+    marginTop: 4,
+  },
   emptyContainer: {
     flex: 1,
     alignItems: "center",
@@ -552,5 +646,25 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  snackbar: {
+    position: "absolute",
+    bottom: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: "#1f2937",
+    borderRadius: 8,
+    padding: 16,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  snackbarText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "500",
   },
 });

@@ -7,7 +7,8 @@ import { View, Text, TouchableOpacity, Keyboard } from "react-native";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 import { theme } from "../../../shared/theme/theme";
 import { styles } from "./CaptureForm.styles";
-import type { Location as LocationType } from "@trace/core";
+import { StatusIcon } from "../../../shared/components/StatusIcon";
+import { getStatusLabel, type Location as LocationType, type EntryStatus } from "@trace/core";
 import type { GpsData } from "./hooks/useCaptureFormState";
 
 interface MetadataBarProps {
@@ -17,7 +18,7 @@ interface MetadataBarProps {
   gpsData: GpsData | null;
   /** Named location - where entry "lives" */
   locationData: LocationType | null;
-  status: "none" | "incomplete" | "in_progress" | "complete";
+  status: EntryStatus;
   dueDate: string | null;
   rating: number;
   priority: number;
@@ -161,26 +162,9 @@ export function MetadataBar({
             onPress={onStatusPress}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                <Circle
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke={status === "complete" ? theme.colors.text.primary : "#6b7280"}
-                  strokeWidth={2}
-                  fill={status === "complete" ? theme.colors.text.primary : "none"}
-                />
-                {status === "complete" && (
-                  <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                )}
-                {status === "in_progress" && (
-                  <Circle cx="12" cy="12" r="4" fill="#6b7280" />
-                )}
-              </Svg>
+              <StatusIcon status={status} size={12} />
               <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
-                {status === "incomplete" ? "Not Started" :
-                 status === "in_progress" ? "In Progress" :
-                 "Completed"}
+                {getStatusLabel(status)}
               </Text>
             </View>
           </TouchableOpacity>

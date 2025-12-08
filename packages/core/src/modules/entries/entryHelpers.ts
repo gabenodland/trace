@@ -1,5 +1,13 @@
 // Pure helper functions for entry operations
 
+import type { EntryStatus } from "./EntryTypes";
+
+// Statuses that indicate work is not started or in progress (actionable)
+const ACTIONABLE_STATUSES: EntryStatus[] = ["new", "todo", "in_progress", "in_review", "waiting", "on_hold"];
+
+// Statuses that indicate work is done/completed (terminal)
+const COMPLETED_STATUSES: EntryStatus[] = ["done", "closed", "cancelled"];
+
 /**
  * Extract hashtags from content (without the # symbol)
  * Matches #word patterns (letters, numbers, underscores)
@@ -208,20 +216,35 @@ export function formatEntryDateTime(dateString: string): string {
 }
 
 /**
- * Check if an entry is a task (has incomplete or complete status)
+ * Check if a status indicates an actionable task (not completed/cancelled)
  */
-export function isTask(status: "none" | "incomplete" | "in_progress" | "complete"): boolean {
-  return status === "incomplete" || status === "in_progress" || status === "complete";
+export function isActionableStatus(status: EntryStatus): boolean {
+  return ACTIONABLE_STATUSES.includes(status);
 }
 
 /**
- * Check if a task is overdue (has due_date in the past and status is incomplete)
+ * Check if a status indicates completion (done, closed, cancelled)
+ */
+export function isCompletedStatus(status: EntryStatus): boolean {
+  return COMPLETED_STATUSES.includes(status);
+}
+
+/**
+ * Check if an entry is a task (has any workflow status set)
+ */
+export function isTask(status: EntryStatus): boolean {
+  return status !== "none";
+}
+
+/**
+ * Check if a task is overdue (has due_date in the past and status is actionable)
  */
 export function isTaskOverdue(
-  status: "none" | "incomplete" | "in_progress" | "complete",
+  status: EntryStatus,
   dueDate: string | null
 ): boolean {
-  if ((status !== "incomplete" && status !== "in_progress") || !dueDate) return false;
+  // Only actionable statuses can be overdue
+  if (!isActionableStatus(status) || !dueDate) return false;
 
   const due = new Date(dueDate);
   const now = new Date();
@@ -270,7 +293,7 @@ export function isDueThisWeek(dueDate: string | null): boolean {
  */
 export function formatDueDate(
   dueDate: string | null,
-  status: "none" | "incomplete" | "in_progress" | "complete"
+  status: EntryStatus
 ): string {
   if (!dueDate) return "";
 
@@ -282,8 +305,8 @@ export function formatDueDate(
   const diffMs = due.getTime() - now.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  // Overdue
-  if ((status === "incomplete" || status === "in_progress") && diffDays < 0) {
+  // Overdue - only for actionable statuses
+  if (isActionableStatus(status) && diffDays < 0) {
     const daysOverdue = Math.abs(diffDays);
     return `Overdue by ${daysOverdue} day${daysOverdue !== 1 ? "s" : ""}`;
   }
@@ -312,22 +335,22 @@ export function formatDueDate(
 }
 
 /**
- * Get task statistics (completed vs incomplete)
+ * Get task statistics
  */
 export function getTaskStats(
-  entries: Array<{ status: "none" | "incomplete" | "in_progress" | "complete" }>
+  entries: Array<{ status: EntryStatus }>
 ): {
   total: number;
-  incomplete: number;
+  actionable: number;
   inProgress: number;
-  complete: number;
+  completed: number;
 } {
   const tasks = entries.filter((e) => isTask(e.status));
 
   return {
     total: tasks.length,
-    incomplete: tasks.filter((t) => t.status === "incomplete").length,
+    actionable: tasks.filter((t) => isActionableStatus(t.status)).length,
     inProgress: tasks.filter((t) => t.status === "in_progress").length,
-    complete: tasks.filter((t) => t.status === "complete").length,
+    completed: tasks.filter((t) => isCompletedStatus(t.status)).length,
   };
 }

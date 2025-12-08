@@ -1,5 +1,7 @@
 // Stream types for flat organization (no hierarchy)
 
+import type { EntryStatus } from "../entries/EntryTypes";
+
 export interface Stream {
   stream_id: string;
   user_id: string;
@@ -22,6 +24,10 @@ export interface Stream {
   entry_use_location?: boolean;
   entry_use_photos?: boolean;
   entry_content_type?: string; // 'text' | 'list' | 'richformat' | 'bullet'
+
+  // Status configuration (when entry_use_status is true)
+  entry_statuses?: EntryStatus[]; // Which statuses are available for this stream
+  entry_default_status?: EntryStatus; // Default status for new entries
 
   // Privacy and sync controls
   is_private?: boolean;
@@ -51,6 +57,10 @@ export interface UpdateStreamInput {
   entry_use_location?: boolean;
   entry_use_photos?: boolean;
   entry_content_type?: string;
+
+  // Status configuration
+  entry_statuses?: EntryStatus[];
+  entry_default_status?: EntryStatus;
 
   // Privacy and sync controls
   is_private?: boolean;

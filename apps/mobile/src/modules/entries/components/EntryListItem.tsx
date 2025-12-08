@@ -1,8 +1,8 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
-import type { Entry } from "@trace/core";
-import { formatEntryDateTime, formatRelativeTime, isTask, formatDueDate, isTaskOverdue } from "@trace/core";
+import type { Entry, EntryStatus } from "@trace/core";
+import { formatEntryDateTime, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor } from "@trace/core";
 import { getFormattedContent, getDisplayModeLines } from "../helpers/entryDisplayHelpers";
 import type { EntryDisplayMode } from "../types/EntryDisplayMode";
 import { HtmlRenderer } from "../helpers/htmlRenderer";
@@ -10,6 +10,7 @@ import { WebViewHtmlRenderer } from "../helpers/webViewHtmlRenderer";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { theme } from "../../../shared/theme/theme";
 import { DropdownMenu, type DropdownMenuItem } from "../../../components/layout/DropdownMenu";
+import { StatusIcon } from "../../../shared/components/StatusIcon";
 
 interface EntryListItemProps {
   entry: Entry;
@@ -17,7 +18,7 @@ interface EntryListItemProps {
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
   onStreamPress?: (streamId: string | null, streamName: string) => void;
-  onToggleComplete?: (entryId: string, currentStatus: "incomplete" | "in_progress" | "complete") => void;
+  onToggleComplete?: (entryId: string, currentStatus: EntryStatus) => void;
   onMove?: (entryId: string) => void;
   onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
@@ -49,7 +50,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
 
   const handleCheckboxPress = (e: any) => {
     e.stopPropagation();
-    if (onToggleComplete && (entry.status === "incomplete" || entry.status === "in_progress" || entry.status === "complete")) {
+    // Allow toggling for any actionable status or completed status
+    if (onToggleComplete && entry.status !== "none") {
       onToggleComplete(entry.entry_id, entry.status);
     }
   };
@@ -107,21 +109,14 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
       activeOpacity={0.7}
     >
       <View style={styles.contentRow}>
-        {/* Task Checkbox */}
+        {/* Status Icon - shows for any task (entry with status != "none") */}
         {isATask && (
           <TouchableOpacity
-            style={[
-              styles.checkbox,
-              entry.status === "complete" && styles.checkboxComplete
-            ]}
+            style={styles.statusIcon}
             onPress={handleCheckboxPress}
             activeOpacity={0.7}
           >
-            {entry.status === "complete" && (
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                <Path d="M5 13l4 4L19 7" stroke="#ffffff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            )}
+            <StatusIcon status={entry.status} size={22} />
           </TouchableOpacity>
         )}
 
@@ -183,7 +178,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             <>
               <Text style={[
                 styles.title,
-                entry.status === "complete" && styles.strikethrough
+                isCompletedStatus(entry.status) && styles.strikethrough
               ]}>
                 {entry.title}
               </Text>
@@ -192,26 +187,9 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                   <Text style={styles.dateSmall}>{entryDateStr}</Text>
                   {entry.status !== "none" && (
                     <View style={styles.statusBadge}>
-                      <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                        <Circle
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke={entry.status === "complete" ? theme.colors.text.primary : theme.colors.text.tertiary}
-                          strokeWidth={2}
-                          fill={entry.status === "complete" ? theme.colors.text.primary : "none"}
-                        />
-                        {entry.status === "complete" && (
-                          <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                        )}
-                        {entry.status === "in_progress" && (
-                          <Circle cx="12" cy="12" r="4" fill={theme.colors.text.tertiary} />
-                        )}
-                      </Svg>
-                      <Text style={styles.statusText}>
-                        {entry.status === "incomplete" ? "Not Started" :
-                         entry.status === "in_progress" ? "In Progress" :
-                         "Completed"}
+                      <StatusIcon status={entry.status} size={12} />
+                      <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
+                        {getStatusLabel(entry.status)}
                       </Text>
                     </View>
                   )}
@@ -231,14 +209,14 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                   html={entry.content || ''}
                   style={[
                     styles.preview,
-                    entry.status === "complete" && styles.strikethrough
+                    isCompletedStatus(entry.status) && styles.strikethrough
                   ]}
-                  strikethrough={entry.status === "complete"}
+                  strikethrough={isCompletedStatus(entry.status)}
                 />
               ) : (
                 <Text style={[
                   styles.preview,
-                  entry.status === "complete" && styles.strikethrough
+                  isCompletedStatus(entry.status) && styles.strikethrough
                 ]} numberOfLines={maxLines}>
                   {formattedContent}
                 </Text>
@@ -252,26 +230,9 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                     <Text style={styles.dateSmall}>{entryDateStr}</Text>
                     {entry.status !== "none" && (
                       <View style={styles.statusBadge}>
-                        <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                          <Circle
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke={entry.status === "complete" ? theme.colors.text.primary : theme.colors.text.tertiary}
-                            strokeWidth={2}
-                            fill={entry.status === "complete" ? theme.colors.text.primary : "none"}
-                          />
-                          {entry.status === "complete" && (
-                            <Path d="M7 12l3 3 7-7" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                          )}
-                          {entry.status === "in_progress" && (
-                            <Circle cx="12" cy="12" r="4" fill={theme.colors.text.tertiary} />
-                          )}
-                        </Svg>
-                        <Text style={styles.statusText}>
-                          {entry.status === "incomplete" ? "Not Started" :
-                           entry.status === "in_progress" ? "In Progress" :
-                           "Completed"}
+                        <StatusIcon status={entry.status} size={12} />
+                        <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
+                          {getStatusLabel(entry.status)}
                         </Text>
                       </View>
                     )}
@@ -290,15 +251,15 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                   html={entry.content || ''}
                   style={[
                     styles.content,
-                    entry.status === "complete" && styles.strikethrough
+                    isCompletedStatus(entry.status) && styles.strikethrough
                   ]}
-                  strikethrough={entry.status === "complete"}
+                  strikethrough={isCompletedStatus(entry.status)}
                 />
               </>
             ) : (
               <Text style={[
                 styles.content,
-                entry.status === "complete" && styles.strikethrough
+                isCompletedStatus(entry.status) && styles.strikethrough
               ]} numberOfLines={maxLines}>
                 {formattedContent}
               </Text>
@@ -458,19 +419,10 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: theme.spacing.md,
   },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: theme.borderRadius.sm,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border.dark,
+  statusIcon: {
     alignItems: "center",
     justifyContent: "center",
     marginTop: 2,
-  },
-  checkboxComplete: {
-    backgroundColor: theme.colors.text.primary,
-    borderColor: theme.colors.text.primary,
   },
   contentWrapper: {
     flex: 1,

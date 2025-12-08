@@ -1,56 +1,21 @@
 /**
  * StatusPicker - Status selection picker component
- * Allows selecting task status: none, incomplete, in_progress, complete
+ * Shows only the statuses allowed by the current stream
+ * Handles legacy statuses that may no longer be available
  */
 
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import Svg, { Path, Circle, Line } from "react-native-svg";
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import Svg, { Path, Line } from "react-native-svg";
 import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
 import { theme } from "../../../../shared/theme/theme";
-
-type EntryStatus = "none" | "incomplete" | "in_progress" | "complete";
-
-interface StatusOption {
-  value: EntryStatus;
-  label: string;
-  icon: React.ReactNode;
-  color: string;
-}
-
-const STATUS_OPTIONS: StatusOption[] = [
-  {
-    value: "incomplete",
-    label: "To Do",
-    icon: (
-      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-        <Circle cx={12} cy={12} r={10} />
-      </Svg>
-    ),
-    color: "#6b7280",
-  },
-  {
-    value: "in_progress",
-    label: "In Progress",
-    icon: (
-      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth={2}>
-        <Circle cx={12} cy={12} r={10} />
-        <Path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    ),
-    color: "#f59e0b",
-  },
-  {
-    value: "complete",
-    label: "Complete",
-    icon: (
-      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth={2}>
-        <Circle cx={12} cy={12} r={10} />
-        <Path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    ),
-    color: "#10b981",
-  },
-];
+import { StatusIcon } from "../../../../shared/components/StatusIcon";
+import {
+  type EntryStatus,
+  ALL_STATUSES,
+  getStatusInfo,
+  getStatusLabel,
+  DEFAULT_STREAM_STATUSES,
+} from "@trace/core";
 
 interface StatusPickerProps {
   visible: boolean;
@@ -58,6 +23,8 @@ interface StatusPickerProps {
   status: EntryStatus;
   onStatusChange: (status: EntryStatus) => void;
   onSnackbar: (message: string) => void;
+  /** Statuses allowed by the stream. If not provided, uses default set. */
+  allowedStatuses?: EntryStatus[];
 }
 
 export function StatusPicker({
@@ -66,11 +33,27 @@ export function StatusPicker({
   status,
   onStatusChange,
   onSnackbar,
+  allowedStatuses,
 }: StatusPickerProps) {
+  // Use provided statuses or fall back to defaults
+  const availableStatuses = allowedStatuses ?? DEFAULT_STREAM_STATUSES;
+
+  // Check if "none" is allowed (enables clearing status)
+  const canClearStatus = availableStatuses.includes("none");
+
+  // Get status info for available statuses (excluding "none" - it's not shown as an option)
+  const statusOptions = availableStatuses
+    .filter(s => s !== "none") // Don't show "none" as a selectable option
+    .map(s => ALL_STATUSES.find(info => info.value === s))
+    .filter((info): info is NonNullable<typeof info> => info !== undefined);
+
+  // Check if current status is a legacy status not in allowed list
+  const isLegacyStatus = status !== "none" && !availableStatuses.includes(status);
+  const legacyStatusInfo = isLegacyStatus ? getStatusInfo(status) : null;
+
   const handleSelect = (newStatus: EntryStatus) => {
     onStatusChange(newStatus);
-    const option = STATUS_OPTIONS.find(o => o.value === newStatus);
-    onSnackbar(`Status set to ${option?.label || newStatus}`);
+    onSnackbar(`Status set to ${getStatusLabel(newStatus)}`);
     onClose();
   };
 
@@ -94,37 +77,56 @@ export function StatusPicker({
           </TouchableOpacity>
         </View>
 
-        {/* Status Options */}
-        <View style={styles.optionsContainer}>
-          {STATUS_OPTIONS.map((option) => (
-            <TouchableOpacity
-              key={option.value}
-              style={[
-                styles.optionButton,
-                status === option.value && styles.optionButtonSelected,
-              ]}
-              onPress={() => handleSelect(option.value)}
-            >
-              <View style={styles.optionIcon}>{option.icon}</View>
-              <Text
-                style={[
-                  styles.optionText,
-                  status === option.value && { color: option.color, fontWeight: "600" },
-                ]}
-              >
-                {option.label}
+        {/* Legacy status warning */}
+        {isLegacyStatus && legacyStatusInfo && (
+          <View style={styles.legacyWarning}>
+            <View style={styles.legacyStatusRow}>
+              <StatusIcon status={status} size={16} color={legacyStatusInfo.color} />
+              <Text style={[styles.legacyText, { color: legacyStatusInfo.color }]}>
+                Current: {legacyStatusInfo.label}
               </Text>
-              {status === option.value && (
-                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={option.color} strokeWidth={2.5} style={styles.checkIcon}>
-                  <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
+            </View>
+            <Text style={styles.legacyHint}>
+              This status is no longer available. Select a new one below.
+            </Text>
+          </View>
+        )}
 
-        {/* Clear Button - only show when status is set */}
-        {status !== "none" && (
+        {/* Status Options */}
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.optionsContainer}>
+            {statusOptions.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.optionButton,
+                  status === option.value && styles.optionButtonSelected,
+                ]}
+                onPress={() => handleSelect(option.value)}
+              >
+                <View style={styles.optionIcon}>
+                  <StatusIcon status={option.value} size={20} color={option.color} />
+                </View>
+                <Text
+                  style={[
+                    styles.optionText,
+                    status === option.value && { color: option.color, fontWeight: "600" },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {status === option.value && (
+                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={option.color} strokeWidth={2.5} style={styles.checkIcon}>
+                    <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+
+        {/* Clear Button - only show when status is set AND "none" is in allowed statuses */}
+        {status !== "none" && canClearStatus && (
           <TouchableOpacity
             style={styles.clearButton}
             onPress={handleClear}
@@ -147,6 +149,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
     gap: theme.spacing.md,
+    maxHeight: 600,
   },
   header: {
     flexDirection: "row",
@@ -161,6 +164,28 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 4,
+  },
+  legacyWarning: {
+    backgroundColor: "#fef3c7",
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  legacyStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+  },
+  legacyText: {
+    fontSize: 14,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  legacyHint: {
+    fontSize: 12,
+    color: "#92400e",
+  },
+  scrollView: {
+    maxHeight: 420,
   },
   optionsContainer: {
     gap: theme.spacing.sm,

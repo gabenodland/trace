@@ -9,6 +9,7 @@ import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDro
 import { theme } from "../../../../shared/theme/theme";
 import { styles } from "../CaptureForm.styles";
 import type { PhotoCaptureRef } from "../../../photos/components/PhotoCapture";
+import type { EntryStatus } from "@trace/core";
 
 interface AttributesPickerProps {
   visible: boolean;
@@ -26,7 +27,7 @@ interface AttributesPickerProps {
   // Current values
   hasGpsData: boolean;
   hasLocationData: boolean;
-  status: "none" | "incomplete" | "in_progress" | "complete";
+  status: EntryStatus;
   dueDate: string | null;
   rating: number;
   priority: number;
