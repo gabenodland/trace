@@ -20,6 +20,7 @@ interface AttributesPickerProps {
   // Visibility flags
   showLocation: boolean;
   showStatus: boolean;
+  showType: boolean;
   showDueDate: boolean;
   showRating: boolean;
   showPriority: boolean;
@@ -28,6 +29,7 @@ interface AttributesPickerProps {
   hasGpsData: boolean;
   hasLocationData: boolean;
   status: EntryStatus;
+  type: string | null;
   dueDate: string | null;
   rating: number;
   priority: number;
@@ -36,6 +38,7 @@ interface AttributesPickerProps {
   onAddGps: () => void;
   onShowLocationPicker: () => void;
   onShowStatusPicker: () => void;
+  onShowTypePicker: () => void;
   onShowDatePicker: () => void;
   onShowRatingPicker: () => void;
   onShowPriorityPicker: () => void;
@@ -52,6 +55,7 @@ export function AttributesPicker({
   enterEditMode,
   showLocation,
   showStatus,
+  showType,
   showDueDate,
   showRating,
   showPriority,
@@ -59,6 +63,7 @@ export function AttributesPicker({
   hasGpsData,
   hasLocationData,
   status,
+  type,
   dueDate,
   rating,
   priority,
@@ -66,6 +71,7 @@ export function AttributesPicker({
   onAddGps,
   onShowLocationPicker,
   onShowStatusPicker,
+  onShowTypePicker,
   onShowDatePicker,
   onShowRatingPicker,
   onShowPriorityPicker,
@@ -77,6 +83,7 @@ export function AttributesPicker({
     !hasGpsData ||
     (showLocation && !hasLocationData) ||
     (showStatus && status === "none") ||
+    (showType && !type) ||
     (showDueDate && !dueDate) ||
     (showRating && rating === 0) ||
     (showPriority && priority === 0) ||
@@ -162,6 +169,25 @@ export function AttributesPicker({
                   </Svg>
                 </View>
                 <Text style={styles.attributePickerItemText}>Status</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Type */}
+            {showType && !type && (
+              <TouchableOpacity
+                style={styles.attributePickerItem}
+                onPress={() => {
+                  onClose();
+                  setTimeout(() => onShowTypePicker(), 100);
+                  if (!isEditMode) enterEditMode();
+                }}
+              >
+                <View style={styles.attributePickerItemIcon}>
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                    <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                </View>
+                <Text style={styles.attributePickerItemText}>Type</Text>
               </TouchableOpacity>
             )}
 

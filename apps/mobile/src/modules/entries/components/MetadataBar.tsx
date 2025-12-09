@@ -8,7 +8,7 @@ import Svg, { Path, Circle, Line } from "react-native-svg";
 import { theme } from "../../../shared/theme/theme";
 import { styles } from "./CaptureForm.styles";
 import { StatusIcon } from "../../../shared/components/StatusIcon";
-import { getStatusLabel, type Location as LocationType, type EntryStatus } from "@trace/core";
+import { getStatusLabel, isLegacyType, type Location as LocationType, type EntryStatus } from "@trace/core";
 import type { GpsData } from "./hooks/useCaptureFormState";
 
 interface MetadataBarProps {
@@ -19,6 +19,7 @@ interface MetadataBarProps {
   /** Named location - where entry "lives" */
   locationData: LocationType | null;
   status: EntryStatus;
+  type: string | null;
   dueDate: string | null;
   rating: number;
   priority: number;
@@ -27,10 +28,13 @@ interface MetadataBarProps {
   // Visibility flags
   showLocation: boolean;
   showStatus: boolean;
+  showType: boolean;
   showDueDate: boolean;
   showRating: boolean;
   showPriority: boolean;
   showPhotos: boolean;
+  // Type configuration
+  availableTypes: string[];
   // Edit mode
   isEditMode: boolean;
   enterEditMode: () => void;
@@ -39,6 +43,7 @@ interface MetadataBarProps {
   onGpsPress: () => void;
   onLocationPress: () => void;
   onStatusPress: () => void;
+  onTypePress: () => void;
   onDueDatePress: () => void;
   onRatingPress: () => void;
   onPriorityPress: () => void;
@@ -53,6 +58,7 @@ export function MetadataBar({
   gpsData,
   locationData,
   status,
+  type,
   dueDate,
   rating,
   priority,
@@ -60,16 +66,19 @@ export function MetadataBar({
   photosCollapsed,
   showLocation,
   showStatus,
+  showType,
   showDueDate,
   showRating,
   showPriority,
   showPhotos,
+  availableTypes,
   isEditMode,
   enterEditMode,
   onStreamPress,
   onGpsPress,
   onLocationPress,
   onStatusPress,
+  onTypePress,
   onDueDatePress,
   onRatingPress,
   onPriorityPress,
@@ -104,6 +113,31 @@ export function MetadataBar({
           </Text>
         </View>
       </TouchableOpacity>
+
+      {/* Type - only if set */}
+      {showType && type && (
+        <>
+          <Text style={styles.metadataDivider}>·</Text>
+          <TouchableOpacity
+            style={styles.metadataLink}
+            onPress={onTypePress}
+          >
+            <View style={styles.metadataLinkContent}>
+              {/* Bookmark Icon */}
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={isLegacyType(type, availableTypes) ? "#f59e0b" : "#6b7280"} strokeWidth={2.5}>
+                <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={[
+                styles.metadataText,
+                styles.metadataTextActive,
+                isLegacyType(type, availableTypes) && { color: "#f59e0b" }
+              ]} numberOfLines={1} ellipsizeMode="tail">
+                {type}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </>
+      )}
 
       {/* GPS - only if coordinates are set */}
       {gpsData && (

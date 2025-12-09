@@ -315,6 +315,16 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               <Text style={styles.streamText}>{streamName || "Unassigned"}</Text>
             </TouchableOpacity>
 
+            {/* Type Badge */}
+            {entry.type && (
+              <View style={styles.typeBadge}>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
+                  <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+                <Text style={styles.typeText}>{entry.type}</Text>
+              </View>
+            )}
+
             {/* Due Date Badge */}
             {dueDateStr && (
               <View style={[
@@ -604,6 +614,20 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full,
   },
   ratingText: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  typeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: theme.colors.background.tertiary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs - 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  typeText: {
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.text.tertiary,
     fontWeight: theme.typography.fontWeight.medium,

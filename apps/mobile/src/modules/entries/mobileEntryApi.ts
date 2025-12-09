@@ -148,6 +148,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     // Location reference (points to locations table)
     location_id: data.location_id || null,
     status: data.status || 'none',
+    type: data.type || null,
     due_date: data.due_date || null,
     completed_at: null,
     entry_date: data.entry_date || new Date().toISOString(),
@@ -321,8 +322,9 @@ export async function copyEntry(
     location_accuracy: gpsCoords?.accuracy || null,
     // Keep the same location reference if set
     location_id: originalEntry.location_id,
-    // Copy status and task-related fields
+    // Copy status, type, and task-related fields
     status: originalEntry.status || 'none',
+    type: originalEntry.type || null,
     due_date: originalEntry.due_date,
     completed_at: null, // New copy is not completed
     entry_date: newEntryDate,

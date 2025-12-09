@@ -23,6 +23,7 @@ import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
 import { StatusConfigModal } from "../modules/streams/components/StatusConfigModal";
+import { TypeConfigModal } from "../modules/streams/components/TypeConfigModal";
 
 interface StreamPropertiesScreenProps {
   streamId: string;
@@ -54,6 +55,11 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   const [entryStatuses, setEntryStatuses] = useState<EntryStatus[]>([...DEFAULT_STREAM_STATUSES]);
   const [entryDefaultStatus, setEntryDefaultStatus] = useState<EntryStatus>(DEFAULT_INITIAL_STATUS);
   const [showStatusConfig, setShowStatusConfig] = useState(false);
+
+  // Type configuration
+  const [useType, setUseType] = useState(false);
+  const [entryTypes, setEntryTypes] = useState<string[]>([]);
+  const [showTypeConfig, setShowTypeConfig] = useState(false);
 
   // Snackbar state
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
@@ -95,6 +101,9 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
       // Status configuration
       setEntryStatuses(stream.entry_statuses ?? [...DEFAULT_STREAM_STATUSES]);
       setEntryDefaultStatus((stream.entry_default_status as EntryStatus) ?? DEFAULT_INITIAL_STATUS);
+      // Type configuration
+      setUseType(stream.entry_use_type ?? false);
+      setEntryTypes(stream.entry_types ?? []);
       setHasChanges(false);
     }
   }, [stream]);
@@ -125,6 +134,9 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         // Status configuration
         entry_statuses: entryStatuses,
         entry_default_status: entryDefaultStatus,
+        // Type configuration
+        entry_use_type: useType,
+        entry_types: entryTypes,
       };
 
       await streamMutations.updateStream(streamId, updates);
@@ -142,6 +154,23 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
     setEntryStatuses(statuses);
     setEntryDefaultStatus(defaultStatus);
     markChanged();
+  };
+
+  // Handle type config save
+  const handleTypeConfigSave = (types: string[]) => {
+    setEntryTypes(types);
+    // If types list is now empty, disable the feature
+    if (types.length === 0) {
+      setUseType(false);
+    }
+    markChanged();
+  };
+
+  // Format type list for display
+  const formatTypeList = () => {
+    if (entryTypes.length === 0) return "No types configured";
+    if (entryTypes.length <= 3) return entryTypes.join(", ");
+    return `${entryTypes.slice(0, 3).join(", ")} +${entryTypes.length - 3} more`;
   };
 
   // Format status list for display
@@ -368,6 +397,40 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
 
           <View style={styles.toggleRow}>
             <View style={styles.toggleInfo}>
+              <Text style={styles.toggleLabel}>Type</Text>
+              <Text style={styles.toggleDescription}>Categorize entries with custom types</Text>
+              {useType && (
+                <Text style={styles.statusList}>{formatTypeList()}</Text>
+              )}
+            </View>
+            {useType && (
+              <TouchableOpacity
+                style={styles.gearButton}
+                onPress={() => setShowTypeConfig(true)}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                  <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
+                </Svg>
+              </TouchableOpacity>
+            )}
+            <Switch
+              value={useType}
+              onValueChange={(value) => {
+                setUseType(value);
+                // If enabling and no types configured, show config modal
+                if (value && entryTypes.length === 0) {
+                  setShowTypeConfig(true);
+                }
+                markChanged();
+              }}
+              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleInfo}>
               <Text style={styles.toggleLabel}>Due Dates</Text>
               <Text style={styles.toggleDescription}>Assign due dates to entries</Text>
             </View>
@@ -475,6 +538,14 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         selectedStatuses={entryStatuses}
         defaultStatus={entryDefaultStatus}
         onSave={handleStatusConfigSave}
+      />
+
+      {/* Type Config Modal */}
+      <TypeConfigModal
+        visible={showTypeConfig}
+        onClose={() => setShowTypeConfig(false)}
+        types={entryTypes}
+        onSave={handleTypeConfigSave}
       />
 
       {/* Snackbar */}

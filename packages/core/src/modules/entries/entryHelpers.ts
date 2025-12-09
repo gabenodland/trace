@@ -354,3 +354,55 @@ export function getTaskStats(
     completed: tasks.filter((t) => isCompletedStatus(t.status)).length,
   };
 }
+
+// ============================================
+// TYPE HELPERS
+// ============================================
+
+/** Maximum length for type names */
+export const MAX_TYPE_NAME_LENGTH = 20;
+
+/**
+ * Sort types alphabetically (case-insensitive)
+ */
+export function sortTypes(types: string[]): string[] {
+  return [...types].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+}
+
+/**
+ * Validate a type name
+ * @returns Object with valid flag and optional error message
+ */
+export function validateTypeName(name: string): { valid: boolean; error?: string } {
+  const trimmed = name.trim();
+
+  if (!trimmed) {
+    return { valid: false, error: "Type name cannot be empty" };
+  }
+
+  if (trimmed.length > MAX_TYPE_NAME_LENGTH) {
+    return { valid: false, error: `Type name must be ${MAX_TYPE_NAME_LENGTH} characters or less` };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Check if a type is a legacy type (not in the allowed list)
+ * Used to show warnings when an entry has a type that's no longer in the stream's types
+ */
+export function isLegacyType(type: string | null, allowedTypes: string[]): boolean {
+  if (!type) return false;
+  return !allowedTypes.includes(type);
+}
+
+/**
+ * Check if type feature is available for a stream
+ * Types must be enabled AND have at least one type defined
+ */
+export function isTypeFeatureAvailable(
+  useType: boolean | undefined,
+  types: string[] | undefined
+): boolean {
+  return !!useType && Array.isArray(types) && types.length > 0;
+}

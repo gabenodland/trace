@@ -29,6 +29,10 @@ export interface Stream {
   entry_statuses?: EntryStatus[]; // Which statuses are available for this stream
   entry_default_status?: EntryStatus; // Default status for new entries
 
+  // Type configuration (when entry_use_type is true)
+  entry_use_type?: boolean; // Enable/disable type feature
+  entry_types?: string[]; // Custom type names for this stream (alphabetically sorted)
+
   // Privacy and sync controls
   is_private?: boolean;
   is_localonly?: boolean;
@@ -61,6 +65,10 @@ export interface UpdateStreamInput {
   // Status configuration
   entry_statuses?: EntryStatus[];
   entry_default_status?: EntryStatus;
+
+  // Type configuration
+  entry_use_type?: boolean;
+  entry_types?: string[];
 
   // Privacy and sync controls
   is_private?: boolean;

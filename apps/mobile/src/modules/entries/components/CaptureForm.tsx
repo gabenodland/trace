@@ -20,7 +20,7 @@ import { localDB } from "../../../shared/db/localDB";
 import * as Crypto from "expo-crypto";
 import { useCaptureFormState } from "./hooks/useCaptureFormState";
 import { styles } from "./CaptureForm.styles";
-import { RatingPicker, PriorityPicker, TimePicker, AttributesPicker, GpsPicker, StatusPicker, DueDatePicker, EntryDatePicker } from "./pickers";
+import { RatingPicker, PriorityPicker, TimePicker, AttributesPicker, GpsPicker, StatusPicker, DueDatePicker, EntryDatePicker, TypePicker } from "./pickers";
 import type { GpsData } from "./hooks/useCaptureFormState";
 import { MetadataBar } from "./MetadataBar";
 import { EditorToolbar } from "./EditorToolbar";
@@ -77,7 +77,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Consolidated picker visibility state - only one picker can be open at a time
-  type ActivePicker = 'stream' | 'gps' | 'location' | 'dueDate' | 'rating' | 'priority' | 'status' | 'attributes' | 'entryDate' | 'time' | null;
+  type ActivePicker = 'stream' | 'gps' | 'location' | 'dueDate' | 'rating' | 'priority' | 'status' | 'type' | 'attributes' | 'entryDate' | 'time' | null;
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
 
   // GPS loading state (for capturing/reloading GPS)
@@ -120,6 +120,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const showRating = !currentStream || currentStream.entry_use_rating === true;
   const showPriority = !currentStream || currentStream.entry_use_priority === true;
   const showStatus = !currentStream || currentStream.entry_use_status !== false;
+  const showType = currentStream?.entry_use_type === true && (currentStream?.entry_types?.length ?? 0) > 0;
   const showDueDate = !currentStream || currentStream.entry_use_duedates === true;
   const showLocation = !currentStream || currentStream.entry_use_location !== false;
   const showPhotos = !currentStream || currentStream.entry_use_photos !== false;
@@ -451,6 +452,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       updateField("content", entry.content);
       updateField("streamId", entry.stream_id || null);
       updateField("status", entry.status);
+      updateField("type", entry.type || null);
       updateField("dueDate", entry.due_date);
       updateField("rating", entry.rating || 0);
       updateField("priority", entry.priority || 0);
@@ -564,6 +566,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       updateField("content", copiedEntry.content);
       updateField("streamId", copiedEntry.stream_id || null);
       updateField("status", copiedEntry.status || "none");
+      updateField("type", copiedEntry.type || null);
       updateField("dueDate", copiedEntry.due_date || null);
       updateField("rating", copiedEntry.rating || 0);
       updateField("priority", copiedEntry.priority || 0);
@@ -864,6 +867,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           stream_id: formData.streamId,
           entry_date: formData.entryDate,
           status: formData.status,
+          type: formData.type,
           due_date: formData.dueDate,
           rating: formData.rating || 0,
           priority: formData.priority || 0,
@@ -880,6 +884,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           entry_date: formData.entryDate,
           stream_id: formData.streamId,
           status: formData.status,
+          type: formData.type,
           due_date: formData.dueDate,
           rating: formData.rating || 0,
           priority: formData.priority || 0,
@@ -930,6 +935,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         updateField("gpsData", null);
         updateField("locationData", null);
         updateField("status", "none");
+        updateField("type", null);
         updateField("dueDate", null);
         updateField("rating", 0);
         updateField("priority", 0);
@@ -1226,6 +1232,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           gpsData={formData.gpsData}
           locationData={formData.locationData}
           status={formData.status}
+          type={formData.type}
           dueDate={formData.dueDate}
           rating={formData.rating}
           priority={formData.priority}
@@ -1233,16 +1240,19 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           photosCollapsed={photosCollapsed}
           showLocation={showLocation}
           showStatus={showStatus}
+          showType={showType}
           showDueDate={showDueDate}
           showRating={showRating}
           showPriority={showPriority}
           showPhotos={showPhotos}
+          availableTypes={currentStream?.entry_types ?? []}
           isEditMode={isEditMode}
           enterEditMode={enterEditMode}
           onStreamPress={() => setActivePicker(activePicker === 'stream' ? null : 'stream')}
           onGpsPress={() => setActivePicker(activePicker === 'gps' ? null : 'gps')}
           onLocationPress={() => setActivePicker(activePicker === 'location' ? null : 'location')}
           onStatusPress={() => setActivePicker(activePicker === 'status' ? null : 'status')}
+          onTypePress={() => setActivePicker(activePicker === 'type' ? null : 'type')}
           onDueDatePress={() => setActivePicker(activePicker === 'dueDate' ? null : 'dueDate')}
           onRatingPress={() => setActivePicker('rating')}
           onPriorityPress={() => setActivePicker('priority')}
@@ -1499,6 +1509,19 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         allowedStatuses={currentStream?.entry_statuses}
       />
 
+      {/* Type Picker Modal */}
+      <TypePicker
+        visible={activePicker === 'type'}
+        onClose={() => setActivePicker(null)}
+        type={formData.type}
+        onTypeChange={(value) => {
+          updateField("type", value);
+          if (!isEditMode) enterEditMode();
+        }}
+        onSnackbar={showSnackbar}
+        availableTypes={currentStream?.entry_types ?? []}
+      />
+
       {/* Entry Menu */}
       <AttributesPicker
         visible={activePicker === 'attributes'}
@@ -1508,6 +1531,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         enterEditMode={enterEditMode}
         showLocation={showLocation}
         showStatus={showStatus}
+        showType={showType}
         showDueDate={showDueDate}
         showRating={showRating}
         showPriority={showPriority}
@@ -1515,6 +1539,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         hasGpsData={!!formData.gpsData}
         hasLocationData={!!formData.locationData?.name}
         status={formData.status}
+        type={formData.type}
         dueDate={formData.dueDate}
         rating={formData.rating}
         priority={formData.priority}
@@ -1526,6 +1551,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         }}
         onShowLocationPicker={() => setActivePicker('location')}
         onShowStatusPicker={() => setActivePicker('status')}
+        onShowTypePicker={() => setActivePicker('type')}
         onShowDatePicker={() => setActivePicker('dueDate')}
         onShowRatingPicker={() => setActivePicker('rating')}
         onShowPriorityPicker={() => setActivePicker('priority')}

@@ -358,6 +358,43 @@ class LocalDatabase {
     } catch (error) {
       console.error('Migration error (streams status config):', error);
     }
+
+    // Migration: Add entry_types and entry_use_type columns to streams table
+    try {
+      const typesCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('streams') WHERE name = 'entry_types'`
+      );
+
+      if (!typesCheck) {
+        console.log('📦 Running migration: Adding entry_types and entry_use_type to streams table...');
+        await this.db.execAsync(`
+          ALTER TABLE streams ADD COLUMN entry_types TEXT DEFAULT '[]';
+          ALTER TABLE streams ADD COLUMN entry_use_type INTEGER DEFAULT 0;
+        `);
+        console.log('✅ Migration complete: entry_types and entry_use_type added to streams');
+      }
+    } catch (error) {
+      console.error('Migration error (streams type config):', error);
+    }
+
+    // Migration: Add type column to entries table
+    try {
+      const typeCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('entries') WHERE name = 'type'`
+      );
+
+      if (!typeCheck) {
+        console.log('📦 Running migration: Adding type column to entries table...');
+        await this.db.execAsync(`
+          ALTER TABLE entries ADD COLUMN type TEXT;
+        `);
+        // Create index for type lookups
+        await this.db.execAsync(`CREATE INDEX IF NOT EXISTS idx_entries_type ON entries(type)`);
+        console.log('✅ Migration complete: type added to entries');
+      }
+    } catch (error) {
+      console.error('Migration error (entries type):', error);
+    }
   }
 
   private async createTables(): Promise<void> {
@@ -410,6 +447,7 @@ class LocalDatabase {
         location_id TEXT,
 
         status TEXT CHECK (status IN ('none', 'new', 'todo', 'in_progress', 'in_review', 'waiting', 'on_hold', 'done', 'closed', 'cancelled')) DEFAULT 'none',
+        type TEXT,                    -- User-defined type from stream's entry_types
         due_date INTEGER,             -- Unix timestamp
         completed_at INTEGER,         -- Unix timestamp
         created_at INTEGER NOT NULL,  -- Unix timestamp
@@ -459,6 +497,8 @@ class LocalDatabase {
         entry_content_type TEXT DEFAULT 'richformat',
         entry_statuses TEXT DEFAULT '["new","todo","in_progress","done"]',
         entry_default_status TEXT DEFAULT 'new',
+        entry_use_type INTEGER DEFAULT 0,
+        entry_types TEXT DEFAULT '[]',
         is_private INTEGER DEFAULT 0,
         is_localonly INTEGER DEFAULT 0,
         created_at INTEGER NOT NULL,
@@ -549,6 +589,7 @@ class LocalDatabase {
       CREATE INDEX IF NOT EXISTS idx_entries_stream_id ON entries(stream_id);
       CREATE INDEX IF NOT EXISTS idx_entries_location_id ON entries(location_id);
       CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status);
+      CREATE INDEX IF NOT EXISTS idx_entries_type ON entries(type);
       CREATE INDEX IF NOT EXISTS idx_entries_synced ON entries(synced);
       CREATE INDEX IF NOT EXISTS idx_entries_local_only ON entries(local_only);
 
@@ -588,14 +629,14 @@ class LocalDatabase {
         stream_id, entry_date,
         entry_latitude, entry_longitude, location_accuracy,
         location_id,
-        status, due_date, completed_at, created_at, updated_at,
+        status, type, due_date, completed_at, created_at, updated_at,
         deleted_at,
         priority, rating, is_pinned,
         local_only, synced, sync_action,
         version, base_version,
         conflict_status, conflict_backup,
         last_edited_by, last_edited_device
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -610,6 +651,7 @@ class LocalDatabase {
         entry.location_accuracy || null,
         entry.location_id || null,
         entry.status || 'none',
+        entry.type || null,
         entry.due_date ? Date.parse(entry.due_date) : null,
         entry.completed_at ? Date.parse(entry.completed_at) : null,
         entry.created_at ? Date.parse(entry.created_at) : now,
@@ -751,7 +793,7 @@ class LocalDatabase {
         stream_id = ?, entry_date = ?,
         entry_latitude = ?, entry_longitude = ?, location_accuracy = ?,
         location_id = ?,
-        status = ?, due_date = ?, completed_at = ?,
+        status = ?, type = ?, due_date = ?, completed_at = ?,
         priority = ?, rating = ?, is_pinned = ?,
         updated_at = ?, deleted_at = ?,
         local_only = ?, synced = ?, sync_action = ?,
@@ -771,6 +813,7 @@ class LocalDatabase {
         updated.location_accuracy || null,
         updated.location_id || null,
         updated.status || 'none',
+        updated.type || null,
         updated.due_date ? Date.parse(updated.due_date) : null,
         updated.completed_at ? Date.parse(updated.completed_at) : null,
         updated.priority !== undefined ? updated.priority : 0,
@@ -924,6 +967,7 @@ class LocalDatabase {
       location_accuracy: row.location_accuracy,
       location_id: row.location_id,
       status: row.status || 'none',
+      type: row.type || null,
       due_date: row.due_date ? new Date(row.due_date).toISOString() : null,
       completed_at: row.completed_at ? new Date(row.completed_at).toISOString() : null,
       created_at: new Date(row.created_at).toISOString(),
@@ -1254,6 +1298,23 @@ class LocalDatabase {
         }
       }
 
+      // Parse entry_types JSON array
+      let entryTypes: string[] = [];
+      if (row.entry_types) {
+        try {
+          let parsed = JSON.parse(row.entry_types);
+          // If result is still a string (double-escaped), parse again
+          if (typeof parsed === 'string') {
+            parsed = JSON.parse(parsed);
+          }
+          if (Array.isArray(parsed)) {
+            entryTypes = parsed;
+          }
+        } catch (e) {
+          console.warn('Failed to parse entry_types:', e);
+        }
+      }
+
       return {
         ...row,
         entry_use_rating: !!row.entry_use_rating,
@@ -1262,10 +1323,12 @@ class LocalDatabase {
         entry_use_duedates: !!row.entry_use_duedates,
         entry_use_location: !!row.entry_use_location,
         entry_use_photos: !!row.entry_use_photos,
+        entry_use_type: !!row.entry_use_type,
         is_private: !!row.is_private,
         is_localonly: !!row.is_localonly,
         entry_statuses: entryStatuses,
         entry_default_status: row.entry_default_status || 'new',
+        entry_types: entryTypes,
       };
     });
   }
@@ -1309,6 +1372,23 @@ class LocalDatabase {
       }
     }
 
+    // Parse entry_types JSON array
+    let entryTypes: string[] = [];
+    if (row.entry_types) {
+      try {
+        let parsed = JSON.parse(row.entry_types);
+        // If result is still a string (double-escaped), parse again
+        if (typeof parsed === 'string') {
+          parsed = JSON.parse(parsed);
+        }
+        if (Array.isArray(parsed)) {
+          entryTypes = parsed;
+        }
+      } catch (e) {
+        console.warn('Failed to parse entry_types:', e);
+      }
+    }
+
     // Convert SQLite integer booleans (0/1) to proper booleans
     return {
       ...row,
@@ -1318,10 +1398,12 @@ class LocalDatabase {
       entry_use_duedates: !!row.entry_use_duedates,
       entry_use_location: !!row.entry_use_location,
       entry_use_photos: !!row.entry_use_photos,
+      entry_use_type: !!row.entry_use_type,
       is_private: !!row.is_private,
       is_localonly: !!row.is_localonly,
       entry_statuses: entryStatuses,
       entry_default_status: row.entry_default_status || 'new',
+      entry_types: entryTypes,
     };
   }
 
@@ -1342,6 +1424,15 @@ class LocalDatabase {
       entryStatusesJson = stream.entry_statuses;
     }
 
+    // Serialize entry_types to JSON string
+    let entryTypesJson = '[]';
+    if (Array.isArray(stream.entry_types)) {
+      entryTypesJson = JSON.stringify(stream.entry_types);
+    } else if (typeof stream.entry_types === 'string' && stream.entry_types.startsWith('[')) {
+      // Already a JSON string - use as-is
+      entryTypesJson = stream.entry_types;
+    }
+
     await this.db.runAsync(
       `INSERT OR REPLACE INTO streams (
         stream_id, user_id, name, entry_count, color, icon,
@@ -1349,9 +1440,10 @@ class LocalDatabase {
         entry_use_rating, entry_use_priority, entry_use_status,
         entry_use_duedates, entry_use_location, entry_use_photos,
         entry_content_type, entry_statuses, entry_default_status,
+        entry_use_type, entry_types,
         is_private, is_localonly,
         created_at, updated_at, synced, sync_action
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         stream.stream_id,
         stream.user_id,
@@ -1370,6 +1462,8 @@ class LocalDatabase {
         stream.entry_content_type || 'richformat',
         entryStatusesJson,
         stream.entry_default_status || 'new',
+        stream.entry_use_type ? 1 : 0,
+        entryTypesJson,
         stream.is_private ? 1 : 0,
         stream.is_localonly ? 1 : 0,
         Date.parse(stream.created_at),
@@ -1456,6 +1550,22 @@ class LocalDatabase {
     if (updates.entry_default_status !== undefined) {
       setClauses.push('entry_default_status = ?');
       values.push(updates.entry_default_status);
+    }
+    if (updates.entry_use_type !== undefined) {
+      setClauses.push('entry_use_type = ?');
+      values.push(updates.entry_use_type ? 1 : 0);
+    }
+    if (updates.entry_types !== undefined) {
+      setClauses.push('entry_types = ?');
+      // Handle: array (from UI), string (from sync), or other
+      if (Array.isArray(updates.entry_types)) {
+        values.push(JSON.stringify(updates.entry_types));
+      } else if (typeof updates.entry_types === 'string' && updates.entry_types.startsWith('[')) {
+        // Already a JSON string - use as-is
+        values.push(updates.entry_types);
+      } else {
+        values.push('[]');
+      }
     }
     if (updates.is_private !== undefined) {
       setClauses.push('is_private = ?');

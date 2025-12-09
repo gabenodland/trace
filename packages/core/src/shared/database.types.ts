@@ -41,6 +41,7 @@ export type Database = {
           stream_id: string | null
           tags: string[] | null
           title: string | null
+          type: string | null
           updated_at: string
           user_id: string
           version: number | null
@@ -71,6 +72,7 @@ export type Database = {
           stream_id?: string | null
           tags?: string[] | null
           title?: string | null
+          type?: string | null
           updated_at?: string
           user_id: string
           version?: number | null
@@ -101,6 +103,7 @@ export type Database = {
           stream_id?: string | null
           tags?: string[] | null
           title?: string | null
+          type?: string | null
           updated_at?: string
           user_id?: string
           version?: number | null
@@ -252,12 +255,14 @@ export type Database = {
           entry_content_type: string
           entry_count: number
           entry_title_template: string | null
+          entry_types: string[] | null
           entry_use_duedates: boolean
           entry_use_location: boolean
           entry_use_photos: boolean
           entry_use_priority: boolean
           entry_use_rating: boolean
           entry_use_status: boolean
+          entry_use_type: boolean | null
           icon: string | null
           is_localonly: boolean
           is_private: boolean
@@ -279,12 +284,14 @@ export type Database = {
           entry_content_type?: string
           entry_count?: number
           entry_title_template?: string | null
+          entry_types?: string[] | null
           entry_use_duedates?: boolean
           entry_use_location?: boolean
           entry_use_photos?: boolean
           entry_use_priority?: boolean
           entry_use_rating?: boolean
           entry_use_status?: boolean
+          entry_use_type?: boolean | null
           icon?: string | null
           is_localonly?: boolean
           is_private?: boolean
@@ -306,12 +313,14 @@ export type Database = {
           entry_content_type?: string
           entry_count?: number
           entry_title_template?: string | null
+          entry_types?: string[] | null
           entry_use_duedates?: boolean
           entry_use_location?: boolean
           entry_use_photos?: boolean
           entry_use_priority?: boolean
           entry_use_rating?: boolean
           entry_use_status?: boolean
+          entry_use_type?: boolean | null
           icon?: string | null
           is_localonly?: boolean
           is_private?: boolean
@@ -330,30 +339,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_category_path: { Args: { category_id: string }; Returns: string }
-      get_entries_for_sync: {
-        Args: { since_timestamp?: string }
-        Returns: {
-          attachments: Json
-          category_id: string
-          completed_at: string
-          content: string
-          created_at: string
-          deleted_at: string
-          due_date: string
-          entry_id: string
-          location_accuracy: number
-          location_lat: number
-          location_lng: number
-          location_name: string
-          mentions: string[]
-          status: string
-          tags: string[]
-          title: string
-          updated_at: string
-          user_id: string
-        }[]
-      }
       is_entry_owner: { Args: { p_entry_id: string }; Returns: boolean }
       is_stream_owner: { Args: { p_stream_id: string }; Returns: boolean }
     }

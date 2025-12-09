@@ -34,6 +34,7 @@ export interface CaptureFormData {
   streamId: string | null;
   streamName: string | null;
   status: EntryStatus;
+  type: string | null;
   dueDate: string | null;
   rating: number;
   priority: number;
@@ -133,6 +134,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
         ? initialStreamName
         : null,
     status: "none",
+    type: null,
     dueDate: null,
     rating: 0,
     priority: 0,
@@ -189,6 +191,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
           ? initialStreamName
           : null,
       status: "none",
+      type: null,
       dueDate: null,
       rating: 0,
       priority: 0,

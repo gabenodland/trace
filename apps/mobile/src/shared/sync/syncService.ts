@@ -809,6 +809,7 @@ class SyncService {
           location_accuracy: remoteEntry.location_accuracy || null,
           location_id: remoteEntry.location_id || null,
           status: (remoteEntry.status as Entry['status']) || 'none',
+          type: remoteEntry.type || null,
           due_date: remoteEntry.due_date,
           completed_at: remoteEntry.completed_at,
           entry_date: remoteEntry.entry_date || remoteEntry.created_at,

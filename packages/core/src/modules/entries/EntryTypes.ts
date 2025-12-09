@@ -76,6 +76,7 @@ export interface Entry {
   // Location reference (points to locations table)
   location_id: string | null;
   status: EntryStatus;
+  type: string | null; // User-defined type from stream's entry_types
   due_date: string | null;
   completed_at: string | null;
   attachments: Json;
@@ -109,6 +110,7 @@ export interface CreateEntryInput {
   location_accuracy?: number | null;
   location_id?: string | null;
   status?: EntryStatus;
+  type?: string | null; // User-defined type from stream's entry_types
   due_date?: string | null;
   priority?: number;
   rating?: number;
@@ -127,6 +129,7 @@ export interface UpdateEntryInput {
   location_accuracy?: number | null;
   location_id?: string | null;
   status?: EntryStatus;
+  type?: string | null; // User-defined type from stream's entry_types
   due_date?: string | null;
   completed_at?: string | null;
   priority?: number;
@@ -143,4 +146,5 @@ export interface EntryFilter {
   start_date?: string;
   end_date?: string;
   status?: EntryStatus;
+  type?: string; // Filter by type
 }
