@@ -1,7 +1,9 @@
-import { View, Text, FlatList, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, SectionList, StyleSheet, ActivityIndicator } from "react-native";
 import { useState } from "react";
 import type { Entry } from "@trace/core";
 import { EntryListItem } from "./EntryListItem";
+import type { EntrySection } from "../helpers/entrySortHelpers";
+import { theme } from "../../../shared/theme/theme";
 
 interface Stream {
   stream_id: string;
@@ -17,6 +19,7 @@ import type { EntryDisplayMode } from '../types/EntryDisplayMode';
 
 interface EntryListProps {
   entries: Entry[];
+  sections?: EntrySection[]; // Optional sections for grouped display
   isLoading: boolean;
   onEntryPress: (entryId: string) => void;
   onTagPress?: (tag: string) => void;
@@ -33,7 +36,7 @@ interface EntryListProps {
   displayMode?: EntryDisplayMode; // Display mode for entry items
 }
 
-export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onResolveConflict, ListHeaderComponent, streams, locations, displayMode }: EntryListProps) {
+export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onResolveConflict, ListHeaderComponent, streams, locations, displayMode }: EntryListProps) {
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
   // Create a lookup map for streams
@@ -47,11 +50,64 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
     map[loc.location_id] = loc.name;
     return map;
   }, {} as Record<string, string>);
+
+  // Render a single entry item
+  const renderEntryItem = (item: Entry) => (
+    <EntryListItem
+      entry={item}
+      onPress={() => onEntryPress(item.entry_id)}
+      onTagPress={onTagPress}
+      onMentionPress={onMentionPress}
+      onStreamPress={onStreamPress}
+      onMove={onMove}
+      onCopy={onCopy}
+      onDelete={onDelete}
+      onPin={onPin}
+      onResolveConflict={onResolveConflict}
+      streamName={item.stream_id && streamMap ? streamMap[item.stream_id] : null}
+      locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
+      displayMode={displayMode}
+      showMenu={openMenuEntryId === item.entry_id}
+      onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}
+    />
+  );
+
+  // Render section header
+  const renderSectionHeader = ({ section }: { section: EntrySection }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>{section.title}</Text>
+      <View style={styles.sectionCount}>
+        <Text style={styles.sectionCountText}>{section.count}</Text>
+      </View>
+    </View>
+  );
+
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#2563eb" />
       </View>
+    );
+  }
+
+  // If sections are provided, use SectionList
+  if (sections && sections.length > 0) {
+    return (
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item.entry_id}
+        renderItem={({ item }) => renderEntryItem(item)}
+        renderSectionHeader={renderSectionHeader}
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={ListHeaderComponent}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>No entries</Text>
+          </View>
+        }
+        stickySectionHeadersEnabled={false}
+        removeClippedSubviews={false}
+      />
     );
   }
 
@@ -61,25 +117,7 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
       <FlatList
         data={entries}
         keyExtractor={(item) => item.entry_id}
-        renderItem={({ item }) => (
-          <EntryListItem
-            entry={item}
-            onPress={() => onEntryPress(item.entry_id)}
-            onTagPress={onTagPress}
-            onMentionPress={onMentionPress}
-            onStreamPress={onStreamPress}
-            onMove={onMove}
-            onCopy={onCopy}
-            onDelete={onDelete}
-            onPin={onPin}
-            onResolveConflict={onResolveConflict}
-            streamName={item.stream_id && streamMap ? streamMap[item.stream_id] : null}
-            locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
-            displayMode={displayMode}
-            showMenu={openMenuEntryId === item.entry_id}
-            onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}
-          />
-        )}
+        renderItem={({ item }) => renderEntryItem(item)}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={ListHeaderComponent}
         ListEmptyComponent={
@@ -107,25 +145,7 @@ export function EntryList({ entries, isLoading, onEntryPress, onTagPress, onMent
     <FlatList
       data={entries}
       keyExtractor={(item) => item.entry_id}
-      renderItem={({ item }) => (
-        <EntryListItem
-          entry={item}
-          onPress={() => onEntryPress(item.entry_id)}
-          onTagPress={onTagPress}
-          onMentionPress={onMentionPress}
-          onStreamPress={onStreamPress}
-          onMove={onMove}
-          onCopy={onCopy}
-          onDelete={onDelete}
-          onPin={onPin}
-          onResolveConflict={onResolveConflict}
-          streamName={item.stream_id && streamMap ? streamMap[item.stream_id] : null}
-          locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
-          displayMode={displayMode}
-          showMenu={openMenuEntryId === item.entry_id}
-          onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}
-        />
-      )}
+      renderItem={({ item }) => renderEntryItem(item)}
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={ListHeaderComponent}
       removeClippedSubviews={false}
@@ -157,5 +177,30 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.xs,
+    gap: theme.spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
+  },
+  sectionCount: {
+    backgroundColor: theme.colors.background.tertiary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  sectionCountText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.text.secondary,
   },
 });

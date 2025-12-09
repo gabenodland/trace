@@ -26,7 +26,7 @@ import type { EntrySortMode } from "../modules/entries/types/EntrySortMode";
 import { DEFAULT_SORT_MODE, ENTRY_SORT_MODES } from "../modules/entries/types/EntrySortMode";
 import type { EntrySortOrder } from "../modules/entries/types/EntrySortOrder";
 import { DEFAULT_SORT_ORDER } from "../modules/entries/types/EntrySortOrder";
-import { sortEntries } from "../modules/entries/helpers/entrySortHelpers";
+import { sortEntries, groupEntriesByStatus, groupEntriesByType, groupEntriesByStream, groupEntriesByPriority, groupEntriesByRating, groupEntriesByDueDate, type EntrySection } from "../modules/entries/helpers/entrySortHelpers";
 import { theme } from "../shared/theme/theme";
 
 interface EntryListScreenProps {
@@ -158,6 +158,29 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
     return sortEntries(entries, sortMode, streamMap, orderMode, showPinnedFirst);
   }, [entries, sortMode, streamMap, orderMode, showPinnedFirst]);
 
+  // Compute sections when sorting by status, type, stream, priority, rating, or due date
+  const entrySections = useMemo((): EntrySection[] | undefined => {
+    if (sortMode === 'status') {
+      return groupEntriesByStatus(entries, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'type') {
+      return groupEntriesByType(entries, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'stream') {
+      return groupEntriesByStream(entries, streamMap, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'priority') {
+      return groupEntriesByPriority(entries, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'rating') {
+      return groupEntriesByRating(entries, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'due_date') {
+      return groupEntriesByDueDate(entries, orderMode, showPinnedFirst);
+    }
+    return undefined;
+  }, [entries, sortMode, streamMap, orderMode, showPinnedFirst]);
+
   // Filter entries by search query (searches title and content)
   const filteredEntries = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -177,6 +200,26 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
       return false;
     });
   }, [sortedEntries, searchQuery]);
+
+  // Filter sections when there's a search query
+  const filteredSections = useMemo((): EntrySection[] | undefined => {
+    if (!entrySections) return undefined;
+    if (!searchQuery.trim()) return entrySections;
+
+    const query = searchQuery.toLowerCase().trim();
+    return entrySections
+      .map(section => ({
+        ...section,
+        data: section.data.filter(entry => {
+          if (entry.title?.toLowerCase().includes(query)) return true;
+          const plainContent = entry.content.replace(/<[^>]*>/g, '').toLowerCase();
+          return plainContent.includes(query);
+        }),
+        count: 0, // Will be recalculated below
+      }))
+      .map(section => ({ ...section, count: section.data.length }))
+      .filter(section => section.data.length > 0);
+  }, [entrySections, searchQuery]);
 
   // Get display labels
   const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Smashed';
@@ -411,6 +454,7 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
 
       <EntryList
         entries={filteredEntries}
+        sections={filteredSections}
         isLoading={isLoading}
         onEntryPress={handleEntryPress}
         onTagPress={handleTagPress}

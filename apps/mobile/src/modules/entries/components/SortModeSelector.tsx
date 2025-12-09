@@ -127,7 +127,7 @@ export function SortModeSelector({
             </TouchableOpacity>
           )}
 
-          <ScrollView ref={scrollViewRef} style={styles.scrollView}>
+          <ScrollView ref={scrollViewRef} style={styles.scrollView} contentContainerStyle={styles.scrollViewContent}>
             {ENTRY_SORT_MODES.map((mode) => {
               const isSelected = mode.value === selectedMode;
 
@@ -177,6 +177,8 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     maxHeight: '80%',
+    paddingBottom: 10,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -185,6 +187,8 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     maxHeight: 400,
+  },
+  scrollViewContent: {
     paddingBottom: 10,
   },
   header: {
