@@ -1,7 +1,7 @@
 /**
  * Entry display modes for list views
  */
-export type EntryDisplayMode = 'smashed' | 'short' | 'flow';
+export type EntryDisplayMode = 'title' | 'smashed' | 'short' | 'flow';
 
 export interface EntryDisplayModeOption {
   value: EntryDisplayMode;
@@ -10,6 +10,11 @@ export interface EntryDisplayModeOption {
 }
 
 export const ENTRY_DISPLAY_MODES: EntryDisplayModeOption[] = [
+  {
+    value: 'title',
+    label: 'Title Only',
+    description: 'Minimal - title, date, and attributes only',
+  },
   {
     value: 'smashed',
     label: 'Smashed',

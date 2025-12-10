@@ -8,8 +8,18 @@ import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { usePersistedState } from "../shared/hooks/usePersistedState";
 import { TopBar } from "../components/layout/TopBar";
-import { EntryListItem } from "../modules/entries/components/EntryListItem";
+import { EntryListContent } from "../modules/entries/components/EntryListContent";
+import { EntryListHeader, StickyEntryListHeader } from "../modules/entries/components/EntryListHeader";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
+import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
+import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
+import type { EntryDisplayMode } from "../modules/entries/types/EntryDisplayMode";
+import { DEFAULT_DISPLAY_MODE, ENTRY_DISPLAY_MODES } from "../modules/entries/types/EntryDisplayMode";
+import type { EntrySortMode } from "../modules/entries/types/EntrySortMode";
+import { DEFAULT_SORT_MODE, ENTRY_SORT_MODES } from "../modules/entries/types/EntrySortMode";
+import type { EntrySortOrder } from "../modules/entries/types/EntrySortOrder";
+import { DEFAULT_SORT_ORDER } from "../modules/entries/types/EntrySortOrder";
+import { sortEntries, groupEntriesByStatus, groupEntriesByType, groupEntriesByStream, groupEntriesByPriority, groupEntriesByRating, groupEntriesByDueDate, type EntrySection } from "../modules/entries/helpers/entrySortHelpers";
 import { theme } from "../shared/theme/theme";
 
 // Calendar date field type - which date to use for calendar display
@@ -84,20 +94,31 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
   });
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
-  // Scroll refs and grid heights for each view
+  // Scroll refs and content heights for each view
   const dayScrollRef = useRef<ScrollView>(null);
   const monthScrollRef = useRef<ScrollView>(null);
   const yearScrollRef = useRef<ScrollView>(null);
-  const [dayGridHeight, setDayGridHeight] = useState(400);
-  const [monthGridHeight, setMonthGridHeight] = useState(300);
-  const [yearGridHeight, setYearGridHeight] = useState(300);
+  // Track the Y position where the header box starts (when it reaches top, show sticky)
+  const [dayHeaderStartY, setDayHeaderStartY] = useState(500);
+  const [monthHeaderStartY, setMonthHeaderStartY] = useState(400);
+  const [yearHeaderStartY, setYearHeaderStartY] = useState(400);
 
   // Scroll position tracking
   const [dayScrollY, setDayScrollY] = useState(0);
   const [monthScrollY, setMonthScrollY] = useState(0);
   const [yearScrollY, setYearScrollY] = useState(0);
 
-  const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
+  // Display and sort mode state (persisted)
+  const [displayMode, setDisplayMode] = usePersistedState<EntryDisplayMode>('@calendarDisplayMode', DEFAULT_DISPLAY_MODE);
+  const [sortMode, setSortMode] = usePersistedState<EntrySortMode>('@calendarSortMode', DEFAULT_SORT_MODE);
+  const [orderMode, setOrderMode] = usePersistedState<EntrySortOrder>('@calendarOrderMode', DEFAULT_SORT_ORDER);
+  const [showPinnedFirst, setShowPinnedFirst] = usePersistedState<boolean>('@calendarShowPinnedFirst', false);
+  const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
+  const [showSortModeSelector, setShowSortModeSelector] = useState(false);
+
+  // Get display/sort mode labels
+  const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Cards';
+  const sortModeLabel = ENTRY_SORT_MODES.find(m => m.value === sortMode)?.label || 'Date';
 
   // Return date handling
   useEffect(() => {
@@ -184,10 +205,96 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
   }, [entries, monthViewYear, selectedMonth, dateField]);
 
   // Stream map
-  const streamMap = streams?.reduce((map, stream) => {
-    map[stream.stream_id] = stream.name;
-    return map;
-  }, {} as Record<string, string>);
+  const streamMap = useMemo(() => {
+    return streams?.reduce((map, stream) => {
+      map[stream.stream_id] = stream.name;
+      return map;
+    }, {} as Record<string, string>) || {};
+  }, [streams]);
+
+  // Sorted entries for day view
+  const sortedEntries = useMemo(() => {
+    return sortEntries(filteredEntries, sortMode, streamMap, orderMode, showPinnedFirst);
+  }, [filteredEntries, sortMode, streamMap, orderMode, showPinnedFirst]);
+
+  // Sorted entries for month view
+  const sortedEntriesForMonth = useMemo(() => {
+    return sortEntries(filteredEntriesForMonth, sortMode, streamMap, orderMode, showPinnedFirst);
+  }, [filteredEntriesForMonth, sortMode, streamMap, orderMode, showPinnedFirst]);
+
+  // Sorted entries for year view
+  const sortedEntriesForYear = useMemo(() => {
+    return sortEntries(filteredEntriesForYear, sortMode, streamMap, orderMode, showPinnedFirst);
+  }, [filteredEntriesForYear, sortMode, streamMap, orderMode, showPinnedFirst]);
+
+  // Compute sections for day view when sorting by status, type, stream, etc.
+  const entrySections = useMemo((): EntrySection[] | undefined => {
+    if (sortMode === 'status') {
+      return groupEntriesByStatus(filteredEntries, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'type') {
+      return groupEntriesByType(filteredEntries, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'stream') {
+      return groupEntriesByStream(filteredEntries, streamMap, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'priority') {
+      return groupEntriesByPriority(filteredEntries, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'rating') {
+      return groupEntriesByRating(filteredEntries, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'due_date') {
+      return groupEntriesByDueDate(filteredEntries, orderMode, showPinnedFirst);
+    }
+    return undefined;
+  }, [filteredEntries, sortMode, streamMap, orderMode, showPinnedFirst]);
+
+  // Compute sections for month view
+  const entrySectionsForMonth = useMemo((): EntrySection[] | undefined => {
+    if (sortMode === 'status') {
+      return groupEntriesByStatus(filteredEntriesForMonth, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'type') {
+      return groupEntriesByType(filteredEntriesForMonth, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'stream') {
+      return groupEntriesByStream(filteredEntriesForMonth, streamMap, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'priority') {
+      return groupEntriesByPriority(filteredEntriesForMonth, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'rating') {
+      return groupEntriesByRating(filteredEntriesForMonth, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'due_date') {
+      return groupEntriesByDueDate(filteredEntriesForMonth, orderMode, showPinnedFirst);
+    }
+    return undefined;
+  }, [filteredEntriesForMonth, sortMode, streamMap, orderMode, showPinnedFirst]);
+
+  // Compute sections for year view
+  const entrySectionsForYear = useMemo((): EntrySection[] | undefined => {
+    if (sortMode === 'status') {
+      return groupEntriesByStatus(filteredEntriesForYear, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'type') {
+      return groupEntriesByType(filteredEntriesForYear, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'stream') {
+      return groupEntriesByStream(filteredEntriesForYear, streamMap, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'priority') {
+      return groupEntriesByPriority(filteredEntriesForYear, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'rating') {
+      return groupEntriesByRating(filteredEntriesForYear, orderMode, showPinnedFirst);
+    }
+    if (sortMode === 'due_date') {
+      return groupEntriesByDueDate(filteredEntriesForYear, orderMode, showPinnedFirst);
+    }
+    return undefined;
+  }, [filteredEntriesForYear, sortMode, streamMap, orderMode, showPinnedFirst]);
 
   // Navigation handlers
   const handleEntryPress = (entryId: string) => {
@@ -323,7 +430,8 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
 
   // Render Day View
   const renderDayView = () => {
-    const isScrolledPastGrid = dayScrollY > dayGridHeight - 50;
+    // Show sticky header when the entry list header box reaches the top of the scroll view
+    const showStickyHeader = dayScrollY > dayHeaderStartY;
 
     return (
       <View style={styles.content}>
@@ -334,10 +442,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           contentContainerStyle={styles.scrollContent}
         >
           {/* Calendar Grid */}
-          <View
-            style={styles.calendarContainer}
-            onLayout={(e) => setDayGridHeight(e.nativeEvent.layout.height)}
-          >
+          <View style={styles.calendarContainer}>
             <View style={styles.monthHeader}>
               <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
                 <Text style={styles.navButtonText}>‹</Text>
@@ -370,49 +475,40 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           </View>
 
           {/* Entry List Header */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionHeaderTitle}>
-              {`${formattedSelectedDate} • ${filteredEntries.length} ${filteredEntries.length === 1 ? 'entry' : 'entries'}`}
-            </Text>
-          </View>
+          <EntryListHeader
+            title={formattedSelectedDate}
+            entryCount={sortedEntries.length}
+            displayModeLabel={displayModeLabel}
+            sortModeLabel={sortModeLabel}
+            onDisplayModePress={() => setShowDisplayModeSelector(true)}
+            onSortModePress={() => setShowSortModeSelector(true)}
+            onLayout={(e) => setDayHeaderStartY(e.nativeEvent.layout.y)}
+          />
 
           {/* Entries */}
-          {filteredEntries.length === 0 ? (
-            <View style={styles.emptyEntriesContainer}>
-              <Text style={styles.emptyEntriesText}>No entries for this date</Text>
-            </View>
-          ) : (
-            filteredEntries.map(entry => (
-              <View key={entry.entry_id} style={styles.entryItemWrapper}>
-                <EntryListItem
-                  entry={entry}
-                  onPress={() => handleEntryPress(entry.entry_id)}
-                  onTagPress={handleTagPress}
-                  onMentionPress={handleMentionPress}
-                  streamName={entry.stream_id && streamMap ? streamMap[entry.stream_id] : null}
-                  showMenu={openMenuEntryId === entry.entry_id}
-                  onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
-                />
-              </View>
-            ))
-          )}
+          <EntryListContent
+            entries={sortedEntries}
+            sections={entrySections}
+            emptyMessage="No entries for this date"
+            displayMode={displayMode}
+            streamMap={streamMap}
+            onEntryPress={handleEntryPress}
+            onTagPress={handleTagPress}
+            onMentionPress={handleMentionPress}
+          />
         </ScrollView>
 
-        {/* Fixed Overlay Header */}
-        {isScrolledPastGrid && (
-          <View style={styles.fixedOverlayHeader}>
-            <Text style={styles.fixedOverlayTitle}>
-              {`${formattedSelectedDate} • ${filteredEntries.length} ${filteredEntries.length === 1 ? 'entry' : 'entries'}`}
-            </Text>
-            <TouchableOpacity
-              onPress={() => dayScrollRef.current?.scrollTo({ y: 0, animated: true })}
-              style={styles.scrollToTopButton}
-            >
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-                <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
-          </View>
+        {/* Sticky Header - shown when original header scrolls out of view */}
+        {showStickyHeader && (
+          <StickyEntryListHeader
+            title={formattedSelectedDate}
+            entryCount={sortedEntries.length}
+            displayModeLabel={displayModeLabel}
+            sortModeLabel={sortModeLabel}
+            onDisplayModePress={() => setShowDisplayModeSelector(true)}
+            onSortModePress={() => setShowSortModeSelector(true)}
+            onScrollToTop={() => dayScrollRef.current?.scrollTo({ y: 0, animated: true })}
+          />
         )}
       </View>
     );
@@ -423,7 +519,8 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'];
     const selectedMonthName = selectedMonth !== null ? monthNames[selectedMonth] : '';
-    const isScrolledPastGrid = monthScrollY > monthGridHeight - 50;
+    // Show sticky header when the entry list header box reaches the top of the scroll view
+    const showStickyHeader = selectedMonth !== null && monthScrollY > monthHeaderStartY;
 
     return (
       <View style={styles.content}>
@@ -434,10 +531,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           contentContainerStyle={styles.scrollContent}
         >
           {/* Month Grid */}
-          <View
-            style={styles.calendarContainer}
-            onLayout={(e) => setMonthGridHeight(e.nativeEvent.layout.height)}
-          >
+          <View style={styles.calendarContainer}>
             <View style={styles.monthViewHeader}>
               <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear - 1); setSelectedMonth(null); }} style={styles.navButton}>
                 <Text style={styles.navButtonText}>‹</Text>
@@ -488,50 +582,43 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           {/* Entry section - only show when month is selected */}
           {selectedMonth !== null && (
             <>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionHeaderTitle}>
-                  {`${selectedMonthName} ${monthViewYear} • ${filteredEntriesForMonth.length} ${filteredEntriesForMonth.length === 1 ? 'entry' : 'entries'}`}
-                </Text>
-              </View>
+              {/* Entry List Header */}
+              <EntryListHeader
+                title={`${selectedMonthName} ${monthViewYear}`}
+                entryCount={sortedEntriesForMonth.length}
+                displayModeLabel={displayModeLabel}
+                sortModeLabel={sortModeLabel}
+                onDisplayModePress={() => setShowDisplayModeSelector(true)}
+                onSortModePress={() => setShowSortModeSelector(true)}
+                onLayout={(e) => setMonthHeaderStartY(e.nativeEvent.layout.y)}
+              />
 
-              {filteredEntriesForMonth.length === 0 ? (
-                <View style={styles.emptyEntriesContainer}>
-                  <Text style={styles.emptyEntriesText}>No entries for this month</Text>
-                </View>
-              ) : (
-                filteredEntriesForMonth.map(entry => (
-                  <View key={entry.entry_id} style={styles.entryItemWrapper}>
-                    <EntryListItem
-                      entry={entry}
-                      onPress={() => handleEntryPress(entry.entry_id)}
-                      onTagPress={handleTagPress}
-                      onMentionPress={handleMentionPress}
-                      streamName={entry.stream_id && streamMap ? streamMap[entry.stream_id] : null}
-                      showMenu={openMenuEntryId === entry.entry_id}
-                      onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
-                    />
-                  </View>
-                ))
-              )}
+              {/* Entries */}
+              <EntryListContent
+                entries={sortedEntriesForMonth}
+                sections={entrySectionsForMonth}
+                emptyMessage="No entries for this month"
+                displayMode={displayMode}
+                streamMap={streamMap}
+                onEntryPress={handleEntryPress}
+                onTagPress={handleTagPress}
+                onMentionPress={handleMentionPress}
+              />
             </>
           )}
         </ScrollView>
 
-        {/* Fixed Overlay Header */}
-        {selectedMonth !== null && isScrolledPastGrid && (
-          <View style={styles.fixedOverlayHeader}>
-            <Text style={styles.fixedOverlayTitle}>
-              {`${selectedMonthName} ${monthViewYear} • ${filteredEntriesForMonth.length} ${filteredEntriesForMonth.length === 1 ? 'entry' : 'entries'}`}
-            </Text>
-            <TouchableOpacity
-              onPress={() => monthScrollRef.current?.scrollTo({ y: 0, animated: true })}
-              style={styles.scrollToTopButton}
-            >
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-                <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
-          </View>
+        {/* Sticky Header - shown when original header scrolls out of view */}
+        {showStickyHeader && (
+          <StickyEntryListHeader
+            title={`${selectedMonthName} ${monthViewYear}`}
+            entryCount={sortedEntriesForMonth.length}
+            displayModeLabel={displayModeLabel}
+            sortModeLabel={sortModeLabel}
+            onDisplayModePress={() => setShowDisplayModeSelector(true)}
+            onSortModePress={() => setShowSortModeSelector(true)}
+            onScrollToTop={() => monthScrollRef.current?.scrollTo({ y: 0, animated: true })}
+          />
         )}
       </View>
     );
@@ -542,7 +629,8 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     const decadeStart = viewingDecade;
     const decadeEnd = viewingDecade + 9;
     const years = Array.from({ length: 10 }, (_, i) => decadeStart + i);
-    const isScrolledPastGrid = yearScrollY > yearGridHeight - 50;
+    // Show sticky header when the entry list header box reaches the top of the scroll view
+    const showStickyHeader = selectedYear !== null && yearScrollY > yearHeaderStartY;
 
     return (
       <View style={styles.content}>
@@ -553,10 +641,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           contentContainerStyle={styles.scrollContent}
         >
           {/* Year Grid */}
-          <View
-            style={styles.calendarContainer}
-            onLayout={(e) => setYearGridHeight(e.nativeEvent.layout.height)}
-          >
+          <View style={styles.calendarContainer}>
             <View style={styles.yearViewHeader}>
               <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade - 10); setSelectedYear(null); }} style={styles.navButton}>
                 <Text style={styles.navButtonText}>‹</Text>
@@ -606,50 +691,43 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           {/* Entry section - only show when year is selected */}
           {selectedYear !== null && (
             <>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionHeaderTitle}>
-                  {`${selectedYear} • ${filteredEntriesForYear.length} ${filteredEntriesForYear.length === 1 ? 'entry' : 'entries'}`}
-                </Text>
-              </View>
+              {/* Entry List Header */}
+              <EntryListHeader
+                title={String(selectedYear)}
+                entryCount={sortedEntriesForYear.length}
+                displayModeLabel={displayModeLabel}
+                sortModeLabel={sortModeLabel}
+                onDisplayModePress={() => setShowDisplayModeSelector(true)}
+                onSortModePress={() => setShowSortModeSelector(true)}
+                onLayout={(e) => setYearHeaderStartY(e.nativeEvent.layout.y)}
+              />
 
-              {filteredEntriesForYear.length === 0 ? (
-                <View style={styles.emptyEntriesContainer}>
-                  <Text style={styles.emptyEntriesText}>No entries for this year</Text>
-                </View>
-              ) : (
-                filteredEntriesForYear.map(entry => (
-                  <View key={entry.entry_id} style={styles.entryItemWrapper}>
-                    <EntryListItem
-                      entry={entry}
-                      onPress={() => handleEntryPress(entry.entry_id)}
-                      onTagPress={handleTagPress}
-                      onMentionPress={handleMentionPress}
-                      streamName={entry.stream_id && streamMap ? streamMap[entry.stream_id] : null}
-                      showMenu={openMenuEntryId === entry.entry_id}
-                      onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
-                    />
-                  </View>
-                ))
-              )}
+              {/* Entries */}
+              <EntryListContent
+                entries={sortedEntriesForYear}
+                sections={entrySectionsForYear}
+                emptyMessage="No entries for this year"
+                displayMode={displayMode}
+                streamMap={streamMap}
+                onEntryPress={handleEntryPress}
+                onTagPress={handleTagPress}
+                onMentionPress={handleMentionPress}
+              />
             </>
           )}
         </ScrollView>
 
-        {/* Fixed Overlay Header */}
-        {selectedYear !== null && isScrolledPastGrid && (
-          <View style={styles.fixedOverlayHeader}>
-            <Text style={styles.fixedOverlayTitle}>
-              {`${selectedYear} • ${filteredEntriesForYear.length} ${filteredEntriesForYear.length === 1 ? 'entry' : 'entries'}`}
-            </Text>
-            <TouchableOpacity
-              onPress={() => yearScrollRef.current?.scrollTo({ y: 0, animated: true })}
-              style={styles.scrollToTopButton}
-            >
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-                <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
-          </View>
+        {/* Sticky Header - shown when original header scrolls out of view */}
+        {showStickyHeader && (
+          <StickyEntryListHeader
+            title={String(selectedYear)}
+            entryCount={sortedEntriesForYear.length}
+            displayModeLabel={displayModeLabel}
+            sortModeLabel={sortModeLabel}
+            onDisplayModePress={() => setShowDisplayModeSelector(true)}
+            onSortModePress={() => setShowSortModeSelector(true)}
+            onScrollToTop={() => yearScrollRef.current?.scrollTo({ y: 0, animated: true })}
+          />
         )}
       </View>
     );
@@ -726,6 +804,35 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Display Mode Selector Modal */}
+      <DisplayModeSelector
+        visible={showDisplayModeSelector}
+        selectedMode={displayMode}
+        onSelect={(mode) => {
+          setDisplayMode(mode);
+          setShowDisplayModeSelector(false);
+        }}
+        onClose={() => setShowDisplayModeSelector(false)}
+      />
+
+      {/* Sort Mode Selector Modal */}
+      <SortModeSelector
+        visible={showSortModeSelector}
+        selectedMode={sortMode}
+        sortOrder={orderMode}
+        showPinnedFirst={showPinnedFirst}
+        onSelect={(mode) => {
+          setSortMode(mode);
+        }}
+        onSortOrderChange={(order) => {
+          setOrderMode(order);
+        }}
+        onShowPinnedFirstChange={(value) => {
+          setShowPinnedFirst(value);
+        }}
+        onClose={() => setShowSortModeSelector(false)}
+      />
 
       {/* Zoom Level Tabs */}
       <View style={styles.tabContainer}>
@@ -919,61 +1026,6 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: "#3b82f6",
     fontWeight: "600",
-  },
-  // Section header
-  sectionHeader: {
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  sectionHeaderTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  // Fixed overlay header
-  fixedOverlayHeader: {
-    position: "absolute",
-    top: 0,
-    left: 16,
-    right: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  fixedOverlayTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-    flex: 1,
-  },
-  scrollToTopButton: {
-    padding: 4,
-  },
-  // Entry list
-  entryItemWrapper: {
-    marginBottom: 8,
-  },
-  emptyEntriesContainer: {
-    alignItems: "center",
-    padding: 24,
-    backgroundColor: "#ffffff",
-    borderRadius: 8,
-  },
-  emptyEntriesText: {
-    fontSize: 16,
-    color: "#6b7280",
   },
   // Month view styles
   monthViewHeader: {

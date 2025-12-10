@@ -2,8 +2,8 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import type { Entry, EntryStatus } from "@trace/core";
-import { formatEntryDateTime, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor } from "@trace/core";
-import { getFormattedContent, getDisplayModeLines } from "../helpers/entryDisplayHelpers";
+import { formatEntryDateTime, formatEntryDateOnly, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor } from "@trace/core";
+import { getFormattedContent, getDisplayModeLines, getFirstLineOfText } from "../helpers/entryDisplayHelpers";
 import type { EntryDisplayMode } from "../types/EntryDisplayMode";
 import { HtmlRenderer } from "../helpers/htmlRenderer";
 import { WebViewHtmlRenderer } from "../helpers/webViewHtmlRenderer";
@@ -103,50 +103,57 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
     <TouchableOpacity
       style={[
         styles.container,
+        displayMode === 'title' && styles.containerTitleOnly,
         isOverdue && styles.containerOverdue
       ]}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={styles.contentRow}>
-        {/* Status Icon - shows for any task (entry with status != "none") */}
-        {isATask && (
-          <TouchableOpacity
-            style={styles.statusIcon}
-            onPress={handleCheckboxPress}
-            activeOpacity={0.7}
-          >
-            <StatusIcon status={entry.status} size={22} />
-          </TouchableOpacity>
-        )}
-
-        {/* Content */}
-        <View style={styles.contentWrapper}>
-          {/* Pin Icon - Upper Right (if pinned) */}
-          {entry.is_pinned && (
-            <View style={styles.pinIcon}>
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"
-                  fill="#3b82f6"
-                />
+      {/* Title Only Mode - special compact layout */}
+      {displayMode === 'title' ? (
+        <>
+          {/* Title row with status icon inline */}
+          <View style={styles.titleOnlyRow}>
+            {/* Status Icon inline with title */}
+            {isATask && (
+              <TouchableOpacity
+                style={styles.titleOnlyStatusIcon}
+                onPress={handleCheckboxPress}
+                activeOpacity={0.7}
+              >
+                <StatusIcon status={entry.status} size={18} />
+              </TouchableOpacity>
+            )}
+            {/* Pin Icon inline */}
+            {entry.is_pinned && (
+              <View style={styles.titleOnlyPinIcon}>
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"
+                    fill="#3b82f6"
+                  />
+                </Svg>
+              </View>
+            )}
+            <Text style={[
+              styles.titleOnlyText,
+              isCompletedStatus(entry.status) && styles.strikethrough
+            ]} numberOfLines={1}>
+              {entry.title || getFirstLineOfText(entry.content)}
+            </Text>
+            {/* Menu Button */}
+            <TouchableOpacity
+              style={styles.titleOnlyMenuButton}
+              onPress={handleMenuPress}
+              activeOpacity={0.7}
+            >
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Circle cx={12} cy={6} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
+                <Circle cx={12} cy={12} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
+                <Circle cx={12} cy={18} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
               </Svg>
-            </View>
-          )}
-
-          {/* Menu Button - Upper Right */}
-          <TouchableOpacity
-            style={styles.menuButton}
-            onPress={handleMenuPress}
-            activeOpacity={0.7}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-              <Circle cx={12} cy={6} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
-              <Circle cx={12} cy={12} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
-              <Circle cx={12} cy={18} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
-            </Svg>
-          </TouchableOpacity>
-
+            </TouchableOpacity>
+          </View>
           {/* Dropdown menu modal */}
           <DropdownMenu
             visible={showMenu}
@@ -154,77 +161,205 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             items={menuItems}
             anchorPosition={menuPosition}
           />
-          {/* Conflict Warning Banner */}
-          {entry.conflict_status === 'conflicted' && (
+          {/* Metadata row for title-only mode */}
+          <View style={styles.titleOnlyMetadata}>
+            <Text style={styles.date}>
+              {formatEntryDateOnly(entry.entry_date || entry.updated_at)}
+            </Text>
+            {/* Location Badge */}
+            {(locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
+              <View style={styles.locationBadge}>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                  <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                </Svg>
+                <Text style={styles.locationText}>{locationName || "GPS"}</Text>
+              </View>
+            )}
+            {/* Stream Badge */}
             <TouchableOpacity
-              style={styles.conflictBanner}
+              style={styles.stream}
               onPress={(e) => {
                 e.stopPropagation();
-                onResolveConflict?.(entry.entry_id);
+                if (onStreamPress) {
+                  const streamId = entry.stream_id || null;
+                  const displayName = streamName || "Unassigned";
+                  onStreamPress(streamId, displayName);
+                }
               }}
+              activeOpacity={0.7}
             >
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path d="M12 2L2 7l10 5 10-5-10-5z" fill="#f59e0b" />
-                <Path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#f59e0b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                <Path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
               </Svg>
-              <Text style={styles.conflictText}>
-                Changes merged - tap to dismiss
-              </Text>
+              <Text style={styles.streamText}>{streamName || "Unassigned"}</Text>
+            </TouchableOpacity>
+            {/* Type Badge */}
+            {entry.type && (
+              <View style={styles.typeBadge}>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
+                  <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+                <Text style={styles.typeText}>{entry.type}</Text>
+              </View>
+            )}
+            {/* Due Date Badge */}
+            {dueDateStr && (
+              <View style={[
+                styles.dueDate,
+                isOverdue && styles.dueDateOverdue,
+                dueDateStr === "Today" && styles.dueDateToday
+              ]}>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill={isOverdue ? "#dc2626" : dueDateStr === "Today" ? theme.colors.text.secondary : theme.colors.text.secondary} stroke="none">
+                  <Path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
+                </Svg>
+                <Text style={[
+                  styles.dueDateText,
+                  isOverdue && styles.dueDateTextOverdue,
+                  dueDateStr === "Today" && styles.dueDateTextToday
+                ]}>
+                  {dueDateStr}
+                </Text>
+              </View>
+            )}
+            {/* Priority Badge */}
+            {(entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
+              <View style={styles.priorityBadge}>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                  <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.secondary} />
+                  <Path d="M5 3h13l-4 5 4 5H5z" />
+                </Svg>
+                <Text style={styles.priorityText}>{entry.priority}</Text>
+              </View>
+            )}
+            {/* Rating Badge */}
+            {(entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
+              <View style={styles.ratingBadge}>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                  <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </Svg>
+                <Text style={styles.ratingText}>{entry.rating}/5</Text>
+              </View>
+            )}
+            {/* Tags */}
+            {entry.tags && entry.tags.length > 0 && (
+              <View style={styles.tags}>
+                {entry.tags.slice(0, 3).map((tag) => (
+                  <TouchableOpacity
+                    key={tag}
+                    style={styles.tag}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      onTagPress?.(tag);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.tagText}>#{tag}</Text>
+                  </TouchableOpacity>
+                ))}
+                {entry.tags.length > 3 && (
+                  <Text style={styles.moreText}>+{entry.tags.length - 3}</Text>
+                )}
+              </View>
+            )}
+            {/* Mentions */}
+            {entry.mentions && entry.mentions.length > 0 && (
+              <View style={styles.mentions}>
+                {entry.mentions.slice(0, 3).map((mention) => (
+                  <TouchableOpacity
+                    key={mention}
+                    style={styles.mention}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      onMentionPress?.(mention);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.mentionText}>@{mention}</Text>
+                  </TouchableOpacity>
+                ))}
+                {entry.mentions.length > 3 && (
+                  <Text style={styles.moreText}>+{entry.mentions.length - 3}</Text>
+                )}
+              </View>
+            )}
+          </View>
+        </>
+      ) : (
+        /* Other display modes - original layout */
+        <View style={styles.contentRow}>
+          {/* Status Icon - shows for any task (entry with status != "none") */}
+          {isATask && (
+            <TouchableOpacity
+              style={styles.statusIcon}
+              onPress={handleCheckboxPress}
+              activeOpacity={0.7}
+            >
+              <StatusIcon status={entry.status} size={22} />
             </TouchableOpacity>
           )}
 
-          {/* Title or Preview based on display mode */}
-          {entry.title ? (
-            <>
-              <Text style={[
-                styles.title,
-                isCompletedStatus(entry.status) && styles.strikethrough
-              ]}>
-                {entry.title}
-              </Text>
-              {displayMode === 'flow' && (
-                <View style={styles.flowDateRow}>
-                  <Text style={styles.dateSmall}>{entryDateStr}</Text>
-                  {entry.status !== "none" && (
-                    <View style={styles.statusBadge}>
-                      <StatusIcon status={entry.status} size={12} />
-                      <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
-                        {getStatusLabel(entry.status)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-              {displayMode === 'flow' && (
-                <PhotoGallery
-                  entryId={entry.entry_id}
-                  collapsible={true}
-                  isCollapsed={photosCollapsed}
-                  onCollapsedChange={setPhotosCollapsed}
-                  onPhotoCountChange={setPhotoCount}
-                />
-              )}
-              {displayMode === 'flow' ? (
-                <WebViewHtmlRenderer
-                  html={entry.content || ''}
-                  style={[
-                    styles.preview,
-                    isCompletedStatus(entry.status) && styles.strikethrough
-                  ]}
-                  strikethrough={isCompletedStatus(entry.status)}
-                />
-              ) : (
-                <Text style={[
-                  styles.preview,
-                  isCompletedStatus(entry.status) && styles.strikethrough
-                ]} numberOfLines={maxLines}>
-                  {formattedContent}
+          {/* Content */}
+          <View style={styles.contentWrapper}>
+            {/* Pin Icon - Upper Right (if pinned) */}
+            {entry.is_pinned && (
+              <View style={styles.pinIcon}>
+                <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"
+                    fill="#3b82f6"
+                  />
+                </Svg>
+              </View>
+            )}
+
+            {/* Menu Button - Upper Right */}
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={handleMenuPress}
+              activeOpacity={0.7}
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                <Circle cx={12} cy={6} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
+                <Circle cx={12} cy={12} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
+                <Circle cx={12} cy={18} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
+              </Svg>
+            </TouchableOpacity>
+
+            {/* Dropdown menu modal */}
+            <DropdownMenu
+              visible={showMenu}
+              onClose={() => onMenuToggle?.()}
+              items={menuItems}
+              anchorPosition={menuPosition}
+            />
+            {/* Conflict Warning Banner */}
+            {entry.conflict_status === 'conflicted' && (
+              <TouchableOpacity
+                style={styles.conflictBanner}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onResolveConflict?.(entry.entry_id);
+                }}
+              >
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                  <Path d="M12 2L2 7l10 5 10-5-10-5z" fill="#f59e0b" />
+                  <Path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#f59e0b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </Svg>
+                <Text style={styles.conflictText}>
+                  Changes merged - tap to dismiss
                 </Text>
-              )}
-            </>
-          ) : (
-            displayMode === 'flow' ? (
+              </TouchableOpacity>
+            )}
+
+            {entry.title ? (
+              /* Other modes with title */
               <>
+                <Text style={[
+                  styles.title,
+                  isCompletedStatus(entry.status) && styles.strikethrough
+                ]}>
+                  {entry.title}
+                </Text>
                 {displayMode === 'flow' && (
                   <View style={styles.flowDateRow}>
                     <Text style={styles.dateSmall}>{entryDateStr}</Text>
@@ -247,168 +382,212 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                     onPhotoCountChange={setPhotoCount}
                   />
                 )}
-                <WebViewHtmlRenderer
-                  html={entry.content || ''}
-                  style={[
-                    styles.content,
+                {displayMode === 'flow' ? (
+                  <WebViewHtmlRenderer
+                    html={entry.content || ''}
+                    style={[
+                      styles.preview,
+                      isCompletedStatus(entry.status) && styles.strikethrough
+                    ]}
+                    strikethrough={isCompletedStatus(entry.status)}
+                  />
+                ) : (
+                  <Text style={[
+                    styles.preview,
                     isCompletedStatus(entry.status) && styles.strikethrough
-                  ]}
-                  strikethrough={isCompletedStatus(entry.status)}
-                />
+                  ]} numberOfLines={maxLines}>
+                    {formattedContent}
+                  </Text>
+                )}
               </>
             ) : (
-              <Text style={[
-                styles.content,
-                isCompletedStatus(entry.status) && styles.strikethrough
-              ]} numberOfLines={maxLines}>
-                {formattedContent}
-              </Text>
-            )
-          )}
-
-          {/* Metadata */}
-          <View style={styles.metadata}>
-            <Text style={styles.date}>Updated {updatedDateStr}</Text>
-
-            {/* Photo Count Badge (when collapsed) */}
-            {displayMode === 'flow' && photosCollapsed && photoCount > 0 && (
-              <TouchableOpacity
-                style={styles.photoBadge}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  setPhotosCollapsed(false);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.photoBadgeText}>
-                  {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Location Badge */}
-            {(locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
-              <View style={styles.locationBadge}>
-                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
-                  <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                </Svg>
-                <Text style={styles.locationText}>{locationName || "GPS"}</Text>
-              </View>
-            )}
-
-            {/* Stream Badge */}
-            <TouchableOpacity
-              style={styles.stream}
-              onPress={(e) => {
-                e.stopPropagation();
-                if (onStreamPress) {
-                  const streamId = entry.stream_id || null;
-                  const displayName = streamName || "Unassigned";
-                  onStreamPress(streamId, displayName);
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
-                <Path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
-              </Svg>
-              <Text style={styles.streamText}>{streamName || "Unassigned"}</Text>
-            </TouchableOpacity>
-
-            {/* Type Badge */}
-            {entry.type && (
-              <View style={styles.typeBadge}>
-                <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-                  <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-                <Text style={styles.typeText}>{entry.type}</Text>
-              </View>
-            )}
-
-            {/* Due Date Badge */}
-            {dueDateStr && (
-              <View style={[
-                styles.dueDate,
-                isOverdue && styles.dueDateOverdue,
-                dueDateStr === "Today" && styles.dueDateToday
-              ]}>
+              /* Other modes without title */
+              displayMode === 'flow' ? (
+                <>
+                  <View style={styles.flowDateRow}>
+                    <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                    {entry.status !== "none" && (
+                      <View style={styles.statusBadge}>
+                        <StatusIcon status={entry.status} size={12} />
+                        <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
+                          {getStatusLabel(entry.status)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <PhotoGallery
+                    entryId={entry.entry_id}
+                    collapsible={true}
+                    isCollapsed={photosCollapsed}
+                    onCollapsedChange={setPhotosCollapsed}
+                    onPhotoCountChange={setPhotoCount}
+                  />
+                  <WebViewHtmlRenderer
+                    html={entry.content || ''}
+                    style={[
+                      styles.content,
+                      isCompletedStatus(entry.status) && styles.strikethrough
+                    ]}
+                    strikethrough={isCompletedStatus(entry.status)}
+                  />
+                </>
+              ) : (
                 <Text style={[
-                  styles.dueDateText,
-                  isOverdue && styles.dueDateTextOverdue,
-                  dueDateStr === "Today" && styles.dueDateTextToday
-                ]}>
-                  {dueDateStr}
+                  styles.content,
+                  isCompletedStatus(entry.status) && styles.strikethrough
+                ]} numberOfLines={maxLines}>
+                  {formattedContent}
                 </Text>
-              </View>
+              )
             )}
 
-            {/* Priority Badge */}
-            {(entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
-              <View style={styles.priorityBadge}>
-                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
-                  <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.secondary} />
-                  <Path d="M5 3h13l-4 5 4 5H5z" />
-                </Svg>
-                <Text style={styles.priorityText}>{entry.priority}</Text>
-              </View>
-            )}
+            {/* Metadata */}
+            <View style={styles.metadata}>
+              <Text style={styles.date}>Updated {updatedDateStr}</Text>
 
-            {/* Rating Badge */}
-            {(entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
-              <View style={styles.ratingBadge}>
-                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
-                  <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </Svg>
-                <Text style={styles.ratingText}>{entry.rating}/5</Text>
-              </View>
-            )}
+              {/* Photo Count Badge (when collapsed) */}
+              {displayMode === 'flow' && photosCollapsed && photoCount > 0 && (
+                <TouchableOpacity
+                  style={styles.photoBadge}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setPhotosCollapsed(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.photoBadgeText}>
+                    {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
-        {/* Tags */}
-        {entry.tags && entry.tags.length > 0 && (
-          <View style={styles.tags}>
-            {entry.tags.slice(0, 3).map((tag) => (
+              {/* Location Badge */}
+              {(locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
+                <View style={styles.locationBadge}>
+                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                    <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </Svg>
+                  <Text style={styles.locationText}>{locationName || "GPS"}</Text>
+                </View>
+              )}
+
+              {/* Stream Badge */}
               <TouchableOpacity
-                key={tag}
-                style={styles.tag}
+                style={styles.stream}
                 onPress={(e) => {
                   e.stopPropagation();
-                  onTagPress?.(tag);
+                  if (onStreamPress) {
+                    const streamId = entry.stream_id || null;
+                    const displayName = streamName || "Unassigned";
+                    onStreamPress(streamId, displayName);
+                  }
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.tagText}>#{tag}</Text>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                  <Path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                </Svg>
+                <Text style={styles.streamText}>{streamName || "Unassigned"}</Text>
               </TouchableOpacity>
-            ))}
-            {entry.tags.length > 3 && (
-              <Text style={styles.moreText}>+{entry.tags.length - 3}</Text>
-            )}
-          </View>
-        )}
 
-        {/* Mentions */}
-        {entry.mentions && entry.mentions.length > 0 && (
-          <View style={styles.mentions}>
-            {entry.mentions.slice(0, 3).map((mention) => (
-              <TouchableOpacity
-                key={mention}
-                style={styles.mention}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onMentionPress?.(mention);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.mentionText}>@{mention}</Text>
-              </TouchableOpacity>
-            ))}
-            {entry.mentions.length > 3 && (
-              <Text style={styles.moreText}>+{entry.mentions.length - 3}</Text>
-            )}
-          </View>
-        )}
+              {/* Type Badge */}
+              {entry.type && (
+                <View style={styles.typeBadge}>
+                  <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
+                    <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                  <Text style={styles.typeText}>{entry.type}</Text>
+                </View>
+              )}
+
+              {/* Due Date Badge */}
+              {dueDateStr && (
+                <View style={[
+                  styles.dueDate,
+                  isOverdue && styles.dueDateOverdue,
+                  dueDateStr === "Today" && styles.dueDateToday
+                ]}>
+                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={isOverdue ? "#dc2626" : dueDateStr === "Today" ? theme.colors.text.secondary : theme.colors.text.secondary} stroke="none">
+                    <Path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
+                  </Svg>
+                  <Text style={[
+                    styles.dueDateText,
+                    isOverdue && styles.dueDateTextOverdue,
+                    dueDateStr === "Today" && styles.dueDateTextToday
+                  ]}>
+                    {dueDateStr}
+                  </Text>
+                </View>
+              )}
+
+              {/* Priority Badge */}
+              {(entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
+                <View style={styles.priorityBadge}>
+                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                    <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.secondary} />
+                    <Path d="M5 3h13l-4 5 4 5H5z" />
+                  </Svg>
+                  <Text style={styles.priorityText}>{entry.priority}</Text>
+                </View>
+              )}
+
+              {/* Rating Badge */}
+              {(entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
+                <View style={styles.ratingBadge}>
+                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                    <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </Svg>
+                  <Text style={styles.ratingText}>{entry.rating}/5</Text>
+                </View>
+              )}
+
+              {/* Tags */}
+              {entry.tags && entry.tags.length > 0 && (
+                <View style={styles.tags}>
+                  {entry.tags.slice(0, 3).map((tag) => (
+                    <TouchableOpacity
+                      key={tag}
+                      style={styles.tag}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        onTagPress?.(tag);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.tagText}>#{tag}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {entry.tags.length > 3 && (
+                    <Text style={styles.moreText}>+{entry.tags.length - 3}</Text>
+                  )}
+                </View>
+              )}
+
+              {/* Mentions */}
+              {entry.mentions && entry.mentions.length > 0 && (
+                <View style={styles.mentions}>
+                  {entry.mentions.slice(0, 3).map((mention) => (
+                    <TouchableOpacity
+                      key={mention}
+                      style={styles.mention}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        onMentionPress?.(mention);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.mentionText}>@{mention}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {entry.mentions.length > 3 && (
+                    <Text style={styles.moreText}>+{entry.mentions.length - 3}</Text>
+                  )}
+                </View>
+              )}
+            </View>
           </View>
         </View>
-      </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -421,8 +600,34 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
     ...theme.shadows.xs,
   },
+  containerTitleOnly: {
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
   containerOverdue: {
     backgroundColor: theme.colors.background.secondary,
+  },
+  titleOnlyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+  },
+  titleOnlyStatusIcon: {
+    flexShrink: 0,
+  },
+  titleOnlyPinIcon: {
+    flexShrink: 0,
+  },
+  titleOnlyMenuButton: {
+    flexShrink: 0,
+    padding: 4,
+  },
+  titleOnlyMetadata: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+    flexWrap: "wrap",
   },
   contentRow: {
     flexDirection: "row",
@@ -436,6 +641,12 @@ const styles = StyleSheet.create({
   },
   contentWrapper: {
     flex: 1,
+  },
+  titleOnlyText: {
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
+    lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.tight,
   },
   title: {
     fontSize: theme.typography.fontSize.xxl,
@@ -568,6 +779,9 @@ const styles = StyleSheet.create({
     color: theme.colors.text.tertiary,
   },
   dueDate: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
     backgroundColor: theme.colors.background.tertiary,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.xs - 2,
@@ -579,10 +793,10 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.medium,
   },
   dueDateOverdue: {
-    backgroundColor: theme.colors.background.secondary,
+    backgroundColor: "#fef2f2",
   },
   dueDateTextOverdue: {
-    color: theme.colors.text.secondary,
+    color: "#dc2626",
   },
   dueDateToday: {
     backgroundColor: theme.colors.background.tertiary,

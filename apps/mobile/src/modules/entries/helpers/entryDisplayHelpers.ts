@@ -5,6 +5,40 @@ import { stripHtml } from '@trace/core';
 import type { EntryDisplayMode } from '../types/EntryDisplayMode';
 
 /**
+ * Get the first line of text from HTML content (used for title-only mode when no title)
+ */
+export function getFirstLineOfText(htmlContent: string): string {
+  // Strip HTML tags
+  let text = htmlContent
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]*>/g, '');
+
+  // Decode HTML entities
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'");
+
+  // Get first non-empty line
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  const firstLine = lines[0] || '';
+
+  // Truncate if too long
+  if (firstLine.length > 100) {
+    return firstLine.substring(0, 100).trim() + '...';
+  }
+
+  return firstLine;
+}
+
+/**
  * Format entry content for "smashed" mode
  * All text smashed together, HTML stripped, add space where tags were
  * Max 2 lines
@@ -83,6 +117,8 @@ export function getFormattedContent(
   maxLength?: number
 ): string {
   switch (mode) {
+    case 'title':
+      return getFirstLineOfText(htmlContent); // For title mode, get first line only
     case 'smashed':
       return formatSmashedContent(htmlContent, maxLength);
     case 'short':
@@ -99,6 +135,8 @@ export function getFormattedContent(
  */
 export function getDisplayModeLines(mode: EntryDisplayMode): number | undefined {
   switch (mode) {
+    case 'title':
+      return 1; // Single line for title-only mode
     case 'smashed':
       return 2; // Max 2 lines
     case 'short':

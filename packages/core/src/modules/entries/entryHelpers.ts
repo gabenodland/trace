@@ -216,6 +216,41 @@ export function formatEntryDateTime(dateString: string): string {
 }
 
 /**
+ * Format entry date only (no time) for display
+ * Shows "Today", "Yesterday", or formatted date
+ */
+export function formatEntryDateOnly(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+
+  // Check if it's today, yesterday, or another day
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate();
+
+  if (isToday) {
+    return "Today";
+  } else if (isYesterday) {
+    return "Yesterday";
+  } else {
+    return date.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+    });
+  }
+}
+
+/**
  * Check if a status indicates an actionable task (not completed/cancelled)
  */
 export function isActionableStatus(status: EntryStatus): boolean {
