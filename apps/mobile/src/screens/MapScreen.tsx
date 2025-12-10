@@ -455,12 +455,25 @@ export function MapScreen() {
   return (
     <View style={styles.container}>
       <TopBar
-        title="Map"
-        badge={entries.length}
         menuItems={menuItems}
         userEmail={userEmail}
         onProfilePress={onProfilePress}
-      />
+      >
+        {/* Custom title with stream filter dropdown */}
+        <View style={styles.titleRow}>
+          <Text style={styles.titleText}>Map</Text>
+          <TouchableOpacity
+            style={styles.streamFilterSelector}
+            onPress={() => setShowStreamPicker(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.streamFilterSelectorText}>{selectedStreamName}</Text>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+        </View>
+      </TopBar>
 
       {/* Map */}
       <View style={styles.mapContainer}>
@@ -521,25 +534,11 @@ export function MapScreen() {
         )}
       </View>
 
-      {/* Entry count and stream filter */}
+      {/* Entry count bar */}
       <View style={styles.countBar}>
         <Text style={styles.countText}>
           {visibleEntries.length} {visibleEntries.length === 1 ? "entry" : "entries"} in view
         </Text>
-        <TouchableOpacity
-          style={styles.streamFilterButton}
-          onPress={() => setShowStreamPicker(true)}
-        >
-          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-            <Path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-          <Text style={styles.streamFilterText} numberOfLines={1}>
-            {selectedStreamName}
-          </Text>
-          <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-            <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        </TouchableOpacity>
       </View>
 
       {/* Entry List */}
@@ -768,35 +767,38 @@ const styles = StyleSheet.create({
   singleMarker: {
     // Container for single marker pin
   },
+  // Title row styles
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 32,
+  },
+  titleText: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  streamFilterSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  streamFilterSelectorText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#6b7280",
+  },
   countBar: {
     backgroundColor: theme.colors.background.primary,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border.light,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
   },
   countText: {
     fontSize: 13,
     color: theme.colors.text.tertiary,
     fontWeight: "500",
-  },
-  streamFilterButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    backgroundColor: theme.colors.background.secondary,
-  },
-  streamFilterText: {
-    fontSize: 13,
-    color: theme.colors.text.secondary,
-    fontWeight: "500",
-    maxWidth: 120,
   },
   entryList: {
     flex: 1,

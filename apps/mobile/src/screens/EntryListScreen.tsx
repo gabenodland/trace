@@ -30,7 +30,7 @@ import { sortEntries, groupEntriesByStatus, groupEntriesByType, groupEntriesBySt
 import { theme } from "../shared/theme/theme";
 
 interface EntryListScreenProps {
-  returnStreamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people"; // Also supports "tag:tagname" and "mention:mentionname"
+  returnStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people"; // Also supports "tag:tagname" and "mention:mentionname"
   returnStreamName?: string;
 }
 
@@ -44,7 +44,7 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
   const [showSortModeSelector, setShowSortModeSelector] = useState(false);
   const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
-  const [selectedStreamId, setSelectedStreamId] = useState<string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people">("all");
+  const [selectedStreamId, setSelectedStreamId] = useState<string | null | "all" | "events" | "streams" | "tags" | "people">("all");
   const [selectedStreamName, setSelectedStreamName] = useState<string>("Home");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -124,8 +124,8 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
     streamFilter = { stream_id: null };
   } else if (selectedStreamId === "streams") {
     // Just a nav item, treat like "all"
-  } else if (selectedStreamId === "tasks" || selectedStreamId === "events") {
-    // TODO: Filter by tasks or events when those are implemented
+  } else if (selectedStreamId === "events") {
+    // TODO: Filter by events when implemented
   } else if (selectedStreamId === "tags" || selectedStreamId === "people") {
     // Just nav items, noop
   } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith('tag:')) {
@@ -283,7 +283,7 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
     setSelectedStreamName(streamName);
   };
 
-  const handleStreamSelect = (streamId: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people", streamName: string) => {
+  const handleStreamSelect = (streamId: string | null | "all" | "events" | "streams" | "tags" | "people", streamName: string) => {
     setSelectedStreamId(streamId);
     setSelectedStreamName(streamName);
   };

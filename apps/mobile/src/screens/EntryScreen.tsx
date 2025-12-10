@@ -7,7 +7,7 @@ export type { ReturnContext };
 
 interface EntryScreenProps {
   entryId?: string | null;
-  initialStreamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people";
+  initialStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people";
   initialStreamName?: string;
   initialContent?: string;
   initialDate?: string;

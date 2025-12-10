@@ -13,7 +13,6 @@ import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { EntryScreen } from "./src/screens/EntryScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
-import { TasksScreen } from "./src/screens/TasksScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { DatabaseInfoScreen } from "./src/screens/DatabaseInfoScreen";
 import { LocationsScreen } from "./src/screens/LocationsScreen";
@@ -51,7 +50,6 @@ function AuthGate() {
   const [navigationHistory, setNavigationHistory] = useState<NavigationHistoryItem[]>([
     { tabId: "inbox", params: {} }
   ]);
-  const [LocationBuilderComponent, setLocationBuilderComponent] = useState<any>(null);
 
   // Before back handler for screens to intercept back navigation
   const beforeBackHandlerRef = useRef<BeforeBackHandler | null>(null);
@@ -184,8 +182,6 @@ function AuthGate() {
         );
       case "calendar":
         return <CalendarScreen returnDate={navParams.returnDate} />;
-      case "tasks":
-        return <TasksScreen />;
       case "profile":
         return <ProfileScreen />;
       case "debug":
@@ -198,20 +194,6 @@ function AuthGate() {
         return <StreamsScreen />;
       case "stream-properties":
         return <StreamPropertiesScreen streamId={navParams.streamId} />;
-      case "location-builder":
-        // Dynamically load LocationBuilderScreen to avoid loading MapView at startup
-        if (!LocationBuilderComponent) {
-          import('./src/modules/locations/screens/LocationBuilderScreen').then(module => {
-            setLocationBuilderComponent(() => module.LocationBuilderScreen);
-          });
-          return (
-            <View style={styles.container}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.loadingText}>Loading...</Text>
-            </View>
-          );
-        }
-        return <LocationBuilderComponent />;
       default:
         return (
           <EntryListScreen

@@ -1,14 +1,44 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import type { Entry } from "@trace/core";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
+import { usePersistedState } from "../shared/hooks/usePersistedState";
 import { TopBar } from "../components/layout/TopBar";
 import { EntryListItem } from "../modules/entries/components/EntryListItem";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
 import { theme } from "../shared/theme/theme";
+
+// Calendar date field type - which date to use for calendar display
+type CalendarDateField = 'entry_date' | 'updated_at' | 'due_date';
+
+interface CalendarDateFieldOption {
+  value: CalendarDateField;
+  label: string;
+}
+
+const CALENDAR_DATE_FIELDS: CalendarDateFieldOption[] = [
+  { value: 'entry_date', label: 'Entry Date' },
+  { value: 'updated_at', label: 'Last Updated' },
+  { value: 'due_date', label: 'Due Date' },
+];
+
+// Helper to get date from entry based on selected field
+function getEntryDate(entry: Entry, field: CalendarDateField): Date | null {
+  switch (field) {
+    case 'entry_date':
+      return new Date(entry.entry_date || entry.created_at);
+    case 'updated_at':
+      return new Date(entry.updated_at);
+    case 'due_date':
+      return entry.due_date ? new Date(entry.due_date) : null;
+    default:
+      return new Date(entry.entry_date || entry.created_at);
+  }
+}
 
 // Helper function to format date in YYYY-MM-DD format in local timezone
 function formatDateKey(date: Date): string {
@@ -33,6 +63,11 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     const today = new Date();
     return formatDateKey(today);
   });
+
+  // Date field selector state (persisted)
+  const [dateField, setDateField] = usePersistedState<CalendarDateField>('@calendarDateField', 'entry_date');
+  const [showDateFieldSelector, setShowDateFieldSelector] = useState(false);
+  const dateFieldLabel = CALENDAR_DATE_FIELDS.find(f => f.value === dateField)?.label || 'Entry Date';
 
   // State for viewing month/year
   const [viewingMonth, setViewingMonth] = useState(() => new Date().getMonth());
@@ -83,61 +118,70 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
   const { entries } = useEntries({});
   const { streams } = useStreams();
 
-  // Entry counts
+  // Entry counts - based on selected date field
   const entryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     entries.forEach(entry => {
-      const date = new Date(entry.entry_date || entry.created_at);
-      const dateKey = formatDateKey(date);
-      counts[dateKey] = (counts[dateKey] || 0) + 1;
+      const date = getEntryDate(entry, dateField);
+      if (date) {
+        const dateKey = formatDateKey(date);
+        counts[dateKey] = (counts[dateKey] || 0) + 1;
+      }
     });
     return counts;
-  }, [entries]);
+  }, [entries, dateField]);
 
   const monthCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     entries.forEach(entry => {
-      const date = new Date(entry.entry_date || entry.created_at);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      counts[monthKey] = (counts[monthKey] || 0) + 1;
+      const date = getEntryDate(entry, dateField);
+      if (date) {
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        counts[monthKey] = (counts[monthKey] || 0) + 1;
+      }
     });
     return counts;
-  }, [entries]);
+  }, [entries, dateField]);
 
   const yearCounts = useMemo(() => {
     const counts: Record<number, number> = {};
     entries.forEach(entry => {
-      const date = new Date(entry.entry_date || entry.created_at);
-      const year = date.getFullYear();
-      counts[year] = (counts[year] || 0) + 1;
+      const date = getEntryDate(entry, dateField);
+      if (date) {
+        const year = date.getFullYear();
+        counts[year] = (counts[year] || 0) + 1;
+      }
     });
     return counts;
-  }, [entries]);
+  }, [entries, dateField]);
 
-  // Filtered entries
+  // Filtered entries - based on selected date field
   const filteredEntries = useMemo(() => {
     return entries.filter(entry => {
-      const date = new Date(entry.entry_date || entry.created_at);
+      const date = getEntryDate(entry, dateField);
+      if (!date) return false;
       const dateKey = formatDateKey(date);
       return dateKey === selectedDate;
     });
-  }, [entries, selectedDate]);
+  }, [entries, selectedDate, dateField]);
 
   const filteredEntriesForYear = useMemo(() => {
     if (selectedYear === null) return [];
     return entries.filter(entry => {
-      const date = new Date(entry.entry_date || entry.created_at);
+      const date = getEntryDate(entry, dateField);
+      if (!date) return false;
       return date.getFullYear() === selectedYear;
     });
-  }, [entries, selectedYear]);
+  }, [entries, selectedYear, dateField]);
 
   const filteredEntriesForMonth = useMemo(() => {
     if (selectedMonth === null) return [];
     return entries.filter(entry => {
-      const date = new Date(entry.entry_date || entry.created_at);
+      const date = getEntryDate(entry, dateField);
+      if (!date) return false;
       return date.getFullYear() === monthViewYear && date.getMonth() === selectedMonth;
     });
-  }, [entries, monthViewYear, selectedMonth]);
+  }, [entries, monthViewYear, selectedMonth, dateField]);
 
   // Stream map
   const streamMap = streams?.reduce((map, stream) => {
@@ -199,7 +243,10 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     const date = new Date(currentYear, currentMonth, day);
     calendar.push({ day, isCurrentMonth: true, date });
   }
-  const remainingCells = 42 - calendar.length;
+  // Calculate how many weeks are needed (round up to complete the last week)
+  const weeksNeeded = Math.ceil(calendar.length / 7);
+  const totalCells = weeksNeeded * 7;
+  const remainingCells = totalCells - calendar.length;
   for (let day = 1; day <= remainingCells; day++) {
     const date = new Date(currentYear, currentMonth + 1, day);
     calendar.push({ day, isCurrentMonth: false, date });
@@ -611,11 +658,74 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
   return (
     <View style={styles.container}>
       <TopBar
-        title="Calendar"
         menuItems={menuItems}
         userEmail={userEmail}
         onProfilePress={onProfilePress}
-      />
+      >
+        {/* Custom title with date field dropdown */}
+        <View style={styles.titleRow}>
+          <Text style={styles.titleText}>Calendar</Text>
+          <TouchableOpacity
+            style={styles.dateFieldSelector}
+            onPress={() => setShowDateFieldSelector(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.dateFieldText}>{dateFieldLabel}</Text>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+        </View>
+      </TopBar>
+
+      {/* Date Field Selector Modal */}
+      <Modal
+        visible={showDateFieldSelector}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDateFieldSelector(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDateFieldSelector(false)}
+        >
+          <View style={styles.dateFieldModal}>
+            <View style={styles.dateFieldModalHeader}>
+              <Text style={styles.dateFieldModalTitle}>Show Entries By</Text>
+            </View>
+            {CALENDAR_DATE_FIELDS.map((field) => {
+              const isSelected = field.value === dateField;
+              return (
+                <TouchableOpacity
+                  key={field.value}
+                  style={[styles.dateFieldOption, isSelected && styles.dateFieldOptionSelected]}
+                  onPress={() => {
+                    setDateField(field.value);
+                    setShowDateFieldSelector(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.dateFieldOptionText, isSelected && styles.dateFieldOptionTextSelected]}>
+                    {field.label}
+                  </Text>
+                  {isSelected && (
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <Path
+                        d="M5 13l4 4L19 7"
+                        stroke={theme.colors.text.primary}
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </Svg>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Zoom Level Tabs */}
       <View style={styles.tabContainer}>
@@ -950,5 +1060,76 @@ const styles = StyleSheet.create({
   },
   yearCellTextSelected: {
     color: "#ffffff",
+  },
+  // Title row styles
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 32,
+  },
+  titleText: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  dateFieldSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  dateFieldText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#6b7280",
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  dateFieldModal: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    width: "100%",
+    maxWidth: 320,
+    paddingBottom: 10,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  dateFieldModalHeader: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
+  dateFieldModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  dateFieldOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  dateFieldOptionSelected: {
+    backgroundColor: "#f3f4f6",
+  },
+  dateFieldOptionText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#111827",
+  },
+  dateFieldOptionTextSelected: {
+    fontWeight: "600",
   },
 });

@@ -49,7 +49,7 @@ export interface CaptureFormData {
 
 interface UseCaptureFormStateOptions {
   isEditing: boolean;
-  initialStreamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people";
+  initialStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people";
   initialStreamName?: string;
   initialContent?: string;
   initialDate?: string;
@@ -59,11 +59,11 @@ interface UseCaptureFormStateOptions {
 
 /**
  * Helper to determine initial stream ID
- * Filters out non-stream values like "all", "tasks", "tag:xyz", etc.
+ * Filters out non-stream values like "all", "tag:xyz", etc.
  */
 function getInitialStreamId(
   isEditing: boolean,
-  initialStreamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people"
+  initialStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people"
 ): string | null {
   if (isEditing) return null; // Will be loaded from entry
 
@@ -72,7 +72,6 @@ function getInitialStreamId(
     !initialStreamId ||
     typeof initialStreamId !== "string" ||
     initialStreamId === "all" ||
-    initialStreamId === "tasks" ||
     initialStreamId === "events" ||
     initialStreamId === "streams" ||
     initialStreamId === "tags" ||

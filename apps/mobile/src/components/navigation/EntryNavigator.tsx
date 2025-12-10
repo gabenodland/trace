@@ -13,8 +13,8 @@ import type { LocationEntity } from "@trace/core";
 interface EntryNavigatorProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (streamId: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people", streamName: string) => void;
-  selectedStreamId: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people";
+  onSelect: (streamId: string | null | "all" | "events" | "streams" | "tags" | "people", streamName: string) => void;
+  selectedStreamId: string | null | "all" | "events" | "streams" | "tags" | "people";
 }
 
 type SegmentType = "streams" | "locations" | "tags" | "mentions";
@@ -353,7 +353,6 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedStreamId }:
                       selectedId={
                         selectedStreamId === null ||
                         selectedStreamId === "all" ||
-                        selectedStreamId === "tasks" ||
                         selectedStreamId === "events" ||
                         selectedStreamId === "streams" ||
                         selectedStreamId === "tags" ||

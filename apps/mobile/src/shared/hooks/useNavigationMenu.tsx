@@ -58,27 +58,7 @@ export function useNavigationMenu() {
         </Svg>
       ),
     },
-    {
-      label: "Tasks",
-      onPress: () => navigate("tasks"),
-      icon: (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-          <Path d="M9 11l3 3L22 4" strokeLinecap="round" strokeLinejoin="round" />
-          <Path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      ),
-    },
     { isDivider: true },
-    {
-      label: "Location Builder",
-      onPress: () => navigate("location-builder"),
-      icon: (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-          <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-          <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      ),
-    },
     {
       label: "Database Info",
       onPress: () => navigate("debug"),

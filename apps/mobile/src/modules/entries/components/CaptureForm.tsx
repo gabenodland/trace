@@ -27,20 +27,18 @@ import { EditorToolbar } from "./EditorToolbar";
 import { CaptureFormHeader } from "./CaptureFormHeader";
 
 export interface ReturnContext {
-  screen: "inbox" | "calendar" | "tasks";
+  screen: "inbox" | "calendar";
   // For inbox
-  streamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people";
+  streamId?: string | null | "all" | "events" | "streams" | "tags" | "people";
   streamName?: string;
   // For calendar
   selectedDate?: string;
   zoomLevel?: "day" | "week" | "month" | "year";
-  // For tasks
-  taskFilter?: "all" | "actionable" | "in_progress" | "completed";
 }
 
 interface CaptureFormProps {
   entryId?: string | null;
-  initialStreamId?: string | null | "all" | "tasks" | "events" | "streams" | "tags" | "people";
+  initialStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people";
   initialStreamName?: string;
   initialContent?: string;
   initialDate?: string;
@@ -402,9 +400,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           returnZoomLevel: returnContext.zoomLevel
         });
         return;
-      } else if (returnContext.screen === "tasks") {
-        navigate("tasks");
-        return;
       } else if (returnContext.screen === "inbox") {
         navigate("inbox", {
           returnStreamId: returnContext.streamId || null,
@@ -420,8 +415,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       let returnStreamId: string | null = formData.streamId || null;
       let returnStreamName: string = formData.streamName || "Uncategorized";
       // Edge case: If returning to a filter view, switch to Uncategorized
-      if (returnStreamId === "all" || returnStreamId === "tasks" ||
-          returnStreamId === "events" || returnStreamId === "streams" ||
+      if (returnStreamId === "all" || returnStreamId === "events" ||
+          returnStreamId === "streams" ||
           returnStreamId === "tags" || returnStreamId === "people" ||
           (typeof returnStreamId === 'string' && (returnStreamId.startsWith("tag:") || returnStreamId.startsWith("mention:")))) {
         returnStreamId = null;
