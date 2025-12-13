@@ -190,6 +190,10 @@ export const styles = StyleSheet.create({
     color: theme.colors.text.primary,
     fontWeight: "600",
   },
+  metadataTextUnsupported: {
+    textDecorationLine: "line-through",
+    color: "#9ca3af",
+  },
   metadataDivider: {
     fontSize: 10,
     color: "#d1d5db",

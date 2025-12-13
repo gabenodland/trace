@@ -1,8 +1,8 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
-import type { Entry, EntryStatus } from "@trace/core";
-import { formatEntryDateTime, formatEntryDateOnly, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor } from "@trace/core";
+import type { Entry, EntryStatus, StreamAttributeVisibility } from "@trace/core";
+import { formatEntryDateTime, formatEntryDateOnly, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor, formatRatingDisplay } from "@trace/core";
 import { getFormattedContent, getDisplayModeLines, getFirstLineOfText } from "../helpers/entryDisplayHelpers";
 import type { EntryDisplayMode } from "../types/EntryDisplayMode";
 import { HtmlRenderer } from "../helpers/htmlRenderer";
@@ -29,9 +29,11 @@ interface EntryListItemProps {
   displayMode?: EntryDisplayMode; // Display mode for content rendering
   showMenu?: boolean; // Whether menu is shown for this entry
   onMenuToggle?: () => void; // Toggle menu visibility
+  /** Attribute visibility settings from stream - if not provided, all attributes show */
+  attributeVisibility?: StreamAttributeVisibility;
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onStreamPress, onToggleComplete, onMove, onCopy, onDelete, onPin, onResolveConflict, streamName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onStreamPress, onToggleComplete, onMove, onCopy, onDelete, onPin, onResolveConflict, streamName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle, attributeVisibility }: EntryListItemProps) {
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(0);
   const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
@@ -47,6 +49,15 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
   const isATask = isTask(entry.status);
   const isOverdue = isTaskOverdue(entry.status, entry.due_date);
   const dueDateStr = formatDueDate(entry.due_date, entry.status);
+
+  // Attribute visibility - default to showing all if not provided
+  const showStatus = attributeVisibility?.showStatus ?? true;
+  const showType = attributeVisibility?.showType ?? true;
+  const showDueDate = attributeVisibility?.showDueDate ?? true;
+  const showRating = attributeVisibility?.showRating ?? true;
+  const showPriority = attributeVisibility?.showPriority ?? true;
+  const showLocation = attributeVisibility?.showLocation ?? true;
+  const ratingType = attributeVisibility?.ratingType ?? 'stars';
 
   const handleCheckboxPress = (e: any) => {
     e.stopPropagation();
@@ -114,8 +125,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
         <>
           {/* Title row with status icon inline */}
           <View style={styles.titleOnlyRow}>
-            {/* Status Icon inline with title */}
-            {isATask && (
+            {/* Status Icon inline with title - only show if stream supports status */}
+            {showStatus && isATask && (
               <TouchableOpacity
                 style={styles.titleOnlyStatusIcon}
                 onPress={handleCheckboxPress}
@@ -166,8 +177,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             <Text style={styles.date}>
               {formatEntryDateOnly(entry.entry_date || entry.updated_at)}
             </Text>
-            {/* Location Badge */}
-            {(locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
+            {/* Location Badge - only show if stream supports location */}
+            {showLocation && (locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
               <View style={styles.locationBadge}>
                 <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                   <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
@@ -193,8 +204,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               </Svg>
               <Text style={styles.streamText}>{streamName || "Unassigned"}</Text>
             </TouchableOpacity>
-            {/* Type Badge */}
-            {entry.type && (
+            {/* Type Badge - only show if stream supports type */}
+            {showType && entry.type && (
               <View style={styles.typeBadge}>
                 <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
                   <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
@@ -202,8 +213,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 <Text style={styles.typeText}>{entry.type}</Text>
               </View>
             )}
-            {/* Due Date Badge */}
-            {dueDateStr && (
+            {/* Due Date Badge - only show if stream supports due dates */}
+            {showDueDate && dueDateStr && (
               <View style={[
                 styles.dueDate,
                 isOverdue && styles.dueDateOverdue,
@@ -221,8 +232,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 </Text>
               </View>
             )}
-            {/* Priority Badge */}
-            {(entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
+            {/* Priority Badge - only show if stream supports priority */}
+            {showPriority && (entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
               <View style={styles.priorityBadge}>
                 <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                   <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.secondary} />
@@ -231,13 +242,13 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 <Text style={styles.priorityText}>{entry.priority}</Text>
               </View>
             )}
-            {/* Rating Badge */}
-            {(entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
+            {/* Rating Badge - only show if stream supports rating */}
+            {showRating && (entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
               <View style={styles.ratingBadge}>
                 <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                   <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </Svg>
-                <Text style={styles.ratingText}>{entry.rating}/5</Text>
+                <Text style={styles.ratingText}>{formatRatingDisplay(entry.rating, ratingType)}</Text>
               </View>
             )}
             {/* Tags */}
@@ -287,8 +298,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
       ) : (
         /* Other display modes - original layout */
         <View style={styles.contentRow}>
-          {/* Status Icon - shows for any task (entry with status != "none") */}
-          {isATask && (
+          {/* Status Icon - shows for any task (entry with status != "none") - only if stream supports status */}
+          {showStatus && isATask && (
             <TouchableOpacity
               style={styles.statusIcon}
               onPress={handleCheckboxPress}
@@ -461,8 +472,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 </TouchableOpacity>
               )}
 
-              {/* Location Badge */}
-              {(locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
+              {/* Location Badge - only show if stream supports location */}
+              {showLocation && (locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
                 <View style={styles.locationBadge}>
                   <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                     <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
@@ -490,8 +501,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 <Text style={styles.streamText}>{streamName || "Unassigned"}</Text>
               </TouchableOpacity>
 
-              {/* Type Badge */}
-              {entry.type && (
+              {/* Type Badge - only show if stream supports type */}
+              {showType && entry.type && (
                 <View style={styles.typeBadge}>
                   <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
                     <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
@@ -500,8 +511,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 </View>
               )}
 
-              {/* Due Date Badge */}
-              {dueDateStr && (
+              {/* Due Date Badge - only show if stream supports due dates */}
+              {showDueDate && dueDateStr && (
                 <View style={[
                   styles.dueDate,
                   isOverdue && styles.dueDateOverdue,
@@ -520,8 +531,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 </View>
               )}
 
-              {/* Priority Badge */}
-              {(entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
+              {/* Priority Badge - only show if stream supports priority */}
+              {showPriority && (entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
                 <View style={styles.priorityBadge}>
                   <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                     <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.secondary} />
@@ -531,13 +542,13 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 </View>
               )}
 
-              {/* Rating Badge */}
-              {(entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
+              {/* Rating Badge - only show if stream supports rating */}
+              {showRating && (entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
                 <View style={styles.ratingBadge}>
                   <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                     <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                   </Svg>
-                  <Text style={styles.ratingText}>{entry.rating}/5</Text>
+                  <Text style={styles.ratingText}>{formatRatingDisplay(entry.rating, ratingType)}</Text>
                 </View>
               )}
 

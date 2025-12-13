@@ -395,6 +395,23 @@ class LocalDatabase {
     } catch (error) {
       console.error('Migration error (entries type):', error);
     }
+
+    // Migration: Add entry_rating_type column to streams table
+    try {
+      const ratingTypeCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('streams') WHERE name = 'entry_rating_type'`
+      );
+
+      if (!ratingTypeCheck) {
+        console.log('📦 Running migration: Adding entry_rating_type to streams table...');
+        await this.db.execAsync(`
+          ALTER TABLE streams ADD COLUMN entry_rating_type TEXT DEFAULT 'stars';
+        `);
+        console.log('✅ Migration complete: entry_rating_type added to streams');
+      }
+    } catch (error) {
+      console.error('Migration error (streams entry_rating_type):', error);
+    }
   }
 
   private async createTables(): Promise<void> {
@@ -489,6 +506,7 @@ class LocalDatabase {
         entry_title_template TEXT,
         entry_content_template TEXT,
         entry_use_rating INTEGER DEFAULT 0,
+        entry_rating_type TEXT DEFAULT 'stars',
         entry_use_priority INTEGER DEFAULT 0,
         entry_use_status INTEGER DEFAULT 1,
         entry_use_duedates INTEGER DEFAULT 0,
@@ -1318,6 +1336,7 @@ class LocalDatabase {
       return {
         ...row,
         entry_use_rating: !!row.entry_use_rating,
+        entry_rating_type: row.entry_rating_type || 'stars',
         entry_use_priority: !!row.entry_use_priority,
         entry_use_status: !!row.entry_use_status,
         entry_use_duedates: !!row.entry_use_duedates,
@@ -1393,6 +1412,7 @@ class LocalDatabase {
     return {
       ...row,
       entry_use_rating: !!row.entry_use_rating,
+      entry_rating_type: row.entry_rating_type || 'stars',
       entry_use_priority: !!row.entry_use_priority,
       entry_use_status: !!row.entry_use_status,
       entry_use_duedates: !!row.entry_use_duedates,
@@ -1437,13 +1457,13 @@ class LocalDatabase {
       `INSERT OR REPLACE INTO streams (
         stream_id, user_id, name, entry_count, color, icon,
         entry_title_template, entry_content_template,
-        entry_use_rating, entry_use_priority, entry_use_status,
+        entry_use_rating, entry_rating_type, entry_use_priority, entry_use_status,
         entry_use_duedates, entry_use_location, entry_use_photos,
         entry_content_type, entry_statuses, entry_default_status,
         entry_use_type, entry_types,
         is_private, is_localonly,
         created_at, updated_at, synced, sync_action
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         stream.stream_id,
         stream.user_id,
@@ -1454,6 +1474,7 @@ class LocalDatabase {
         stream.entry_title_template || null,
         stream.entry_content_template || null,
         stream.entry_use_rating ? 1 : 0,
+        stream.entry_rating_type || 'stars',
         stream.entry_use_priority ? 1 : 0,
         stream.entry_use_status !== false ? 1 : 0,
         stream.entry_use_duedates ? 1 : 0,
@@ -1510,6 +1531,10 @@ class LocalDatabase {
     if (updates.entry_use_rating !== undefined) {
       setClauses.push('entry_use_rating = ?');
       values.push(updates.entry_use_rating ? 1 : 0);
+    }
+    if (updates.entry_rating_type !== undefined) {
+      setClauses.push('entry_rating_type = ?');
+      values.push(updates.entry_rating_type || 'stars');
     }
     if (updates.entry_use_priority !== undefined) {
       setClauses.push('entry_use_priority = ?');

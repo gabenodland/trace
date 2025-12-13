@@ -254,6 +254,7 @@ export type Database = {
           entry_content_template: string | null
           entry_content_type: string
           entry_count: number
+          entry_rating_type: string | null
           entry_title_template: string | null
           entry_types: string[] | null
           entry_use_duedates: boolean
@@ -283,6 +284,7 @@ export type Database = {
           entry_content_template?: string | null
           entry_content_type?: string
           entry_count?: number
+          entry_rating_type?: string | null
           entry_title_template?: string | null
           entry_types?: string[] | null
           entry_use_duedates?: boolean
@@ -312,6 +314,7 @@ export type Database = {
           entry_content_template?: string | null
           entry_content_type?: string
           entry_count?: number
+          entry_rating_type?: string | null
           entry_title_template?: string | null
           entry_types?: string[] | null
           entry_use_duedates?: boolean

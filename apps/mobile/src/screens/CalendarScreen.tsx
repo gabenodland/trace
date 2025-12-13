@@ -204,12 +204,20 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     });
   }, [entries, monthViewYear, selectedMonth, dateField]);
 
-  // Stream map
+  // Stream map (for names)
   const streamMap = useMemo(() => {
     return streams?.reduce((map, stream) => {
       map[stream.stream_id] = stream.name;
       return map;
     }, {} as Record<string, string>) || {};
+  }, [streams]);
+
+  // Stream by ID map (for attribute visibility)
+  const streamById = useMemo(() => {
+    return streams?.reduce((map, stream) => {
+      map[stream.stream_id] = stream;
+      return map;
+    }, {} as Record<string, typeof streams[0]>) || {};
   }, [streams]);
 
   // Sorted entries for day view
@@ -492,6 +500,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
             emptyMessage="No entries for this date"
             displayMode={displayMode}
             streamMap={streamMap}
+            streamById={streamById}
             onEntryPress={handleEntryPress}
             onTagPress={handleTagPress}
             onMentionPress={handleMentionPress}
@@ -600,6 +609,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
                 emptyMessage="No entries for this month"
                 displayMode={displayMode}
                 streamMap={streamMap}
+                streamById={streamById}
                 onEntryPress={handleEntryPress}
                 onTagPress={handleTagPress}
                 onMentionPress={handleMentionPress}
@@ -709,6 +719,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
                 emptyMessage="No entries for this year"
                 displayMode={displayMode}
                 streamMap={streamMap}
+                streamById={streamById}
                 onEntryPress={handleEntryPress}
                 onTagPress={handleTagPress}
                 onMentionPress={handleMentionPress}

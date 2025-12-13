@@ -20,7 +20,7 @@ import { localDB } from "../../../shared/db/localDB";
 import * as Crypto from "expo-crypto";
 import { useCaptureFormState } from "./hooks/useCaptureFormState";
 import { styles } from "./CaptureForm.styles";
-import { RatingPicker, PriorityPicker, TimePicker, AttributesPicker, GpsPicker, StatusPicker, DueDatePicker, EntryDatePicker, TypePicker } from "./pickers";
+import { RatingPicker, WholeNumberRatingPicker, DecimalRatingPicker, PriorityPicker, TimePicker, AttributesPicker, GpsPicker, StatusPicker, DueDatePicker, EntryDatePicker, TypePicker, UnsupportedAttributePicker } from "./pickers";
 import type { GpsData } from "./hooks/useCaptureFormState";
 import { MetadataBar } from "./MetadataBar";
 import { EditorToolbar } from "./EditorToolbar";
@@ -75,7 +75,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Consolidated picker visibility state - only one picker can be open at a time
-  type ActivePicker = 'stream' | 'gps' | 'location' | 'dueDate' | 'rating' | 'priority' | 'status' | 'type' | 'attributes' | 'entryDate' | 'time' | null;
+  type ActivePicker = 'stream' | 'gps' | 'location' | 'dueDate' | 'rating' | 'priority' | 'status' | 'type' | 'attributes' | 'entryDate' | 'time' | 'unsupportedStatus' | 'unsupportedType' | 'unsupportedDueDate' | 'unsupportedRating' | 'unsupportedPriority' | 'unsupportedLocation' | null;
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
 
   // GPS loading state (for capturing/reloading GPS)
@@ -122,6 +122,15 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const showDueDate = !currentStream || currentStream.entry_use_duedates === true;
   const showLocation = !currentStream || currentStream.entry_use_location !== false;
   const showPhotos = !currentStream || currentStream.entry_use_photos !== false;
+
+  // Unsupported flags - attribute not supported by stream BUT entry has a value
+  // Used to show strikethrough in MetadataBar with option to remove
+  const unsupportedStatus = !showStatus && formData.status !== "none";
+  const unsupportedType = !showType && !!formData.type;
+  const unsupportedDueDate = !showDueDate && !!formData.dueDate;
+  const unsupportedRating = !showRating && formData.rating > 0;
+  const unsupportedPriority = !showPriority && formData.priority > 0;
+  const unsupportedLocation = !showLocation && !!formData.locationData;
 
   // Get unsaved changes behavior from settings
   const unsavedChangesBehavior = settings.unsavedChangesBehavior;
@@ -1240,17 +1249,24 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           showRating={showRating}
           showPriority={showPriority}
           showPhotos={showPhotos}
+          unsupportedStatus={unsupportedStatus}
+          unsupportedType={unsupportedType}
+          unsupportedDueDate={unsupportedDueDate}
+          unsupportedRating={unsupportedRating}
+          unsupportedPriority={unsupportedPriority}
+          unsupportedLocation={unsupportedLocation}
           availableTypes={currentStream?.entry_types ?? []}
+          ratingType={currentStream?.entry_rating_type || 'stars'}
           isEditMode={isEditMode}
           enterEditMode={enterEditMode}
           onStreamPress={() => setActivePicker(activePicker === 'stream' ? null : 'stream')}
           onGpsPress={() => setActivePicker(activePicker === 'gps' ? null : 'gps')}
-          onLocationPress={() => setActivePicker(activePicker === 'location' ? null : 'location')}
-          onStatusPress={() => setActivePicker(activePicker === 'status' ? null : 'status')}
-          onTypePress={() => setActivePicker(activePicker === 'type' ? null : 'type')}
-          onDueDatePress={() => setActivePicker(activePicker === 'dueDate' ? null : 'dueDate')}
-          onRatingPress={() => setActivePicker('rating')}
-          onPriorityPress={() => setActivePicker('priority')}
+          onLocationPress={() => unsupportedLocation ? setActivePicker('unsupportedLocation') : setActivePicker(activePicker === 'location' ? null : 'location')}
+          onStatusPress={() => unsupportedStatus ? setActivePicker('unsupportedStatus') : setActivePicker(activePicker === 'status' ? null : 'status')}
+          onTypePress={() => unsupportedType ? setActivePicker('unsupportedType') : setActivePicker(activePicker === 'type' ? null : 'type')}
+          onDueDatePress={() => unsupportedDueDate ? setActivePicker('unsupportedDueDate') : setActivePicker(activePicker === 'dueDate' ? null : 'dueDate')}
+          onRatingPress={() => unsupportedRating ? setActivePicker('unsupportedRating') : setActivePicker('rating')}
+          onPriorityPress={() => unsupportedPriority ? setActivePicker('unsupportedPriority') : setActivePicker('priority')}
           onPhotosPress={() => setPhotosCollapsed(false)}
           onMenuPress={() => setActivePicker('attributes')}
           editorRef={editorRef}
@@ -1473,14 +1489,32 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         includeTime={formData.includeTime}
       />
 
-      {/* Rating Picker Modal */}
-      <RatingPicker
-        visible={activePicker === 'rating'}
-        onClose={() => setActivePicker(null)}
-        rating={formData.rating}
-        onRatingChange={(value) => updateField("rating", value)}
-        onSnackbar={showSnackbar}
-      />
+      {/* Rating Picker Modal - switch between stars, decimal_whole, and decimal based on stream config */}
+      {currentStream?.entry_rating_type === 'decimal' ? (
+        <DecimalRatingPicker
+          visible={activePicker === 'rating'}
+          onClose={() => setActivePicker(null)}
+          rating={formData.rating}
+          onRatingChange={(value) => updateField("rating", value)}
+          onSnackbar={showSnackbar}
+        />
+      ) : currentStream?.entry_rating_type === 'decimal_whole' ? (
+        <WholeNumberRatingPicker
+          visible={activePicker === 'rating'}
+          onClose={() => setActivePicker(null)}
+          rating={formData.rating}
+          onRatingChange={(value) => updateField("rating", value)}
+          onSnackbar={showSnackbar}
+        />
+      ) : (
+        <RatingPicker
+          visible={activePicker === 'rating'}
+          onClose={() => setActivePicker(null)}
+          rating={formData.rating}
+          onRatingChange={(value) => updateField("rating", value)}
+          onSnackbar={showSnackbar}
+        />
+      )}
 
       {/* Priority Picker Modal */}
       <PriorityPicker
@@ -1515,6 +1549,79 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         }}
         onSnackbar={showSnackbar}
         availableTypes={currentStream?.entry_types ?? []}
+      />
+
+      {/* Unsupported Attribute Pickers - show when attribute has value but stream doesn't support it */}
+      <UnsupportedAttributePicker
+        visible={activePicker === 'unsupportedStatus'}
+        onClose={() => setActivePicker(null)}
+        attributeName="Status"
+        currentValue={formData.status === 'none' ? 'None' : formData.status.charAt(0).toUpperCase() + formData.status.slice(1)}
+        onRemove={() => {
+          updateField("status", "none");
+          if (!isEditMode) enterEditMode();
+        }}
+        onSnackbar={showSnackbar}
+      />
+
+      <UnsupportedAttributePicker
+        visible={activePicker === 'unsupportedType'}
+        onClose={() => setActivePicker(null)}
+        attributeName="Type"
+        currentValue={formData.type || ''}
+        onRemove={() => {
+          updateField("type", null);
+          if (!isEditMode) enterEditMode();
+        }}
+        onSnackbar={showSnackbar}
+      />
+
+      <UnsupportedAttributePicker
+        visible={activePicker === 'unsupportedDueDate'}
+        onClose={() => setActivePicker(null)}
+        attributeName="Due Date"
+        currentValue={formData.dueDate ? new Date(formData.dueDate).toLocaleDateString() : ''}
+        onRemove={() => {
+          updateField("dueDate", null);
+          if (!isEditMode) enterEditMode();
+        }}
+        onSnackbar={showSnackbar}
+      />
+
+      <UnsupportedAttributePicker
+        visible={activePicker === 'unsupportedRating'}
+        onClose={() => setActivePicker(null)}
+        attributeName="Rating"
+        currentValue={`${formData.rating} star${formData.rating !== 1 ? 's' : ''}`}
+        onRemove={() => {
+          updateField("rating", 0);
+          if (!isEditMode) enterEditMode();
+        }}
+        onSnackbar={showSnackbar}
+      />
+
+      <UnsupportedAttributePicker
+        visible={activePicker === 'unsupportedPriority'}
+        onClose={() => setActivePicker(null)}
+        attributeName="Priority"
+        currentValue={formData.priority === 1 ? 'Low' : formData.priority === 2 ? 'Medium' : 'High'}
+        onRemove={() => {
+          updateField("priority", 0);
+          if (!isEditMode) enterEditMode();
+        }}
+        onSnackbar={showSnackbar}
+      />
+
+      <UnsupportedAttributePicker
+        visible={activePicker === 'unsupportedLocation'}
+        onClose={() => setActivePicker(null)}
+        attributeName="Location"
+        currentValue={formData.locationData?.name || 'Unknown Location'}
+        onRemove={() => {
+          updateField("locationData", null);
+          if (!isEditMode) enterEditMode();
+        }}
+        onSnackbar={showSnackbar}
       />
 
       {/* Entry Menu */}

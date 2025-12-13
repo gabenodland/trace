@@ -18,6 +18,7 @@ export interface Stream {
 
   // Feature toggles - enable/disable features per stream
   entry_use_rating?: boolean;
+  entry_rating_type?: 'stars' | 'decimal_whole' | 'decimal'; // Rating display type: stars (1-5), decimal_whole (0-10), or decimal (0.0-10.0)
   entry_use_priority?: boolean;
   entry_use_status?: boolean;
   entry_use_duedates?: boolean;
@@ -55,6 +56,7 @@ export interface UpdateStreamInput {
 
   // Feature toggles
   entry_use_rating?: boolean;
+  entry_rating_type?: 'stars' | 'decimal_whole' | 'decimal';
   entry_use_priority?: boolean;
   entry_use_status?: boolean;
   entry_use_duedates?: boolean;

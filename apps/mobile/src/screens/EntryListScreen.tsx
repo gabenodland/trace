@@ -468,6 +468,7 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
         streams={streams}
         locations={locations}
         displayMode={displayMode}
+        fullStreams={streams}
       />
 
       {/* Stream Navigator Dropdown */}

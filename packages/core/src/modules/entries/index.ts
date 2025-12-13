@@ -8,5 +8,6 @@ export * from "./EntryTypes";
 
 // Export all helpers
 export * from "./entryHelpers";
+export * from "./ratingHelpers";
 
 // DO NOT export API functions - they are internal only

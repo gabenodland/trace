@@ -24,6 +24,8 @@ import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
 import { StatusConfigModal } from "../modules/streams/components/StatusConfigModal";
 import { TypeConfigModal } from "../modules/streams/components/TypeConfigModal";
+import { RatingConfigModal } from "../modules/streams/components/RatingConfigModal";
+import { type RatingType, getRatingTypeLabel } from "@trace/core";
 
 interface StreamPropertiesScreenProps {
   streamId: string;
@@ -42,6 +44,8 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   const [entryContentTemplate, setEntryContentTemplate] = useState("");
   const [entryContentType, setEntryContentType] = useState("text");
   const [useRating, setUseRating] = useState(true);
+  const [ratingType, setRatingType] = useState<RatingType>('stars');
+  const [showRatingConfig, setShowRatingConfig] = useState(false);
   const [usePriority, setUsePriority] = useState(true);
   const [useStatus, setUseStatus] = useState(true);
   const [useDueDates, setUseDueDates] = useState(true);
@@ -91,6 +95,7 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
       setEntryContentTemplate(stream.entry_content_template || "");
       setEntryContentType(stream.entry_content_type || "text");
       setUseRating(stream.entry_use_rating ?? true);
+      setRatingType(stream.entry_rating_type ?? 'stars');
       setUsePriority(stream.entry_use_priority ?? true);
       setUseStatus(stream.entry_use_status ?? true);
       setUseDueDates(stream.entry_use_duedates ?? true);
@@ -124,6 +129,7 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         entry_content_template: entryContentTemplate || null,
         entry_content_type: entryContentType,
         entry_use_rating: useRating,
+        entry_rating_type: ratingType,
         entry_use_priority: usePriority,
         entry_use_status: useStatus,
         entry_use_duedates: useDueDates,
@@ -336,8 +342,22 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
           <View style={styles.toggleRow}>
             <View style={styles.toggleInfo}>
               <Text style={styles.toggleLabel}>Rating</Text>
-              <Text style={styles.toggleDescription}>Star rating for entries</Text>
+              <Text style={styles.toggleDescription}>Rate entries with stars or numbers</Text>
+              {useRating && (
+                <Text style={styles.statusList}>{getRatingTypeLabel(ratingType)}</Text>
+              )}
             </View>
+            {useRating && (
+              <TouchableOpacity
+                style={styles.gearButton}
+                onPress={() => setShowRatingConfig(true)}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                  <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
+                </Svg>
+              </TouchableOpacity>
+            )}
             <Switch
               value={useRating}
               onValueChange={(value) => {
@@ -546,6 +566,17 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         onClose={() => setShowTypeConfig(false)}
         types={entryTypes}
         onSave={handleTypeConfigSave}
+      />
+
+      {/* Rating Config Modal */}
+      <RatingConfigModal
+        visible={showRatingConfig}
+        onClose={() => setShowRatingConfig(false)}
+        ratingType={ratingType}
+        onSave={(newType) => {
+          setRatingType(newType);
+          markChanged();
+        }}
       />
 
       {/* Snackbar */}
