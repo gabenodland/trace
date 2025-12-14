@@ -250,13 +250,13 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
       return groupEntriesByPriority(filteredEntries, orderMode, showPinnedFirst);
     }
     if (sortMode === 'rating') {
-      return groupEntriesByRating(filteredEntries, orderMode, showPinnedFirst);
+      return groupEntriesByRating(filteredEntries, orderMode, showPinnedFirst, streamById);
     }
     if (sortMode === 'due_date') {
       return groupEntriesByDueDate(filteredEntries, orderMode, showPinnedFirst);
     }
     return undefined;
-  }, [filteredEntries, sortMode, streamMap, orderMode, showPinnedFirst]);
+  }, [filteredEntries, sortMode, streamMap, streamById, orderMode, showPinnedFirst]);
 
   // Compute sections for month view
   const entrySectionsForMonth = useMemo((): EntrySection[] | undefined => {
@@ -273,13 +273,13 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
       return groupEntriesByPriority(filteredEntriesForMonth, orderMode, showPinnedFirst);
     }
     if (sortMode === 'rating') {
-      return groupEntriesByRating(filteredEntriesForMonth, orderMode, showPinnedFirst);
+      return groupEntriesByRating(filteredEntriesForMonth, orderMode, showPinnedFirst, streamById);
     }
     if (sortMode === 'due_date') {
       return groupEntriesByDueDate(filteredEntriesForMonth, orderMode, showPinnedFirst);
     }
     return undefined;
-  }, [filteredEntriesForMonth, sortMode, streamMap, orderMode, showPinnedFirst]);
+  }, [filteredEntriesForMonth, sortMode, streamMap, streamById, orderMode, showPinnedFirst]);
 
   // Compute sections for year view
   const entrySectionsForYear = useMemo((): EntrySection[] | undefined => {
@@ -296,13 +296,13 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
       return groupEntriesByPriority(filteredEntriesForYear, orderMode, showPinnedFirst);
     }
     if (sortMode === 'rating') {
-      return groupEntriesByRating(filteredEntriesForYear, orderMode, showPinnedFirst);
+      return groupEntriesByRating(filteredEntriesForYear, orderMode, showPinnedFirst, streamById);
     }
     if (sortMode === 'due_date') {
       return groupEntriesByDueDate(filteredEntriesForYear, orderMode, showPinnedFirst);
     }
     return undefined;
-  }, [filteredEntriesForYear, sortMode, streamMap, orderMode, showPinnedFirst]);
+  }, [filteredEntriesForYear, sortMode, streamMap, streamById, orderMode, showPinnedFirst]);
 
   // Navigation handlers
   const handleEntryPress = (entryId: string) => {

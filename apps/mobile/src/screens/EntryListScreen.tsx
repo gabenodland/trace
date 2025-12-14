@@ -154,6 +154,14 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
     }, {} as Record<string, string>);
   }, [streams]);
 
+  // Create stream by ID map for attribute visibility
+  const streamById = useMemo(() => {
+    return streams.reduce((map, stream) => {
+      map[stream.stream_id] = stream;
+      return map;
+    }, {} as Record<string, typeof streams[0]>);
+  }, [streams]);
+
   const sortedEntries = useMemo(() => {
     return sortEntries(entries, sortMode, streamMap, orderMode, showPinnedFirst);
   }, [entries, sortMode, streamMap, orderMode, showPinnedFirst]);
@@ -173,13 +181,13 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
       return groupEntriesByPriority(entries, orderMode, showPinnedFirst);
     }
     if (sortMode === 'rating') {
-      return groupEntriesByRating(entries, orderMode, showPinnedFirst);
+      return groupEntriesByRating(entries, orderMode, showPinnedFirst, streamById);
     }
     if (sortMode === 'due_date') {
       return groupEntriesByDueDate(entries, orderMode, showPinnedFirst);
     }
     return undefined;
-  }, [entries, sortMode, streamMap, orderMode, showPinnedFirst]);
+  }, [entries, sortMode, streamMap, streamById, orderMode, showPinnedFirst]);
 
   // Filter entries by search query (searches title and content)
   const filteredEntries = useMemo(() => {

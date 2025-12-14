@@ -1,8 +1,8 @@
 /**
  * Sorting helpers for entry lists
  */
-import type { Entry, EntryStatus } from '@trace/core';
-import { ALL_STATUSES, getStatusLabel } from '@trace/core';
+import type { Entry, EntryStatus, Stream } from '@trace/core';
+import { ALL_STATUSES, getStatusLabel, decimalToStars, type RatingType } from '@trace/core';
 import type { EntrySortMode } from '../types/EntrySortMode';
 import type { EntrySortOrder } from '../types/EntrySortOrder';
 
@@ -414,51 +414,123 @@ export function groupEntriesByPriority(
 }
 
 /**
- * Rating labels for display
+ * Determine if entries have mixed rating types
+ * Returns 'stars' if all are stars, 'mixed' if any 10-base, or specific type
  */
-function getRatingLabel(rating: number): string {
+function determineRatingDisplayMode(
+  entries: Entry[],
+  streamById?: Record<string, Stream> | null
+): 'stars' | '10base' {
+  if (!streamById) return 'stars';
+
+  // Check if any entry's stream uses 10-base rating
+  for (const entry of entries) {
+    if (entry.stream_id && streamById[entry.stream_id]) {
+      const stream = streamById[entry.stream_id];
+      const ratingType = stream.entry_rating_type ?? 'stars';
+      if (ratingType === 'decimal' || ratingType === 'decimal_whole') {
+        return '10base';
+      }
+    }
+  }
+
+  return 'stars';
+}
+
+/**
+ * Get rating label for display based on display mode
+ * For stars mode: "5 Stars", "4 Stars", etc. (converts 0-10 to 1-5)
+ * For 10base mode: "10/10", "9/10", etc. (shows actual value)
+ */
+function getRatingLabel(rating: number, displayMode: 'stars' | '10base'): string {
   if (rating === 0) return 'No Rating';
-  return `${rating} Star${rating !== 1 ? 's' : ''}`;
+
+  if (displayMode === '10base') {
+    // For 10-base mode, show the actual value
+    const isWholeNumber = rating === Math.floor(rating);
+    if (isWholeNumber) {
+      return `${rating}/10`;
+    }
+    return `${rating.toFixed(1)}/10`;
+  }
+
+  // For stars mode, convert 0-10 to 1-5 stars
+  const stars = decimalToStars(rating);
+  return `${stars} Star${stars !== 1 ? 's' : ''}`;
+}
+
+/**
+ * Get the grouping key for a rating based on display mode
+ * For stars: group by star value (1-5)
+ * For 10base: group by whole number (0-10)
+ */
+function getRatingGroupKey(rating: number, displayMode: 'stars' | '10base'): number {
+  if (rating === 0) return 0;
+
+  if (displayMode === '10base') {
+    // Group by whole number for 10-base
+    return Math.floor(rating);
+  }
+
+  // Group by star value (1-5) - convert to the star bucket
+  return decimalToStars(rating);
 }
 
 /**
  * Group entries by rating into sections
  * Returns sections in rating order (highest first for desc) with count
+ * Automatically uses 10-base display when entries have mixed rating types
  */
 export function groupEntriesByRating(
   entries: Entry[],
   order: EntrySortOrder = 'desc',
-  showPinnedFirst: boolean = false
+  showPinnedFirst: boolean = false,
+  streamById?: Record<string, Stream> | null
 ): EntrySection[] {
   // First sort entries by rating
   const sorted = sortEntries(entries, 'rating', undefined, order, showPinnedFirst);
+
+  // Determine display mode based on stream rating types
+  const displayMode = determineRatingDisplayMode(entries, streamById);
 
   // Group by rating
   const groups = new Map<number, Entry[]>();
 
   for (const entry of sorted) {
     const rating = entry.rating || 0;
-    if (!groups.has(rating)) {
-      groups.set(rating, []);
+    const groupKey = getRatingGroupKey(rating, displayMode);
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, []);
     }
-    groups.get(rating)!.push(entry);
+    groups.get(groupKey)!.push(entry);
   }
 
-  // Get unique ratings and sort them
-  const ratings = Array.from(groups.keys()).sort((a, b) => {
+  // Get unique group keys and sort them
+  const groupKeys = Array.from(groups.keys()).sort((a, b) => {
     return (b - a) * (order === 'asc' ? -1 : 1);
   });
 
   // Convert to sections
   const sections: EntrySection[] = [];
 
-  for (const rating of ratings) {
-    const entries = groups.get(rating);
-    if (entries && entries.length > 0) {
+  for (const groupKey of groupKeys) {
+    const groupEntries = groups.get(groupKey);
+    if (groupEntries && groupEntries.length > 0) {
+      // For the title, use the group key value
+      let title: string;
+      if (groupKey === 0) {
+        title = 'No Rating';
+      } else if (displayMode === '10base') {
+        title = `${groupKey}/10`;
+      } else {
+        title = `${groupKey} Star${groupKey !== 1 ? 's' : ''}`;
+      }
+
       sections.push({
-        title: getRatingLabel(rating),
-        count: entries.length,
-        data: entries,
+        title,
+        count: groupEntries.length,
+        data: groupEntries,
       });
     }
   }
