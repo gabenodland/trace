@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from "react";
 import { View, StyleSheet, Alert } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import * as Location from "expo-location";
-import { useAuthState, type LocationEntity } from "@trace/core";
+import { useAuthState } from "@trace/core";
 import { useEntries, MobileEntryFilter } from "../modules/entries/mobileEntryHooks";
-import { localDB } from "../shared/db/localDB";
+import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
@@ -52,7 +52,10 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
   const [sortMode, setSortMode] = usePersistedState<EntrySortMode>('@entryListSortMode', DEFAULT_SORT_MODE);
   const [orderMode, setOrderMode] = usePersistedState<EntrySortOrder>('@entryListOrderMode', DEFAULT_SORT_ORDER);
   const [showPinnedFirst, setShowPinnedFirst] = usePersistedState<boolean>('@entryListShowPinnedFirst', false);
-  const [locations, setLocations] = useState<LocationEntity[]>([]);
+
+  // Use hook for locations instead of direct localDB call
+  const { data: locationsData } = useLocations();
+  const locations = locationsData || [];
 
   // Update stream when returning from entry screen
   useEffect(() => {
@@ -61,19 +64,6 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
       setSelectedStreamName(returnStreamName);
     }
   }, [returnStreamId, returnStreamName]);
-
-  // Fetch locations for displaying location names
-  useEffect(() => {
-    const fetchLocations = async () => {
-      try {
-        const allLocations = await localDB.getAllLocations();
-        setLocations(allLocations);
-      } catch (error) {
-        console.error('Failed to fetch locations:', error);
-      }
-    };
-    fetchLocations();
-  }, []);
 
   // Build breadcrumbs from selected stream (flat - no hierarchy)
   const breadcrumbs = useMemo((): BreadcrumbSegment[] => {

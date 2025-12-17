@@ -2,9 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ScrollView } from "react-native";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
+import { useLocationsWithCounts } from "../modules/locations/mobileLocationHooks";
 import { TopBar } from "../components/layout/TopBar";
 import { SubBar } from "../components/layout/SubBar";
-import { localDB } from "../shared/db/localDB";
 import Svg, { Path, Circle } from "react-native-svg";
 import { theme } from "../shared/theme/theme";
 import type { LocationEntity } from "@trace/core";
@@ -30,26 +30,11 @@ export function LocationsScreen() {
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
 
-  const [locations, setLocations] = useState<Array<LocationEntity & { entry_count: number }>>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use hook for locations with counts instead of direct localDB call
+  const { data: locationsData, isLoading } = useLocationsWithCounts();
+  const locations = locationsData || [];
+
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Load locations with entry counts
-  useEffect(() => {
-    const loadLocations = async () => {
-      try {
-        setIsLoading(true);
-        const allLocations = await localDB.getLocationsWithCounts();
-        setLocations(allLocations);
-      } catch (error) {
-        console.error("Error loading locations:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadLocations();
-  }, []);
 
   // Build location tree from locations
   const locationTree = useMemo(() => {

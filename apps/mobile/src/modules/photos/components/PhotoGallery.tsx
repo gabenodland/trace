@@ -9,8 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
-import { localDB } from '../../../shared/db/localDB';
-import { getPhotoUri, ensurePhotoDownloaded } from '../mobilePhotoApi';
+import { getPhotoUri, ensurePhotoDownloaded, getPhotosForEntry } from '../mobilePhotoApi';
 import { PhotoViewer } from './PhotoViewer';
 import type { Photo } from '@trace/core';
 
@@ -93,7 +92,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
   const loadPhotos = async (mounted: boolean = true, retryCount: number = 0) => {
     try {
       setLoading(true);
-      const entryPhotos = await localDB.getPhotosForEntry(entryId);
+      const entryPhotos = await getPhotosForEntry(entryId);
 
       if (!mounted) return; // Prevent setState on unmounted component
 

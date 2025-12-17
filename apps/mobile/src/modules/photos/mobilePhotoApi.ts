@@ -278,6 +278,58 @@ export async function deletePhotoFromLocalStorage(localPath: string): Promise<vo
 }
 
 /**
+ * Create photo input type
+ */
+export interface CreatePhotoInput {
+  photo_id: string;
+  entry_id: string;
+  user_id: string;
+  file_path: string;
+  local_path: string;
+  mime_type: string;
+  file_size: number;
+  width: number;
+  height: number;
+  position: number;
+  uploaded: boolean;
+}
+
+/**
+ * Create a photo record in the local database
+ * This is the proper API function for creating photos - components should use this instead of localDB directly
+ */
+export async function createPhoto(data: CreatePhotoInput): Promise<void> {
+  log.info('Creating photo', { photoId: data.photo_id, entryId: data.entry_id });
+
+  await localDB.createPhoto({
+    photo_id: data.photo_id,
+    entry_id: data.entry_id,
+    user_id: data.user_id,
+    file_path: data.file_path,
+    local_path: data.local_path,
+    mime_type: data.mime_type,
+    file_size: data.file_size,
+    width: data.width,
+    height: data.height,
+    position: data.position,
+    uploaded: data.uploaded,
+  });
+
+  // Trigger sync in background
+  triggerPushSync();
+
+  log.success('Photo created', { photoId: data.photo_id });
+}
+
+/**
+ * Get all photos for an entry
+ */
+export async function getPhotosForEntry(entryId: string): Promise<any[]> {
+  log.debug('Getting photos for entry', { entryId });
+  return await localDB.getPhotosForEntry(entryId);
+}
+
+/**
  * Delete photo completely (database entry + local file)
  */
 export async function deletePhoto(photoId: string): Promise<void> {

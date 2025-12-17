@@ -15,8 +15,7 @@ import { useNavigationMenu } from "../../../shared/hooks/useNavigationMenu";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { LocationPicker } from "../../locations/components/LocationPicker";
-import { compressPhoto, savePhotoToLocalStorage, deletePhoto } from "../../photos/mobilePhotoApi";
-import { localDB } from "../../../shared/db/localDB";
+import { compressPhoto, savePhotoToLocalStorage, deletePhoto, createPhoto } from "../../photos/mobilePhotoApi";
 import * as Crypto from "expo-crypto";
 import { useCaptureFormState } from "./hooks/useCaptureFormState";
 import { styles } from "./CaptureForm.styles";
@@ -912,8 +911,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               to: newLocalPath,
             });
 
-            // Save to DB with real entry_id
-            await localDB.createPhoto({
+            // Save to DB with real entry_id using proper API
+            await createPhoto({
               photo_id: photo.photoId,
               entry_id: newEntry.entry_id,
               user_id: user!.id,
@@ -1000,10 +999,10 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       const userId = user.id;
 
       if (isEditing) {
-        // EXISTING ENTRY: Save photo to DB immediately (entry exists in Supabase)
+        // EXISTING ENTRY: Save photo to DB immediately using proper API
         const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, entryId!);
 
-        await localDB.createPhoto({
+        await createPhoto({
           photo_id: photoId,
           entry_id: entryId!,
           user_id: userId,
@@ -1065,10 +1064,10 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         const userId = user.id;
 
         if (isEditing) {
-          // EXISTING ENTRY: Save photo to DB immediately
+          // EXISTING ENTRY: Save photo to DB immediately using proper API
           const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, entryId!);
 
-          await localDB.createPhoto({
+          await createPhoto({
             photo_id: photoId,
             entry_id: entryId!,
             user_id: userId,
@@ -1179,7 +1178,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         onMenuToggle={() => setShowMenu(!showMenu)}
         enterEditMode={enterEditMode}
         showMenu={showMenu}
-        menuItems={isEditing ? [...wrappedMenuItems.slice(0, -1), { label: "Delete Entry", onPress: handleDelete, destructive: true }, wrappedMenuItems[wrappedMenuItems.length - 1]] : wrappedMenuItems}
+        menuItems={wrappedMenuItems}
         userEmail={userEmail || null}
         onProfilePress={wrappedOnProfilePress}
         onMenuClose={() => setShowMenu(false)}
