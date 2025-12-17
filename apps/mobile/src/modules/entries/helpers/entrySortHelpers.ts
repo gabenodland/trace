@@ -357,57 +357,80 @@ export function groupEntriesByStream(
 }
 
 /**
- * Priority labels for display
- */
-const PRIORITY_LABELS: Record<number, string> = {
-  5: 'Critical',
-  4: 'High',
-  3: 'Medium',
-  2: 'Low',
-  1: 'Lowest',
-  0: 'No Priority',
-};
-
-/**
  * Group entries by priority into sections
- * Returns sections in priority order (highest first for desc) with count
+ * For priority sorting, entries with priorities are not grouped (no section headers).
+ * Only entries without priority are grouped under "No Priority" at the bottom.
+ *
+ * @param entries - The entries to group
+ * @param order - 'asc' puts priority 1 at top, 'desc' puts highest priority at top
+ * @param showPinnedFirst - Whether to show pinned entries first
  */
 export function groupEntriesByPriority(
   entries: Entry[],
   order: EntrySortOrder = 'desc',
   showPinnedFirst: boolean = false
 ): EntrySection[] {
-  // First sort entries by priority
-  const sorted = sortEntries(entries, 'priority', undefined, order, showPinnedFirst);
+  // Separate entries with priority from those without
+  const entriesWithPriority: Entry[] = [];
+  const entriesWithoutPriority: Entry[] = [];
 
-  // Group by priority
-  const groups = new Map<number, Entry[]>();
-
-  for (const entry of sorted) {
-    const priority = entry.priority || 0;
-    if (!groups.has(priority)) {
-      groups.set(priority, []);
+  for (const entry of entries) {
+    if (entry.priority && entry.priority > 0) {
+      entriesWithPriority.push(entry);
+    } else {
+      entriesWithoutPriority.push(entry);
     }
-    groups.get(priority)!.push(entry);
   }
 
-  // Get unique priorities and sort them
-  const priorities = Array.from(groups.keys()).sort((a, b) => {
-    return (b - a) * (order === 'asc' ? -1 : 1);
+  // Sort entries with priority
+  // asc: 1 at top (lowest number first), desc: highest at top
+  const sortedWithPriority = [...entriesWithPriority].sort((a, b) => {
+    // Handle pinned entries if requested
+    if (showPinnedFirst) {
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+    }
+
+    const priorityA = a.priority || 0;
+    const priorityB = b.priority || 0;
+
+    // asc: lower numbers first (1, 2, 3...)
+    // desc: higher numbers first (10, 9, 8...)
+    if (order === 'asc') {
+      return priorityA - priorityB;
+    }
+    return priorityB - priorityA;
   });
 
-  // Convert to sections
+  // Sort entries without priority by date (secondary sort)
+  const sortedWithoutPriority = [...entriesWithoutPriority].sort((a, b) => {
+    if (showPinnedFirst) {
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+    }
+    // Sort by entry_date descending within no-priority group
+    return new Date(b.entry_date || b.created_at).getTime() -
+           new Date(a.entry_date || a.created_at).getTime();
+  });
+
+  // Build sections - prioritized entries get no section header (empty title)
+  // "No Priority" entries always go at the bottom
   const sections: EntrySection[] = [];
 
-  for (const priority of priorities) {
-    const entries = groups.get(priority);
-    if (entries && entries.length > 0) {
-      sections.push({
-        title: PRIORITY_LABELS[priority] || `Priority ${priority}`,
-        count: entries.length,
-        data: entries,
-      });
-    }
+  if (sortedWithPriority.length > 0) {
+    sections.push({
+      title: '', // No section header for prioritized entries
+      count: sortedWithPriority.length,
+      data: sortedWithPriority,
+    });
+  }
+
+  if (sortedWithoutPriority.length > 0) {
+    sections.push({
+      title: 'No Priority',
+      count: sortedWithoutPriority.length,
+      data: sortedWithoutPriority,
+    });
   }
 
   return sections;

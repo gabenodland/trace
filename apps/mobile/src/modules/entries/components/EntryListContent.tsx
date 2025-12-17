@@ -94,12 +94,15 @@ export function EntryListContent({
   if (sections && sections.length > 0) {
     return (
       <>
-        {sections.map((section) => (
-          <View key={section.title}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Text style={styles.sectionCount}>({section.data.length})</Text>
-            </View>
+        {sections.map((section, index) => (
+          <View key={section.title || `section-${index}`}>
+            {/* Only show section header if title is not empty */}
+            {section.title !== '' && (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <Text style={styles.sectionCount}>({section.data.length})</Text>
+              </View>
+            )}
             {section.data.map(renderEntry)}
           </View>
         ))}

@@ -88,15 +88,21 @@ export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPre
     );
   };
 
-  // Render section header
-  const renderSectionHeader = ({ section }: { section: EntrySection }) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{section.title}</Text>
-      <View style={styles.sectionCount}>
-        <Text style={styles.sectionCountText}>{section.count}</Text>
+  // Render section header (only if title is not empty)
+  const renderSectionHeader = ({ section }: { section: EntrySection }) => {
+    // Don't render header for empty titles (e.g., priority entries without label)
+    if (section.title === '') {
+      return null;
+    }
+    return (
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{section.title}</Text>
+        <View style={styles.sectionCount}>
+          <Text style={styles.sectionCountText}>{section.count}</Text>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (isLoading) {
     return (

@@ -10,7 +10,7 @@ import {
   Alert,
   Animated,
 } from "react-native";
-import Svg, { Path, Line } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import {
   type UpdateStreamInput,
@@ -22,13 +22,16 @@ import {
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
+import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
 import { StatusConfigModal } from "../modules/streams/components/StatusConfigModal";
 import { TypeConfigModal } from "../modules/streams/components/TypeConfigModal";
 import { RatingConfigModal } from "../modules/streams/components/RatingConfigModal";
 import { type RatingType, getRatingTypeLabel } from "@trace/core";
 
+type TabType = "features" | "template" | "general";
+
 interface StreamPropertiesScreenProps {
-  streamId: string;
+  streamId: string | null;
 }
 
 export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps) {
@@ -36,7 +39,17 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const { streams, streamMutations } = useStreams();
 
-  const stream = streams.find((s) => s.stream_id === streamId);
+  const isCreateMode = streamId === null;
+  const stream = isCreateMode ? null : streams.find((s) => s.stream_id === streamId);
+
+  // Build breadcrumbs
+  const breadcrumbs: BreadcrumbSegment[] = [
+    { id: "streams", label: "Streams" },
+    { id: streamId, label: isCreateMode ? "New Stream" : stream?.name || "Stream" },
+  ];
+
+  // Active tab - default to "general"
+  const [activeTab, setActiveTab] = useState<TabType>("general");
 
   // Local state for editing
   const [name, setName] = useState("");
@@ -87,9 +100,29 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
     ]).start(() => setSnackbarMessage(null));
   };
 
-  // Initialize form with stream data
+  // Initialize form with stream data or defaults for create mode
   useEffect(() => {
-    if (stream) {
+    if (isCreateMode) {
+      // Set defaults for create mode
+      setName("");
+      setEntryTitleTemplate("");
+      setEntryContentTemplate("");
+      setEntryContentType("text");
+      setUseRating(true);
+      setRatingType('stars');
+      setUsePriority(true);
+      setUseStatus(true);
+      setUseDueDates(true);
+      setUseLocation(true);
+      setUsePhotos(true);
+      setIsPrivate(false);
+      setIsLocalOnly(false);
+      setEntryStatuses([...DEFAULT_STREAM_STATUSES]);
+      setEntryDefaultStatus(DEFAULT_INITIAL_STATUS);
+      setUseType(false);
+      setEntryTypes([]);
+      setHasChanges(false);
+    } else if (stream) {
       setName(stream.name || "");
       setEntryTitleTemplate(stream.entry_title_template || "");
       setEntryContentTemplate(stream.entry_content_template || "");
@@ -111,47 +144,58 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
       setEntryTypes(stream.entry_types ?? []);
       setHasChanges(false);
     }
-  }, [stream]);
+  }, [stream, isCreateMode]);
 
   // Track changes
   const markChanged = () => {
     setHasChanges(true);
   };
 
-  // Save changes
+  // Save changes (create or update)
   const handleSave = async () => {
-    if (!stream) return;
+    // Validate name
+    if (!name.trim()) {
+      Alert.alert("Error", "Please enter a stream name");
+      return;
+    }
 
     try {
-      const updates: UpdateStreamInput = {
-        name: name.trim() || stream.name,
-        entry_title_template: entryTitleTemplate || null,
-        entry_content_template: entryContentTemplate || null,
-        entry_content_type: entryContentType,
-        entry_use_rating: useRating,
-        entry_rating_type: ratingType,
-        entry_use_priority: usePriority,
-        entry_use_status: useStatus,
-        entry_use_duedates: useDueDates,
-        entry_use_location: useLocation,
-        entry_use_photos: usePhotos,
-        is_private: isPrivate,
-        is_localonly: isLocalOnly,
-        // Status configuration
-        entry_statuses: entryStatuses,
-        entry_default_status: entryDefaultStatus,
-        // Type configuration
-        entry_use_type: useType,
-        entry_types: entryTypes,
-      };
+      if (isCreateMode) {
+        // Create new stream
+        await streamMutations.createStream(name.trim());
+        showSnackbar("Stream created");
+        navigate("streams");
+      } else if (stream) {
+        // Update existing stream
+        const updates: UpdateStreamInput = {
+          name: name.trim(),
+          entry_title_template: entryTitleTemplate || null,
+          entry_content_template: entryContentTemplate || null,
+          entry_content_type: entryContentType,
+          entry_use_rating: useRating,
+          entry_rating_type: ratingType,
+          entry_use_priority: usePriority,
+          entry_use_status: useStatus,
+          entry_use_duedates: useDueDates,
+          entry_use_location: useLocation,
+          entry_use_photos: usePhotos,
+          is_private: isPrivate,
+          is_localonly: isLocalOnly,
+          // Status configuration
+          entry_statuses: entryStatuses,
+          entry_default_status: entryDefaultStatus,
+          // Type configuration
+          entry_use_type: useType,
+          entry_types: entryTypes,
+        };
 
-      await streamMutations.updateStream(streamId, updates);
-      setHasChanges(false);
-      // Navigate back to stream with snackbar message
-      navigate("inbox", { streamId, streamName: name.trim() || stream.name, snackbarMessage: "Stream settings saved" });
+        await streamMutations.updateStream(streamId!, updates);
+        setHasChanges(false);
+        showSnackbar("Stream settings saved");
+      }
     } catch (error) {
       console.error("Failed to save stream:", error);
-      showSnackbar("Failed to save stream properties");
+      showSnackbar(isCreateMode ? "Failed to create stream" : "Failed to save stream properties");
     }
   };
 
@@ -204,11 +248,26 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
     }
   };
 
-  if (!stream) {
+  // Handle breadcrumb press
+  const handleBreadcrumbPress = (segment: BreadcrumbSegment) => {
+    if (segment.id === "streams") {
+      handleBack();
+    }
+  };
+
+  // Show not found only for edit mode when stream doesn't exist
+  if (!isCreateMode && !stream) {
+    const notFoundBreadcrumbs: BreadcrumbSegment[] = [
+      { id: "streams", label: "Streams" },
+      { id: null, label: "Not Found" },
+    ];
     return (
       <View style={styles.container}>
         <TopBar
-          title="Stream Properties"
+          breadcrumbs={notFoundBreadcrumbs}
+          onBreadcrumbPress={(segment) => {
+            if (segment.id === "streams") navigate("streams");
+          }}
           menuItems={menuItems}
           userEmail={userEmail}
           onProfilePress={onProfilePress}
@@ -216,7 +275,7 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>Stream not found</Text>
           <TouchableOpacity
-            style={styles.backButton}
+            style={styles.backButtonContainer}
             onPress={() => navigate("streams")}
             activeOpacity={0.7}
           >
@@ -234,319 +293,352 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
     { value: "richformat", label: "Rich Format" },
   ];
 
+  // Render Features Tab
+  const renderFeaturesTab = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionDescription}>
+        Enable or disable features for entries in this stream
+      </Text>
+
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleInfo}>
+          <Text style={styles.toggleLabel}>Rating</Text>
+          <Text style={styles.toggleDescription}>Rate entries with stars or numbers</Text>
+          {useRating && (
+            <Text style={styles.statusList}>{getRatingTypeLabel(ratingType)}</Text>
+          )}
+        </View>
+        {useRating && (
+          <TouchableOpacity
+            style={styles.gearButton}
+            onPress={() => setShowRatingConfig(true)}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
+            </Svg>
+          </TouchableOpacity>
+        )}
+        <Switch
+          value={useRating}
+          onValueChange={(value) => {
+            setUseRating(value);
+            markChanged();
+          }}
+          trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+          thumbColor="#ffffff"
+        />
+      </View>
+
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleInfo}>
+          <Text style={styles.toggleLabel}>Priority</Text>
+          <Text style={styles.toggleDescription}>Priority levels (low, medium, high)</Text>
+        </View>
+        <Switch
+          value={usePriority}
+          onValueChange={(value) => {
+            setUsePriority(value);
+            markChanged();
+          }}
+          trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+          thumbColor="#ffffff"
+        />
+      </View>
+
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleInfo}>
+          <Text style={styles.toggleLabel}>Status</Text>
+          <Text style={styles.toggleDescription}>Track completion status</Text>
+          {useStatus && (
+            <Text style={styles.statusList}>{formatStatusList()}</Text>
+          )}
+        </View>
+        {useStatus && (
+          <TouchableOpacity
+            style={styles.gearButton}
+            onPress={() => setShowStatusConfig(true)}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
+            </Svg>
+          </TouchableOpacity>
+        )}
+        <Switch
+          value={useStatus}
+          onValueChange={(value) => {
+            setUseStatus(value);
+            markChanged();
+          }}
+          trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+          thumbColor="#ffffff"
+        />
+      </View>
+
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleInfo}>
+          <Text style={styles.toggleLabel}>Type</Text>
+          <Text style={styles.toggleDescription}>Categorize entries with custom types</Text>
+          {useType && (
+            <Text style={styles.statusList}>{formatTypeList()}</Text>
+          )}
+        </View>
+        {useType && (
+          <TouchableOpacity
+            style={styles.gearButton}
+            onPress={() => setShowTypeConfig(true)}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
+            </Svg>
+          </TouchableOpacity>
+        )}
+        <Switch
+          value={useType}
+          onValueChange={(value) => {
+            setUseType(value);
+            // If enabling and no types configured, show config modal
+            if (value && entryTypes.length === 0) {
+              setShowTypeConfig(true);
+            }
+            markChanged();
+          }}
+          trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+          thumbColor="#ffffff"
+        />
+      </View>
+
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleInfo}>
+          <Text style={styles.toggleLabel}>Due Dates</Text>
+          <Text style={styles.toggleDescription}>Assign due dates to entries</Text>
+        </View>
+        <Switch
+          value={useDueDates}
+          onValueChange={(value) => {
+            setUseDueDates(value);
+            markChanged();
+          }}
+          trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+          thumbColor="#ffffff"
+        />
+      </View>
+
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleInfo}>
+          <Text style={styles.toggleLabel}>Location</Text>
+          <Text style={styles.toggleDescription}>Attach location to entries</Text>
+        </View>
+        <Switch
+          value={useLocation}
+          onValueChange={(value) => {
+            setUseLocation(value);
+            markChanged();
+          }}
+          trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+          thumbColor="#ffffff"
+        />
+      </View>
+
+      <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}>
+        <View style={styles.toggleInfo}>
+          <Text style={styles.toggleLabel}>Photos</Text>
+          <Text style={styles.toggleDescription}>Attach photos to entries</Text>
+        </View>
+        <Switch
+          value={usePhotos}
+          onValueChange={(value) => {
+            setUsePhotos(value);
+            markChanged();
+          }}
+          trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+          thumbColor="#ffffff"
+        />
+      </View>
+    </View>
+  );
+
+  // Render Template Tab
+  const renderTemplateTab = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionDescription}>
+        Default values for new entries in this stream
+      </Text>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Title Template</Text>
+        <TextInput
+          style={styles.textInput}
+          value={entryTitleTemplate}
+          onChangeText={(text) => {
+            setEntryTitleTemplate(text);
+            markChanged();
+          }}
+          placeholder="e.g., Meeting Notes - "
+          placeholderTextColor="#9ca3af"
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Content Template</Text>
+        <TextInput
+          style={[styles.textInput, styles.multilineInput]}
+          value={entryContentTemplate}
+          onChangeText={(text) => {
+            setEntryContentTemplate(text);
+            markChanged();
+          }}
+          placeholder="e.g., Attendees:\n\nAgenda:\n\nNotes:"
+          placeholderTextColor="#9ca3af"
+          multiline
+          numberOfLines={4}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Content Type</Text>
+        <View style={styles.segmentedControl}>
+          {contentTypes.map((type) => (
+            <TouchableOpacity
+              key={type.value}
+              style={[
+                styles.segmentButton,
+                entryContentType === type.value && styles.segmentButtonActive,
+              ]}
+              onPress={() => {
+                setEntryContentType(type.value);
+                markChanged();
+              }}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.segmentButtonText,
+                  entryContentType === type.value && styles.segmentButtonTextActive,
+                ]}
+              >
+                {type.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+
+  // Render General Tab (Name + Privacy & Sync combined)
+  const renderGeneralTab = () => (
+    <>
+      <View style={styles.section}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Stream Name</Text>
+          <TextInput
+            style={styles.textInput}
+            value={name}
+            onChangeText={(text) => {
+              setName(text);
+              markChanged();
+            }}
+            placeholder="Stream name"
+            placeholderTextColor="#9ca3af"
+          />
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Privacy & Sync</Text>
+
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleInfo}>
+            <Text style={styles.toggleLabel}>Private</Text>
+            <Text style={styles.toggleDescription}>Hide from shared views</Text>
+          </View>
+          <Switch
+            value={isPrivate}
+            onValueChange={(value) => {
+              setIsPrivate(value);
+              markChanged();
+            }}
+            trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+            thumbColor="#ffffff"
+          />
+        </View>
+
+        <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}>
+          <View style={styles.toggleInfo}>
+            <Text style={styles.toggleLabel}>Local Only</Text>
+            <Text style={styles.toggleDescription}>
+              Don't sync to cloud (entries stay on this device only)
+            </Text>
+          </View>
+          <Switch
+            value={isLocalOnly}
+            onValueChange={(value) => {
+              setIsLocalOnly(value);
+              markChanged();
+            }}
+            trackColor={{ false: "#d1d5db", true: "#ef4444" }}
+            thumbColor="#ffffff"
+          />
+        </View>
+      </View>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <TopBar
-        title={stream.name}
+        breadcrumbs={breadcrumbs}
+        onBreadcrumbPress={handleBreadcrumbPress}
         menuItems={menuItems}
         userEmail={userEmail}
         onProfilePress={onProfilePress}
-        showBackButton
-        onBackPress={handleBack}
       />
 
+      {/* Tabs */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === "general" && styles.tabActive]}
+          onPress={() => setActiveTab("general")}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, activeTab === "general" && styles.tabTextActive]}>General</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === "features" && styles.tabActive]}
+          onPress={() => setActiveTab("features")}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, activeTab === "features" && styles.tabTextActive]}>Features</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === "template" && styles.tabActive]}
+          onPress={() => setActiveTab("template")}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, activeTab === "template" && styles.tabTextActive]}>Template</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        {/* Basic Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Basic Info</Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Name</Text>
-            <TextInput
-              style={styles.textInput}
-              value={name}
-              onChangeText={(text) => {
-                setName(text);
-                markChanged();
-              }}
-              placeholder="Stream name"
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-        </View>
-
-        {/* Entry Templates */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Entry Templates</Text>
-          <Text style={styles.sectionDescription}>
-            Default values for new entries in this stream
-          </Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Title Template</Text>
-            <TextInput
-              style={styles.textInput}
-              value={entryTitleTemplate}
-              onChangeText={(text) => {
-                setEntryTitleTemplate(text);
-                markChanged();
-              }}
-              placeholder="e.g., Meeting Notes - "
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Content Template</Text>
-            <TextInput
-              style={[styles.textInput, styles.multilineInput]}
-              value={entryContentTemplate}
-              onChangeText={(text) => {
-                setEntryContentTemplate(text);
-                markChanged();
-              }}
-              placeholder="e.g., Attendees:\n\nAgenda:\n\nNotes:"
-              placeholderTextColor="#9ca3af"
-              multiline
-              numberOfLines={4}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Content Type</Text>
-            <View style={styles.segmentedControl}>
-              {contentTypes.map((type) => (
-                <TouchableOpacity
-                  key={type.value}
-                  style={[
-                    styles.segmentButton,
-                    entryContentType === type.value && styles.segmentButtonActive,
-                  ]}
-                  onPress={() => {
-                    setEntryContentType(type.value);
-                    markChanged();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.segmentButtonText,
-                      entryContentType === type.value && styles.segmentButtonTextActive,
-                    ]}
-                  >
-                    {type.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        {/* Feature Toggles */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Entry Features</Text>
-          <Text style={styles.sectionDescription}>
-            Enable or disable features for entries in this stream
-          </Text>
-
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleInfo}>
-              <Text style={styles.toggleLabel}>Rating</Text>
-              <Text style={styles.toggleDescription}>Rate entries with stars or numbers</Text>
-              {useRating && (
-                <Text style={styles.statusList}>{getRatingTypeLabel(ratingType)}</Text>
-              )}
-            </View>
-            {useRating && (
-              <TouchableOpacity
-                style={styles.gearButton}
-                onPress={() => setShowRatingConfig(true)}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                  <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
-                </Svg>
-              </TouchableOpacity>
-            )}
-            <Switch
-              value={useRating}
-              onValueChange={(value) => {
-                setUseRating(value);
-                markChanged();
-              }}
-              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
-              thumbColor="#ffffff"
-            />
-          </View>
-
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleInfo}>
-              <Text style={styles.toggleLabel}>Priority</Text>
-              <Text style={styles.toggleDescription}>Priority levels (low, medium, high)</Text>
-            </View>
-            <Switch
-              value={usePriority}
-              onValueChange={(value) => {
-                setUsePriority(value);
-                markChanged();
-              }}
-              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
-              thumbColor="#ffffff"
-            />
-          </View>
-
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleInfo}>
-              <Text style={styles.toggleLabel}>Status</Text>
-              <Text style={styles.toggleDescription}>Track completion status</Text>
-              {useStatus && (
-                <Text style={styles.statusList}>{formatStatusList()}</Text>
-              )}
-            </View>
-            {useStatus && (
-              <TouchableOpacity
-                style={styles.gearButton}
-                onPress={() => setShowStatusConfig(true)}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                  <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
-                </Svg>
-              </TouchableOpacity>
-            )}
-            <Switch
-              value={useStatus}
-              onValueChange={(value) => {
-                setUseStatus(value);
-                markChanged();
-              }}
-              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
-              thumbColor="#ffffff"
-            />
-          </View>
-
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleInfo}>
-              <Text style={styles.toggleLabel}>Type</Text>
-              <Text style={styles.toggleDescription}>Categorize entries with custom types</Text>
-              {useType && (
-                <Text style={styles.statusList}>{formatTypeList()}</Text>
-              )}
-            </View>
-            {useType && (
-              <TouchableOpacity
-                style={styles.gearButton}
-                onPress={() => setShowTypeConfig(true)}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                  <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
-                </Svg>
-              </TouchableOpacity>
-            )}
-            <Switch
-              value={useType}
-              onValueChange={(value) => {
-                setUseType(value);
-                // If enabling and no types configured, show config modal
-                if (value && entryTypes.length === 0) {
-                  setShowTypeConfig(true);
-                }
-                markChanged();
-              }}
-              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
-              thumbColor="#ffffff"
-            />
-          </View>
-
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleInfo}>
-              <Text style={styles.toggleLabel}>Due Dates</Text>
-              <Text style={styles.toggleDescription}>Assign due dates to entries</Text>
-            </View>
-            <Switch
-              value={useDueDates}
-              onValueChange={(value) => {
-                setUseDueDates(value);
-                markChanged();
-              }}
-              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
-              thumbColor="#ffffff"
-            />
-          </View>
-
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleInfo}>
-              <Text style={styles.toggleLabel}>Location</Text>
-              <Text style={styles.toggleDescription}>Attach location to entries</Text>
-            </View>
-            <Switch
-              value={useLocation}
-              onValueChange={(value) => {
-                setUseLocation(value);
-                markChanged();
-              }}
-              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
-              thumbColor="#ffffff"
-            />
-          </View>
-
-          <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}>
-            <View style={styles.toggleInfo}>
-              <Text style={styles.toggleLabel}>Photos</Text>
-              <Text style={styles.toggleDescription}>Attach photos to entries</Text>
-            </View>
-            <Switch
-              value={usePhotos}
-              onValueChange={(value) => {
-                setUsePhotos(value);
-                markChanged();
-              }}
-              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
-              thumbColor="#ffffff"
-            />
-          </View>
-        </View>
-
-        {/* Privacy Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Privacy & Sync</Text>
-
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleInfo}>
-              <Text style={styles.toggleLabel}>Private</Text>
-              <Text style={styles.toggleDescription}>Hide from shared views</Text>
-            </View>
-            <Switch
-              value={isPrivate}
-              onValueChange={(value) => {
-                setIsPrivate(value);
-                markChanged();
-              }}
-              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
-              thumbColor="#ffffff"
-            />
-          </View>
-
-          <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}>
-            <View style={styles.toggleInfo}>
-              <Text style={styles.toggleLabel}>Local Only</Text>
-              <Text style={styles.toggleDescription}>
-                Don't sync to cloud (entries stay on this device only)
-              </Text>
-            </View>
-            <Switch
-              value={isLocalOnly}
-              onValueChange={(value) => {
-                setIsLocalOnly(value);
-                markChanged();
-              }}
-              trackColor={{ false: "#d1d5db", true: "#ef4444" }}
-              thumbColor="#ffffff"
-            />
-          </View>
-        </View>
+        {activeTab === "general" && renderGeneralTab()}
+        {activeTab === "features" && renderFeaturesTab()}
+        {activeTab === "template" && renderTemplateTab()}
       </ScrollView>
 
-      {/* Save Button */}
-      {hasChanges && (
+      {/* Save/Create Button */}
+      {(isCreateMode || hasChanges) && (
         <View style={styles.saveButtonContainer}>
           <TouchableOpacity
             style={styles.saveButton}
             onPress={handleSave}
             activeOpacity={0.7}
           >
-            <Text style={styles.saveButtonText}>Save Changes</Text>
+            <Text style={styles.saveButtonText}>{isCreateMode ? "Create" : "Save Changes"}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -594,12 +686,38 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f9fafb",
   },
+  tabContainer: {
+    flexDirection: "row",
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  tabActive: {
+    borderBottomColor: "#3b82f6",
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6b7280",
+  },
+  tabTextActive: {
+    color: "#3b82f6",
+    fontWeight: "600",
+  },
   content: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   section: {
     backgroundColor: "#ffffff",
@@ -613,10 +731,10 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
     color: "#1f2937",
-    marginBottom: 4,
+    marginBottom: 12,
   },
   sectionDescription: {
     fontSize: 14,
@@ -717,7 +835,7 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginBottom: 16,
   },
-  backButton: {
+  backButtonContainer: {
     backgroundColor: "#3b82f6",
     paddingHorizontal: 20,
     paddingVertical: 12,
