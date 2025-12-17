@@ -1,17 +1,12 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
-import { useSettings } from "../shared/contexts/SettingsContext";
 import { TopBar } from "../components/layout/TopBar";
-import { UnsavedChangesBehaviorSelector } from "../components/settings/UnsavedChangesBehaviorSelector";
-import { UnitSystemSelector } from "../components/settings/UnitSystemSelector";
-import { ImageQualitySelector } from "../components/settings/ImageQualitySelector";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Circle } from "react-native-svg";
 import { useSync } from "../shared/sync";
 import { useState } from "react";
 import { createScopedLogger } from "../shared/utils/logger";
-import { UNSAVED_CHANGES_BEHAVIOR_OPTIONS, UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
 
 const log = createScopedLogger('ProfileScreen');
 
@@ -19,17 +14,8 @@ export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
-  const { settings, updateSettings } = useSettings();
   const { sync } = useSync();
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [showBehaviorSelector, setShowBehaviorSelector] = useState(false);
-  const [showUnitSelector, setShowUnitSelector] = useState(false);
-  const [showImageQualitySelector, setShowImageQualitySelector] = useState(false);
-
-  // Get labels for current settings
-  const behaviorLabel = UNSAVED_CHANGES_BEHAVIOR_OPTIONS.find(b => b.value === settings.unsavedChangesBehavior)?.label || 'Ask';
-  const unitLabel = UNIT_OPTIONS.find(u => u.value === settings.units)?.label || 'Metric';
-  const imageQualityLabel = IMAGE_QUALITY_OPTIONS.find(q => q.value === settings.imageQuality)?.label || 'Standard';
 
   const handleSignOut = async () => {
     try {
@@ -69,6 +55,15 @@ export function ProfileScreen() {
     }
   };
 
+  // Get user initials for avatar
+  const getInitials = () => {
+    const email = user?.email || '';
+    if (email) {
+      return email.charAt(0).toUpperCase();
+    }
+    return '?';
+  };
+
   return (
     <View style={styles.container}>
       <TopBar
@@ -79,115 +74,62 @@ export function ProfileScreen() {
       />
 
       <ScrollView style={styles.content}>
-        {/* User Info Card */}
+        {/* User Avatar and Email */}
+        <View style={styles.profileHeader}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{getInitials()}</Text>
+          </View>
+          <Text style={styles.email}>{user?.email || "Not available"}</Text>
+        </View>
+
+        {/* Account Info Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Account Information</Text>
 
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{user?.email || "Not available"}</Text>
+            <View style={styles.infoIcon}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M22 6l-10 7L2 6" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </View>
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>Email</Text>
+              <Text style={styles.infoValue}>{user?.email || "Not available"}</Text>
+            </View>
           </View>
 
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>User ID</Text>
-            <Text style={styles.infoValue}>{user?.id || "Not available"}</Text>
-          </View>
-        </View>
-
-        {/* Settings */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Settings</Text>
-
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={() => setShowBehaviorSelector(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Unsaved Changes</Text>
-              <Text style={styles.settingDescription}>
-                What to do when leaving an entry with unsaved changes
-              </Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Text style={styles.settingValueText}>{behaviorLabel}</Text>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M9 18l6-6-6-6"
-                  stroke="#9ca3af"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+          <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
+            <View style={styles.infoIcon}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round" />
+                <Circle cx="12" cy="7" r="4" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={() => setShowUnitSelector(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Distance Units</Text>
-              <Text style={styles.settingDescription}>
-                Display distances in metric or imperial
-              </Text>
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>User ID</Text>
+              <Text style={styles.infoValueMono}>{user?.id || "Not available"}</Text>
             </View>
-            <View style={styles.settingValue}>
-              <Text style={styles.settingValueText}>{unitLabel}</Text>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M9 18l6-6-6-6"
-                  stroke="#9ca3af"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={() => setShowImageQualitySelector(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Photo Quality</Text>
-              <Text style={styles.settingDescription}>
-                Compression level for photos. Higher quality uses more storage.
-              </Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Text style={styles.settingValueText}>{imageQualityLabel}</Text>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M9 18l6-6-6-6"
-                  stroke="#9ca3af"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Capture GPS Location</Text>
-              <Text style={styles.settingDescription}>
-                Automatically capture your GPS coordinates when creating new entries
-              </Text>
-            </View>
-            <Switch
-              value={settings.captureGpsLocation}
-              onValueChange={(value) => updateSettings({ captureGpsLocation: value })}
-              trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
-              thumbColor="#ffffff"
-            />
           </View>
         </View>
+
+        {/* Settings Link */}
+        <TouchableOpacity
+          style={styles.settingsLink}
+          onPress={() => navigate("settings")}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingsLinkContent}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth={2}>
+              <Circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+            <Text style={styles.settingsLinkText}>App Settings</Text>
+          </View>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+            <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
 
         {/* Sign Out Button */}
         <TouchableOpacity
@@ -205,30 +147,6 @@ export function ProfileScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Unsaved Changes Behavior Selector */}
-      <UnsavedChangesBehaviorSelector
-        visible={showBehaviorSelector}
-        selectedBehavior={settings.unsavedChangesBehavior}
-        onSelect={(behavior) => updateSettings({ unsavedChangesBehavior: behavior })}
-        onClose={() => setShowBehaviorSelector(false)}
-      />
-
-      {/* Unit System Selector */}
-      <UnitSystemSelector
-        visible={showUnitSelector}
-        selectedUnit={settings.units}
-        onSelect={(units) => updateSettings({ units })}
-        onClose={() => setShowUnitSelector(false)}
-      />
-
-      {/* Image Quality Selector */}
-      <ImageQualitySelector
-        visible={showImageQualitySelector}
-        selectedQuality={settings.imageQuality}
-        onSelect={(imageQuality) => updateSettings({ imageQuality })}
-        onClose={() => setShowImageQualitySelector(false)}
-      />
     </View>
   );
 }
@@ -241,6 +159,29 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+  },
+  profileHeader: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#3b82f6",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  avatarText: {
+    fontSize: 32,
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  email: {
+    fontSize: 16,
+    color: "#374151",
+    fontWeight: "500",
   },
   card: {
     backgroundColor: "#ffffff",
@@ -259,45 +200,24 @@ const styles = StyleSheet.create({
     color: "#1a1a1a",
     marginBottom: 16,
   },
-  cardDescription: {
-    fontSize: 14,
-    color: "#6b7280",
-    lineHeight: 20,
-  },
-  settingRow: {
+  infoRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",
   },
-  settingContent: {
-    flex: 1,
+  infoIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#1f2937",
-    marginBottom: 4,
-  },
-  settingDescription: {
-    fontSize: 13,
-    color: "#6b7280",
-    lineHeight: 18,
-  },
-  settingValue: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  settingValueText: {
-    fontSize: 14,
-    color: "#6b7280",
-  },
-  infoRow: {
-    marginBottom: 16,
+  infoContent: {
+    flex: 1,
   },
   infoLabel: {
     fontSize: 12,
@@ -307,8 +227,37 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   infoValue: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#1f2937",
+  },
+  infoValueMono: {
+    fontSize: 13,
+    color: "#1f2937",
+    fontFamily: "monospace",
+  },
+  settingsLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  settingsLinkContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  settingsLinkText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#374151",
   },
   signOutButton: {
     flexDirection: "row",
@@ -319,7 +268,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 12,
-    marginTop: 24,
+    marginTop: 8,
     marginBottom: 40,
   },
   signOutButtonDisabled: {

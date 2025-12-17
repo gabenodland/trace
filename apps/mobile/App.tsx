@@ -19,6 +19,7 @@ import { LocationsScreen } from "./src/screens/LocationsScreen";
 import { MapScreen } from "./src/screens/MapScreen";
 import { StreamsScreen } from "./src/screens/StreamsScreen";
 import { StreamPropertiesScreen } from "./src/screens/StreamPropertiesScreen";
+import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { localDB } from "./src/shared/db/localDB";
 import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
@@ -184,6 +185,8 @@ function AuthGate() {
         return <CalendarScreen returnDate={navParams.returnDate} />;
       case "profile":
         return <ProfileScreen />;
+      case "settings":
+        return <SettingsScreen />;
       case "debug":
         return <DatabaseInfoScreen />;
       case "locations":
