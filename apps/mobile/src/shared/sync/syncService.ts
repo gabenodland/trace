@@ -385,6 +385,13 @@ class SyncService {
     let errors = 0;
 
     for (const stream of unsyncedStreams) {
+      // Skip local-only streams - mark as synced so they don't reappear in queue
+      if (stream.is_localonly) {
+        log.debug('Skipping local-only stream', { streamId: stream.stream_id, name: stream.name });
+        await localDB.markStreamSynced(stream.stream_id);
+        continue;
+      }
+
       try {
         await this.syncStream(stream);
         success++;
@@ -428,10 +435,20 @@ class SyncService {
       return { success: 0, errors: 0 };
     }
 
+    // Get local-only stream IDs to filter out entries that shouldn't sync
+    const localOnlyStreamIds = await this.getLocalOnlyStreamIds();
+
     let success = 0;
     let errors = 0;
 
     for (const entry of entriesToPush) {
+      // Skip entries from local-only streams - mark as synced so they don't reappear in queue
+      if (entry.stream_id && localOnlyStreamIds.has(entry.stream_id)) {
+        log.debug('Skipping local-only entry', { entryId: entry.entry_id, streamId: entry.stream_id });
+        await localDB.markSynced(entry.entry_id);
+        continue;
+      }
+
       try {
         await this.syncEntry(entry);
         success++;
@@ -453,10 +470,20 @@ class SyncService {
       return { success: 0, errors: 0 };
     }
 
+    // Get local-only stream IDs to filter out entries that shouldn't sync
+    const localOnlyStreamIds = await this.getLocalOnlyStreamIds();
+
     let success = 0;
     let errors = 0;
 
     for (const entry of entriesToDelete) {
+      // Skip deletes for entries from local-only streams - they were never synced
+      if (entry.stream_id && localOnlyStreamIds.has(entry.stream_id)) {
+        log.debug('Skipping local-only entry delete', { entryId: entry.entry_id, streamId: entry.stream_id });
+        await localDB.markSynced(entry.entry_id);
+        continue;
+      }
+
       try {
         await this.syncEntry(entry);
         success++;
@@ -474,12 +501,24 @@ class SyncService {
     let success = 0;
     let errors = 0;
 
+    // Get local-only stream IDs to filter out photos that shouldn't sync
+    const localOnlyStreamIds = await this.getLocalOnlyStreamIds();
+
     // Upload photo files
     const photosToUpload = await localDB.getPhotosNeedingUpload();
     if (photosToUpload.length > 0) {
       log.debug('Uploading photo files', { count: photosToUpload.length });
 
       for (const photo of photosToUpload) {
+        // Check if photo's entry belongs to local-only stream
+        const entry = await localDB.getEntry(photo.entry_id);
+        if (entry && entry.stream_id && localOnlyStreamIds.has(entry.stream_id)) {
+          log.debug('Skipping local-only photo upload', { photoId: photo.photo_id, streamId: entry.stream_id });
+          // Mark as uploaded so it doesn't keep trying
+          await localDB.updatePhoto(photo.photo_id, { uploaded: true, synced: 1, sync_action: null });
+          continue;
+        }
+
         try {
           if (photo.local_path) {
             await uploadPhotoToSupabase(photo.local_path, photo.file_path);
@@ -518,6 +557,13 @@ class SyncService {
           if (!entry || entry.deleted_at) {
             log.debug('Skipping orphaned photo', { photoId: photo.photo_id });
             await localDB.deletePhoto(photo.photo_id);
+            continue;
+          }
+
+          // Skip photos from local-only streams - mark as synced so they don't keep trying
+          if (entry.stream_id && localOnlyStreamIds.has(entry.stream_id)) {
+            log.debug('Skipping local-only photo metadata sync', { photoId: photo.photo_id, streamId: entry.stream_id });
+            await localDB.updatePhoto(photo.photo_id, { synced: 1, sync_action: null });
             continue;
           }
 
@@ -1239,6 +1285,17 @@ class SyncService {
 
     const { data: { user } } = await supabase.auth.getUser();
     return !!user;
+  }
+
+  /**
+   * Get the set of stream IDs that are marked as local-only
+   * Entries from these streams should never sync to the cloud
+   */
+  private async getLocalOnlyStreamIds(): Promise<Set<string>> {
+    const streams = await localDB.getAllStreams();
+    return new Set(
+      streams.filter(s => s.is_localonly).map(s => s.stream_id)
+    );
   }
 
   private async cleanupWrongUserData(): Promise<void> {

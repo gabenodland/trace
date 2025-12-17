@@ -5,8 +5,9 @@ import * as Location from "expo-location";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
+import { useEntries } from "../modules/entries/mobileEntryHooks";
+import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { TopBar } from "../components/layout/TopBar";
-import { localDB } from "../shared/db/localDB";
 import { theme } from "../shared/theme/theme";
 import Svg, { Path, Circle } from "react-native-svg";
 import { formatRelativeTime, type Entry, type Stream } from "@trace/core";
@@ -80,13 +81,44 @@ export function MapScreen() {
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const { streams } = useStreams();
 
-  const [allEntries, setAllEntries] = useState<Entry[]>([]); // All entries with GPS
-  const [locationNames, setLocationNames] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(true);
-
   // Stream filter state
   const [selectedStreamId, setSelectedStreamId] = useState<string | null>("all"); // "all" = show all
   const [showStreamPicker, setShowStreamPicker] = useState(false);
+
+  // Use the proper hooks - privacy filtering is handled automatically by useEntries
+  // When selectedStreamId is "all", we pass undefined for stream_id which triggers auto-filtering
+  // When a specific stream is selected, we pass that stream_id
+  const entryFilter = useMemo(() => {
+    if (selectedStreamId === "all") {
+      return {}; // No stream_id filter = show all (with auto privacy filtering)
+    }
+    if (selectedStreamId === "no-stream") {
+      return { stream_id: null }; // Explicitly null = unassigned only
+    }
+    return { stream_id: selectedStreamId }; // Specific stream
+  }, [selectedStreamId]);
+
+  const { entries: allEntriesFromHook, isLoading } = useEntries(entryFilter);
+  const { data: locationsData } = useLocations();
+
+  // Filter entries to only those with GPS coordinates
+  const allEntries = useMemo(() => {
+    return allEntriesFromHook.filter(
+      (entry) => entry.entry_latitude && entry.entry_longitude
+    );
+  }, [allEntriesFromHook]);
+
+  // Build location name map from locations hook data
+  const locationNames = useMemo(() => {
+    const nameMap: Record<string, string> = {};
+    if (locationsData) {
+      locationsData.forEach(loc => {
+        nameMap[loc.location_id] = loc.name;
+      });
+    }
+    return nameMap;
+  }, [locationsData]);
+
   const [region, setRegion] = useState<Region>({
     latitude: 39.0997,
     longitude: -94.5786,
@@ -98,62 +130,20 @@ export function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const listRef = useRef<FlatList<Entry>>(null);
   const regionRef = useRef<Region>(region); // Track region without causing re-renders
+  const hasInitializedMap = useRef(false);
 
-  // Load entries with GPS coordinates
+  // Center map on entries when data first loads
   useEffect(() => {
-    const loadEntries = async () => {
-      try {
-        setIsLoading(true);
-        const fetchedEntries = await localDB.getAllEntries();
-        // Filter entries that have GPS coordinates
-        const entriesWithGPS = fetchedEntries.filter(
-          (entry) => entry.entry_latitude && entry.entry_longitude
-        );
-        setAllEntries(entriesWithGPS);
-
-        // Fetch location names for entries with location_id
-        const locationIds = [...new Set(
-          entriesWithGPS
-            .filter(e => e.location_id)
-            .map(e => e.location_id!)
-        )];
-
-        if (locationIds.length > 0) {
-          const locations = await localDB.getAllLocations();
-          const nameMap: Record<string, string> = {};
-          locations.forEach(loc => {
-            nameMap[loc.location_id] = loc.name;
-          });
-          setLocationNames(nameMap);
-        }
-
-        // If we have entries, center on them
-        if (entriesWithGPS.length > 0) {
-          const bounds = calculateBounds(entriesWithGPS);
-          regionRef.current = bounds;
-          setRegion(bounds);
-        }
-      } catch (error) {
-        console.error("Error loading entries for map:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadEntries();
-  }, []);
-
-  // Filter entries by selected stream (flat - no hierarchy)
-  const entries = useMemo(() => {
-    if (selectedStreamId === "all") {
-      return allEntries;
+    if (!hasInitializedMap.current && allEntries.length > 0 && !isLoading) {
+      const bounds = calculateBounds(allEntries);
+      regionRef.current = bounds;
+      setRegion(bounds);
+      hasInitializedMap.current = true;
     }
-    if (selectedStreamId === "no-stream") {
-      return allEntries.filter(entry => !entry.stream_id);
-    }
-    // Filter by selected stream
-    return allEntries.filter(entry => entry.stream_id === selectedStreamId);
-  }, [allEntries, selectedStreamId]);
+  }, [allEntries, isLoading]);
+
+  // entries is now the same as allEntries (filtering already done by hook)
+  const entries = allEntries;
 
   // Get selected stream name for display
   const selectedStreamName = useMemo(() => {

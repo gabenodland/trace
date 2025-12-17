@@ -19,6 +19,7 @@ import {
   DEFAULT_INITIAL_STATUS,
   getStatusLabel,
 } from "@trace/core";
+import { supabase } from "@trace/core/src/shared/supabase";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { TopBar } from "../components/layout/TopBar";
@@ -576,8 +577,55 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
           <Switch
             value={isLocalOnly}
             onValueChange={(value) => {
-              setIsLocalOnly(value);
-              markChanged();
+              // If turning ON local-only for an existing stream, show warning
+              if (value && !isCreateMode && stream) {
+                Alert.alert(
+                  "Make Stream Local Only?",
+                  "This will delete all entries and photos from the server and other devices. Your local data will be preserved.\n\nThis action cannot be undone.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Make Local Only",
+                      style: "destructive",
+                      onPress: async () => {
+                        try {
+                          // Delete entries from server first (cascade will handle photos)
+                          const { error: entriesError } = await supabase
+                            .from("entries")
+                            .update({ deleted_at: new Date().toISOString() })
+                            .eq("stream_id", stream.stream_id);
+
+                          if (entriesError) {
+                            console.error("Failed to delete server entries:", entriesError);
+                          }
+
+                          // Delete stream from server
+                          const { error: streamError } = await supabase
+                            .from("streams")
+                            .delete()
+                            .eq("stream_id", stream.stream_id);
+
+                          if (streamError) {
+                            console.error("Failed to delete server stream:", streamError);
+                          }
+
+                          // Now update local state
+                          setIsLocalOnly(true);
+                          markChanged();
+                          showSnackbar("Stream is now local only");
+                        } catch (error) {
+                          console.error("Failed to make stream local only:", error);
+                          showSnackbar("Failed to delete server data");
+                        }
+                      },
+                    },
+                  ]
+                );
+              } else {
+                // Turning OFF or creating new - no confirmation needed
+                setIsLocalOnly(value);
+                markChanged();
+              }
             }}
             trackColor={{ false: "#d1d5db", true: "#ef4444" }}
             thumbColor="#ffffff"

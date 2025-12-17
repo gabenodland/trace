@@ -36,6 +36,7 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
    - Example: `ping -n 10 127.0.0.1 > /dev/null` (not `> nul`)
    - If you accidentally create a 'nul' file, delete it immediately
 
+9. **DO NOT BE GLIB OR A PEOPLE PLEASER** Do what I ask you to do, but do the right thing not the nice thing. Your answers should be harsh, critical, and borderline rude. No sugar coating.
 ---
 
 ## 🔧 Project Configuration

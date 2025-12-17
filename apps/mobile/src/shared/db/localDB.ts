@@ -726,6 +726,7 @@ class LocalDatabase {
     mention?: string;
     location_id?: string;
     includeDeleted?: boolean;
+    excludePrivateStreams?: boolean;
   }): Promise<Entry[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
@@ -770,6 +771,14 @@ class LocalDatabase {
       if (filter.location_id) {
         query += ' AND location_id = ?';
         params.push(filter.location_id);
+      }
+
+      // Privacy filtering - exclude entries from private streams
+      // Only applies when NOT viewing a specific stream (i.e., viewing "All Entries")
+      if (filter.excludePrivateStreams) {
+        query += ` AND (stream_id IS NULL OR stream_id NOT IN (
+          SELECT stream_id FROM streams WHERE is_private = 1 AND (sync_action IS NULL OR sync_action != 'delete')
+        ))`;
       }
     }
 
@@ -970,15 +979,22 @@ class LocalDatabase {
   /**
    * Get entry counts for navigation display
    * Returns total entries and entries with no stream - fast COUNT queries
+   * "Total" count excludes entries from private streams (same as "All Entries" view)
    */
   async getEntryCounts(): Promise<{ total: number; noStream: number }> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
     const [totalResult, noStreamResult] = await Promise.all([
+      // Total count excludes private streams - same filtering as getAllEntries with excludePrivateStreams=true
       this.db.getFirstAsync<{ count: number }>(
-        'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NULL'
+        `SELECT COUNT(*) as count FROM entries
+         WHERE deleted_at IS NULL
+         AND (stream_id IS NULL OR stream_id NOT IN (
+           SELECT stream_id FROM streams WHERE is_private = 1 AND (sync_action IS NULL OR sync_action != 'delete')
+         ))`
       ),
+      // Unassigned count - entries with no stream are never private
       this.db.getFirstAsync<{ count: number }>(
         'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NULL AND stream_id IS NULL'
       ),

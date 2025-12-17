@@ -126,9 +126,21 @@ function useCopyEntryMutation() {
 /**
  * SINGLE SOURCE OF TRUTH: Main hook for entry operations (mobile version)
  * Uses local SQLite database for offline-first functionality
+ *
+ * Privacy filtering is automatically applied:
+ * - When no stream_id filter is specified (viewing "All Entries"), private streams are excluded
+ * - When viewing a specific stream directly, all entries from that stream are shown (even if private)
+ * - This ensures EntryListScreen, MapScreen, CalendarScreen all get correct filtering automatically
  */
 export function useEntries(filter?: MobileEntryFilter) {
-  const entriesQuery = useEntriesQuery(filter);
+  // Auto-apply private stream filtering for "All Entries" view
+  // Only when stream_id is undefined (showing all entries)
+  // When stream_id is explicitly set (including null for unassigned), don't filter
+  const effectiveFilter: MobileEntryFilter | undefined = filter?.stream_id === undefined
+    ? { ...filter, excludePrivateStreams: filter?.excludePrivateStreams ?? true }
+    : filter;
+
+  const entriesQuery = useEntriesQuery(effectiveFilter);
   const createMutation = useCreateEntryMutation();
   const updateMutation = useUpdateEntryMutation();
   const deleteMutation = useDeleteEntryMutation();

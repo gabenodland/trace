@@ -28,6 +28,13 @@ const log = createScopedLogger('EntryApi');
  */
 export interface MobileEntryFilter extends EntryFilter {
   // Extends core EntryFilter which now uses stream_id
+
+  /**
+   * When true, exclude entries from streams marked as private (is_private = 1).
+   * This is automatically applied when viewing "All Entries" to hide private streams.
+   * When viewing a specific stream directly, this should be false.
+   */
+  excludePrivateStreams?: boolean;
 }
 
 /**
