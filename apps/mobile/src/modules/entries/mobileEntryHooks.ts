@@ -12,6 +12,7 @@ import {
   deleteEntry,
   copyEntry,
   getUnsyncedCount,
+  getEntryCounts,
   getTags,
   getMentions,
   MobileEntryFilter,
@@ -59,6 +60,7 @@ function useCreateEntryMutation() {
     onSuccess: () => {
       // Invalidate queries to trigger refresh
       queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
       queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
@@ -78,6 +80,7 @@ function useUpdateEntryMutation() {
       updateEntry(id, data),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
       queryClient.invalidateQueries({ queryKey: ['entry', data.entry_id] });
       queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
@@ -97,6 +100,7 @@ function useDeleteEntryMutation() {
     mutationFn: deleteEntry,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
       queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
@@ -247,4 +251,16 @@ export function useMentions() {
     isLoading: mentionsQuery.isLoading,
     error: mentionsQuery.error,
   };
+}
+
+/**
+ * Hook for getting entry counts (fast COUNT queries for navigation display)
+ * Returns total entry count and unassigned entry count
+ */
+export function useEntryCounts() {
+  return useQuery({
+    queryKey: ['entryCounts'],
+    queryFn: getEntryCounts,
+    staleTime: 30000, // Consider fresh for 30 seconds
+  });
 }

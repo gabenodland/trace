@@ -968,6 +968,29 @@ class LocalDatabase {
   }
 
   /**
+   * Get entry counts for navigation display
+   * Returns total entries and entries with no stream - fast COUNT queries
+   */
+  async getEntryCounts(): Promise<{ total: number; noStream: number }> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const [totalResult, noStreamResult] = await Promise.all([
+      this.db.getFirstAsync<{ count: number }>(
+        'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NULL'
+      ),
+      this.db.getFirstAsync<{ count: number }>(
+        'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NULL AND stream_id IS NULL'
+      ),
+    ]);
+
+    return {
+      total: totalResult?.count || 0,
+      noStream: noStreamResult?.count || 0,
+    };
+  }
+
+  /**
    * Convert database row to Entry object
    */
   private rowToEntry(row: any): Entry {

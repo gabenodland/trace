@@ -1,14 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
-import { useEntries, useTags, useMentions } from "../../modules/entries/mobileEntryHooks";
+import { useTags, useMentions, useEntryCounts } from "../../modules/entries/mobileEntryHooks";
 import { useStreams } from "../../modules/streams/mobileStreamHooks";
+import { useLocationsWithCounts } from "../../modules/locations/mobileLocationHooks";
 import Svg, { Path, Circle } from "react-native-svg";
 import { StreamList } from "../../modules/streams/components/StreamList";
 import { TagList } from "../../modules/entries/components/TagList";
 import { PeopleList } from "../../modules/entries/components/PeopleList";
 import { theme } from "../../shared/theme/theme";
-import { getLocationsWithCounts } from "../../modules/locations/mobileLocationApi";
-import type { LocationEntity } from "@trace/core";
 
 interface EntryNavigatorProps {
   visible: boolean;
@@ -26,45 +25,44 @@ interface LocationItem {
   locationId: string; // location_id from locations table
 }
 
-export function EntryNavigator({ visible, onClose, onSelect, selectedStreamId }: EntryNavigatorProps) {
+export function EntryNavigator({
+  visible,
+  onClose,
+  onSelect,
+  selectedStreamId,
+}: EntryNavigatorProps) {
   const { streams, isLoading } = useStreams();
   const { tags, isLoading: isLoadingTags } = useTags();
   const { mentions, isLoading: isLoadingMentions } = useMentions();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSegment, setSelectedSegment] = useState<SegmentType>("streams");
   const scrollViewRef = useRef<ScrollView>(null);
-  const [locations, setLocations] = useState<LocationItem[]>([]);
-  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
 
-  // Load locations from locations table when locations tab is selected
-  useEffect(() => {
-    if (visible && selectedSegment === "locations") {
-      const loadLocations = async () => {
-        setIsLoadingLocations(true);
-        try {
-          const locationsWithCounts = await getLocationsWithCounts();
-          const locationItems: LocationItem[] = locationsWithCounts.map(loc => ({
-            name: loc.name,
-            entryCount: loc.entry_count,
-            locationId: loc.location_id,
-          }));
-          // Sort by entry count (descending), then by name
-          locationItems.sort((a, b) => {
-            if (b.entryCount !== a.entryCount) {
-              return b.entryCount - a.entryCount;
-            }
-            return a.name.localeCompare(b.name);
-          });
-          setLocations(locationItems);
-        } catch (error) {
-          console.error("Error loading locations:", error);
-        } finally {
-          setIsLoadingLocations(false);
-        }
-      };
-      loadLocations();
-    }
-  }, [visible, selectedSegment]);
+  // Use fast COUNT queries for entry counts - much faster than loading all entries
+  const { data: entryCounts } = useEntryCounts();
+  const allEntriesCount = entryCounts?.total || 0;
+  const noStreamCount = entryCounts?.noStream || 0;
+
+  // Use React Query hook for locations - data is cached and loads instantly after first fetch
+  const { data: locationsData, isLoading: isLoadingLocations } = useLocationsWithCounts();
+
+  // Transform and sort locations
+  const locations = useMemo((): LocationItem[] => {
+    if (!locationsData) return [];
+    const items: LocationItem[] = locationsData.map(loc => ({
+      name: loc.name,
+      entryCount: loc.entry_count,
+      locationId: loc.location_id,
+    }));
+    // Sort by entry count (descending), then by name
+    items.sort((a, b) => {
+      if (b.entryCount !== a.entryCount) {
+        return b.entryCount - a.entryCount;
+      }
+      return a.name.localeCompare(b.name);
+    });
+    return items;
+  }, [locationsData]);
 
   // Filter locations by search
   const filteredLocations = useMemo(() => {
@@ -73,12 +71,6 @@ export function EntryNavigator({ visible, onClose, onSelect, selectedStreamId }:
       loc.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [locations, searchQuery]);
-
-  // Get entry counts
-  const { entries: noStreamEntries } = useEntries({ stream_id: null });
-  const noStreamCount = noStreamEntries.length;
-  const { entries: allEntries } = useEntries({});
-  const allEntriesCount = allEntries.length;
 
   // Set correct tab and scroll to selected when modal first opens
   useEffect(() => {

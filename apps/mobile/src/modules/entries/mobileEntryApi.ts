@@ -96,6 +96,13 @@ export async function getUnsyncedCount(): Promise<number> {
 }
 
 /**
+ * Get entry counts for navigation display (fast COUNT queries)
+ */
+export async function getEntryCounts(): Promise<{ total: number; noStream: number }> {
+  return await localDB.getEntryCounts();
+}
+
+/**
  * Get all unsynced entries
  */
 export async function getUnsyncedEntries(): Promise<Entry[]> {
