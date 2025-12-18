@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuthState } from "@trace/core";
 import { useLocation, useNavigate } from "react-router-dom";
-import { InboxCategoryDropdown } from "./InboxCategoryDropdown";
+import { InboxStreamDropdown } from "./InboxStreamDropdown";
 
 export function Header() {
   const { user, authMutations } = useAuthState();
@@ -10,18 +10,18 @@ export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Parse category from URL
+  // Parse stream from URL
   const searchParams = new URLSearchParams(location.search);
-  const categoryParam = searchParams.get("category");
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null | "all">(
-    categoryParam === "all" ? "all" : categoryParam || null
+  const streamParam = searchParams.get("stream");
+  const [selectedStreamId, setSelectedStreamId] = useState<string | null | "all">(
+    streamParam === "all" ? "all" : streamParam || null
   );
-  const [selectedCategoryName, setSelectedCategoryName] = useState<string>(
-    categoryParam === "all" ? "All" : categoryParam ? "Loading..." : "Inbox"
+  const [selectedStreamName, setSelectedStreamName] = useState<string>(
+    streamParam === "all" ? "All" : streamParam ? "Loading..." : "Inbox"
   );
 
-  // Show inbox selector only on inbox page
-  const isInboxPage = location.pathname === "/inbox";
+  // Show inbox selector only on entries page
+  const isEntriesPage = location.pathname === "/entries";
 
   const handleSignOut = async () => {
     await authMutations.signOut();
@@ -31,49 +31,49 @@ export function Header() {
     return email.charAt(0).toUpperCase();
   };
 
-  const handleCategorySelect = (categoryId: string | null | "all", categoryName: string) => {
-    setSelectedCategoryId(categoryId);
-    setSelectedCategoryName(categoryName);
+  const handleStreamSelect = (streamId: string | null | "all", streamName: string) => {
+    setSelectedStreamId(streamId);
+    setSelectedStreamName(streamName);
 
-    // Update URL with selected category
+    // Update URL with selected stream
     const params = new URLSearchParams();
-    if (categoryId === "all") {
-      params.set("category", "all");
-    } else if (categoryId !== null) {
-      params.set("category", categoryId);
+    if (streamId === "all") {
+      params.set("stream", "all");
+    } else if (streamId !== null) {
+      params.set("stream", streamId);
     }
-    // If categoryId is null (Inbox), don't add category param
+    // If streamId is null (Inbox), don't add stream param
 
-    navigate(`/inbox?${params.toString()}`, { replace: true });
+    navigate(`/entries?${params.toString()}`, { replace: true });
   };
 
-  // Update selected category name when URL changes
+  // Update selected stream name when URL changes
   useEffect(() => {
-    if (categoryParam === "all") {
-      setSelectedCategoryId("all");
-      setSelectedCategoryName("All");
-    } else if (categoryParam) {
-      setSelectedCategoryId(categoryParam);
-      // Name will be set when dropdown loads the categories
+    if (streamParam === "all") {
+      setSelectedStreamId("all");
+      setSelectedStreamName("All");
+    } else if (streamParam) {
+      setSelectedStreamId(streamParam);
+      // Name will be set when dropdown loads the streams
     } else {
-      setSelectedCategoryId(null);
-      setSelectedCategoryName("Inbox");
+      setSelectedStreamId(null);
+      setSelectedStreamName("Inbox");
     }
-  }, [categoryParam]);
+  }, [streamParam]);
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4 min-h-[72px]">
       <div className="flex items-center justify-between h-full">
         <div className="flex-1 flex items-center">
-          {/* Inbox Category Selector - only show on inbox page */}
-          {isInboxPage ? (
+          {/* Inbox Stream Selector - only show on inbox page */}
+          {false && isEntriesPage ? ( // Disabled - entries page has its own navigator
             <div className="relative inline-block">
               <button
                 onClick={() => setShowInboxDropdown(!showInboxDropdown)}
                 className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1 transition-colors"
               >
                 <h1 className="text-2xl font-bold text-gray-900">
-                  {selectedCategoryName || "Inbox"}
+                  {selectedStreamName || "Inbox"}
                 </h1>
                 <svg
                   className="w-5 h-5 text-gray-500 flex-shrink-0"
@@ -90,11 +90,11 @@ export function Header() {
                 </svg>
               </button>
 
-              <InboxCategoryDropdown
+              <InboxStreamDropdown
                 visible={showInboxDropdown}
                 onClose={() => setShowInboxDropdown(false)}
-                onSelect={handleCategorySelect}
-                selectedCategoryId={selectedCategoryId}
+                onSelect={handleStreamSelect}
+                selectedStreamId={selectedStreamId}
               />
             </div>
           ) : (

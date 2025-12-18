@@ -1,19 +1,19 @@
 import { useState } from "react";
-import { useCategories } from "@trace/core";
-import { CategoryTree } from "../modules/categories/components/CategoryTree";
-import { AddCategoryModal } from "../modules/categories/components/AddCategoryModal";
+import { useStreams } from "@trace/core";
+import { StreamList } from "../modules/streams/components/StreamList";
+import { AddStreamModal } from "../modules/streams/components/AddStreamModal";
 
-export function CategoriesPage() {
-  const { categories, categoryTree, isLoading, categoryMutations } = useCategories();
+export function StreamsPage() {
+  const { streams, isLoading, streamMutations } = useStreams();
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedStreamId, setSelectedStreamId] = useState<string | null>(null);
 
-  const handleCreateCategory = async (name: string, parentId: string | null) => {
-    await categoryMutations.createCategory(name, parentId);
+  const handleCreateStream = async (name: string) => {
+    await streamMutations.createStream(name);
   };
 
-  const handleCategoryPress = (categoryId: string) => {
-    setSelectedCategoryId(categoryId === selectedCategoryId ? null : categoryId);
+  const handleStreamPress = (streamId: string) => {
+    setSelectedStreamId(streamId === selectedStreamId ? null : streamId);
   };
 
   if (isLoading) {
@@ -31,9 +31,9 @@ export function CategoriesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Categories</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Streams</h1>
           <p className="text-gray-600">
-            Organize your entries with hierarchical categories
+            Organize your entries with streams
           </p>
         </div>
         <button
@@ -43,34 +43,33 @@ export function CategoriesPage() {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          New Category
+          New Stream
         </button>
       </div>
 
-      {/* Category Count */}
-      {categories.length > 0 && (
+      {/* Stream Count */}
+      {streams.length > 0 && (
         <div className="mb-4">
           <p className="text-sm text-gray-500">
-            {categories.length} {categories.length === 1 ? "category" : "categories"}
+            {streams.length} {streams.length === 1 ? "stream" : "streams"}
           </p>
         </div>
       )}
 
-      {/* Category Tree */}
+      {/* Stream List */}
       <div className="bg-white rounded-lg shadow">
-        <CategoryTree
-          tree={categoryTree}
-          onCategoryPress={handleCategoryPress}
-          selectedId={selectedCategoryId}
+        <StreamList
+          streams={streams}
+          onStreamPress={handleStreamPress}
+          selectedId={selectedStreamId}
         />
       </div>
 
-      {/* Add Category Modal */}
-      <AddCategoryModal
+      {/* Add Stream Modal */}
+      <AddStreamModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onSubmit={handleCreateCategory}
-        categories={categories}
+        onSubmit={handleCreateStream}
       />
     </div>
   );

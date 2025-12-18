@@ -1,9 +1,8 @@
 import { View, Text, FlatList, SectionList, StyleSheet, ActivityIndicator } from "react-native";
 import { useState } from "react";
-import type { Entry, Stream as FullStream } from "@trace/core";
+import type { Entry, Stream as FullStream, EntrySection, EntryDisplayMode } from "@trace/core";
 import { getStreamAttributeVisibility } from "@trace/core";
 import { EntryListItem } from "./EntryListItem";
-import type { EntrySection } from "../helpers/entrySortHelpers";
 import { theme } from "../../../shared/theme/theme";
 
 interface Stream {
@@ -15,8 +14,6 @@ interface Location {
   location_id: string;
   name: string;
 }
-
-import type { EntryDisplayMode } from '../types/EntryDisplayMode';
 
 interface EntryListProps {
   entries: Entry[];

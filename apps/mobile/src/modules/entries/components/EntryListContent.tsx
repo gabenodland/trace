@@ -1,10 +1,8 @@
 import { View, Text, StyleSheet } from "react-native";
 import { useState } from "react";
-import type { Entry, Stream } from "@trace/core";
+import type { Entry, Stream, EntrySection, EntryDisplayMode } from "@trace/core";
 import { getStreamAttributeVisibility } from "@trace/core";
 import { EntryListItem } from "./EntryListItem";
-import type { EntrySection } from "../helpers/entrySortHelpers";
-import type { EntryDisplayMode } from "../types/EntryDisplayMode";
 import { theme } from "../../../shared/theme/theme";
 
 interface EntryListContentProps {

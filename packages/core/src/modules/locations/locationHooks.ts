@@ -4,8 +4,9 @@
  * React Query hooks for location operations
  */
 
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import * as locationApi from './locationApi';
+import * as locationDbApi from './locationDbApi';
 import * as locationHelpers from './locationHelpers';
 import type {
   MapboxReverseGeocodeResponse,
@@ -14,6 +15,8 @@ import type {
   LocationAutocompleteRequest,
   POIItem,
   MapboxLocationHierarchy,
+  LocationEntity,
+  CreateLocationInput,
 } from './LocationTypes';
 
 /**
@@ -21,6 +24,8 @@ import type {
  */
 export const locationKeys = {
   all: ['locations'] as const,
+  list: () => [...locationKeys.all, 'list'] as const,
+  detail: (id: string) => [...locationKeys.all, 'detail', id] as const,
   geocode: (lat: number, lng: number) => [...locationKeys.all, 'geocode', lat, lng] as const,
   nearby: (lat: number, lng: number, radius: number) => [...locationKeys.all, 'nearby', lat, lng, radius] as const,
   autocomplete: (query: string) => [...locationKeys.all, 'autocomplete', query] as const,
@@ -115,3 +120,103 @@ export function useLocationHierarchy(
 
 // Export helpers for use in components
 export { locationHelpers };
+
+// ============================================================================
+// DATABASE HOOKS - For stored locations (Supabase)
+// ============================================================================
+
+/**
+ * Internal hook - fetch all user locations from database
+ */
+function useLocationsQuery(): UseQueryResult<LocationEntity[], Error> {
+  return useQuery({
+    queryKey: locationKeys.list(),
+    queryFn: locationDbApi.getLocations,
+  });
+}
+
+/**
+ * Internal hook - create location mutation
+ */
+function useCreateLocationMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: locationDbApi.createLocation,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: locationKeys.list() });
+    },
+  });
+}
+
+/**
+ * Internal hook - update location mutation
+ */
+function useUpdateLocationMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ locationId, input }: { locationId: string; input: Partial<CreateLocationInput> }) =>
+      locationDbApi.updateLocation(locationId, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: locationKeys.list() });
+    },
+  });
+}
+
+/**
+ * Internal hook - delete location mutation
+ */
+function useDeleteLocationMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: locationDbApi.deleteLocation,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: locationKeys.list() });
+    },
+  });
+}
+
+/**
+ * THE SINGLE SOURCE OF TRUTH for stored locations
+ *
+ * Provides access to user's saved locations from the database
+ * and mutations to create, update, delete locations.
+ */
+export function useLocations() {
+  const locationsQuery = useLocationsQuery();
+  const createMutation = useCreateLocationMutation();
+  const updateMutation = useUpdateLocationMutation();
+  const deleteMutation = useDeleteLocationMutation();
+
+  return {
+    // Data
+    locations: locationsQuery.data || [],
+    isLoading: locationsQuery.isLoading,
+    error: locationsQuery.error,
+    refetch: locationsQuery.refetch,
+
+    // Mutations
+    locationMutations: {
+      createLocation: createMutation.mutateAsync,
+      updateLocation: (locationId: string, input: Partial<CreateLocationInput>) =>
+        updateMutation.mutateAsync({ locationId, input }),
+      deleteLocation: deleteMutation.mutateAsync,
+      isCreating: createMutation.isPending,
+      isUpdating: updateMutation.isPending,
+      isDeleting: deleteMutation.isPending,
+    },
+  };
+}
+
+/**
+ * Hook to get a single location by ID
+ */
+export function useLocation(locationId: string | null) {
+  return useQuery({
+    queryKey: locationId ? locationKeys.detail(locationId) : ['locations', 'detail', 'disabled'],
+    queryFn: () => locationDbApi.getLocation(locationId!),
+    enabled: !!locationId,
+  });
+}

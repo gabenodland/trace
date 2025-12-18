@@ -3,8 +3,8 @@ import { useAuthState } from "@trace/core";
 import { LoginPage } from "./modules/auth/pages/LoginPage";
 import { Layout } from "./components/layout/Layout";
 import { CapturePage } from "./pages/CapturePage";
-import { InboxPage } from "./pages/InboxPage";
-import { CategoriesPage } from "./pages/CategoriesPage";
+import { EntriesPage } from "./pages/EntriesPage";
+import { StreamsPage } from "./pages/StreamsPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { TasksPage } from "./pages/TasksPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -30,8 +30,9 @@ function ProtectedRoutes() {
       <Route path="/" element={<Layout />}>
         <Route index element={<Navigate to="/capture" replace />} />
         <Route path="capture" element={<CapturePage />} />
-        <Route path="inbox" element={<InboxPage />} />
-        <Route path="categories" element={<CategoriesPage />} />
+        <Route path="entries" element={<EntriesPage />} />
+        <Route path="inbox" element={<Navigate to="/entries" replace />} />
+        <Route path="streams" element={<StreamsPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="settings" element={<SettingsPage />} />

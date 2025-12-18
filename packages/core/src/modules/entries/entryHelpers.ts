@@ -265,6 +265,18 @@ export function isCompletedStatus(status: EntryStatus): boolean {
 }
 
 /**
+ * Get the next status when toggling an entry's completion state
+ * - If completed/cancelled → todo (back to actionable)
+ * - If actionable → done (mark complete)
+ * - If none → none (no change)
+ */
+export function getNextStatus(currentStatus: EntryStatus): EntryStatus {
+  if (currentStatus === "none") return "none";
+  if (isCompletedStatus(currentStatus)) return "todo";
+  return "done";
+}
+
+/**
  * Check if an entry is a task (has any workflow status set)
  */
 export function isTask(status: EntryStatus): boolean {
@@ -440,4 +452,99 @@ export function isTypeFeatureAvailable(
   types: string[] | undefined
 ): boolean {
   return !!useType && Array.isArray(types) && types.length > 0;
+}
+
+// ============================================
+// AGGREGATION HELPERS
+// Pure functions that aggregate data from entry arrays
+// ============================================
+
+export interface TagCount {
+  tag: string;
+  count: number;
+}
+
+export interface MentionCount {
+  mention: string;
+  count: number;
+}
+
+export interface LocationCount {
+  location_id: string;
+  count: number;
+}
+
+/**
+ * Aggregate all unique tags from entries with their counts
+ * Returns sorted by count descending
+ */
+export function aggregateTags(entries: Array<{ tags?: string[] | null }>): TagCount[] {
+  const tagCounts: Record<string, number> = {};
+
+  for (const entry of entries) {
+    for (const tag of entry.tags || []) {
+      tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+    }
+  }
+
+  return Object.entries(tagCounts)
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Aggregate all unique mentions from entries with their counts
+ * Returns sorted by count descending
+ */
+export function aggregateMentions(entries: Array<{ mentions?: string[] | null }>): MentionCount[] {
+  const mentionCounts: Record<string, number> = {};
+
+  for (const entry of entries) {
+    for (const mention of entry.mentions || []) {
+      mentionCounts[mention] = (mentionCounts[mention] || 0) + 1;
+    }
+  }
+
+  return Object.entries(mentionCounts)
+    .map(([mention, count]) => ({ mention, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Aggregate all unique location_ids from entries with their counts
+ * Returns sorted by count descending
+ */
+export function aggregateLocations(entries: Array<{ location_id?: string | null }>): LocationCount[] {
+  const locationCounts: Record<string, number> = {};
+
+  for (const entry of entries) {
+    if (entry.location_id) {
+      locationCounts[entry.location_id] = (locationCounts[entry.location_id] || 0) + 1;
+    }
+  }
+
+  return Object.entries(locationCounts)
+    .map(([location_id, count]) => ({ location_id, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Get entry counts summary
+ * @param entries - Array of entries to count
+ * @returns Object with total count and count of entries without stream
+ */
+export function getEntryCounts(entries: Array<{ stream_id?: string | null }>): {
+  total: number;
+  noStream: number;
+} {
+  let noStream = 0;
+  for (const entry of entries) {
+    if (!entry.stream_id) {
+      noStream++;
+    }
+  }
+  return {
+    total: entries.length,
+    noStream,
+  };
 }

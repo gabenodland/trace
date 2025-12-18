@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { useEntries, useEntry, useCategories, extractTagsAndMentions, getWordCount, getCharacterCount } from "@trace/core";
-import { CategoryPicker } from "../../categories/components/CategoryPicker";
+import { useEntries, useEntry, useStreams, extractTagsAndMentions, getWordCount, getCharacterCount } from "@trace/core";
+import { StreamPicker } from "../../streams/components/StreamPicker";
 
 export function CaptureForm() {
   const navigate = useNavigate();
@@ -14,9 +14,9 @@ export function CaptureForm() {
   const [title, setTitle] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [captureLocation, setCaptureLocation] = useState(true);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [categoryName, setCategoryName] = useState<string | null>(null);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [streamId, setStreamId] = useState<string | null>(null);
+  const [streamName, setStreamName] = useState<string | null>(null);
+  const [showStreamPicker, setShowStreamPicker] = useState(false);
   const [status, setStatus] = useState<"none" | "incomplete" | "complete">("none");
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -32,7 +32,7 @@ export function CaptureForm() {
 
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId);
-  const { categories } = useCategories();
+  const { streams } = useStreams();
 
   const isEditing = !!entryId;
 
@@ -74,7 +74,7 @@ export function CaptureForm() {
     if (entry && isEditing && editor) {
       setTitle(entry.title || "");
       editor.commands.setContent(entry.content);
-      setCategoryId(entry.category_id || null);
+      setStreamId(entry.stream_id || null);
       setStatus(entry.status);
       setDueDate(entry.due_date);
 
@@ -90,12 +90,12 @@ export function CaptureForm() {
         setIncludeTime(date.getMilliseconds() !== 100);
       }
 
-      // Look up category name from categories list
-      if (entry.category_id && categories.length > 0) {
-        const category = categories.find(c => c.category_id === entry.category_id);
-        setCategoryName(category?.name || null);
+      // Look up stream name from streams list
+      if (entry.stream_id && streams.length > 0) {
+        const stream = streams.find(s => s.stream_id === entry.stream_id);
+        setStreamName(stream?.name || null);
       } else {
-        setCategoryName(null);
+        setStreamName(null);
       }
 
       // Set location if available
@@ -103,7 +103,7 @@ export function CaptureForm() {
         setCaptureLocation(true);
       }
     }
-  }, [entry, isEditing, editor, categories]);
+  }, [entry, isEditing, editor, streams]);
 
   const handleSave = async () => {
     if (!editor) {
@@ -136,7 +136,7 @@ export function CaptureForm() {
           content,
           tags,
           mentions,
-          category_id: categoryId,
+          stream_id: streamId,
           entry_date: entryDate,
           status,
           due_date: dueDate,
@@ -177,7 +177,7 @@ export function CaptureForm() {
           location_lat: latitude,
           location_lng: longitude,
           location_accuracy: accuracy,
-          category_id: categoryId,
+          stream_id: streamId,
           status,
           due_date: dueDate,
         });
@@ -186,14 +186,14 @@ export function CaptureForm() {
         // Clear form only when creating
         setTitle("");
         editor.commands.setContent("");
-        setCategoryId(null);
-        setCategoryName(null);
+        setStreamId(null);
+        setStreamName(null);
         setStatus("none");
         setDueDate(null);
       }
 
-      // Navigate to inbox
-      navigate("/inbox");
+      // Navigate to entries
+      navigate("/entries");
     } catch (error) {
       console.error(`Failed to ${isEditing ? 'update' : 'create'} entry:`, error);
       alert(`Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -212,7 +212,7 @@ export function CaptureForm() {
 
     try {
       await singleEntryMutations.deleteEntry();
-      navigate("/inbox");
+      navigate("/entries");
     } catch (error) {
       console.error("Failed to delete entry:", error);
       alert(`Failed to delete: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -241,10 +241,10 @@ export function CaptureForm() {
         <div className="text-center">
           <p className="text-red-600 text-lg mb-4">Entry not found</p>
           <button
-            onClick={() => navigate("/inbox")}
+            onClick={() => navigate("/entries")}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
-            Back to Inbox
+            Back to Entries
           </button>
         </div>
       </div>
@@ -297,30 +297,30 @@ export function CaptureForm() {
             </svg>
           </button>
 
-          {/* Category Button - with relative positioning for dropdown */}
+          {/* Stream Button - with relative positioning for dropdown */}
           <div className="relative">
             <button
-              onClick={() => setShowCategoryPicker(!showCategoryPicker)}
+              onClick={() => setShowStreamPicker(!showStreamPicker)}
               className={`flex items-center gap-2 px-3 py-2 rounded transition-colors ${
-                categoryId ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-50"
+                streamId ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-50"
               }`}
-              title={categoryName || "Inbox"}
+              title={streamName || "Inbox"}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
               </svg>
-              <span className="text-sm font-medium">{categoryName || "Inbox"}</span>
+              <span className="text-sm font-medium">{streamName || "Inbox"}</span>
             </button>
 
-            {/* Category Picker Dropdown */}
-            <CategoryPicker
-              visible={showCategoryPicker}
-              onClose={() => setShowCategoryPicker(false)}
+            {/* Stream Picker Dropdown */}
+            <StreamPicker
+              visible={showStreamPicker}
+              onClose={() => setShowStreamPicker(false)}
               onSelect={(id, name) => {
-                setCategoryId(id);
-                setCategoryName(name);
+                setStreamId(id);
+                setStreamName(name);
               }}
-              selectedCategoryId={categoryId}
+              selectedStreamId={streamId}
             />
           </div>
 

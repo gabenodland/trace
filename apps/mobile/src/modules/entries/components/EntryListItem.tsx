@@ -1,10 +1,8 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
-import type { Entry, EntryStatus, StreamAttributeVisibility } from "@trace/core";
-import { formatEntryDateTime, formatEntryDateOnly, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor, formatRatingDisplay } from "@trace/core";
-import { getFormattedContent, getDisplayModeLines, getFirstLineOfText } from "../helpers/entryDisplayHelpers";
-import type { EntryDisplayMode } from "../types/EntryDisplayMode";
+import type { Entry, EntryStatus, StreamAttributeVisibility, EntryDisplayMode } from "@trace/core";
+import { formatEntryDateTime, formatEntryDateOnly, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor, formatRatingDisplay, getFormattedContent, getDisplayModeLines, getFirstLineOfText } from "@trace/core";
 import { HtmlRenderer } from "../helpers/htmlRenderer";
 import { WebViewHtmlRenderer } from "../helpers/webViewHtmlRenderer";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";

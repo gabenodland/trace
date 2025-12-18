@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
 import { useRef, useEffect } from 'react';
-import type { EntrySortOrder } from '../types/EntrySortOrder';
-import { ENTRY_SORT_ORDERS } from '../types/EntrySortOrder';
+import type { EntrySortOrder } from '@trace/core';
+import { ENTRY_SORT_ORDERS } from '@trace/core';
 import Svg, { Path } from 'react-native-svg';
 import { theme } from '../../../shared/theme/theme';
 

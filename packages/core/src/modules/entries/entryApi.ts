@@ -66,6 +66,26 @@ export async function getEntries(filter?: EntryFilter): Promise<Entry[]> {
       query = query.contains("tags", filter.tags);
     }
 
+    // Single tag filter (for tag navigation)
+    if (filter.tag) {
+      query = query.contains("tags", [filter.tag]);
+    }
+
+    // Single mention filter (for mention navigation)
+    if (filter.mention) {
+      query = query.contains("mentions", [filter.mention]);
+    }
+
+    // Location filter
+    if (filter.location_id) {
+      query = query.eq("location_id", filter.location_id);
+    }
+
+    // Type filter
+    if (filter.type) {
+      query = query.eq("type", filter.type);
+    }
+
     if (filter.status) {
       query = query.eq("status", filter.status);
     }

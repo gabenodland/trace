@@ -3,8 +3,8 @@ import { useState } from "react";
 
 const navItems = [
   { path: "/capture", label: "Capture", icon: "✏️" },
-  { path: "/inbox", label: "Inbox", icon: "📥", badge: 0 },
-  { path: "/categories", label: "Categories", icon: "📁" },
+  { path: "/entries", label: "Entries", icon: "📥", badge: 0 },
+  { path: "/streams", label: "Streams", icon: "📁" },
   { path: "/calendar", label: "Calendar", icon: "📅" },
   { path: "/tasks", label: "Tasks", icon: "✓", badge: 0 },
   { path: "/settings", label: "Settings", icon: "⚙️" },

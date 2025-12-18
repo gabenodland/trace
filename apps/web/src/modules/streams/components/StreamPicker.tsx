@@ -1,25 +1,25 @@
 import { useState } from "react";
-import { useCategories } from "@trace/core";
+import { useStreams } from "@trace/core";
 
-interface CategoryPickerProps {
+interface StreamPickerProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (categoryId: string | null, categoryName: string | null) => void;
-  selectedCategoryId: string | null;
+  onSelect: (streamId: string | null, streamName: string | null) => void;
+  selectedStreamId: string | null;
 }
 
-export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId }: CategoryPickerProps) {
-  const { categories, isLoading } = useCategories();
+export function StreamPicker({ visible, onClose, onSelect, selectedStreamId }: StreamPickerProps) {
+  const { streams, isLoading } = useStreams();
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Filter categories based on search query
-  const filteredCategories = categories.filter((category) =>
-    category.display_path.toLowerCase().includes(searchQuery.toLowerCase())
+  // Filter streams based on search query
+  const filteredStreams = streams.filter((stream) =>
+    stream.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSelect = (categoryId: string | null) => {
-    const selectedCategory = categories.find(c => c.category_id === categoryId);
-    onSelect(categoryId, selectedCategory?.name || null);
+  const handleSelect = (streamId: string | null) => {
+    const selectedStream = streams.find(s => s.stream_id === streamId);
+    onSelect(streamId, selectedStream?.name || null);
     setSearchQuery("");
     onClose();
   };
@@ -60,7 +60,7 @@ export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId 
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search categories..."
+              placeholder="Search streams..."
               className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               autoFocus
             />
@@ -79,25 +79,25 @@ export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId 
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
-          {/* Inbox Option (No Category) - Only when not searching */}
+          {/* Inbox Option (No Stream) - Only when not searching */}
           {searchQuery === "" && (
             <>
               <button
                 onClick={() => handleSelect(null)}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors mb-2 ${
-                  selectedCategoryId === null ? "bg-blue-50 border-2 border-blue-200" : "bg-gray-50 hover:bg-gray-100 border-2 border-transparent"
+                  selectedStreamId === null ? "bg-blue-50 border-2 border-blue-200" : "bg-gray-50 hover:bg-gray-100 border-2 border-transparent"
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <svg className={`w-5 h-5 ${selectedCategoryId === null ? "text-blue-600" : "text-gray-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-5 h-5 ${selectedStreamId === null ? "text-blue-600" : "text-gray-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 22V12h6v10" />
                   </svg>
-                  <span className={`font-medium ${selectedCategoryId === null ? "text-blue-900" : "text-gray-700"}`}>
-                    Inbox (No Category)
+                  <span className={`font-medium ${selectedStreamId === null ? "text-blue-900" : "text-gray-700"}`}>
+                    Inbox (No Stream)
                   </span>
                 </div>
-                {selectedCategoryId === null && (
+                {selectedStreamId === null && (
                   <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
@@ -108,29 +108,29 @@ export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId 
             </>
           )}
 
-          {/* Categories - Flat List */}
+          {/* Streams - Flat List */}
           {isLoading ? (
             <div className="flex items-center justify-center gap-3 py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <span className="text-sm text-gray-500">Loading categories...</span>
+              <span className="text-sm text-gray-500">Loading streams...</span>
             </div>
-          ) : filteredCategories.length === 0 ? (
+          ) : filteredStreams.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500 font-semibold mb-1">
-                {searchQuery ? "No categories found" : "No categories yet"}
+                {searchQuery ? "No streams found" : "No streams yet"}
               </p>
               <p className="text-sm text-gray-400">
-                {searchQuery ? "Try a different search" : "Create a category first"}
+                {searchQuery ? "Try a different search" : "Create a stream first"}
               </p>
             </div>
           ) : (
             <div className="space-y-1">
-              {filteredCategories.map((category) => (
+              {filteredStreams.map((stream) => (
                 <button
-                  key={category.category_id}
-                  onClick={() => handleSelect(category.category_id)}
+                  key={stream.stream_id}
+                  onClick={() => handleSelect(stream.stream_id)}
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
-                    selectedCategoryId === category.category_id
+                    selectedStreamId === stream.stream_id
                       ? "bg-blue-50 border-2 border-blue-200"
                       : "bg-gray-50 hover:bg-gray-100 border-2 border-transparent"
                   }`}
@@ -138,7 +138,7 @@ export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId 
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <svg
                       className={`w-5 h-5 flex-shrink-0 ${
-                        selectedCategoryId === category.category_id ? "text-blue-600" : "text-gray-500"
+                        selectedStreamId === stream.stream_id ? "text-blue-600" : "text-gray-500"
                       }`}
                       fill="none"
                       stroke="currentColor"
@@ -153,14 +153,19 @@ export function CategoryPicker({ visible, onClose, onSelect, selectedCategoryId 
                     </svg>
                     <span
                       className={`font-medium truncate ${
-                        selectedCategoryId === category.category_id ? "text-blue-900" : "text-gray-700"
+                        selectedStreamId === stream.stream_id ? "text-blue-900" : "text-gray-700"
                       }`}
-                      title={category.display_path}
+                      title={stream.name}
                     >
-                      {category.display_path}
+                      {stream.name}
                     </span>
                   </div>
-                  {selectedCategoryId === category.category_id && (
+                  {stream.entry_count > 0 && (
+                    <span className="px-2 py-0.5 text-xs font-semibold bg-gray-200 text-gray-600 rounded-full mr-2">
+                      {stream.entry_count}
+                    </span>
+                  )}
+                  {selectedStreamId === stream.stream_id && (
                     <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                     </svg>

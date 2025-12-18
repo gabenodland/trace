@@ -1,30 +1,30 @@
 import { useState } from "react";
-import { useCategories } from "@trace/core";
-import { CategoryTree as CategoryTreeComponent } from "../../modules/categories/components/CategoryTree";
+import { useStreams } from "@trace/core";
+import { StreamList } from "../../modules/streams/components/StreamList";
 
-interface InboxCategoryDropdownProps {
+interface InboxStreamDropdownProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (categoryId: string | null | "all", categoryName: string) => void;
-  selectedCategoryId: string | null | "all";
+  onSelect: (streamId: string | null | "all", streamName: string) => void;
+  selectedStreamId: string | null | "all";
 }
 
-export function InboxCategoryDropdown({
+export function InboxStreamDropdown({
   visible,
   onClose,
   onSelect,
-  selectedCategoryId,
-}: InboxCategoryDropdownProps) {
-  const { categories, categoryTree, isLoading } = useCategories();
+  selectedStreamId,
+}: InboxStreamDropdownProps) {
+  const { streams, isLoading } = useStreams();
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Filter categories based on search query
-  const filteredCategories = categories.filter((category) =>
-    category.display_path.toLowerCase().includes(searchQuery.toLowerCase())
+  // Filter streams based on search query
+  const filteredStreams = streams.filter((stream) =>
+    stream.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSelect = (categoryId: string | null | "all", categoryName: string) => {
-    onSelect(categoryId, categoryName);
+  const handleSelect = (streamId: string | null | "all", streamName: string) => {
+    onSelect(streamId, streamName);
     setSearchQuery("");
     onClose();
   };
@@ -80,7 +80,7 @@ export function InboxCategoryDropdown({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search categories..."
+              placeholder="Search streams..."
               className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               autoFocus
             />
@@ -107,11 +107,11 @@ export function InboxCategoryDropdown({
           {/* Only show special options when not searching */}
           {searchQuery === "" && (
             <>
-              {/* Inbox Option (No Category) */}
+              {/* Inbox Option (No Stream) */}
               <button
                 onClick={() => handleSelect(null, "Inbox")}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors mb-2 ${
-                  selectedCategoryId === null
+                  selectedStreamId === null
                     ? "bg-blue-50 border-2 border-blue-200"
                     : "bg-gray-50 hover:bg-gray-100 border-2 border-transparent"
                 }`}
@@ -119,7 +119,7 @@ export function InboxCategoryDropdown({
                 <div className="flex items-center gap-2">
                   <svg
                     className={`w-5 h-5 ${
-                      selectedCategoryId === null ? "text-blue-600" : "text-gray-500"
+                      selectedStreamId === null ? "text-blue-600" : "text-gray-500"
                     }`}
                     fill="none"
                     stroke="currentColor"
@@ -134,13 +134,13 @@ export function InboxCategoryDropdown({
                   </svg>
                   <span
                     className={`font-medium ${
-                      selectedCategoryId === null ? "text-blue-900" : "text-gray-700"
+                      selectedStreamId === null ? "text-blue-900" : "text-gray-700"
                     }`}
                   >
                     Inbox
                   </span>
                 </div>
-                {selectedCategoryId === null && (
+                {selectedStreamId === null && (
                   <svg
                     className="w-5 h-5 text-blue-600"
                     fill="none"
@@ -161,7 +161,7 @@ export function InboxCategoryDropdown({
               <button
                 onClick={() => handleSelect("all", "All")}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors mb-2 ${
-                  selectedCategoryId === "all"
+                  selectedStreamId === "all"
                     ? "bg-blue-50 border-2 border-blue-200"
                     : "bg-gray-50 hover:bg-gray-100 border-2 border-transparent"
                 }`}
@@ -169,7 +169,7 @@ export function InboxCategoryDropdown({
                 <div className="flex items-center gap-2">
                   <svg
                     className={`w-5 h-5 ${
-                      selectedCategoryId === "all" ? "text-blue-600" : "text-gray-500"
+                      selectedStreamId === "all" ? "text-blue-600" : "text-gray-500"
                     }`}
                     fill="none"
                     stroke="currentColor"
@@ -184,13 +184,13 @@ export function InboxCategoryDropdown({
                   </svg>
                   <span
                     className={`font-medium ${
-                      selectedCategoryId === "all" ? "text-blue-900" : "text-gray-700"
+                      selectedStreamId === "all" ? "text-blue-900" : "text-gray-700"
                     }`}
                   >
                     All
                   </span>
                 </div>
-                {selectedCategoryId === "all" && (
+                {selectedStreamId === "all" && (
                   <svg
                     className="w-5 h-5 text-blue-600"
                     fill="none"
@@ -211,44 +211,44 @@ export function InboxCategoryDropdown({
             </>
           )}
 
-          {/* Categories - Tree or Flat List based on search */}
+          {/* Streams - Flat List */}
           {isLoading ? (
             <div className="flex items-center justify-center gap-3 py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <span className="text-sm text-gray-500">Loading categories...</span>
+              <span className="text-sm text-gray-500">Loading streams...</span>
             </div>
           ) : searchQuery === "" ? (
-            // Show tree view when not searching
-            categoryTree.length === 0 ? (
+            // Show list when not searching
+            filteredStreams.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500 font-semibold mb-1">No categories yet</p>
-                <p className="text-sm text-gray-400">Create a category first</p>
+                <p className="text-gray-500 font-semibold mb-1">No streams yet</p>
+                <p className="text-sm text-gray-400">Create a stream first</p>
               </div>
             ) : (
-              <CategoryTreeComponent
-                tree={categoryTree}
-                onCategoryPress={(categoryId) => {
-                  const category = categories.find((c) => c.category_id === categoryId);
-                  handleSelect(categoryId, category?.name || "Unknown");
+              <StreamList
+                streams={filteredStreams}
+                onStreamPress={(streamId) => {
+                  const stream = streams.find((s) => s.stream_id === streamId);
+                  handleSelect(streamId, stream?.name || "Unknown");
                 }}
-                selectedId={selectedCategoryId === "all" || selectedCategoryId === null ? null : selectedCategoryId}
+                selectedId={selectedStreamId === "all" || selectedStreamId === null ? null : selectedStreamId}
               />
             )
           ) : (
             // Show flat list when searching
-            filteredCategories.length === 0 ? (
+            filteredStreams.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500 font-semibold mb-1">No categories found</p>
+                <p className="text-gray-500 font-semibold mb-1">No streams found</p>
                 <p className="text-sm text-gray-400">Try a different search</p>
               </div>
             ) : (
               <div className="space-y-1">
-                {filteredCategories.map((category) => (
+                {filteredStreams.map((stream) => (
                   <button
-                    key={category.category_id}
-                    onClick={() => handleSelect(category.category_id, category.name)}
+                    key={stream.stream_id}
+                    onClick={() => handleSelect(stream.stream_id, stream.name)}
                     className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
-                      selectedCategoryId === category.category_id
+                      selectedStreamId === stream.stream_id
                         ? "bg-blue-50 border-2 border-blue-200"
                         : "bg-gray-50 hover:bg-gray-100 border-2 border-transparent"
                     }`}
@@ -256,7 +256,7 @@ export function InboxCategoryDropdown({
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <svg
                         className={`w-5 h-5 flex-shrink-0 ${
-                          selectedCategoryId === category.category_id
+                          selectedStreamId === stream.stream_id
                             ? "text-blue-600"
                             : "text-gray-500"
                         }`}
@@ -273,16 +273,16 @@ export function InboxCategoryDropdown({
                       </svg>
                       <span
                         className={`font-medium truncate ${
-                          selectedCategoryId === category.category_id
+                          selectedStreamId === stream.stream_id
                             ? "text-blue-900"
                             : "text-gray-700"
                         }`}
-                        title={category.display_path}
+                        title={stream.name}
                       >
-                        {category.display_path}
+                        {stream.name}
                       </span>
                     </div>
-                    {selectedCategoryId === category.category_id && (
+                    {selectedStreamId === stream.stream_id && (
                       <svg
                         className="w-5 h-5 text-blue-600 flex-shrink-0"
                         fill="none"

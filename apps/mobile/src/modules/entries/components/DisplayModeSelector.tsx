@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
 import { useRef, useEffect } from 'react';
-import type { EntryDisplayMode } from '../types/EntryDisplayMode';
-import { ENTRY_DISPLAY_MODES } from '../types/EntryDisplayMode';
+import type { EntryDisplayMode } from '@trace/core';
+import { ENTRY_DISPLAY_MODES } from '@trace/core';
 import Svg, { Path } from 'react-native-svg';
 import { theme } from '../../../shared/theme/theme';
 
