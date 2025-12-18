@@ -11,7 +11,7 @@
 
 import { localDB } from '../db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
-import { Entry, LocationEntity, isCompletedStatus } from '@trace/core';
+import { Entry, LocationEntity, isCompletedStatus, ALL_STATUSES, EntryStatus } from '@trace/core';
 // AppState import removed - not currently used but may be needed for foreground sync
 import NetInfo from '@react-native-community/netinfo';
 import type { QueryClient } from '@tanstack/react-query';
@@ -191,6 +191,7 @@ class SyncService {
           location_accuracy: serverEntry.location_accuracy,
           location_id: serverEntry.location_id,
           status: (serverEntry.status as Entry['status']) || 'none',
+          type: serverEntry.type || null,
           due_date: serverEntry.due_date,
           completed_at: serverEntry.completed_at,
           attachments: serverEntry.attachments,
@@ -988,9 +989,39 @@ class SyncService {
   private async syncEntry(entry: Entry): Promise<void> {
     const { sync_action } = entry;
 
-    // Enforce completed_at constraint - set for any completed status (done, closed, cancelled)
+    // Validate and sanitize status - ensure it's a valid value for the database constraint
+    const validStatuses = ALL_STATUSES.map(s => s.value);
+    let sanitizedStatus: EntryStatus = entry.status;
+
+    // Debug: Log the original status value
+    log.info('syncEntry status check', {
+      entryId: entry.entry_id,
+      originalStatus: entry.status,
+      statusType: typeof entry.status,
+      isValid: validStatuses.includes(entry.status)
+    });
+
+    if (!validStatuses.includes(entry.status)) {
+      // Map legacy status values to new ones
+      if (entry.status === 'incomplete' as unknown as EntryStatus) {
+        sanitizedStatus = 'todo';
+        log.info('Mapped incomplete to todo', { entryId: entry.entry_id });
+      } else if (entry.status === 'complete' as unknown as EntryStatus) {
+        sanitizedStatus = 'done';
+        log.info('Mapped complete to done', { entryId: entry.entry_id });
+      } else {
+        // Unknown status - default to 'none'
+        log.warn('Invalid status, defaulting to none', { entryId: entry.entry_id, status: entry.status });
+        sanitizedStatus = 'none';
+      }
+    }
+
+    // Enforce completed_at constraint:
+    // - If status is completed (done, closed, cancelled) → completed_at MUST be set
+    // - If status is NOT completed → completed_at MUST be NULL
     let completedAtValue: string | null = null;
-    if (isCompletedStatus(entry.status)) {
+    if (isCompletedStatus(sanitizedStatus)) {
+      // Completed status - ensure completed_at is set
       if (entry.completed_at) {
         completedAtValue = typeof entry.completed_at === 'number'
           ? new Date(entry.completed_at).toISOString()
@@ -999,6 +1030,7 @@ class SyncService {
         completedAtValue = new Date().toISOString();
       }
     }
+    // else: Non-completed status - completedAtValue stays null (constraint requirement)
 
     const supabaseData = {
       entry_id: entry.entry_id,
@@ -1008,15 +1040,22 @@ class SyncService {
       tags: entry.tags,
       mentions: entry.mentions,
       stream_id: entry.stream_id,
+      entry_date: entry.entry_date && (typeof entry.entry_date === 'number'
+        ? new Date(entry.entry_date).toISOString()
+        : entry.entry_date),
       entry_latitude: entry.entry_latitude,
       entry_longitude: entry.entry_longitude,
       location_accuracy: entry.location_accuracy,
       location_id: entry.location_id,
-      status: entry.status,
+      status: sanitizedStatus,
+      type: entry.type || null,
       due_date: entry.due_date && (typeof entry.due_date === 'number'
         ? new Date(entry.due_date).toISOString()
         : entry.due_date),
       completed_at: completedAtValue,
+      priority: entry.priority ?? 0,
+      rating: entry.rating ?? 0,
+      is_pinned: entry.is_pinned ?? false,
       created_at: typeof entry.created_at === 'number'
         ? new Date(entry.created_at).toISOString()
         : entry.created_at,
@@ -1090,6 +1129,17 @@ class SyncService {
         }
       }
 
+      // Debug: Log exactly what we're sending
+      log.info('Upserting entry', {
+        entryId: entry.entry_id,
+        status: supabaseData.status,
+        completed_at: supabaseData.completed_at,
+        rating: supabaseData.rating,
+        priority: supabaseData.priority,
+        is_pinned: supabaseData.is_pinned,
+        type: supabaseData.type,
+      });
+
       const { data: upsertedEntry, error } = await supabase
         .from('entries')
         .upsert(supabaseData, { onConflict: 'entry_id' })
@@ -1097,6 +1147,13 @@ class SyncService {
         .single();
 
       if (error) {
+        log.error('Upsert failed', {
+          entryId: entry.entry_id,
+          errorCode: error.code,
+          errorMessage: error.message,
+          errorDetails: error.details,
+          errorHint: error.hint,
+        });
         throw new Error(`Supabase upsert failed: ${error.message}`);
       }
 
@@ -1107,6 +1164,7 @@ class SyncService {
         base_version: serverVersion,
         synced: 1,
         sync_action: null,
+        sync_error: null, // Clear any previous sync error
       });
 
     } else if (sync_action === 'delete') {
