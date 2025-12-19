@@ -2,10 +2,10 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
 import * as Location from "expo-location";
 import { extractTagsAndMentions, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput, type EntryStatus } from "@trace/core";
+import { getDeviceName } from "../mobileEntryApi";
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
-import { useEntryRealtime } from "../../../shared/sync";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
@@ -16,7 +16,7 @@ import { useNavigationMenu } from "../../../shared/hooks/useNavigationMenu";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { LocationPicker } from "../../locations/components/LocationPicker";
-import { compressPhoto, savePhotoToLocalStorage, deletePhoto, createPhoto } from "../../photos/mobilePhotoApi";
+import { compressPhoto, savePhotoToLocalStorage, deletePhoto, createPhoto, getPhotosForEntry } from "../../photos/mobilePhotoApi";
 import * as Crypto from "expo-crypto";
 import { useCaptureFormState } from "./hooks/useCaptureFormState";
 import { styles } from "./CaptureForm.styles";
@@ -61,7 +61,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const { settings } = useSettings();
 
   // Single form data state hook (consolidates form field state + pending photos)
-  const { formData, updateField, addPendingPhoto, removePendingPhoto } = useCaptureFormState({
+  const { formData, updateField, updateMultipleFields, addPendingPhoto, removePendingPhoto, isDirty, setBaseline, markClean } = useCaptureFormState({
     isEditing,
     initialStreamId,
     initialStreamName,
@@ -95,21 +95,22 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const titleInputRef = useRef<TextInput>(null);
   const photoCaptureRef = useRef<PhotoCaptureRef>(null);
   const isInitialLoad = useRef(true); // Track if this is first load
+  const baselineNeedsSet = useRef(false); // Track if we need to set baseline after load
   const [photoCount, setPhotoCount] = useState(0); // Track photo position for ordering
+  const [baselinePhotoCount, setBaselinePhotoCount] = useState<number | null>(null); // Baseline for dirty tracking (null = not yet initialized)
   const [photosCollapsed, setPhotosCollapsed] = useState(false); // Start expanded
+  const [externalRefreshKey, setExternalRefreshKey] = useState(0); // Increment on external updates to force PhotoGallery reload
   // For copied entries, use the pre-generated entry_id from copiedEntryData
   // For new entries, generate a temp ID. For editing, use the existing entryId.
   const [tempEntryId] = useState(() => copiedEntryData?.entry.entry_id || entryId || Crypto.randomUUID());
 
   const { entryMutations } = useEntries();
-  const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
-  const { user } = useAuthState();
-
-  // Subscribe to realtime updates for this entry (only when editing an existing entry)
-  const { externalUpdate, clearExternalUpdate } = useEntryRealtime(
-    isEditing ? entryId : null,
-    { enabled: isEditing }
+  // When editing, refresh from server first to get latest version
+  const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(
+    entryId || null,
+    { refreshFirst: isEditing }
   );
+  const { user } = useAuthState();
   const { streams } = useStreams();
   const { navigate, setBeforeBackHandler } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
@@ -141,20 +142,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Get unsaved changes behavior from settings
   const unsavedChangesBehavior = settings.unsavedChangesBehavior;
 
-  // Track original values for change detection
-  const originalValues = useRef<{
-    title: string;
-    content: string;
-    streamId: string | null;
-    status: EntryStatus;
-    dueDate: string | null;
-    rating: number;
-    priority: number;
-    entryDate: string;
-    gpsData: GpsData | null;
-    locationData: LocationType | null;
-    photoCount: number;
-  } | null>(null);
+  // Track known version to detect external updates from the entry object
+  // This allows us to detect when another device has updated the entry via global sync
+  const knownVersionRef = useRef<number | null>(null);
 
   // Edit mode: new entries start in edit mode, existing entries start in read-only
   const [isEditMode, setIsEditMode] = useState(!isEditing);
@@ -162,22 +152,29 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Full-screen edit mode (hides all metadata, shows only formData.title + body + toolbar)
   const [isFullScreen, setIsFullScreen] = useState(false);
 
-  // Initialize original values for new entries
+  // Combined dirty state: hook's isDirty + photo count comparison for existing entries
+  // For editing existing entries, photos are saved directly to LocalDB (not pendingPhotos),
+  // so we need to compare photoCount against the baseline stored as state
+  const isFormDirty = useMemo(() => {
+    // If hook says dirty, it's dirty
+    if (isDirty) return true;
+
+    // For editing existing entries, check if photo count changed from baseline
+    // Only compare if baseline has been initialized (not null)
+    if (isEditing && baselinePhotoCount !== null && photoCount !== baselinePhotoCount) {
+      return true;
+    }
+
+    return false;
+  }, [isDirty, isEditing, photoCount, baselinePhotoCount]);
+
+  // Initialize baseline for new entries
   useEffect(() => {
-    if (!isEditing && !originalValues.current) {
-      originalValues.current = {
-        title: formData.title,
-        content: formData.content,
-        streamId: formData.streamId,
-        status: formData.status,
-        dueDate: formData.dueDate,
-        rating: formData.rating,
-        priority: formData.priority,
-        entryDate: formData.entryDate,
-        gpsData: formData.gpsData,
-        locationData: formData.locationData,
-        photoCount: 0,
-      };
+    if (!isEditing && baselinePhotoCount === null) {
+      // Set baseline in hook for dirty tracking
+      setBaseline(formData);
+      // For new entries, photos use pendingPhotos so baseline starts at 0
+      setBaselinePhotoCount(0);
     }
   }, []);
 
@@ -240,53 +237,12 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     };
   }, [unsavedChangesBehavior, formData.title, formData.content, formData.streamId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode]);
 
-  // Check if there are unsaved changes
+  // Check if there are unsaved changes - combines edit mode check with dirty tracking
+  // Uses isFormDirty from the hook instead of duplicate logic
   const hasUnsavedChanges = (): boolean => {
     // If not in edit mode, no changes are possible
     if (!isEditMode) return false;
-
-    if (!originalValues.current) return false;
-
-    const orig = originalValues.current;
-
-    // Compare current values with original
-    if (formData.title !== orig.title) return true;
-    if (formData.content !== orig.content) return true;
-    if (formData.streamId !== orig.streamId) return true;
-    if (formData.status !== orig.status) return true;
-    if (formData.dueDate !== orig.dueDate) return true;
-    if (formData.entryDate !== orig.entryDate) return true;
-
-    // Compare photo count
-    const currentPhotoCount = isEditing ? photoCount : formData.pendingPhotos.length;
-    if (currentPhotoCount !== orig.photoCount) return true;
-
-    // Compare GPS data
-    const origGps = orig.gpsData;
-    if (!formData.gpsData && !origGps) {
-      // Both null, no change
-    } else if (!formData.gpsData || !origGps) {
-      return true; // One is null, other is not
-    } else {
-      // Compare GPS fields
-      if (formData.gpsData.latitude !== origGps.latitude) return true;
-      if (formData.gpsData.longitude !== origGps.longitude) return true;
-    }
-
-    // Compare location data
-    const origLoc = orig.locationData;
-    if (!formData.locationData && !origLoc) {
-      // Both null, no change
-    } else if (!formData.locationData || !origLoc) {
-      return true; // One is null, other is not
-    } else {
-      // Compare location fields
-      if (formData.locationData.name !== origLoc.name) return true;
-      if (formData.locationData.latitude !== origLoc.latitude) return true;
-      if (formData.locationData.longitude !== origLoc.longitude) return true;
-    }
-
-    return false;
+    return isFormDirty;
   };
 
   // Handle navigation with unsaved changes check
@@ -300,9 +256,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     // Check the behavior setting
     switch (unsavedChangesBehavior) {
       case 'save':
-        // Automatically save and navigate
+        // Automatically save and then navigate
         handleSave().then(() => {
-          // Navigation happens in handleSave
+          navigateCallback();
         });
         break;
 
@@ -329,8 +285,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
             },
             {
               text: 'Save',
-              onPress: () => {
-                handleSave();
+              onPress: async () => {
+                await handleSave();
+                navigateCallback();
               },
             },
           ]
@@ -386,20 +343,90 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     ]).start(() => setSnackbarMessage(null));
   };
 
-  // Handle external update from another device (realtime subscription)
+  // Detect external updates by watching entry.version via global sync
+  // Simple logic: If version increased AND it's from a different device, update the form
   useEffect(() => {
-    if (externalUpdate && isEditing) {
-      // Show notification that entry was updated by another device
-      const deviceName = externalUpdate.last_edited_device || 'another device';
-      showSnackbar(`Entry updated by ${deviceName}`);
+    if (!entry || !isEditing) return;
 
-      // Clear the external update flag
-      clearExternalUpdate();
+    const entryVersion = entry.version || 1;
+    const thisDevice = getDeviceName();
+    const editingDevice = entry.last_edited_device || '';
 
-      // Note: The form data will be refreshed via React Query invalidation
-      // The useEntry hook will refetch and the form will update automatically
+    // First load - just record the version
+    if (knownVersionRef.current === null) {
+      knownVersionRef.current = entryVersion;
+      return;
     }
-  }, [externalUpdate, isEditing, clearExternalUpdate]);
+
+    // Version didn't change - nothing to do
+    if (entryVersion <= knownVersionRef.current) return;
+
+    // Version increased - check if it's from another device
+    const isExternalUpdate = editingDevice !== thisDevice;
+
+    console.log('🔄 [CaptureForm] Version change detected', {
+      thisDevice,
+      editingDevice,
+      isExternalUpdate,
+      previousVersion: knownVersionRef.current,
+      newVersion: entryVersion,
+    });
+
+    // Update known version
+    knownVersionRef.current = entryVersion;
+
+    // If change is from THIS device (our own save), don't update form
+    if (!isExternalUpdate) return;
+
+    // External update - if user has unsaved changes, warn them
+    if (isFormDirty) {
+      showSnackbar(`Entry updated by ${editingDevice} - you have unsaved changes`);
+      return;
+    }
+
+    // No local changes - update form with new data
+    updateMultipleFields({
+      title: entry.title || '',
+      content: entry.content || '',
+      streamId: entry.stream_id || null,
+      status: entry.status || 'none' as EntryStatus,
+      type: entry.type || null,
+      dueDate: entry.due_date || null,
+      rating: entry.rating || 0,
+      priority: entry.priority || 0,
+      entryDate: entry.entry_date || formData.entryDate,
+      gpsData: entry.entry_latitude && entry.entry_longitude ? {
+        latitude: entry.entry_latitude,
+        longitude: entry.entry_longitude,
+        accuracy: entry.location_accuracy || null,
+      } : null,
+    });
+
+    // Update stream name
+    if (entry.stream_id && streams.length > 0) {
+      const stream = streams.find(s => s.stream_id === entry.stream_id);
+      updateField("streamName", stream?.name || null);
+    } else {
+      updateField("streamName", null);
+    }
+
+    // Update includeTime based on milliseconds
+    if (entry.entry_date) {
+      updateField("includeTime", new Date(entry.entry_date).getMilliseconds() !== 100);
+    }
+
+    // Mark form clean after external update
+    setTimeout(() => {
+      markClean();
+      setBaselinePhotoCount(photoCount);
+    }, 0);
+
+    // Increment externalRefreshKey to force PhotoGallery to reload
+    // This ensures external photo additions are displayed
+    setExternalRefreshKey(prev => prev + 1);
+
+    showSnackbar(`Entry updated by ${editingDevice}`);
+  }, [entry, isEditing, isFormDirty, streams, updateMultipleFields, updateField, markClean, formData.entryDate, photoCount]);
 
   // Handle tap on title to enter edit mode
   const handleTitlePress = () => {
@@ -502,10 +529,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           accuracy: entry.location_accuracy || null,
         };
         updateField("gpsData", gps);
-        // Update original values for change detection
-        if (originalValues.current) {
-          originalValues.current.gpsData = gps;
-        }
       } else {
         updateField("gpsData", null);
       }
@@ -530,10 +553,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               country: locationEntity.country || null,
             };
             updateField("locationData", location);
-            // Update original values for change detection
-            if (originalValues.current) {
-              originalValues.current.locationData = location;
-            }
           } else {
             updateField("locationData", null);
           }
@@ -560,26 +579,21 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         setOriginalStreamName(null);
       }
 
-      // Store original values for change detection (after all state is set)
-      // Note: gpsData and locationData will be set asynchronously
-      originalValues.current = {
-        title: entry.title || "",
-        content: entry.content,
-        streamId: entry.stream_id || null,
-        status: entry.status,
-        dueDate: entry.due_date,
-        rating: entry.rating || 0,
-        priority: entry.priority || 0,
-        entryDate: entry.entry_date || entry.created_at || formData.entryDate,
-        gpsData: null, // Will be updated when GPS loads
-        locationData: null, // Will be updated when location loads
-        photoCount: 0, // Will be updated when photos load
-      };
-
       // Mark that initial load is complete
       isInitialLoad.current = false;
+      // Mark that baseline needs to be set (will happen in next effect after state updates)
+      baselineNeedsSet.current = true;
     }
   }, [entry, isEditing, streams]);
+
+  // Set baseline for dirty tracking after entry load completes
+  // This runs after the formData state updates from the load effect
+  useEffect(() => {
+    if (baselineNeedsSet.current && isEditing && !isInitialLoad.current) {
+      setBaseline(formData);
+      baselineNeedsSet.current = false;
+    }
+  }, [formData, isEditing, setBaseline]);
 
   // Load copied entry data (for copy workflow - entry is NOT saved to DB yet)
   useEffect(() => {
@@ -653,12 +667,14 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     }
   }, [isCopiedEntry, copiedEntryData, streams]);
 
-  // Update original photo count when photos load
+  // Update baseline photo count when photos load (initial load only)
+  // This handles both entries with existing photos AND entries with 0 photos
   useEffect(() => {
-    if (isEditing && originalValues.current && photoCount > 0 && originalValues.current.photoCount === 0) {
-      originalValues.current.photoCount = photoCount;
+    if (isEditing && baselinePhotoCount === null) {
+      // Set baseline once photos have been counted (even if 0)
+      setBaselinePhotoCount(photoCount);
     }
-  }, [photoCount, isEditing]);
+  }, [photoCount, isEditing, baselinePhotoCount]);
 
   // Apply default status for new entries with an initial stream
   // This handles the case when navigating directly to capture form with a stream preset
@@ -968,8 +984,15 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
       // Note: Sync is triggered automatically in mobileEntryApi after save
 
-      // Navigate back with current stream
-      navigateBack({ useCurrentStream: true });
+      if (isEditing) {
+        // For editing: stay on screen and show snackbar (easier for testing realtime)
+        markClean(); // Mark form as clean after successful save
+        setBaselinePhotoCount(photoCount); // Update photo baseline
+        showSnackbar("Saved");
+      } else {
+        // For creating: navigate back to list
+        navigateBack({ useCurrentStream: true });
+      }
     } catch (error) {
       console.error(`Failed to ${isEditing ? 'update' : 'create'} entry:`, error);
       Alert.alert("Error", `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -1137,6 +1160,11 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Photo deletion handler
   const handlePhotoDelete = async (photoId: string) => {
     try {
+      // Enter edit mode if not already (deletion is an edit action)
+      if (!isEditMode) {
+        enterEditMode();
+      }
+
       if (isEditing) {
         // EXISTING ENTRY: Delete from DB
         await deletePhoto(photoId);
@@ -1182,12 +1210,13 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         isFullScreen={isFullScreen}
         isSubmitting={isSubmitting}
         isEditing={isEditing}
+        isDirty={isFormDirty}
         title={formData.title}
         entryDate={formData.entryDate}
         includeTime={formData.includeTime}
         onTitleChange={(text) => updateField("title", text)}
         onCancel={handleCancel}
-        onBack={() => handleNavigationWithUnsavedCheck(navigateBack)}
+        onBack={navigateBack}
         onSave={handleSave}
         onDatePress={() => setActivePicker('entryDate')}
         onTimePress={() => setActivePicker('time')}
@@ -1306,7 +1335,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         {!isFullScreen && (
           <PhotoGallery
             entryId={entryId || tempEntryId}
-            refreshKey={photoCount}
+            refreshKey={photoCount + externalRefreshKey}
             onPhotoCountChange={setPhotoCount}
             onPhotoDelete={handlePhotoDelete}
             pendingPhotos={isEditing ? undefined : formData.pendingPhotos}

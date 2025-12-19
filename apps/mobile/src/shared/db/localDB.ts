@@ -225,11 +225,9 @@ class LocalDatabase {
           SELECT ${columnList} FROM entries;
         `);
 
-        // Drop old table and rename new
-        await this.db.execAsync(`
-          DROP TABLE entries;
-          ALTER TABLE entries_new RENAME TO entries;
-        `);
+        // Drop old table and rename new (must be separate statements in SQLite)
+        await this.db.execAsync(`DROP TABLE entries;`);
+        await this.db.execAsync(`ALTER TABLE entries_new RENAME TO entries;`);
 
         // Mark migration as done
         await this.db.execAsync(`
@@ -322,12 +320,12 @@ class LocalDatabase {
         }).join(', ');
 
         // Recreate table with new constraint and migrate data
-        await this.db.execAsync(`
-          CREATE TABLE entries_new (${newTableColumns});
-          INSERT INTO entries_new (${columnsList}) SELECT ${selectColumns} FROM entries;
-          DROP TABLE entries;
-          ALTER TABLE entries_new RENAME TO entries;
-        `);
+        // Drop any leftover entries_new from failed migration
+        await this.db.execAsync(`DROP TABLE IF EXISTS entries_new;`);
+        await this.db.execAsync(`CREATE TABLE entries_new (${newTableColumns});`);
+        await this.db.execAsync(`INSERT INTO entries_new (${columnsList}) SELECT ${selectColumns} FROM entries;`);
+        await this.db.execAsync(`DROP TABLE entries;`);
+        await this.db.execAsync(`ALTER TABLE entries_new RENAME TO entries;`);
 
         // Mark migration as done
         await this.db.execAsync(`
@@ -2312,6 +2310,54 @@ class LocalDatabase {
     `);
 
     console.log('🗑️ All local data cleared');
+  }
+
+  /**
+   * Reset database schema - drops all tables and recreates them
+   * Use this when migrations fail or schema is corrupted
+   */
+  async resetSchema(): Promise<void> {
+    console.log('🔄 Resetting database schema...');
+
+    // Close existing connection if open
+    if (this.db) {
+      try {
+        await this.db.closeAsync();
+        console.log('Closed existing database connection');
+      } catch (e) {
+        console.log('Could not close db (may already be closed):', e);
+      }
+      this.db = null;
+    }
+
+    // Reset init state
+    this.initPromise = null;
+
+    // Open fresh connection
+    this.db = await SQLite.openDatabaseAsync('trace.db');
+    console.log('Opened fresh database connection');
+
+    // Drop all tables one by one (more robust than multi-statement)
+    const tables = ['photos', 'entries', 'streams', 'locations', 'sync_metadata', 'sync_logs', 'entries_new'];
+    for (const table of tables) {
+      try {
+        await this.db.execAsync(`DROP TABLE IF EXISTS ${table};`);
+        console.log(`Dropped table: ${table}`);
+      } catch (e) {
+        console.log(`Could not drop ${table}:`, e);
+      }
+    }
+
+    console.log('🗑️ All tables dropped');
+
+    // Close and reopen to ensure clean state
+    await this.db.closeAsync();
+    this.db = null;
+
+    // Recreate tables with fresh schema via init
+    await this.init();
+
+    console.log('✅ Database schema reset complete');
   }
 
   /**

@@ -15,7 +15,7 @@ import { Entry, LocationEntity, isCompletedStatus, ALL_STATUSES, EntryStatus } f
 // AppState import removed - not currently used but may be needed for foreground sync
 import NetInfo from '@react-native-community/netinfo';
 import type { QueryClient } from '@tanstack/react-query';
-import { uploadPhotoToSupabase, downloadPhotosInBackground } from '../../modules/photos/mobilePhotoApi';
+import { uploadPhotoToSupabase, downloadPhotosInBackground, deletePhotoFromLocalStorage } from '../../modules/photos/mobilePhotoApi';
 import { createScopedLogger } from '../utils/logger';
 
 // Create scoped logger for sync operations with sync icon
@@ -336,7 +336,7 @@ class SyncService {
 
         // Step 4: Pull photos
         const photoResult = await this.pullPhotos(forceFullPull);
-        result.pulled.photos = photoResult.new + photoResult.updated;
+        result.pulled.photos = photoResult.new + photoResult.updated + photoResult.deleted;
 
         // Save pull timestamp for incremental sync
         await this.saveLastPullTimestamp(pullStartTime);
@@ -551,10 +551,21 @@ class SyncService {
 
     // Sync photo metadata
     const photosNeedingSync = await localDB.getPhotosNeedingSync();
+    log.info('Photos needing sync query result', {
+      total: photosNeedingSync.length,
+      photos: photosNeedingSync.map(p => ({
+        id: p.photo_id,
+        entryId: p.entry_id,
+        synced: p.synced,
+        sync_action: p.sync_action,
+        file_size: p.file_size,
+        mime_type: p.mime_type,
+      }))
+    });
     const photosToCreateOrUpdate = photosNeedingSync.filter(p => p.sync_action !== 'delete');
 
     if (photosToCreateOrUpdate.length > 0) {
-      log.debug('Syncing photo metadata', { count: photosToCreateOrUpdate.length });
+      log.info('Syncing photo metadata', { count: photosToCreateOrUpdate.length });
 
       for (const photo of photosToCreateOrUpdate) {
         try {
@@ -923,9 +934,9 @@ class SyncService {
     return { new: newCount, updated: updatedCount, deleted: deletedCount };
   }
 
-  private async pullPhotos(forceFullPull: boolean): Promise<{ new: number; updated: number }> {
+  private async pullPhotos(forceFullPull: boolean): Promise<{ new: number; updated: number; deleted: number }> {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { new: 0, updated: 0 };
+    if (!user) return { new: 0, updated: 0, deleted: 0 };
 
     const { data: remotePhotos, error } = await supabase
       .from('photos')
@@ -935,17 +946,19 @@ class SyncService {
 
     if (error) {
       log.error('Failed to fetch photos', error);
-      return { new: 0, updated: 0 };
-    }
-
-    if (!remotePhotos || remotePhotos.length === 0) {
-      return { new: 0, updated: 0 };
+      return { new: 0, updated: 0, deleted: 0 };
     }
 
     let newCount = 0;
     let updatedCount = 0;
+    let deletedCount = 0;
 
-    for (const remotePhoto of remotePhotos) {
+    // Build set of remote photo IDs for deletion detection
+    const remotePhotoIds = new Set<string>(
+      (remotePhotos || []).map(p => p.photo_id)
+    );
+
+    for (const remotePhoto of (remotePhotos || [])) {
       try {
         const localPhotos = await localDB.runCustomQuery(
           'SELECT * FROM photos WHERE photo_id = ?',
@@ -989,7 +1002,35 @@ class SyncService {
       }
     }
 
-    return { new: newCount, updated: updatedCount };
+    // Detect and delete photos that exist locally but were deleted on server
+    // Only delete photos that are synced (uploaded) - not local-only unsynced photos
+    try {
+      const localSyncedPhotos = await localDB.runCustomQuery(
+        'SELECT photo_id, local_path FROM photos WHERE user_id = ? AND synced = 1 AND (sync_action IS NULL OR sync_action != ?)',
+        [user.id, 'delete']
+      );
+
+      for (const localPhoto of localSyncedPhotos) {
+        if (!remotePhotoIds.has(localPhoto.photo_id)) {
+          log.info('Photo deleted on server, removing locally', { photoId: localPhoto.photo_id });
+          // Delete local file if exists
+          if (localPhoto.local_path) {
+            try {
+              await deletePhotoFromLocalStorage(localPhoto.local_path);
+            } catch (err) {
+              log.warn('Failed to delete local photo file', { path: localPhoto.local_path, error: err });
+            }
+          }
+          // Permanently delete from local DB
+          await localDB.permanentlyDeletePhoto(localPhoto.photo_id);
+          deletedCount++;
+        }
+      }
+    } catch (error) {
+      log.warn('Failed to detect deleted photos', { error });
+    }
+
+    return { new: newCount, updated: updatedCount, deleted: deletedCount };
   }
 
   // ==========================================================================
@@ -1300,33 +1341,74 @@ class SyncService {
         return;
       }
 
+      log.info('📡 Setting up global realtime subscription for all tables...', { userId: user.id });
+
+      // Subscribe to all changes on tables - RLS will filter to user's data
+      // Note: Filters like user_id=eq.X can have issues, so we rely on RLS instead
       this.realtimeChannel = supabase
         .channel('db-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'entries', filter: `user_id=eq.${user.id}` }, () => {
-          this.handleRealtimeChange('entries');
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'entries' }, (payload) => {
+          const entryId = (payload.new as any)?.entry_id || (payload.old as any)?.entry_id;
+          log.info('📡 Entries realtime event received', { eventType: payload.eventType, entryId });
+          this.handleRealtimeChange('entries', entryId);
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'streams', filter: `user_id=eq.${user.id}` }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'streams' }, (payload) => {
+          log.info('📡 Streams realtime event received', { eventType: payload.eventType });
           this.handleRealtimeChange('streams');
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'photos', filter: `user_id=eq.${user.id}` }, () => {
-          this.handleRealtimeChange('photos');
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'photos' }, (payload) => {
+          const entryId = (payload.new as any)?.entry_id || (payload.old as any)?.entry_id;
+          log.info('📡 Photos realtime event received', { eventType: payload.eventType, entryId });
+          this.handleRealtimeChange('photos', entryId);
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'locations', filter: `user_id=eq.${user.id}` }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, (payload) => {
+          log.info('📡 Locations realtime event received', { eventType: payload.eventType });
           this.handleRealtimeChange('locations');
         })
-        .subscribe();
+        .subscribe((status, err) => {
+          if (status === 'SUBSCRIBED') {
+            log.info('✅ Global realtime subscription ACTIVE for entries/streams/photos/locations');
+          } else if (status === 'CHANNEL_ERROR') {
+            log.error('❌ Global realtime subscription FAILED', err);
+          } else if (status === 'TIMED_OUT') {
+            log.error('⏱️ Global realtime subscription TIMED OUT');
+          } else if (status === 'CLOSED') {
+            log.info('🔒 Global realtime subscription CLOSED');
+          } else {
+            log.debug('Global realtime status', { status });
+          }
+        });
     } catch (error) {
       log.error('Failed to set up realtime subscription', error);
     }
   }
 
-  private handleRealtimeChange(table: string): void {
+  // Track entry IDs that have changed during debounce window
+  private pendingEntryIds: Set<string> = new Set();
+
+  private handleRealtimeChange(table: string, entryId?: string): void {
+    log.info(`🔔 Realtime change detected on ${table} table`, entryId ? { entryId } : {});
+
+    // Track entry IDs for cache invalidation
+    if (entryId) {
+      this.pendingEntryIds.add(entryId);
+    }
+
     if (this.realtimeDebounceTimer) {
+      log.debug('Clearing existing debounce timer, resetting...');
       clearTimeout(this.realtimeDebounceTimer);
     }
 
-    this.realtimeDebounceTimer = setTimeout(() => {
+    log.debug('Starting 2s debounce timer for realtime pull...');
+    this.realtimeDebounceTimer = setTimeout(async () => {
+      log.debug('Debounce timer fired, checking if can sync...');
+
+      // Capture and clear pending entry IDs
+      const entryIdsToInvalidate = [...this.pendingEntryIds];
+      this.pendingEntryIds.clear();
+
       if (this.isSyncing) {
+        log.warn('⚠️ Sync in progress, SKIPPING realtime pull (may cause stale data!)');
         return;
       }
 
@@ -1336,8 +1418,24 @@ class SyncService {
       // Strategy: Do a pull-only sync. If we have unsynced local changes, the pull
       // will skip those entries (synced=0 check in pullEntries). If the server has
       // newer data from another device, we'll get it.
-      log.debug(`Server change detected (${table}), pulling remote changes...`);
-      this.pullChanges('realtime').catch(console.error);
+      log.info(`🔄 Pulling remote changes for ${table}...`);
+      try {
+        const result = await this.pullChanges('realtime');
+        const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.photos;
+
+        if (totalPulled > 0) {
+          log.info(`✅ Pulled ${result.pulled.entries} entries, ${result.pulled.streams} streams from realtime`);
+          // Invalidate specific entry queries for pulled entries
+          this.invalidateQueryCache(entryIdsToInvalidate);
+        } else {
+          // Even if pull didn't find "new" data (due to incremental logic),
+          // the server definitely has changes. Force cache invalidation so UI refreshes.
+          log.debug('No new items pulled, but forcing cache invalidation for UI refresh');
+          this.invalidateQueryCache(entryIdsToInvalidate);
+        }
+      } catch (error) {
+        log.error('Failed to pull realtime changes', error);
+      }
     }, 2000);
   }
 
@@ -1502,13 +1600,37 @@ class SyncService {
     );
   }
 
-  private invalidateQueryCache(): void {
+  private invalidateQueryCache(entryIds?: string[]): void {
     if (this.queryClient) {
-      log.debug('Invalidating React Query cache (if visible, debug works)');
+      log.info('🔄 [Sync] Invalidating React Query cache', { entryIds: entryIds?.length || 0 });
+
+      // Always invalidate list queries
       this.queryClient.invalidateQueries({ queryKey: ['entries'] });
       this.queryClient.invalidateQueries({ queryKey: ['streams'] });
       this.queryClient.invalidateQueries({ queryKey: ['locations'] });
       this.queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
+
+      // Also invalidate specific entry and photo queries if IDs provided
+      // This ensures CaptureForm updates when editing the same entry on another device
+      // Note: Entry query keys are ['entry', id, 'local'] or ['entry', id, 'refresh']
+      // Photo query keys are ['photos', 'entry', entryId]
+      // so we use predicate matching to invalidate both variants
+      if (entryIds && entryIds.length > 0) {
+        for (const entryId of entryIds) {
+          log.debug('🔄 [Sync] Invalidating individual entry and photo queries', { entryId });
+          // Invalidate entry queries
+          this.queryClient.invalidateQueries({
+            predicate: (query) => {
+              const key = query.queryKey;
+              return Array.isArray(key) && key[0] === 'entry' && key[1] === entryId;
+            }
+          });
+          // Invalidate photo queries for this entry: ['photos', 'entry', entryId]
+          this.queryClient.invalidateQueries({
+            queryKey: ['photos', 'entry', entryId]
+          });
+        }
+      }
     }
   }
 

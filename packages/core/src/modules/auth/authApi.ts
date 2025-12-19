@@ -33,11 +33,14 @@ export async function signUpWithEmail(credentials: AuthCredentials) {
  * For mobile: Returns URL to open in WebBrowser
  */
 export async function signInWithGoogle(redirectTo?: string) {
-  const options = redirectTo ? { redirectTo } : undefined;
-
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options,
+    options: {
+      redirectTo,
+      queryParams: {
+        prompt: "select_account",
+      },
+    },
   });
 
   if (error) throw error;

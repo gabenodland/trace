@@ -628,6 +628,29 @@ export function DatabaseInfoScreen() {
     );
   };
 
+  const handleResetSchema = () => {
+    Alert.alert(
+      'Reset Database Schema',
+      'This will DROP and RECREATE all database tables. Use this if you have schema errors like "no such column". ALL local data will be lost!',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset Schema',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await localDB.resetSchema();
+              setRefreshKey(prev => prev + 1);
+              Alert.alert('Success', 'Database schema reset. You can now sync to pull data from the cloud.');
+            } catch (error) {
+              Alert.alert('Error', `Failed to reset schema: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <TopBar
@@ -871,6 +894,12 @@ export function DatabaseInfoScreen() {
               <TouchableOpacity onPress={handleClearDatabase} style={styles.dangerButton}>
                 <Text style={styles.dangerButtonText}>💀 Delete All Local Data</Text>
               </TouchableOpacity>
+              <TouchableOpacity onPress={handleResetSchema} style={[styles.dangerButton, { marginTop: 8 }]}>
+                <Text style={styles.dangerButtonText}>🔧 Reset Database Schema</Text>
+              </TouchableOpacity>
+              <Text style={styles.helperText}>
+                Use "Reset Schema" if you see errors like "no such column"
+              </Text>
             </View>
           </>
         )}
@@ -1652,6 +1681,12 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   modalBackdrop: {
     flex: 1,

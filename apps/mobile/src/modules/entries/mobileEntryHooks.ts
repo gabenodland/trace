@@ -38,14 +38,20 @@ function useEntriesQuery(filter?: MobileEntryFilter) {
 
 /**
  * Internal: Query hook for fetching a single entry
+ * @param id - Entry ID to fetch
+ * @param options - Optional configuration
+ * @param options.refreshFirst - If true, refresh from server before returning (use when editing)
  */
-function useEntryQuery(id: string | null) {
+function useEntryQuery(id: string | null, options?: { refreshFirst?: boolean }) {
   return useQuery({
+    // Use same query key for both local and refresh - this ensures cache consistency
     queryKey: ['entry', id],
-    queryFn: () => (id ? getEntry(id) : Promise.resolve(null)),
+    queryFn: () => (id ? getEntry(id, { refreshFirst: options?.refreshFirst }) : Promise.resolve(null)),
     enabled: !!id,
     // Override global staleTime to ensure entry always shows fresh data
     staleTime: 0,
+    // When refreshFirst is true, always refetch on mount to get latest from server
+    refetchOnMount: options?.refreshFirst ? 'always' : false,
   });
 }
 
@@ -178,9 +184,12 @@ export function useEntries(filter?: MobileEntryFilter) {
 
 /**
  * Hook for fetching a single entry by ID
+ * @param id - Entry ID to fetch
+ * @param options - Optional configuration
+ * @param options.refreshFirst - If true, refresh from server before returning (recommended for editing)
  */
-export function useEntry(id: string | null) {
-  const entryQuery = useEntryQuery(id);
+export function useEntry(id: string | null, options?: { refreshFirst?: boolean }) {
+  const entryQuery = useEntryQuery(id, options);
   const updateMutation = useUpdateEntryMutation();
   const deleteMutation = useDeleteEntryMutation();
 
@@ -189,6 +198,7 @@ export function useEntry(id: string | null) {
     entry: entryQuery.data || null,
     isLoading: entryQuery.isLoading,
     error: entryQuery.error,
+    refetch: entryQuery.refetch,
 
     // Mutations
     entryMutations: {

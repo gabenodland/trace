@@ -47,7 +47,7 @@ export interface ReadOptions {
 /**
  * Get device identifier for attribution
  */
-function getDeviceName(): string {
+export function getDeviceName(): string {
   const deviceName = Device.deviceName || 'Unknown Device';
   const platformName = Platform.OS === 'ios' ? 'iOS' : 'Android';
   return `${deviceName} (${platformName})`;

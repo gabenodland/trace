@@ -21,6 +21,7 @@ interface CaptureFormHeaderProps {
   isFullScreen: boolean;
   isSubmitting: boolean;
   isEditing: boolean;
+  isDirty: boolean;
   // Form data
   title: string;
   entryDate: string;
@@ -50,6 +51,7 @@ export function CaptureFormHeader({
   isFullScreen,
   isSubmitting,
   isEditing,
+  isDirty,
   title,
   entryDate,
   includeTime,
@@ -69,11 +71,13 @@ export function CaptureFormHeader({
   onMenuClose,
   editorRef,
 }: CaptureFormHeaderProps) {
+  // Determine if save should be disabled (no changes)
+  const isSaveDisabled = isSubmitting || !isDirty;
   return (
     <View style={[styles.titleBar, isFullScreen && styles.titleBarFullScreen]}>
-      {/* Left side: Cancel button in edit mode, Back button in view mode */}
+      {/* Left side: Cancel button (when dirty in edit mode), Back button (when clean or view mode) */}
       <View style={styles.headerLeftContainer}>
-        {isEditMode ? (
+        {isEditMode && isDirty ? (
           <TouchableOpacity
             onPress={onCancel}
             style={styles.headerCancelButton}
@@ -168,10 +172,10 @@ export function CaptureFormHeader({
         {isEditMode && (
           <TouchableOpacity
             onPress={onSave}
-            disabled={isSubmitting}
-            style={[styles.headerSaveButton, isSubmitting && styles.headerSaveButtonDisabled]}
+            disabled={isSaveDisabled}
+            style={[styles.headerSaveButton, isSaveDisabled && styles.headerSaveButtonDisabled]}
           >
-            <Text style={[styles.headerSaveText, isSubmitting && styles.headerSaveTextDisabled]}>
+            <Text style={[styles.headerSaveText, isSaveDisabled && styles.headerSaveTextDisabled]}>
               {isSubmitting ? "Saving..." : "Save"}
             </Text>
           </TouchableOpacity>

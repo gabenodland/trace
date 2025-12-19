@@ -38,6 +38,8 @@ export const RichTextEditor = forwardRef(({
   const prevEditable = useRef(editable);
   // Track if focus was requested during read-only mode (before editable transition)
   const pendingFocusRequest = useRef(false);
+  // Track pending content that needs to be set once editor is ready
+  const pendingContent = useRef<string | null>(null);
 
   const customCSS = `
     * {
@@ -295,13 +297,55 @@ export const RichTextEditor = forwardRef(({
   }, [editor, onChange]);
 
   // Update editor when value changes externally (not from typing)
+  // Uses retry logic to handle race condition when editor isn't ready yet
   useEffect(() => {
     if (!isLocalChange.current && value && value !== lastContent.current) {
-      editor.setContent(value);
+      // Store the pending content
+      pendingContent.current = value;
       lastContent.current = value;
+
+      // Try to set content with retry logic
+      const trySetContent = (attempt: number) => {
+        if (pendingContent.current === null || pendingContent.current !== value) {
+          // Content changed while retrying, abort
+          return;
+        }
+
+        try {
+          editor.setContent(value);
+          pendingContent.current = null;
+        } catch (e) {
+          // Editor not ready, retry after delay (up to 5 attempts)
+          if (attempt < 5) {
+            setTimeout(() => trySetContent(attempt + 1), 100 * (attempt + 1));
+          } else {
+            console.warn('[RichTextEditor] Failed to set content after 5 attempts');
+            pendingContent.current = null;
+          }
+        }
+      };
+
+      trySetContent(0);
     }
     isLocalChange.current = false;
   }, [value, editor]);
+
+  // Retry pending content when editor might be ready (check every 200ms)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (pendingContent.current !== null) {
+        try {
+          editor.setContent(pendingContent.current);
+          lastContent.current = pendingContent.current;
+          pendingContent.current = null;
+        } catch (e) {
+          // Still not ready, will try again next interval
+        }
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [editor]);
 
   // Handle transition to editable UI mode
   useEffect(() => {

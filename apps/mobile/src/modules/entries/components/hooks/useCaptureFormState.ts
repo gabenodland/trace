@@ -7,7 +7,7 @@
  * This hook ONLY manages state - no side effects, no data fetching.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import type { Location as LocationType, EntryStatus } from "@trace/core";
 
 export interface PendingPhoto {
@@ -144,6 +144,10 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
     pendingPhotos: [],
   });
 
+  // Baseline for dirty tracking - stores the "clean" state after load or save
+  // We use a ref to avoid re-renders when setting baseline
+  const baselineRef = useRef<CaptureFormData | null>(null);
+
   // Generic update field helper - per CLAUDE.md pattern
   const updateField = useCallback(
     <K extends keyof CaptureFormData>(
@@ -200,6 +204,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
       locationData: null,
       pendingPhotos: [],
     });
+    baselineRef.current = null;
   }, [
     initialContent,
     initialStrId,
@@ -209,6 +214,50 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
     initialEntryDate,
   ]);
 
+  // Set the baseline (called when entry is loaded or after save)
+  const setBaseline = useCallback((data: CaptureFormData) => {
+    // Deep clone to avoid reference issues
+    baselineRef.current = JSON.parse(JSON.stringify(data));
+  }, []);
+
+  // Mark current state as clean (call after successful save)
+  const markClean = useCallback(() => {
+    baselineRef.current = JSON.parse(JSON.stringify(formData));
+  }, [formData]);
+
+  // Compute isDirty by comparing formData to baseline
+  // For new entries without a baseline, consider dirty if there's any content
+  const isDirty = useMemo(() => {
+    // No baseline set yet - for new entries, consider dirty if there's content
+    if (!baselineRef.current) {
+      // New entry is dirty if it has title, content, or pending photos
+      return formData.title.trim() !== "" ||
+             formData.content.trim() !== "" ||
+             formData.pendingPhotos.length > 0;
+    }
+
+    const baseline = baselineRef.current;
+
+    // Compare relevant fields (excluding includeTime as it's UI-only)
+    return (
+      formData.title !== baseline.title ||
+      formData.content !== baseline.content ||
+      formData.streamId !== baseline.streamId ||
+      formData.status !== baseline.status ||
+      formData.type !== baseline.type ||
+      formData.dueDate !== baseline.dueDate ||
+      formData.rating !== baseline.rating ||
+      formData.priority !== baseline.priority ||
+      formData.entryDate !== baseline.entryDate ||
+      // GPS comparison
+      JSON.stringify(formData.gpsData) !== JSON.stringify(baseline.gpsData) ||
+      // Location comparison (compare by location_id if available, otherwise full object)
+      (formData.locationData?.location_id || null) !== (baseline.locationData?.location_id || null) ||
+      // Pending photos - compare count (photos can only be added for new entries)
+      formData.pendingPhotos.length !== baseline.pendingPhotos.length
+    );
+  }, [formData]);
+
   return {
     formData,
     updateField,
@@ -217,5 +266,9 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
     resetForm,
     addPendingPhoto,
     removePendingPhoto,
+    // Dirty tracking
+    isDirty,
+    setBaseline,
+    markClean,
   };
 }
