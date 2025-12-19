@@ -383,24 +383,24 @@ No changes to web needed for this sync architecture.
 
 ## Implementation Phases
 
-### Phase 1: Refactor Mobile API Layer
-- [ ] Create mobile-specific API that reads from LocalDB only
-- [ ] Create mobile-specific API that writes to LocalDB only
-- [ ] Remove direct Supabase calls from mobile API
-- [ ] Ensure all existing functionality works with LocalDB
+### Phase 1: Refactor Mobile API Layer ✅ COMPLETE
+- [x] Create mobile-specific API that reads from LocalDB only
+- [x] Create mobile-specific API that writes to LocalDB only
+- [x] Remove direct Supabase calls from mobile API (now uses localDB.getCurrentUserId())
+- [x] Ensure all existing functionality works with LocalDB
 
-### Phase 2: Sync Service Refactor
-- [ ] Refactor to push single entries (not batch)
-- [ ] Add listener for LocalDB changes
-- [ ] Implement offline queue with sync_action tracking
-- [ ] Handle reconnect: pull then push
+### Phase 2: Sync Service Refactor ✅ COMPLETE
+- [x] Refactor to push single entries (not batch) - Already implemented
+- [x] Add listener for LocalDB changes - triggerPushSync() called after writes
+- [x] Implement offline queue with sync_action tracking - LocalDB tracks synced/sync_action fields
+- [x] Handle reconnect: pull then push - Added NetInfo listener for network reconnect
 
-### Phase 3: Realtime Subscriptions
-- [ ] Subscribe to entry on editor open
-- [ ] Unsubscribe on editor close
-- [ ] Update LocalDB on realtime change
-- [ ] Invalidate React Query cache
-- [ ] Show toast on external change
+### Phase 3: Realtime Subscriptions ✅ COMPLETE
+- [x] Subscribe to entry on editor open - realtimeService.subscribeToEntry() via useEntryRealtime hook
+- [x] Unsubscribe on editor close - automatic cleanup in useEntryRealtime useEffect
+- [x] Update LocalDB on realtime change - realtimeService.handleEntryUpdate() updates LocalDB
+- [x] Invalidate React Query cache - queryClient.invalidateQueries() called on external change
+- [x] Show toast on external change - CaptureForm shows snackbar "Entry updated by {device}"
 
 ### Phase 4: Autosave Implementation
 - [ ] Create useAutosave hook (3s debounce / 15s max)

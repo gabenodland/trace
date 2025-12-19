@@ -5,6 +5,7 @@ import { extractTagsAndMentions, useAuthState, generatePhotoPath, type Location 
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
+import { useEntryRealtime } from "../../../shared/sync";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
@@ -103,6 +104,12 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId || null);
   const { user } = useAuthState();
+
+  // Subscribe to realtime updates for this entry (only when editing an existing entry)
+  const { externalUpdate, clearExternalUpdate } = useEntryRealtime(
+    isEditing ? entryId : null,
+    { enabled: isEditing }
+  );
   const { streams } = useStreams();
   const { navigate, setBeforeBackHandler } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
@@ -378,6 +385,21 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       }),
     ]).start(() => setSnackbarMessage(null));
   };
+
+  // Handle external update from another device (realtime subscription)
+  useEffect(() => {
+    if (externalUpdate && isEditing) {
+      // Show notification that entry was updated by another device
+      const deviceName = externalUpdate.last_edited_device || 'another device';
+      showSnackbar(`Entry updated by ${deviceName}`);
+
+      // Clear the external update flag
+      clearExternalUpdate();
+
+      // Note: The form data will be refreshed via React Query invalidation
+      // The useEntry hook will refetch and the form will update automatically
+    }
+  }, [externalUpdate, isEditing, clearExternalUpdate]);
 
   // Handle tap on title to enter edit mode
   const handleTitlePress = () => {

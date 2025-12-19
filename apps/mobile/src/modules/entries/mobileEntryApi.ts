@@ -13,7 +13,6 @@
 
 import { Entry, CreateEntryInput, EntryFilter } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
-import { supabase } from '@trace/core/src/shared/supabase';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -139,9 +138,9 @@ export async function getMentions(): Promise<Array<{ mention: string; count: num
  * Writes to local SQLite immediately, syncs to Supabase in background
  */
 export async function createEntry(data: CreateEntryInput): Promise<Entry> {
-  // Get user ID
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  // Get user ID from LocalDB (cached from login)
+  const userId = localDB.getCurrentUserId();
+  if (!userId) throw new Error('Not authenticated');
 
   // Generate entry ID
   const entry_id = generateUUID();
@@ -149,7 +148,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
   // Create entry object
   const entry: Entry = {
     entry_id,
-    user_id: user.id,
+    user_id: userId,
     title: data.title || null,
     content: data.content,
     tags: data.tags || [],
@@ -181,7 +180,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     base_version: 1,
     conflict_status: null,
     conflict_backup: null,
-    last_edited_by: user.email || null,
+    last_edited_by: null, // Will be set during sync if needed
     last_edited_device: getDeviceName(),
   };
 
@@ -207,9 +206,6 @@ export async function updateEntry(
   const currentEntry = await localDB.getEntry(id);
   if (!currentEntry) throw new Error('Entry not found');
 
-  // Get user for attribution
-  const { data: { user } } = await supabase.auth.getUser();
-
   // Determine if this is a user edit (needs version increment) or a sync operation
   const isUserEdit = updates.sync_action === undefined || updates.sync_action === 'update';
 
@@ -223,7 +219,7 @@ export async function updateEntry(
   // Add version tracking and attribution for user edits
   if (isUserEdit) {
     updatesWithSync.version = (currentEntry.version || 1) + 1;
-    updatesWithSync.last_edited_by = user?.email || null;
+    updatesWithSync.last_edited_by = null; // Will be set during sync if needed
     updatesWithSync.last_edited_device = getDeviceName();
   }
 
@@ -286,9 +282,9 @@ export async function copyEntry(
   const originalEntry = await localDB.getEntry(id);
   if (!originalEntry) throw new Error('Entry not found');
 
-  // Get user ID
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  // Get user ID from LocalDB (cached from login)
+  const userId = localDB.getCurrentUserId();
+  if (!userId) throw new Error('Not authenticated');
 
   // Generate new entry ID
   const entry_id = generateUUID();
@@ -324,7 +320,7 @@ export async function copyEntry(
   // Create the copied entry (NOT saved to DB)
   const entry: Entry = {
     entry_id,
-    user_id: user.id,
+    user_id: userId,
     title: newTitle,
     content: originalEntry.content,
     tags: originalEntry.tags || [],
@@ -357,12 +353,12 @@ export async function copyEntry(
     base_version: 1,
     conflict_status: null,
     conflict_backup: null,
-    last_edited_by: user.email || null,
+    last_edited_by: null, // Will be set during sync if needed
     last_edited_device: getDeviceName(),
   };
 
   // Copy photos from the original entry
-  const pendingPhotos = await copyPhotosForEntry(id, entry_id, user.id);
+  const pendingPhotos = await copyPhotosForEntry(id, entry_id, userId);
 
   log.debug('Copying entry (in-memory)', {
     originalId: id,

@@ -67,6 +67,8 @@ class SyncService {
   private realtimeChannel: any = null;
   private realtimeDebounceTimer: NodeJS.Timeout | null = null;
   private lastSyncTime: number | null = null;
+  private networkUnsubscribe: (() => void) | null = null;
+  private wasOffline = false;
 
   // ==========================================================================
   // INITIALIZATION
@@ -94,6 +96,9 @@ class SyncService {
     // Set up realtime subscription for server changes
     await this.setupRealtimeSubscription();
 
+    // Set up network reconnect listener
+    this.setupNetworkListener();
+
     log.debug('Sync service initialized');
   }
 
@@ -107,6 +112,11 @@ class SyncService {
     if (this.realtimeChannel) {
       supabase.removeChannel(this.realtimeChannel);
       log.debug('Realtime subscription removed');
+    }
+    if (this.networkUnsubscribe) {
+      this.networkUnsubscribe();
+      this.networkUnsubscribe = null;
+      log.debug('Network listener removed');
     }
     this.isInitialized = false;
     log.debug('Sync service destroyed');
@@ -1329,6 +1339,71 @@ class SyncService {
       log.debug(`Server change detected (${table}), pulling remote changes...`);
       this.pullChanges('realtime').catch(console.error);
     }, 2000);
+  }
+
+  // ==========================================================================
+  // NETWORK LISTENER
+  // ==========================================================================
+
+  /**
+   * Set up network state listener for reconnect sync
+   * When network reconnects after being offline:
+   * 1. Pull missed changes from server
+   * 2. Push queued local changes
+   */
+  private setupNetworkListener(): void {
+    // Get initial network state
+    NetInfo.fetch().then(state => {
+      this.wasOffline = !state.isConnected || !state.isInternetReachable;
+      log.debug('Initial network state', {
+        isConnected: state.isConnected,
+        isInternetReachable: state.isInternetReachable,
+        wasOffline: this.wasOffline
+      });
+    });
+
+    // Subscribe to network changes
+    this.networkUnsubscribe = NetInfo.addEventListener(state => {
+      const isOnline = state.isConnected && state.isInternetReachable;
+
+      log.debug('Network state changed', {
+        isConnected: state.isConnected,
+        isInternetReachable: state.isInternetReachable,
+        wasOffline: this.wasOffline,
+        isOnline,
+      });
+
+      // Reconnect detected: was offline, now online
+      if (this.wasOffline && isOnline) {
+        log.info('Network reconnected, syncing queued changes...');
+        this.handleReconnect();
+      }
+
+      // Update offline state
+      this.wasOffline = !isOnline;
+    });
+
+    log.debug('Network listener set up');
+  }
+
+  /**
+   * Handle network reconnect
+   * Pull first (get missed changes), then push (send queued changes)
+   */
+  private async handleReconnect(): Promise<void> {
+    if (this.isSyncing) {
+      log.debug('Sync already in progress, skipping reconnect sync');
+      return;
+    }
+
+    try {
+      // Full sync: pull then push
+      // The executeSync already does pull-then-push in the correct order
+      await this.fullSync('app-foreground');
+      log.info('Reconnect sync completed');
+    } catch (error) {
+      log.error('Reconnect sync failed', error);
+    }
   }
 
   // ==========================================================================

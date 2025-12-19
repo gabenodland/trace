@@ -12,7 +12,6 @@
 
 import { LocationEntity, CreateLocationInput } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
-import { supabase } from '@trace/core/src/shared/supabase';
 import { triggerPushSync } from '../../shared/sync';
 import { createScopedLogger } from '../../shared/utils/logger';
 
@@ -73,9 +72,9 @@ export async function getUnsyncedLocations(): Promise<LocationEntity[]> {
  * Writes to local SQLite immediately, syncs to Supabase in background
  */
 export async function createLocation(data: CreateLocationInput): Promise<LocationEntity> {
-  // Get user ID
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  // Get user ID from LocalDB (cached from login)
+  const userId = localDB.getCurrentUserId();
+  if (!userId) throw new Error('Not authenticated');
 
   // Generate location ID
   const location_id = generateUUID();
@@ -84,7 +83,7 @@ export async function createLocation(data: CreateLocationInput): Promise<Locatio
   // Create location object
   const location: LocationEntity = {
     location_id,
-    user_id: user.id,
+    user_id: userId,
     name: data.name,
     latitude: data.latitude,
     longitude: data.longitude,

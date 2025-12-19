@@ -12,7 +12,6 @@
 
 import * as Crypto from 'expo-crypto';
 import { localDB } from '../../shared/db/localDB';
-import { supabase } from '@trace/core/src/shared/supabase';
 import type { Stream, UpdateStreamInput } from '@trace/core';
 import { triggerPushSync } from '../../shared/sync';
 import { createScopedLogger } from '../../shared/utils/logger';
@@ -53,8 +52,9 @@ export async function createStream(data: {
   color?: string | null;
   icon?: string | null;
 }): Promise<Stream> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  // Get user ID from LocalDB (cached from login)
+  const userId = localDB.getCurrentUserId();
+  if (!userId) throw new Error('Not authenticated');
 
   // Generate ID
   const stream_id = Crypto.randomUUID();
@@ -63,7 +63,7 @@ export async function createStream(data: {
 
   const stream: Stream = {
     stream_id,
-    user_id: user.id,
+    user_id: userId,
     name: data.name,
     entry_count: 0,
     color: data.color || null,
