@@ -333,14 +333,16 @@ export async function getPhotosForEntry(entryId: string): Promise<any[]> {
  * Delete photo completely (database entry + local file)
  */
 export async function deletePhoto(photoId: string): Promise<void> {
-  log.info('Deleting photo', { photoId });
+  log.info('📸 deletePhoto called', { photoId });
 
   try {
     const photo = await localDB.getPhoto(photoId);
     if (!photo) {
-      log.warn('Photo not found in database', { photoId });
+      log.warn('📸 Photo not found in database', { photoId });
       return;
     }
+
+    log.info('📸 Photo found, marking for deletion', { photoId, entryId: photo.entry_id, synced: photo.synced });
 
     // Delete local file if exists
     if (photo.local_path) {
@@ -349,13 +351,15 @@ export async function deletePhoto(photoId: string): Promise<void> {
 
     // Delete database record (marks for sync deletion)
     await localDB.deletePhoto(photoId);
+    log.info('📸 Photo marked for sync deletion in localDB', { photoId });
 
     // Trigger sync in background
+    log.info('📸 Triggering push sync for photo deletion');
     triggerPushSync();
 
-    log.success('Photo deleted', { photoId });
+    log.success('📸 Photo delete initiated', { photoId });
   } catch (error) {
-    log.error('Failed to delete photo', error, { photoId });
+    log.error('📸 Failed to delete photo', error, { photoId });
     throw error;
   }
 }

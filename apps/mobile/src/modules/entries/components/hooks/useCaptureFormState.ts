@@ -87,6 +87,17 @@ function getInitialStreamId(
 }
 
 /**
+ * Compare two ISO date strings by their actual timestamp value.
+ * Handles format differences like ".000Z" vs "+00:00" which represent the same moment.
+ */
+function areDatesEqual(date1: string | null, date2: string | null): boolean {
+  if (date1 === date2) return true;
+  if (!date1 || !date2) return false;
+  // Compare as timestamps to ignore format differences
+  return new Date(date1).getTime() === new Date(date2).getTime();
+}
+
+/**
  * Helper to calculate initial entry date
  */
 function getInitialEntryDate(initialDate?: string): string {
@@ -147,6 +158,9 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
   // Baseline for dirty tracking - stores the "clean" state after load or save
   // We use a ref to avoid re-renders when setting baseline
   const baselineRef = useRef<CaptureFormData | null>(null);
+  // Counter to force isDirty to re-compute when baseline changes
+  // (refs don't trigger re-renders, so we need this for useMemo dependency)
+  const [baselineVersion, setBaselineVersion] = useState(0);
 
   // Generic update field helper - per CLAUDE.md pattern
   const updateField = useCallback(
@@ -218,45 +232,67 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
   const setBaseline = useCallback((data: CaptureFormData) => {
     // Deep clone to avoid reference issues
     baselineRef.current = JSON.parse(JSON.stringify(data));
+    // Increment version to force isDirty useMemo to re-compute
+    setBaselineVersion(v => v + 1);
+    console.log('🧹 [setBaseline] Baseline set:', {
+      title: data.title?.substring(0, 20),
+      contentLen: data.content?.length,
+      streamId: data.streamId?.substring(0, 8),
+    });
   }, []);
 
   // Mark current state as clean (call after successful save)
   const markClean = useCallback(() => {
     baselineRef.current = JSON.parse(JSON.stringify(formData));
+    // Increment version to force isDirty useMemo to re-compute
+    setBaselineVersion(v => v + 1);
   }, [formData]);
 
   // Compute isDirty by comparing formData to baseline
-  // For new entries without a baseline, consider dirty if there's any content
   const isDirty = useMemo(() => {
-    // No baseline set yet - for new entries, consider dirty if there's content
+    // No baseline set yet
     if (!baselineRef.current) {
-      // New entry is dirty if it has title, content, or pending photos
-      return formData.title.trim() !== "" ||
+      // If editing, baseline is still loading - not dirty
+      if (isEditing) {
+        console.log('🧹 [isDirty] No baseline + editing = false');
+        return false;
+      }
+      // For new entries, consider dirty if there's any content
+      const dirty = formData.title.trim() !== "" ||
              formData.content.trim() !== "" ||
              formData.pendingPhotos.length > 0;
+      console.log('🧹 [isDirty] No baseline + new entry =', dirty);
+      return dirty;
     }
 
     const baseline = baselineRef.current;
 
     // Compare relevant fields (excluding includeTime as it's UI-only)
-    return (
-      formData.title !== baseline.title ||
-      formData.content !== baseline.content ||
-      formData.streamId !== baseline.streamId ||
-      formData.status !== baseline.status ||
-      formData.type !== baseline.type ||
-      formData.dueDate !== baseline.dueDate ||
-      formData.rating !== baseline.rating ||
-      formData.priority !== baseline.priority ||
-      formData.entryDate !== baseline.entryDate ||
-      // GPS comparison
-      JSON.stringify(formData.gpsData) !== JSON.stringify(baseline.gpsData) ||
-      // Location comparison (compare by location_id if available, otherwise full object)
-      (formData.locationData?.location_id || null) !== (baseline.locationData?.location_id || null) ||
-      // Pending photos - compare count (photos can only be added for new entries)
-      formData.pendingPhotos.length !== baseline.pendingPhotos.length
-    );
-  }, [formData]);
+    const changes = {
+      title: formData.title !== baseline.title,
+      content: formData.content !== baseline.content,
+      streamId: formData.streamId !== baseline.streamId,
+      status: formData.status !== baseline.status,
+      type: formData.type !== baseline.type,
+      dueDate: !areDatesEqual(formData.dueDate, baseline.dueDate),
+      rating: formData.rating !== baseline.rating,
+      priority: formData.priority !== baseline.priority,
+      entryDate: !areDatesEqual(formData.entryDate, baseline.entryDate),
+      gpsData: JSON.stringify(formData.gpsData) !== JSON.stringify(baseline.gpsData),
+      locationData: (formData.locationData?.location_id || null) !== (baseline.locationData?.location_id || null),
+      pendingPhotos: formData.pendingPhotos.length !== baseline.pendingPhotos.length,
+    };
+
+    const isDirtyResult = Object.values(changes).some(v => v);
+
+    // Only log when something changed to reduce noise
+    if (isDirtyResult) {
+      const changedFields = Object.entries(changes).filter(([_, v]) => v).map(([k]) => k);
+      console.log('🧹 [isDirty] DIRTY! Changed fields:', changedFields.join(', '));
+    }
+
+    return isDirtyResult;
+  }, [formData, baselineVersion, isEditing]);
 
   return {
     formData,

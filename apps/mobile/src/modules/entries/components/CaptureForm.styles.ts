@@ -406,12 +406,12 @@ export const styles = StyleSheet.create({
   snackbar: {
     position: "absolute",
     top: Platform.OS === "ios" ? 60 : 40,
-    left: 16,
-    right: 16,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    alignSelf: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    maxWidth: "70%",
   },
   snackbarText: {
     color: "#fff",

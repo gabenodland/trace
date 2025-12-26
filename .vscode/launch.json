@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach to Expo",
+      "type": "reactnative",
+      "request": "attach",
+      "cwd": "${workspaceFolder}/apps/mobile",
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "webpack:///./~/*": "${workspaceFolder}/apps/mobile/node_modules/*",
+        "webpack:///./*": "${workspaceFolder}/apps/mobile/*"
+      }
+    },
+    {
+      "name": "Debug Expo (Hermes)",
+      "type": "reactnative",
+      "request": "attach",
+      "cwd": "${workspaceFolder}/apps/mobile",
+      "platform": "exponent",
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true
+    }
+  ]
+}

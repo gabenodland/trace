@@ -7,7 +7,7 @@ import {
   CoreBridge,
 } from "@10play/tentap-editor";
 
-// Debug logging for editor focus issues
+// Debug logging for editor content/focus issues
 const DEBUG_FOCUS = false;
 const log = (msg: string, data?: any) => {
   if (DEBUG_FOCUS) {
@@ -22,6 +22,8 @@ interface RichTextEditorProps {
   editable?: boolean;
   onDoublePress?: () => void;
   onPress?: (tapCoordinates?: { x: number; y: number }) => void;
+  /** Called once when editor is ready with its actual (possibly normalized) content */
+  onReady?: (content: string) => void;
 }
 
 export const RichTextEditor = forwardRef(({
@@ -31,9 +33,12 @@ export const RichTextEditor = forwardRef(({
   editable = true,
   onDoublePress,
   onPress,
+  onReady,
 }: RichTextEditorProps, ref) => {
   const isLocalChange = useRef(false);
-  const lastContent = useRef(value);
+  // Initialize to null - first poll will sync to editor's normalized content
+  const lastContent = useRef<string | null>(null);
+  const hasCalledOnReady = useRef(false);
   const containerRef = useRef<View>(null);
   const prevEditable = useRef(editable);
   // Track if focus was requested during read-only mode (before editable transition)
@@ -224,51 +229,32 @@ export const RichTextEditor = forwardRef(({
     },
     // Force scroll to cursor position
     scrollToCursor: () => {
-      // Check if editor has focus - if not, don't scroll (avoid stealing focus from title)
-      const editorState = editor.getEditorState();
-      if (!editorState.isFocused) {
-        log('scrollToCursor: editor not focused, skipping');
-        return;
-      }
+      // Call focus first - this triggers tentap's built-in scroll handling
+      editor.focus();
 
-      log('scrollToCursor: scrolling cursor into view');
-
-      // Inject JavaScript to scroll the cursor into view in the webview
+      // Also inject JavaScript as backup
       try {
         const webview = (editor as any).webviewRef?.current;
         if (webview && typeof webview.injectJavaScript === 'function') {
           webview.injectJavaScript(`
             (function() {
-              // Use ProseMirror's built-in scrollIntoView first
-              if (window.editor?.view) {
-                window.editor.view.dispatch(
-                  window.editor.view.state.tr.scrollIntoView()
-                );
-              }
-
-              // Also scroll the selection into view
               const selection = window.getSelection();
               if (!selection || selection.rangeCount === 0) return;
 
               const range = selection.getRangeAt(0);
+              const element = range.startContainer.nodeType === 3
+                ? range.startContainer.parentElement
+                : range.startContainer;
 
-              // Get the cursor position rect
-              const rect = range.getBoundingClientRect();
-              if (rect) {
-                // Calculate if cursor is visible considering keyboard
-                const viewportHeight = window.innerHeight;
-                const cursorBottom = rect.bottom;
+              if (element && element.scrollIntoView) {
+                element.scrollIntoView({ behavior: 'auto', block: 'center' });
+              }
 
-                // If cursor is below the middle of the viewport, scroll it up
-                if (cursorBottom > viewportHeight * 0.6) {
-                  const element = range.startContainer.nodeType === 3
-                    ? range.startContainer.parentElement
-                    : range.startContainer;
-
-                  if (element && element.scrollIntoView) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }
-                }
+              // Also try ProseMirror scrollIntoView
+              if (window.editor?.view) {
+                window.editor.view.dispatch(
+                  window.editor.view.state.tr.scrollIntoView()
+                );
               }
             })();
             true;
@@ -284,6 +270,15 @@ export const RichTextEditor = forwardRef(({
     // Subscribe to content changes with debouncing
     const interval = setInterval(async () => {
       const html = await editor.getHTML();
+      if (lastContent.current === null) {
+        // First poll - editor is ready with its (possibly normalized) content
+        lastContent.current = html;
+        if (!hasCalledOnReady.current && onReady) {
+          hasCalledOnReady.current = true;
+          onReady(html);
+        }
+        return;
+      }
       if (html !== lastContent.current) {
         lastContent.current = html;
         isLocalChange.current = true;
@@ -294,18 +289,25 @@ export const RichTextEditor = forwardRef(({
     return () => {
       clearInterval(interval);
     };
-  }, [editor, onChange]);
+  }, [editor, onChange, onReady]);
 
   // Update editor when value changes externally (not from typing)
   // Uses retry logic to handle race condition when editor isn't ready yet
   useEffect(() => {
     if (!isLocalChange.current && value && value !== lastContent.current) {
-      // Store the pending content
+      // DEBUG: Log when external content update is triggered
+      console.log('📝 [RichTextEditor] EXTERNAL CONTENT UPDATE', {
+        isLocalChange: isLocalChange.current,
+        valueLength: value?.length,
+        lastContentLength: lastContent.current?.length,
+        valueDifferent: value !== lastContent.current,
+      });
+
+      // Store the pending content (don't update lastContent until setContent succeeds)
       pendingContent.current = value;
-      lastContent.current = value;
 
       // Try to set content with retry logic
-      const trySetContent = (attempt: number) => {
+      const trySetContent = async (attempt: number) => {
         if (pendingContent.current === null || pendingContent.current !== value) {
           // Content changed while retrying, abort
           return;
@@ -313,13 +315,19 @@ export const RichTextEditor = forwardRef(({
 
         try {
           editor.setContent(value);
+          // Read back what the editor actually has after normalization
+          const actualContent = await editor.getHTML();
+          lastContent.current = actualContent;
           pendingContent.current = null;
+          log('setContent succeeded', { attempt, sentLength: value.length, actualLength: actualContent.length });
         } catch (e) {
-          // Editor not ready, retry after delay (up to 5 attempts)
-          if (attempt < 5) {
-            setTimeout(() => trySetContent(attempt + 1), 100 * (attempt + 1));
+          // Editor not ready, retry after delay (up to 10 attempts over ~5 seconds)
+          if (attempt < 10) {
+            const delay = Math.min(100 * (attempt + 1), 500);
+            log('setContent failed, retrying', { attempt, delay });
+            setTimeout(() => trySetContent(attempt + 1), delay);
           } else {
-            console.warn('[RichTextEditor] Failed to set content after 5 attempts');
+            console.warn('[RichTextEditor] Failed to set content after 10 attempts');
             pendingContent.current = null;
           }
         }
@@ -332,14 +340,18 @@ export const RichTextEditor = forwardRef(({
 
   // Retry pending content when editor might be ready (check every 200ms)
   useEffect(() => {
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       if (pendingContent.current !== null) {
         try {
           editor.setContent(pendingContent.current);
-          lastContent.current = pendingContent.current;
+          // Read back the editor's normalized content
+          const actualContent = await editor.getHTML();
+          lastContent.current = actualContent;
+          log('Interval retry succeeded', { sentLength: pendingContent.current.length, actualLength: actualContent.length });
           pendingContent.current = null;
         } catch (e) {
           // Still not ready, will try again next interval
+          log('Interval retry failed, will retry');
         }
       }
     }, 200);

@@ -12,49 +12,24 @@
 import { localDB } from '../db/localDB';
 import { supabase } from '@trace/core/src/shared/supabase';
 import { Entry, LocationEntity, isCompletedStatus, ALL_STATUSES, EntryStatus } from '@trace/core';
-// AppState import removed - not currently used but may be needed for foreground sync
 import NetInfo from '@react-native-community/netinfo';
 import type { QueryClient } from '@tanstack/react-query';
 import { uploadPhotoToSupabase, downloadPhotosInBackground, deletePhotoFromLocalStorage } from '../../modules/photos/mobilePhotoApi';
+import { getDeviceName } from '../../modules/entries/mobileEntryApi';
 import { createScopedLogger } from '../utils/logger';
+import {
+  SyncResult,
+  SyncStatus,
+  SyncTrigger,
+  createEmptySyncResult,
+} from './syncTypes';
 
-// Create scoped logger for sync operations with sync icon
-const log = createScopedLogger('Sync', '🔄');
+// Re-export types for external consumers
+export type { SyncResult, SyncStatus, SyncTrigger };
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface SyncResult {
-  success: boolean;
-  pushed: {
-    entries: number;
-    streams: number;
-    locations: number;
-    photos: number;
-  };
-  pulled: {
-    entries: number;
-    streams: number;
-    locations: number;
-    photos: number;
-  };
-  errors: {
-    entries: number;
-    streams: number;
-    locations: number;
-    photos: number;
-  };
-  duration: number;
-}
-
-export interface SyncStatus {
-  unsyncedCount: number;
-  isSyncing: boolean;
-  lastSyncTime: number | null;
-}
-
-type SyncTrigger = 'manual' | 'post-save' | 'realtime' | 'app-foreground' | 'initialization';
+// Create scoped logger for sync operations with sync icon and device name
+const deviceName = getDeviceName();
+const log = createScopedLogger(`Sync:${deviceName}`, '🔄');
 
 // ============================================================================
 // SYNC SERVICE CLASS
@@ -69,6 +44,15 @@ class SyncService {
   private lastSyncTime: number | null = null;
   private networkUnsubscribe: (() => void) | null = null;
   private wasOffline = false;
+
+  // Track entries currently being pushed - prevents race condition with realtime
+  // Entry is added before push, removed after LocalDB is updated with new version
+  private currentlyPushingEntryIds: Set<string> = new Set();
+
+  // Realtime reconnection state
+  private realtimeReconnectTimer: NodeJS.Timeout | null = null;
+  private realtimeReconnectAttempts = 0;
+  private readonly REALTIME_MAX_BACKOFF_MS = 30000; // 30 seconds max
 
   // ==========================================================================
   // INITIALIZATION
@@ -109,6 +93,10 @@ class SyncService {
     if (this.realtimeDebounceTimer) {
       clearTimeout(this.realtimeDebounceTimer);
     }
+    if (this.realtimeReconnectTimer) {
+      clearTimeout(this.realtimeReconnectTimer);
+      this.realtimeReconnectTimer = null;
+    }
     if (this.realtimeChannel) {
       supabase.removeChannel(this.realtimeChannel);
       log.debug('Realtime subscription removed');
@@ -118,6 +106,7 @@ class SyncService {
       this.networkUnsubscribe = null;
       log.debug('Network listener removed');
     }
+    this.realtimeReconnectAttempts = 0;
     this.isInitialized = false;
     log.debug('Sync service destroyed');
   }
@@ -255,13 +244,7 @@ class SyncService {
     options: { push?: boolean; pull?: boolean; forceFullPull?: boolean }
   ): Promise<SyncResult> {
     const startTime = Date.now();
-    const result: SyncResult = {
-      success: false,
-      pushed: { entries: 0, streams: 0, locations: 0, photos: 0 },
-      pulled: { entries: 0, streams: 0, locations: 0, photos: 0 },
-      errors: { entries: 0, streams: 0, locations: 0, photos: 0 },
-      duration: 0,
-    };
+    const result = createEmptySyncResult();
 
     // Prevent concurrent syncs
     if (this.isSyncing) {
@@ -296,6 +279,9 @@ class SyncService {
 
       // PUSH: Local → Server
       if (options.push) {
+        // Cache local-only stream IDs for this sync cycle (called 5x in push methods)
+        const localOnlyStreamIds = await this.getLocalOnlyStreamIds();
+
         // Step 1: Push streams (entries depend on them)
         const streamResult = await this.pushStreams();
         result.pushed.streams = streamResult.success;
@@ -307,17 +293,17 @@ class SyncService {
         result.errors.locations = locationResult.errors;
 
         // Step 3: Push entries (create/update)
-        const entryResult = await this.pushEntries();
+        const entryResult = await this.pushEntries(localOnlyStreamIds);
         result.pushed.entries = entryResult.success;
         result.errors.entries = entryResult.errors;
 
         // Step 4: Push photos
-        const photoResult = await this.pushPhotos();
+        const photoResult = await this.pushPhotos(localOnlyStreamIds);
         result.pushed.photos = photoResult.success;
         result.errors.photos = photoResult.errors;
 
         // Step 5: Push entry deletes (after photos to avoid FK issues)
-        const deleteResult = await this.pushEntryDeletes();
+        const deleteResult = await this.pushEntryDeletes(localOnlyStreamIds);
         result.pushed.entries += deleteResult.success;
         result.errors.entries += deleteResult.errors;
 
@@ -438,16 +424,13 @@ class SyncService {
     return { success, errors };
   }
 
-  private async pushEntries(): Promise<{ success: number; errors: number }> {
+  private async pushEntries(localOnlyStreamIds: Set<string>): Promise<{ success: number; errors: number }> {
     const unsyncedEntries = await localDB.getUnsyncedEntries();
     const entriesToPush = unsyncedEntries.filter(e => e.sync_action !== 'delete');
 
     if (entriesToPush.length === 0) {
       return { success: 0, errors: 0 };
     }
-
-    // Get local-only stream IDs to filter out entries that shouldn't sync
-    const localOnlyStreamIds = await this.getLocalOnlyStreamIds();
 
     let success = 0;
     let errors = 0;
@@ -473,16 +456,13 @@ class SyncService {
     return { success, errors };
   }
 
-  private async pushEntryDeletes(): Promise<{ success: number; errors: number }> {
+  private async pushEntryDeletes(localOnlyStreamIds: Set<string>): Promise<{ success: number; errors: number }> {
     const unsyncedEntries = await localDB.getUnsyncedEntries();
     const entriesToDelete = unsyncedEntries.filter(e => e.sync_action === 'delete');
 
     if (entriesToDelete.length === 0) {
       return { success: 0, errors: 0 };
     }
-
-    // Get local-only stream IDs to filter out entries that shouldn't sync
-    const localOnlyStreamIds = await this.getLocalOnlyStreamIds();
 
     let success = 0;
     let errors = 0;
@@ -508,12 +488,9 @@ class SyncService {
     return { success, errors };
   }
 
-  private async pushPhotos(): Promise<{ success: number; errors: number }> {
+  private async pushPhotos(localOnlyStreamIds: Set<string>): Promise<{ success: number; errors: number }> {
     let success = 0;
     let errors = 0;
-
-    // Get local-only stream IDs to filter out photos that shouldn't sync
-    const localOnlyStreamIds = await this.getLocalOnlyStreamIds();
 
     // Upload photo files
     const photosToUpload = await localDB.getPhotosNeedingUpload();
@@ -616,19 +593,32 @@ class SyncService {
 
     // Delete photos
     const photosToDelete = photosNeedingSync.filter(p => p.sync_action === 'delete');
+    log.info('📸 Photo delete sync check', {
+      totalPhotosNeedingSync: photosNeedingSync.length,
+      photosToDeleteCount: photosToDelete.length,
+      photosToDelete: photosToDelete.map(p => ({ id: p.photo_id, entryId: p.entry_id })),
+    });
     if (photosToDelete.length > 0) {
-      log.debug('Deleting photos', { count: photosToDelete.length });
+      log.info('📸 Deleting photos from server', { count: photosToDelete.length });
 
       for (const photo of photosToDelete) {
         try {
-          await supabase.from('photos').delete().eq('photo_id', photo.photo_id);
+          log.info('📸 Deleting photo from Supabase', { photoId: photo.photo_id, filePath: photo.file_path });
+          const { error: dbError } = await supabase.from('photos').delete().eq('photo_id', photo.photo_id);
+          if (dbError) {
+            log.error('📸 Failed to delete photo from DB', { photoId: photo.photo_id, error: dbError });
+          }
           if (photo.file_path) {
-            await supabase.storage.from('photos').remove([photo.file_path]);
+            const { error: storageError } = await supabase.storage.from('photos').remove([photo.file_path]);
+            if (storageError) {
+              log.warn('📸 Failed to delete photo from storage', { photoId: photo.photo_id, error: storageError });
+            }
           }
           await localDB.permanentlyDeletePhoto(photo.photo_id);
+          log.info('📸 Photo deleted successfully', { photoId: photo.photo_id });
           success++;
         } catch (error) {
-          log.warn('Failed to delete photo', { photoId: photo.photo_id, error });
+          log.error('📸 Failed to delete photo', { photoId: photo.photo_id, error });
           errors++;
         }
       }
@@ -1040,6 +1030,10 @@ class SyncService {
   private async syncEntry(entry: Entry): Promise<void> {
     const { sync_action } = entry;
 
+    // Track this entry as currently pushing to prevent realtime race condition
+    this.currentlyPushingEntryIds.add(entry.entry_id);
+
+    try {
     // Validate and sanitize status - ensure it's a valid value for the database constraint
     const validStatuses = ALL_STATUSES.map(s => s.value);
     let sanitizedStatus: EntryStatus = entry.status;
@@ -1125,98 +1119,149 @@ class SyncService {
     };
 
     if (sync_action === 'create' || sync_action === 'update') {
-      // Conflict detection for updates
-      if (sync_action === 'update') {
-        const { data: serverEntry, error: fetchError } = await supabase
-          .from('entries')
-          .select('version, base_version, title, content, status, tags, mentions, last_edited_by, last_edited_device')
-          .eq('entry_id', entry.entry_id)
-          .single();
-
-        if (!fetchError && serverEntry) {
-          const serverVersion = (serverEntry as any).version || 1;
-          const localBaseVersion = entry.base_version || 1;
-
-          if (serverVersion > localBaseVersion) {
-            log.warn('Conflict detected', {
-              entryId: entry.entry_id,
-              serverVersion,
-              localBaseVersion,
-            });
-
-            // Save local changes as backup
-            const localBackup = {
-              title: entry.title,
-              content: entry.content,
-              status: entry.status,
-              tags: entry.tags,
-              mentions: entry.mentions,
-              edited_by: entry.last_edited_by,
-              edited_device: entry.last_edited_device,
-              version: entry.version,
-            };
-
-            const serverData = serverEntry as any;
-
-            // Keep server version, mark as conflicted
-            await localDB.updateEntry(entry.entry_id, {
-              title: serverData.title,
-              content: serverData.content,
-              status: serverData.status,
-              tags: serverData.tags,
-              mentions: serverData.mentions,
-              version: serverVersion,
-              base_version: serverVersion,
-              conflict_status: 'conflicted',
-              conflict_backup: JSON.stringify(localBackup),
-              last_edited_by: serverData.last_edited_by,
-              last_edited_device: serverData.last_edited_device,
-              synced: 1,
-              sync_action: null,
-            });
-
-            return;
-          }
-        }
-      }
-
       // Debug: Log exactly what we're sending
-      log.info('Upserting entry', {
+      log.info('Syncing entry', {
         entryId: entry.entry_id,
+        sync_action,
         status: supabaseData.status,
         completed_at: supabaseData.completed_at,
-        rating: supabaseData.rating,
-        priority: supabaseData.priority,
-        is_pinned: supabaseData.is_pinned,
-        type: supabaseData.type,
+        localVersion: entry.version,
+        baseVersion: entry.base_version,
       });
 
-      const { data: upsertedEntry, error } = await supabase
-        .from('entries')
-        .upsert(supabaseData, { onConflict: 'entry_id' })
-        .select('version')
-        .single();
+      if (sync_action === 'create') {
+        // For creates, use upsert - no version conflict possible for new entries
+        const { data: upsertedEntry, error } = await supabase
+          .from('entries')
+          .upsert(supabaseData, { onConflict: 'entry_id' })
+          .select('version')
+          .single();
 
-      if (error) {
-        log.error('Upsert failed', {
-          entryId: entry.entry_id,
-          errorCode: error.code,
-          errorMessage: error.message,
-          errorDetails: error.details,
-          errorHint: error.hint,
+        if (error) {
+          log.error('Create failed', {
+            entryId: entry.entry_id,
+            errorCode: error.code,
+            errorMessage: error.message,
+          });
+          throw new Error(`Supabase create failed: ${error.message}`);
+        }
+
+        // Update local base_version to match server's new version
+        const serverVersion = upsertedEntry?.version || 1;
+        await localDB.updateEntry(entry.entry_id, {
+          version: serverVersion,
+          base_version: serverVersion,
+          synced: 1,
+          sync_action: null,
+          sync_error: null,
         });
-        throw new Error(`Supabase upsert failed: ${error.message}`);
-      }
+      } else {
+        // For updates, use OPTIMISTIC LOCKING with conditional update
+        // This prevents race condition where two devices update simultaneously
+        const localBaseVersion = entry.base_version || 1;
 
-      // Update local base_version to match server's new version (set by trigger)
-      const serverVersion = upsertedEntry?.version || 1;
-      await localDB.updateEntry(entry.entry_id, {
-        version: serverVersion,
-        base_version: serverVersion,
-        synced: 1,
-        sync_action: null,
-        sync_error: null, // Clear any previous sync error
-      });
+        // Attempt conditional update: only succeeds if server version matches our base_version
+        // The server trigger will auto-increment version on success
+        const { data: updatedEntry, error: updateError } = await supabase
+          .from('entries')
+          .update(supabaseData)
+          .eq('entry_id', entry.entry_id)
+          .eq('version', localBaseVersion)  // OPTIMISTIC LOCK: only update if version unchanged
+          .select('version, title, content, status, tags, mentions, last_edited_by, last_edited_device')
+          .maybeSingle();  // Returns null if no rows matched (conflict)
+
+        if (updateError) {
+          log.error('Update failed', {
+            entryId: entry.entry_id,
+            errorCode: updateError.code,
+            errorMessage: updateError.message,
+          });
+          throw new Error(`Supabase update failed: ${updateError.message}`);
+        }
+
+        if (!updatedEntry) {
+          // OPTIMISTIC LOCK FAILED: Server version changed since we started editing
+          // This means another device updated between our last sync and now
+          log.warn('Optimistic lock failed - version mismatch (race condition caught!)', {
+            entryId: entry.entry_id,
+            localBaseVersion,
+          });
+
+          // Fetch the current server state to show user what changed
+          const { data: serverEntry, error: fetchError } = await supabase
+            .from('entries')
+            .select('version, title, content, status, tags, mentions, last_edited_by, last_edited_device')
+            .eq('entry_id', entry.entry_id)
+            .single();
+
+          if (fetchError || !serverEntry) {
+            log.error('Failed to fetch server entry after conflict', { entryId: entry.entry_id });
+            throw new Error('Conflict detected but failed to fetch server state');
+          }
+
+          const serverVersion = (serverEntry as any).version || 1;
+
+          // Save local changes as backup for user to review
+          const localBackup = {
+            title: entry.title,
+            content: entry.content,
+            status: entry.status,
+            tags: entry.tags,
+            mentions: entry.mentions,
+            edited_by: entry.last_edited_by,
+            edited_device: entry.last_edited_device,
+            version: entry.version,
+          };
+
+          const serverData = serverEntry as any;
+
+          // Keep server version, mark as conflicted
+          await localDB.updateEntry(entry.entry_id, {
+            title: serverData.title,
+            content: serverData.content,
+            status: serverData.status,
+            tags: serverData.tags,
+            mentions: serverData.mentions,
+            version: serverVersion,
+            base_version: serverVersion,
+            conflict_status: 'conflicted',
+            conflict_backup: JSON.stringify(localBackup),
+            last_edited_by: serverData.last_edited_by,
+            last_edited_device: serverData.last_edited_device,
+            synced: 1,
+            sync_action: null,
+          });
+
+          // Update React Query cache so UI sees the conflict
+          const conflictedEntry = await localDB.getEntry(entry.entry_id);
+          if (conflictedEntry) {
+            this.setEntryQueryData(entry.entry_id, conflictedEntry);
+          }
+
+          log.warn('Conflict saved - user will be prompted to resolve', {
+            entryId: entry.entry_id,
+            serverVersion,
+            localBackupSaved: true,
+          });
+
+          return;
+        }
+
+        // Update succeeded - update local base_version to match server
+        const serverVersion = updatedEntry.version || 1;
+        await localDB.updateEntry(entry.entry_id, {
+          version: serverVersion,
+          base_version: serverVersion,
+          synced: 1,
+          sync_action: null,
+          sync_error: null,
+        });
+
+        log.debug('Entry updated with optimistic lock', {
+          entryId: entry.entry_id,
+          newVersion: serverVersion,
+        });
+      }
 
     } else if (sync_action === 'delete') {
       const { data: existingEntry } = await supabase
@@ -1240,6 +1285,10 @@ class SyncService {
       }
 
       await localDB.markSynced(entry.entry_id);
+    }
+    } finally {
+      // Always remove from tracking set, even on error
+      this.currentlyPushingEntryIds.delete(entry.entry_id);
     }
   }
 
@@ -1348,13 +1397,16 @@ class SyncService {
       this.realtimeChannel = supabase
         .channel('db-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'entries' }, (payload) => {
-          const entryId = (payload.new as any)?.entry_id || (payload.old as any)?.entry_id;
-          log.info('📡 Entries realtime event received', { eventType: payload.eventType, entryId });
-          this.handleRealtimeChange('entries', entryId);
+          // Process entry realtime event with version-based filtering
+          this.processEntryRealtimeEvent(payload).catch(err => {
+            log.error('Failed to process entry realtime event', err);
+          });
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'streams' }, (payload) => {
-          log.info('📡 Streams realtime event received', { eventType: payload.eventType });
-          this.handleRealtimeChange('streams');
+          // Process stream realtime event with meaningful-change detection
+          this.processStreamRealtimeEvent(payload).catch(err => {
+            log.error('Failed to process stream realtime event', err);
+          });
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'photos' }, (payload) => {
           const entryId = (payload.new as any)?.entry_id || (payload.old as any)?.entry_id;
@@ -1365,22 +1417,367 @@ class SyncService {
           log.info('📡 Locations realtime event received', { eventType: payload.eventType });
           this.handleRealtimeChange('locations');
         })
-        .subscribe((status, err) => {
+        .subscribe(async (status, err) => {
           if (status === 'SUBSCRIBED') {
             log.info('✅ Global realtime subscription ACTIVE for entries/streams/photos/locations');
+            // Reset reconnection state on successful connection
+            this.realtimeReconnectAttempts = 0;
+            if (this.realtimeReconnectTimer) {
+              clearTimeout(this.realtimeReconnectTimer);
+              this.realtimeReconnectTimer = null;
+            }
           } else if (status === 'CHANNEL_ERROR') {
-            log.error('❌ Global realtime subscription FAILED', err);
+            // Suppress logging when offline - this is expected behavior
+            const netState = await NetInfo.fetch();
+            if (!netState.isConnected || !netState.isInternetReachable) {
+              log.debug('Realtime subscription failed (expected - device is offline)');
+            } else {
+              // Use warn instead of error - reconnection is automatic, this is expected during app lifecycle
+              log.warn('Realtime subscription failed, will reconnect', { error: err });
+              this.scheduleRealtimeReconnect();
+            }
           } else if (status === 'TIMED_OUT') {
-            log.error('⏱️ Global realtime subscription TIMED OUT');
+            // Suppress logging when offline
+            const netState = await NetInfo.fetch();
+            if (!netState.isConnected || !netState.isInternetReachable) {
+              log.debug('Realtime subscription timed out (expected - device is offline)');
+            } else {
+              // Use warn instead of error - reconnection is automatic
+              log.warn('Realtime subscription timed out, will reconnect');
+              this.scheduleRealtimeReconnect();
+            }
           } else if (status === 'CLOSED') {
             log.info('🔒 Global realtime subscription CLOSED');
+            // Reconnect if closed unexpectedly while initialized
+            if (this.isInitialized) {
+              this.scheduleRealtimeReconnect();
+            }
           } else {
             log.debug('Global realtime status', { status });
           }
         });
     } catch (error) {
       log.error('Failed to set up realtime subscription', error);
+      this.scheduleRealtimeReconnect();
     }
+  }
+
+  /**
+   * Schedule a reconnection attempt for the realtime subscription
+   * Uses exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (max)
+   */
+  private scheduleRealtimeReconnect(): void {
+    // Don't schedule if not initialized or already scheduled
+    if (!this.isInitialized || this.realtimeReconnectTimer) {
+      return;
+    }
+
+    const backoffMs = Math.min(
+      1000 * Math.pow(2, this.realtimeReconnectAttempts),
+      this.REALTIME_MAX_BACKOFF_MS
+    );
+
+    log.info(`🔄 Scheduling realtime reconnect in ${backoffMs / 1000}s (attempt ${this.realtimeReconnectAttempts + 1})`);
+
+    this.realtimeReconnectTimer = setTimeout(async () => {
+      this.realtimeReconnectTimer = null;
+      this.realtimeReconnectAttempts++;
+
+      // Check if we're online before attempting reconnect
+      const netState = await NetInfo.fetch();
+      if (!netState.isConnected || !netState.isInternetReachable) {
+        log.debug('Skipping realtime reconnect - device is offline');
+        return;
+      }
+
+      log.info('🔄 Attempting realtime reconnect...');
+
+      // Remove old channel if it exists
+      if (this.realtimeChannel) {
+        try {
+          await supabase.removeChannel(this.realtimeChannel);
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
+        this.realtimeChannel = null;
+      }
+
+      // Set up new subscription
+      await this.setupRealtimeSubscription();
+    }, backoffMs);
+  }
+
+  /**
+   * Process entry realtime event with version-based filtering
+   * Compares payload version against LocalDB to determine if update is needed
+   */
+  private async processEntryRealtimeEvent(payload: any): Promise<void> {
+    const entryId = (payload.new as any)?.entry_id || (payload.old as any)?.entry_id;
+    const eventType = payload.eventType;
+
+    if (!entryId) {
+      log.debug('📡 Ignoring realtime event - no entry ID');
+      return;
+    }
+
+    // Debug: Log all realtime events for entries
+    log.info('📡 REALTIME EVENT RECEIVED', {
+      entryId: entryId.substring(0, 8),
+      eventType,
+      remoteVersion: (payload.new as any)?.version,
+      remoteEditedBy: (payload.new as any)?.last_edited_by?.substring(0, 8),
+      isPushing: this.currentlyPushingEntryIds.has(entryId),
+    });
+
+    // Skip if we're currently pushing this entry (race condition prevention)
+    if (this.currentlyPushingEntryIds.has(entryId)) {
+      log.info('📡 SKIPPED - currently pushing', { entryId: entryId.substring(0, 8) });
+      return;
+    }
+
+    // For DELETE events, just trigger the normal flow
+    if (eventType === 'DELETE') {
+      log.info('📡 Entry DELETE event received', { entryId });
+      this.handleRealtimeChange('entries', entryId);
+      return;
+    }
+
+    // For INSERT/UPDATE, check version against LocalDB
+    const remoteVersion = (payload.new as any)?.version || 1;
+    const localEntry = await localDB.getEntry(entryId);
+
+    if (localEntry) {
+      const localVersion = localEntry.base_version || 1;
+
+      log.info('📡 VERSION CHECK', {
+        entryId: entryId.substring(0, 8),
+        remoteVersion,
+        localBaseVersion: localVersion,
+        localVersion: localEntry.version,
+        localSynced: localEntry.synced,
+        willSkip: remoteVersion <= localVersion,
+      });
+
+      // Skip if we already have this version or newer
+      if (remoteVersion <= localVersion) {
+        log.info('📡 SKIPPED - version up to date', { entryId: entryId.substring(0, 8) });
+        return;
+      }
+
+      // Skip if local has unsynced changes (don't overwrite pending edits)
+      if (localEntry.synced === 0) {
+        log.info('📡 SKIPPED - local changes pending', { entryId: entryId.substring(0, 8) });
+        return;
+      }
+    }
+
+    // New entry or newer version - update LocalDB directly from payload
+    log.warn('📡 APPLYING REALTIME UPDATE!', {
+      entryId: entryId.substring(0, 8),
+      eventType,
+      remoteVersion,
+      isNewEntry: !localEntry
+    });
+
+    const updatedEntry = await this.updateEntryFromPayload(entryId, payload.new);
+    // Update React Query cache directly instead of invalidating
+    // This prevents double-render: one from invalidation, one from refetch
+    this.setEntryQueryData(entryId, updatedEntry);
+  }
+
+  /**
+   * Update LocalDB entry directly from realtime payload data
+   * Avoids unnecessary network call since payload contains full row
+   * Returns the entry object for cache updates
+   *
+   * CRITICAL: Re-checks version before writing to prevent race conditions
+   * when multiple realtime events arrive simultaneously
+   */
+  private async updateEntryFromPayload(entryId: string, payloadData: any): Promise<Entry | null> {
+    if (!payloadData) {
+      log.warn('No payload data to update entry', { entryId });
+      return null;
+    }
+
+    const payloadVersion = payloadData.version || 1;
+
+    // Re-check version right before writing (prevents race condition)
+    // This is needed because multiple realtime events can arrive simultaneously
+    // and both might pass the initial version check before either writes
+    const currentEntry = await localDB.getEntry(entryId);
+    if (currentEntry) {
+      const currentVersion = currentEntry.base_version || 1;
+
+      // Skip if LocalDB already has this version or newer
+      if (payloadVersion <= currentVersion) {
+        log.debug('Skipping outdated realtime update (race condition prevented)', {
+          entryId,
+          payloadVersion,
+          currentVersion
+        });
+        return currentEntry; // Return current entry, don't overwrite
+      }
+
+      // Skip if local has unsynced changes (double-check since event processing started)
+      if (currentEntry.synced === 0) {
+        log.debug('Skipping realtime update - local changes now pending', { entryId });
+        return currentEntry;
+      }
+    }
+
+    const entry: Entry = {
+      entry_id: payloadData.entry_id,
+      user_id: payloadData.user_id,
+      title: payloadData.title,
+      content: payloadData.content,
+      tags: payloadData.tags || [],
+      mentions: payloadData.mentions || [],
+      stream_id: payloadData.stream_id,
+      entry_latitude: payloadData.entry_latitude || null,
+      entry_longitude: payloadData.entry_longitude || null,
+      location_accuracy: payloadData.location_accuracy || null,
+      location_id: payloadData.location_id || null,
+      status: payloadData.status || 'none',
+      type: payloadData.type || null,
+      due_date: payloadData.due_date,
+      completed_at: payloadData.completed_at,
+      entry_date: payloadData.entry_date || payloadData.created_at,
+      created_at: payloadData.created_at,
+      updated_at: payloadData.updated_at,
+      deleted_at: payloadData.deleted_at,
+      attachments: payloadData.attachments,
+      priority: payloadData.priority || 0,
+      rating: payloadData.rating || 0.00,
+      is_pinned: payloadData.is_pinned || false,
+      local_only: 0,
+      synced: 1,
+      sync_action: null,
+      version: payloadVersion,
+      base_version: payloadVersion,
+      conflict_status: payloadData.conflict_status || null,
+      conflict_backup: typeof payloadData.conflict_backup === 'string' ? payloadData.conflict_backup : null,
+      last_edited_by: payloadData.last_edited_by || null,
+      last_edited_device: payloadData.last_edited_device || null,
+    };
+
+    if (currentEntry) {
+      await localDB.updateEntry(entryId, entry);
+      log.debug('Updated entry from realtime payload', { entryId, version: entry.version });
+    } else {
+      await localDB.saveEntry(entry as any);
+      await localDB.markSynced(entryId);
+      log.debug('Inserted new entry from realtime payload', { entryId, version: entry.version });
+    }
+
+    return entry;
+  }
+
+  /**
+   * Update React Query cache directly for an entry
+   * This avoids triggering a refetch which would cause isFetching=true and UI flash
+   */
+  private setEntryQueryData(entryId: string, entry: Entry | null): void {
+    if (!this.queryClient || !entry) return;
+
+    // Update the specific entry cache
+    this.queryClient.setQueryData(['entry', entryId], entry);
+
+    // Also invalidate the entries list so it refreshes in the background
+    this.queryClient.invalidateQueries({ queryKey: ['entries'] });
+
+    log.debug('Updated React Query cache for entry', { entryId, version: entry.version });
+  }
+
+  /**
+   * Process stream realtime event with meaningful-change detection
+   * Streams don't have versions, so we compare actual field values
+   * Ignores entry_count changes (computed locally from entries)
+   */
+  private async processStreamRealtimeEvent(payload: any): Promise<void> {
+    const streamId = (payload.new as any)?.stream_id || (payload.old as any)?.stream_id;
+    const eventType = payload.eventType;
+
+    if (!streamId) {
+      log.debug('📡 Ignoring stream realtime event - no stream ID');
+      return;
+    }
+
+    // For DELETE events, trigger the normal pull flow
+    if (eventType === 'DELETE') {
+      log.info('📡 Stream DELETE event received', { streamId });
+      this.handleRealtimeChange('streams');
+      return;
+    }
+
+    // For INSERT/UPDATE, compare meaningful fields with LocalDB
+    const remoteStream = payload.new as any;
+    const localStream = await localDB.getStream(streamId);
+
+    if (!localStream) {
+      // New stream from another device - process it
+      log.info('📡 Stream INSERT event - new stream from remote', { streamId });
+      this.handleRealtimeChange('streams');
+      return;
+    }
+
+    // Skip if local has unsynced changes
+    if (localStream.synced === 0) {
+      log.debug('📡 Ignoring stream realtime event - local changes pending', { streamId });
+      return;
+    }
+
+    // Compare MEANINGFUL fields only (ignore entry_count - it's computed)
+    const hasMeaningfulChanges =
+      localStream.name !== remoteStream.name ||
+      localStream.color !== remoteStream.color ||
+      localStream.icon !== remoteStream.icon ||
+      localStream.is_private !== remoteStream.is_private;
+
+    if (!hasMeaningfulChanges) {
+      log.debug('📡 Ignoring stream realtime event - only entry_count changed', {
+        streamId,
+        localEntryCount: localStream.entry_count,
+        remoteEntryCount: remoteStream.entry_count
+      });
+      return;
+    }
+
+    // Meaningful changes detected - update LocalDB directly from payload
+    log.info('📡 Stream realtime event - meaningful changes detected', {
+      streamId,
+      changes: {
+        name: localStream.name !== remoteStream.name,
+        color: localStream.color !== remoteStream.color,
+        icon: localStream.icon !== remoteStream.icon,
+        is_private: localStream.is_private !== remoteStream.is_private
+      }
+    });
+
+    await this.updateStreamFromPayload(streamId, remoteStream);
+    this.invalidateQueryCache();
+  }
+
+  /**
+   * Update LocalDB stream directly from realtime payload data
+   */
+  private async updateStreamFromPayload(streamId: string, payloadData: any): Promise<void> {
+    if (!payloadData) {
+      log.warn('No payload data to update stream', { streamId });
+      return;
+    }
+
+    await localDB.updateStream(streamId, {
+      name: payloadData.name,
+      color: payloadData.color,
+      icon: payloadData.icon,
+      is_private: payloadData.is_private,
+      entry_count: payloadData.entry_count,
+      updated_at: payloadData.updated_at,
+      synced: 1,
+      sync_action: null,
+    });
+
+    log.debug('Updated stream from realtime payload', { streamId });
   }
 
   // Track entry IDs that have changed during debounce window
@@ -1428,10 +1825,9 @@ class SyncService {
           // Invalidate specific entry queries for pulled entries
           this.invalidateQueryCache(entryIdsToInvalidate);
         } else {
-          // Even if pull didn't find "new" data (due to incremental logic),
-          // the server definitely has changes. Force cache invalidation so UI refreshes.
-          log.debug('No new items pulled, but forcing cache invalidation for UI refresh');
-          this.invalidateQueryCache(entryIdsToInvalidate);
+          // No actual changes - don't invalidate cache unnecessarily
+          // Version comparison in pullEntries already handles this correctly
+          log.debug('No changes from server (version up-to-date), skipping cache invalidation');
         }
       } catch (error) {
         log.error('Failed to pull realtime changes', error);
@@ -1486,9 +1882,24 @@ class SyncService {
 
   /**
    * Handle network reconnect
-   * Pull first (get missed changes), then push (send queued changes)
+   * Reconnect realtime subscription and sync data
    */
   private async handleReconnect(): Promise<void> {
+    // Reset reconnection attempts since we're back online
+    this.realtimeReconnectAttempts = 0;
+
+    // Cancel any pending reconnect timer
+    if (this.realtimeReconnectTimer) {
+      clearTimeout(this.realtimeReconnectTimer);
+      this.realtimeReconnectTimer = null;
+    }
+
+    // Reconnect realtime if not connected
+    if (!this.realtimeChannel) {
+      log.info('Reconnecting realtime subscription...');
+      await this.setupRealtimeSubscription();
+    }
+
     if (this.isSyncing) {
       log.debug('Sync already in progress, skipping reconnect sync');
       return;
@@ -1524,9 +1935,15 @@ class SyncService {
    */
   private async getLocalOnlyStreamIds(): Promise<Set<string>> {
     const streams = await localDB.getAllStreams();
-    return new Set(
-      streams.filter(s => s.is_localonly).map(s => s.stream_id)
-    );
+    const localOnlyStreams = streams.filter(s => s.is_localonly);
+
+    if (localOnlyStreams.length > 0) {
+      log.debug('Local-only streams (will not sync):', {
+        streams: localOnlyStreams.map(s => ({ id: s.stream_id, name: s.name })),
+      });
+    }
+
+    return new Set(localOnlyStreams.map(s => s.stream_id));
   }
 
   private async cleanupWrongUserData(): Promise<void> {

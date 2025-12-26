@@ -6,6 +6,7 @@ import { getDeviceName } from "../mobileEntryApi";
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
+import { usePhotos } from "../../photos/mobilePhotoHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
@@ -80,6 +81,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
   // GPS loading state (for capturing/reloading GPS)
   const [isGpsLoading, setIsGpsLoading] = useState(false);
+  // Tracks when form data is fully loaded and ready for baseline
+  // New entries are ready immediately, editing/copying need to wait for data
+  const [isFormReady, setIsFormReady] = useState(!isEditing && !isCopiedEntry);
   // Track if we're capturing GPS from a cleared state (shows Save button instead of Remove)
   const [isNewGpsCapture, setIsNewGpsCapture] = useState(false);
   // Pending GPS data - holds captured GPS before user confirms with Save button
@@ -95,7 +99,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const titleInputRef = useRef<TextInput>(null);
   const photoCaptureRef = useRef<PhotoCaptureRef>(null);
   const isInitialLoad = useRef(true); // Track if this is first load
-  const baselineNeedsSet = useRef(false); // Track if we need to set baseline after load
   const [photoCount, setPhotoCount] = useState(0); // Track photo position for ordering
   const [baselinePhotoCount, setBaselinePhotoCount] = useState<number | null>(null); // Baseline for dirty tracking (null = not yet initialized)
   const [photosCollapsed, setPhotosCollapsed] = useState(false); // Start expanded
@@ -112,6 +115,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   );
   const { user } = useAuthState();
   const { streams } = useStreams();
+  // Use React Query for photos to detect external sync changes
+  const { photos: queryPhotos } = usePhotos(isEditing ? entryId : null);
   const { navigate, setBeforeBackHandler } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [showMenu, setShowMenu] = useState(false);
@@ -146,6 +151,14 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // This allows us to detect when another device has updated the entry via global sync
   const knownVersionRef = useRef<number | null>(null);
 
+  // Track known photo count from React Query to detect external photo additions
+  // Photo syncs don't change entry.version, so we need separate detection
+  const knownPhotoCountRef = useRef<number | null>(null);
+
+  // Autosave timer ref - only for editing existing entries
+  const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const AUTOSAVE_DELAY_MS = 2000;
+
   // Edit mode: new entries start in edit mode, existing entries start in read-only
   const [isEditMode, setIsEditMode] = useState(!isEditing);
 
@@ -168,15 +181,67 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     return false;
   }, [isDirty, isEditing, photoCount, baselinePhotoCount]);
 
-  // Initialize baseline for new entries
+  // Initialize baseline for new entries (NOT copied entries - those have async data loading)
   useEffect(() => {
-    if (!isEditing && baselinePhotoCount === null) {
+    if (!isEditing && !isCopiedEntry && baselinePhotoCount === null) {
       // Set baseline in hook for dirty tracking
       setBaseline(formData);
       // For new entries, photos use pendingPhotos so baseline starts at 0
       setBaselinePhotoCount(0);
     }
   }, []);
+
+  // AUTOSAVE: Debounced save for editing existing entries
+  // Triggers 2s after last change, only when dirty and in edit mode
+  useEffect(() => {
+    // Debug: Log autosave state on every evaluation
+    console.log('🔍 [Autosave] Evaluating:', {
+      isEditMode,
+      isEditing,
+      isFormDirty,
+      isFormReady,
+      isSubmitting,
+      streamId: formData.streamId,
+      willTrigger: isEditing && isFormDirty && isEditMode && isFormReady && !isSubmitting,
+    });
+
+    // Only autosave when:
+    // 1. Editing an existing entry (not creating new)
+    // 2. Form is dirty
+    // 3. In edit mode
+    // 4. Form is fully loaded (prevents autosave during sync reload)
+    // 5. Not currently submitting
+    if (!isEditing || !isFormDirty || !isEditMode || !isFormReady || isSubmitting) {
+      // Clear any pending autosave if conditions no longer met
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+        console.log('🔍 [Autosave] Timer cleared - conditions not met');
+      }
+      return;
+    }
+
+    // Clear previous timer
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      console.log('🔍 [Autosave] Previous timer cleared, resetting debounce');
+    }
+
+    // Set new timer
+    console.log('🔍 [Autosave] Starting 2s debounce timer...');
+    autosaveTimerRef.current = setTimeout(() => {
+      console.log('🔄 [Autosave] Triggering autosave after 2s debounce');
+      handleSave();
+    }, AUTOSAVE_DELAY_MS);
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [isEditing, isFormDirty, isEditMode, isFormReady, isSubmitting, formData, photoCount]);
 
   // Register beforeBack handler for gesture/hardware back interception
   useEffect(() => {
@@ -370,13 +435,17 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       isExternalUpdate,
       previousVersion: knownVersionRef.current,
       newVersion: entryVersion,
+      willUpdateForm: isExternalUpdate && !isFormDirty,
     });
 
     // Update known version
     knownVersionRef.current = entryVersion;
 
     // If change is from THIS device (our own save), don't update form
-    if (!isExternalUpdate) return;
+    if (!isExternalUpdate) {
+      console.log('🔄 [CaptureForm] Skipping form update - change from this device');
+      return;
+    }
 
     // External update - if user has unsaved changes, warn them
     if (isFormDirty) {
@@ -384,49 +453,93 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       return;
     }
 
-    // No local changes - update form with new data
-    updateMultipleFields({
+    // No local changes - build complete new form data and set both form and baseline atomically
+    const streamName = entry.stream_id && streams.length > 0
+      ? streams.find(s => s.stream_id === entry.stream_id)?.name || null
+      : null;
+
+    const newFormData = {
       title: entry.title || '',
       content: entry.content || '',
       streamId: entry.stream_id || null,
-      status: entry.status || 'none' as EntryStatus,
+      streamName,
+      status: (entry.status || 'none') as EntryStatus,
       type: entry.type || null,
       dueDate: entry.due_date || null,
       rating: entry.rating || 0,
       priority: entry.priority || 0,
       entryDate: entry.entry_date || formData.entryDate,
+      includeTime: entry.entry_date ? new Date(entry.entry_date).getMilliseconds() !== 100 : formData.includeTime,
       gpsData: entry.entry_latitude && entry.entry_longitude ? {
         latitude: entry.entry_latitude,
         longitude: entry.entry_longitude,
         accuracy: entry.location_accuracy || null,
       } : null,
-    });
+      // Keep current locationData - location_id changes are rare and would need async fetch
+      locationData: formData.locationData,
+      pendingPhotos: formData.pendingPhotos,
+    };
 
-    // Update stream name
-    if (entry.stream_id && streams.length > 0) {
-      const stream = streams.find(s => s.stream_id === entry.stream_id);
-      updateField("streamName", stream?.name || null);
-    } else {
-      updateField("streamName", null);
-    }
+    // Set baseline FIRST with the exact data we're loading
+    // This prevents any dirty state since baseline === formData
+    setBaseline(newFormData);
+    setBaselinePhotoCount(photoCount);
 
-    // Update includeTime based on milliseconds
-    if (entry.entry_date) {
-      updateField("includeTime", new Date(entry.entry_date).getMilliseconds() !== 100);
-    }
-
-    // Mark form clean after external update
-    setTimeout(() => {
-      markClean();
-      setBaselinePhotoCount(photoCount);
-    }, 0);
+    // Then update form to same data
+    updateMultipleFields(newFormData);
 
     // Increment externalRefreshKey to force PhotoGallery to reload
     // This ensures external photo additions are displayed
     setExternalRefreshKey(prev => prev + 1);
 
     showSnackbar(`Entry updated by ${editingDevice}`);
-  }, [entry, isEditing, isFormDirty, streams, updateMultipleFields, updateField, markClean, formData.entryDate, photoCount]);
+  }, [entry, isEditing, isFormDirty, streams, updateMultipleFields, setBaseline, photoCount, formData.entryDate, formData.includeTime, formData.locationData, formData.pendingPhotos]);
+
+  // Detect external photo additions via React Query
+  // Photo syncs don't change entry.version, so we need separate detection using usePhotos hook
+  // IMPORTANT: Only detect external changes AFTER:
+  // 1. Form is ready (baseline set)
+  // 2. baselinePhotoCount has been established (ensures we're past initial load)
+  // Otherwise we treat initial data load as "external" and mark form dirty
+  useEffect(() => {
+    // Gate: Must be editing, form ready, AND baseline photo count established
+    if (!isEditing || !entryId || !isFormReady || baselinePhotoCount === null) return;
+
+    const queryPhotoCount = queryPhotos.length;
+
+    // First time this effect runs after all gates pass - initialize known count
+    if (knownPhotoCountRef.current === null) {
+      knownPhotoCountRef.current = queryPhotoCount;
+      console.log('📸 [CaptureForm] Photo tracking initialized (form + baseline ready):', queryPhotoCount);
+      return;
+    }
+
+    // Photo count increased - external photo addition detected
+    if (queryPhotoCount > knownPhotoCountRef.current) {
+      console.log('📸 [CaptureForm] External photo addition detected', {
+        previous: knownPhotoCountRef.current,
+        current: queryPhotoCount,
+      });
+
+      // Update known count
+      knownPhotoCountRef.current = queryPhotoCount;
+
+      // Increment externalRefreshKey to force PhotoGallery to reload
+      setExternalRefreshKey(prev => prev + 1);
+
+      // Update photoCount state so it's in sync
+      setPhotoCount(queryPhotoCount);
+    } else if (queryPhotoCount < knownPhotoCountRef.current) {
+      // Photo was deleted externally - also update
+      console.log('📸 [CaptureForm] External photo deletion detected', {
+        previous: knownPhotoCountRef.current,
+        current: queryPhotoCount,
+      });
+      knownPhotoCountRef.current = queryPhotoCount;
+      setExternalRefreshKey(prev => prev + 1);
+      setPhotoCount(queryPhotoCount);
+    }
+  }, [queryPhotos.length, isEditing, entryId, isFormReady, baselinePhotoCount]);
 
   // Handle tap on title to enter edit mode
   const handleTitlePress = () => {
@@ -497,134 +610,68 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     }
   }, [formData.title, formData.content]);
 
-  // Load entry data when editing
+  // Load entry data when editing (INITIAL LOAD ONLY)
+  // Pattern: Build complete form data object, set baseline AND form atomically, then mark ready
+  // IMPORTANT: Only runs once on initial load - subsequent entry changes are handled by version detection
   useEffect(() => {
-    if (entry && isEditing) {
-      updateField("title", entry.title || "");
-      updateField("content", entry.content);
-      updateField("streamId", entry.stream_id || null);
-      updateField("status", entry.status);
-      updateField("type", entry.type || null);
-      updateField("dueDate", entry.due_date);
-      updateField("rating", entry.rating || 0);
-      updateField("priority", entry.priority || 0);
+    if (!entry || !isEditing) return;
+    // Guard: Don't reload form if already loaded - version change handler deals with updates
+    if (isFormReady) return;
 
-      // Load entry_date or default to created_at
-      if (entry.entry_date) {
-        updateField("entryDate", entry.entry_date);
-        // Check milliseconds to determine if time should be shown
-        const date = new Date(entry.entry_date);
-        updateField("includeTime", date.getMilliseconds() !== 100);
-      } else if (entry.created_at) {
-        updateField("entryDate", entry.created_at);
-        const date = new Date(entry.created_at);
-        updateField("includeTime", date.getMilliseconds() !== 100);
-      }
+    // Build base form data synchronously
+    const entryDate = entry.entry_date || entry.created_at || formData.entryDate;
+    const includeTime = entryDate ? new Date(entryDate).getMilliseconds() !== 100 : formData.includeTime;
 
-      // Load GPS data from entry coordinates (separate from named location)
-      if (entry.entry_latitude && entry.entry_longitude) {
-        const gps: GpsData = {
+    // Look up stream name
+    const streamName = entry.stream_id && streams.length > 0
+      ? streams.find(s => s.stream_id === entry.stream_id)?.name || null
+      : null;
+
+    // Store original stream for cancel navigation
+    setOriginalStreamId(entry.stream_id || null);
+    setOriginalStreamName(streamName);
+
+    // Build GPS data
+    const gpsData: GpsData | null = entry.entry_latitude && entry.entry_longitude
+      ? {
           latitude: entry.entry_latitude,
           longitude: entry.entry_longitude,
           accuracy: entry.location_accuracy || null,
-        };
-        updateField("gpsData", gps);
-      } else {
-        updateField("gpsData", null);
-      }
+        }
+      : null;
 
-      // Load named location data if available from locations table
-      if (entry.location_id) {
-        getLocationById(entry.location_id).then(locationEntity => {
-          if (locationEntity) {
-            // Convert LocationEntity to Location type for component use
-            const location: LocationType = {
-              location_id: locationEntity.location_id, // Include ID for reuse and readOnly check
-              latitude: locationEntity.latitude,
-              longitude: locationEntity.longitude,
-              name: locationEntity.name,
-              source: (locationEntity.source as any) || 'user_custom',
-              address: locationEntity.address || null,
-              neighborhood: locationEntity.neighborhood || null,
-              postalCode: locationEntity.postal_code || null,
-              city: locationEntity.city || null,
-              subdivision: locationEntity.subdivision || null,
-              region: locationEntity.region || null,
-              country: locationEntity.country || null,
-            };
-            updateField("locationData", location);
-          } else {
-            updateField("locationData", null);
-          }
-        }).catch(err => {
-          console.error('Failed to load location:', err);
-          updateField("locationData", null);
-        });
-      } else {
-        // No named location saved
-        updateField("locationData", null);
-      }
+    // Helper to finalize loading - sets baseline and form atomically
+    const finalizeLoad = (locationData: LocationType | null) => {
+      const newFormData = {
+        title: entry.title || '',
+        content: entry.content || '',
+        streamId: entry.stream_id || null,
+        streamName,
+        status: (entry.status || 'none') as EntryStatus,
+        type: entry.type || null,
+        dueDate: entry.due_date || null,
+        rating: entry.rating || 0,
+        priority: entry.priority || 0,
+        entryDate,
+        includeTime,
+        gpsData,
+        locationData,
+        pendingPhotos: [], // Existing entries don't use pendingPhotos
+      };
 
-      // Look up stream name from streams list
-      if (entry.stream_id && streams.length > 0) {
-        const stream = streams.find(s => s.stream_id === entry.stream_id);
-        updateField("streamName", stream?.name || null);
-        // Store original stream for cancel navigation
-        setOriginalStreamId(entry.stream_id);
-        setOriginalStreamName(stream?.name || null);
-      } else {
-        updateField("streamName", null);
-        // Store original stream (No Stream) for cancel navigation
-        setOriginalStreamId(null);
-        setOriginalStreamName(null);
-      }
-
-      // Mark that initial load is complete
+      // Set baseline FIRST, then form data - ensures they're identical
+      // Note: Editor may normalize content slightly, but this is close enough for dirty tracking
+      setBaseline(newFormData);
+      updateMultipleFields(newFormData);
+      // Mark load complete
       isInitialLoad.current = false;
-      // Mark that baseline needs to be set (will happen in next effect after state updates)
-      baselineNeedsSet.current = true;
-    }
-  }, [entry, isEditing, streams]);
+      setIsFormReady(true);
+    };
 
-  // Set baseline for dirty tracking after entry load completes
-  // This runs after the formData state updates from the load effect
-  useEffect(() => {
-    if (baselineNeedsSet.current && isEditing && !isInitialLoad.current) {
-      setBaseline(formData);
-      baselineNeedsSet.current = false;
-    }
-  }, [formData, isEditing, setBaseline]);
-
-  // Load copied entry data (for copy workflow - entry is NOT saved to DB yet)
-  useEffect(() => {
-    if (isCopiedEntry && copiedEntryData) {
-      const { entry: copiedEntry, pendingPhotos, hasTime } = copiedEntryData;
-
-      // Load all entry fields
-      updateField("title", copiedEntry.title || "");
-      updateField("content", copiedEntry.content);
-      updateField("streamId", copiedEntry.stream_id || null);
-      updateField("status", copiedEntry.status || "none");
-      updateField("type", copiedEntry.type || null);
-      updateField("dueDate", copiedEntry.due_date || null);
-      updateField("rating", copiedEntry.rating || 0);
-      updateField("priority", copiedEntry.priority || 0);
-      updateField("entryDate", copiedEntry.entry_date || new Date().toISOString());
-      updateField("includeTime", hasTime);
-
-      // Load GPS data from entry coordinates
-      if (copiedEntry.entry_latitude && copiedEntry.entry_longitude) {
-        const gps: GpsData = {
-          latitude: copiedEntry.entry_latitude,
-          longitude: copiedEntry.entry_longitude,
-          accuracy: copiedEntry.location_accuracy || null,
-        };
-        updateField("gpsData", gps);
-      }
-
-      // Load named location data if available
-      if (copiedEntry.location_id) {
-        getLocationById(copiedEntry.location_id).then(locationEntity => {
+    // Load location if needed, then finalize
+    if (entry.location_id) {
+      getLocationById(entry.location_id)
+        .then(locationEntity => {
           if (locationEntity) {
             const location: LocationType = {
               location_id: locationEntity.location_id,
@@ -640,41 +687,146 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               region: locationEntity.region || null,
               country: locationEntity.country || null,
             };
-            updateField("locationData", location);
+            finalizeLoad(location);
+          } else {
+            finalizeLoad(null);
           }
-        }).catch(err => {
-          console.error('Failed to load location for copied entry:', err);
+        })
+        .catch(err => {
+          console.error('Failed to load location:', err);
+          finalizeLoad(null);
         });
-      }
+    } else {
+      // No location to load - finalize immediately
+      finalizeLoad(null);
+    }
+  }, [entry, isEditing, streams, setBaseline, updateMultipleFields, isFormReady]);
 
-      // Look up stream name
-      if (copiedEntry.stream_id && streams.length > 0) {
-        const stream = streams.find(s => s.stream_id === copiedEntry.stream_id);
-        updateField("streamName", stream?.name || null);
-      }
+  // Called when RichTextEditor is ready with its actual content (possibly normalized)
+  // This syncs formData AND baseline to the editor's real content if normalization changed it
+  const handleEditorReady = useCallback((editorContent: string) => {
+    if (!isEditing || !isFormReady) return;
 
-      // Load the copied photos as pending photos
-      if (pendingPhotos.length > 0) {
-        // Add each photo to pending photos
-        for (const photo of pendingPhotos) {
-          addPendingPhoto(photo);
+    // Only sync if editor normalized the content differently
+    if (formData.content !== editorContent) {
+      console.log('📝 [handleEditorReady] Editor normalized content, syncing baseline', {
+        formContentLen: formData.content?.length,
+        editorContentLen: editorContent?.length,
+      });
+      // Update formData to match editor's actual content
+      updateField("content", editorContent);
+      // Also update baseline so this doesn't mark as dirty
+      const syncedData = { ...formData, content: editorContent };
+      setBaseline(syncedData);
+    }
+  }, [isEditing, isFormReady, formData, setBaseline, updateField]);
+
+  // Set baseline photo count for editing after initial load
+  // Use queryPhotos.length directly to avoid race with photoCount state
+  // The form data baseline is set atomically in the load effect above
+  useEffect(() => {
+    if (isEditing && isFormReady && baselinePhotoCount === null) {
+      const actualPhotoCount = queryPhotos.length;
+      console.log('📸 [CaptureForm] Setting baseline photo count:', actualPhotoCount);
+      setBaselinePhotoCount(actualPhotoCount);
+      // Also sync photoCount if it differs
+      if (photoCount !== actualPhotoCount) {
+        setPhotoCount(actualPhotoCount);
+      }
+    }
+  }, [isEditing, isFormReady, baselinePhotoCount, queryPhotos.length, photoCount]);
+
+  // Load copied entry data (for copy workflow - entry is NOT saved to DB yet)
+  // Pattern: Build complete form data object, set baseline AND form atomically, then mark ready
+  useEffect(() => {
+    if (!isCopiedEntry || !copiedEntryData) return;
+
+    const { entry: copiedEntry, pendingPhotos, hasTime } = copiedEntryData;
+
+    // Look up stream name
+    const streamName = copiedEntry.stream_id && streams.length > 0
+      ? streams.find(s => s.stream_id === copiedEntry.stream_id)?.name || null
+      : null;
+
+    // Build GPS data
+    const gpsData: GpsData | null = copiedEntry.entry_latitude && copiedEntry.entry_longitude
+      ? {
+          latitude: copiedEntry.entry_latitude,
+          longitude: copiedEntry.entry_longitude,
+          accuracy: copiedEntry.location_accuracy || null,
         }
-        setPhotoCount(pendingPhotos.length);
-      }
+      : null;
 
-      // Mark initial load complete
+    // Helper to finalize loading - sets baseline and form atomically
+    const finalizeLoad = (locationData: LocationType | null) => {
+      const newFormData = {
+        title: copiedEntry.title || '',
+        content: copiedEntry.content || '',
+        streamId: copiedEntry.stream_id || null,
+        streamName,
+        status: (copiedEntry.status || 'none') as EntryStatus,
+        type: copiedEntry.type || null,
+        dueDate: copiedEntry.due_date || null,
+        rating: copiedEntry.rating || 0,
+        priority: copiedEntry.priority || 0,
+        entryDate: copiedEntry.entry_date || new Date().toISOString(),
+        includeTime: hasTime,
+        gpsData,
+        locationData,
+        pendingPhotos, // Copied entries use pendingPhotos
+      };
+
+      console.log('🔍 [Load Copied] Setting baseline and form atomically', {
+        streamId: newFormData.streamId,
+        title: newFormData.title?.substring(0, 30),
+        pendingPhotos: pendingPhotos.length,
+      });
+
+      // Set baseline FIRST with the exact data we're loading
+      setBaseline(newFormData);
+      setBaselinePhotoCount(pendingPhotos.length);
+      // Then update form to same data - they're identical so isDirty = false
+      updateMultipleFields(newFormData);
+      // Update photo count
+      setPhotoCount(pendingPhotos.length);
+      // Mark load complete
       isInitialLoad.current = false;
+      setIsFormReady(true);
+    };
+
+    // Load location if needed, then finalize
+    if (copiedEntry.location_id) {
+      getLocationById(copiedEntry.location_id)
+        .then(locationEntity => {
+          if (locationEntity) {
+            const location: LocationType = {
+              location_id: locationEntity.location_id,
+              latitude: locationEntity.latitude,
+              longitude: locationEntity.longitude,
+              name: locationEntity.name,
+              source: (locationEntity.source as any) || 'user_custom',
+              address: locationEntity.address || null,
+              neighborhood: locationEntity.neighborhood || null,
+              postalCode: locationEntity.postal_code || null,
+              city: locationEntity.city || null,
+              subdivision: locationEntity.subdivision || null,
+              region: locationEntity.region || null,
+              country: locationEntity.country || null,
+            };
+            finalizeLoad(location);
+          } else {
+            finalizeLoad(null);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load location for copied entry:', err);
+          finalizeLoad(null);
+        });
+    } else {
+      // No location to load - finalize immediately
+      finalizeLoad(null);
     }
   }, [isCopiedEntry, copiedEntryData, streams]);
-
-  // Update baseline photo count when photos load (initial load only)
-  // This handles both entries with existing photos AND entries with 0 photos
-  useEffect(() => {
-    if (isEditing && baselinePhotoCount === null) {
-      // Set baseline once photos have been counted (even if 0)
-      setBaselinePhotoCount(photoCount);
-    }
-  }, [photoCount, isEditing, baselinePhotoCount]);
 
   // Apply default status for new entries with an initial stream
   // This handles the case when navigating directly to capture form with a stream preset
@@ -840,6 +992,148 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
     setIsSubmitting(true);
 
+    // CONFLICT DETECTION (Option 5 from ENTRY_EDITING_DATAFLOW.md)
+    // Check if another device updated this entry while we were editing
+    if (isEditing && entry && knownVersionRef.current !== null) {
+      const currentVersion = entry.version || 1;
+      const baseVersion = knownVersionRef.current;
+
+      if (currentVersion > baseVersion) {
+        // Conflict detected - another device updated this entry
+        const lastDevice = entry.last_edited_device || 'another device';
+
+        setIsSubmitting(false);
+
+        // Show conflict resolution dialog
+        return new Promise<void>((resolve) => {
+          Alert.alert(
+            'Entry Modified',
+            `This entry was updated by ${lastDevice} while you were editing. How would you like to proceed?`,
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => resolve(),
+              },
+              {
+                text: 'Discard My Changes',
+                style: 'destructive',
+                onPress: () => {
+                  // Reload form from entry (server version)
+                  updateMultipleFields({
+                    title: entry.title || '',
+                    content: entry.content || '',
+                    streamId: entry.stream_id || null,
+                    status: entry.status || 'none' as EntryStatus,
+                    type: entry.type || null,
+                    dueDate: entry.due_date || null,
+                    rating: entry.rating || 0,
+                    priority: entry.priority || 0,
+                    entryDate: entry.entry_date || formData.entryDate,
+                    gpsData: entry.entry_latitude && entry.entry_longitude ? {
+                      latitude: entry.entry_latitude,
+                      longitude: entry.entry_longitude,
+                      accuracy: entry.location_accuracy || null,
+                    } : null,
+                  });
+                  // Update known version to current
+                  knownVersionRef.current = currentVersion;
+                  markClean();
+                  setBaselinePhotoCount(photoCount);
+                  showSnackbar('Discarded your changes, loaded latest version');
+                  resolve();
+                },
+              },
+              {
+                text: 'Save as Copy',
+                onPress: async () => {
+                  // Create a new entry with current form data
+                  try {
+                    const { tags, mentions } = extractTagsAndMentions(formData.content);
+
+                    // Build GPS fields
+                    let gpsFields: { entry_latitude: number | null; entry_longitude: number | null; location_accuracy: number | null };
+                    if (formData.gpsData) {
+                      gpsFields = {
+                        entry_latitude: formData.gpsData.latitude,
+                        entry_longitude: formData.gpsData.longitude,
+                        location_accuracy: formData.gpsData.accuracy,
+                      };
+                    } else if (formData.locationData) {
+                      gpsFields = {
+                        entry_latitude: formData.locationData.latitude,
+                        entry_longitude: formData.locationData.longitude,
+                        location_accuracy: null,
+                      };
+                    } else {
+                      gpsFields = { entry_latitude: null, entry_longitude: null, location_accuracy: null };
+                    }
+
+                    // Get or create location
+                    let location_id: string | null = null;
+                    if (formData.locationData && formData.locationData.name) {
+                      if (formData.locationData.location_id) {
+                        location_id = formData.locationData.location_id;
+                      } else {
+                        const locationInput = locationToCreateInput(formData.locationData);
+                        const savedLocation = await createLocation(locationInput);
+                        location_id = savedLocation.location_id;
+                      }
+                    }
+
+                    // Create new entry with "Copy of" title
+                    const copyTitle = formData.title.trim()
+                      ? `Copy of ${formData.title.trim()}`
+                      : 'Copy of Untitled';
+
+                    await entryMutations.createEntry({
+                      title: copyTitle,
+                      content: formData.content,
+                      tags,
+                      mentions,
+                      entry_date: formData.entryDate,
+                      stream_id: formData.streamId,
+                      status: formData.status,
+                      type: formData.type,
+                      due_date: formData.dueDate,
+                      rating: formData.rating || 0,
+                      priority: formData.priority || 0,
+                      location_id,
+                      ...gpsFields,
+                    });
+
+                    showSnackbar('Saved as new entry');
+                    navigateBack({ useCurrentStream: true });
+                  } catch (error) {
+                    console.error('Failed to save as copy:', error);
+                    Alert.alert('Error', `Failed to save copy: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                  }
+                  resolve();
+                },
+              },
+              {
+                text: 'Keep My Changes',
+                style: 'default',
+                onPress: async () => {
+                  // Proceed with save - this will overwrite the remote version
+                  // Update known version so we don't detect conflict again
+                  knownVersionRef.current = currentVersion;
+                  setIsSubmitting(true);
+                  await performSave();
+                  resolve();
+                },
+              },
+            ]
+          );
+        });
+      }
+    }
+
+    await performSave();
+  };
+
+  // Actual save logic extracted for reuse in conflict resolution
+  const performSave = async () => {
     // Check if there's something to save (formData.title, formData.content, photos, GPS, or location)
     const textContent = formData.content.replace(/<[^>]*>/g, '').trim();
     const hasTitle = formData.title.trim().length > 0;
@@ -988,6 +1282,11 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         // For editing: stay on screen and show snackbar (easier for testing realtime)
         markClean(); // Mark form as clean after successful save
         setBaselinePhotoCount(photoCount); // Update photo baseline
+        // Update known version - we just created a new version with this save
+        // This prevents false conflict detection on subsequent saves
+        if (knownVersionRef.current !== null) {
+          knownVersionRef.current = (knownVersionRef.current || 1) + 1;
+        }
         showSnackbar("Saved");
       } else {
         // For creating: navigate back to list
@@ -1181,8 +1480,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     }
   };
 
-  // Show loading when editing and entry is loading
-  if (isEditing && isLoadingEntry) {
+  // Show loading when editing/copying and form is not fully ready
+  // This blocks rendering until entry AND location are both loaded
+  if ((isEditing || isCopiedEntry) && !isFormReady) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <Text style={styles.loadingText}>Loading...</Text>
@@ -1361,6 +1661,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
             placeholder="What's on your mind? Use #tags and @mentions..."
             editable={isEditMode}
             onPress={enterEditMode}
+            onReady={handleEditorReady}
           />
         </View>
 
