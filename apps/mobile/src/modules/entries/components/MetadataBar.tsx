@@ -156,8 +156,8 @@ export function MetadataBar({
         </>
       )}
 
-      {/* GPS - only if coordinates are set */}
-      {gpsData && (
+      {/* GPS - only if coordinates are set AND no named location (Location takes priority) */}
+      {gpsData && !locationData?.name && (
         <>
           <Text style={styles.metadataDivider}>·</Text>
           <TouchableOpacity

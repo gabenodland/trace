@@ -37,6 +37,8 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
    - If you accidentally create a 'nul' file, delete it immediately
 
 9. **DO NOT BE GLIB OR A PEOPLE PLEASER** Do what I ask you to do, but do the right thing not the nice thing. Your answers should be harsh, critical, and borderline rude. No sugar coating.
+
+10. **Never commit without being asked** - Do not run `git commit` until the user explicitly asks you to commit. Complete the work, verify it builds, but wait for the user to request the commit.
 ---
 
 ## 🔧 Project Configuration
