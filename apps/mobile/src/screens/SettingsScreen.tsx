@@ -5,22 +5,19 @@ import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { TopBar } from "../components/layout/TopBar";
-import { UnsavedChangesBehaviorSelector } from "../components/settings/UnsavedChangesBehaviorSelector";
 import { UnitSystemSelector } from "../components/settings/UnitSystemSelector";
 import { ImageQualitySelector } from "../components/settings/ImageQualitySelector";
-import { UNSAVED_CHANGES_BEHAVIOR_OPTIONS, UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
+import { UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
 
 export function SettingsScreen() {
   const { navigate } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const { settings, updateSettings } = useSettings();
 
-  const [showBehaviorSelector, setShowBehaviorSelector] = useState(false);
   const [showUnitSelector, setShowUnitSelector] = useState(false);
   const [showImageQualitySelector, setShowImageQualitySelector] = useState(false);
 
   // Get labels for current settings
-  const behaviorLabel = UNSAVED_CHANGES_BEHAVIOR_OPTIONS.find(b => b.value === settings.unsavedChangesBehavior)?.label || 'Ask';
   const unitLabel = UNIT_OPTIONS.find(u => u.value === settings.units)?.label || 'Metric';
   const imageQualityLabel = IMAGE_QUALITY_OPTIONS.find(q => q.value === settings.imageQuality)?.label || 'Standard';
 
@@ -37,31 +34,6 @@ export function SettingsScreen() {
         {/* Entry Settings */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Entry</Text>
-
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={() => setShowBehaviorSelector(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Unsaved Changes</Text>
-              <Text style={styles.settingDescription}>
-                What to do when leaving an entry with unsaved changes
-              </Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Text style={styles.settingValueText}>{behaviorLabel}</Text>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M9 18l6-6-6-6"
-                  stroke="#9ca3af"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </View>
-          </TouchableOpacity>
 
           <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
             <View style={styles.settingContent}>
@@ -139,14 +111,6 @@ export function SettingsScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Unsaved Changes Behavior Selector */}
-      <UnsavedChangesBehaviorSelector
-        visible={showBehaviorSelector}
-        selectedBehavior={settings.unsavedChangesBehavior}
-        onSelect={(behavior) => updateSettings({ unsavedChangesBehavior: behavior })}
-        onClose={() => setShowBehaviorSelector(false)}
-      />
 
       {/* Unit System Selector */}
       <UnitSystemSelector

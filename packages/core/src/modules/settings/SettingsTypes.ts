@@ -30,36 +30,6 @@ export const UNIT_OPTIONS: UnitOption[] = [
 ];
 
 // ============================================================================
-// UNSAVED CHANGES BEHAVIOR (moved from separate file for consolidation)
-// ============================================================================
-
-export type UnsavedChangesBehavior = 'ask' | 'save' | 'discard';
-
-export interface UnsavedChangesBehaviorOption {
-  value: UnsavedChangesBehavior;
-  label: string;
-  description: string;
-}
-
-export const UNSAVED_CHANGES_BEHAVIOR_OPTIONS: UnsavedChangesBehaviorOption[] = [
-  {
-    value: 'ask',
-    label: 'Ask',
-    description: 'Prompt me each time',
-  },
-  {
-    value: 'save',
-    label: 'Always Save',
-    description: 'Automatically save changes',
-  },
-  {
-    value: 'discard',
-    label: 'Always Discard',
-    description: 'Automatically discard changes',
-  },
-];
-
-// ============================================================================
 // IMAGE QUALITY SETTINGS
 // ============================================================================
 
@@ -116,9 +86,6 @@ export interface UserSettings {
   // Display preferences
   units: UnitSystem;
 
-  // Behavior preferences
-  unsavedChangesBehavior: UnsavedChangesBehavior;
-
   // Location preferences
   captureGpsLocation: boolean;
 
@@ -136,7 +103,6 @@ export interface UserSettings {
  */
 export const DEFAULT_SETTINGS: UserSettings = {
   units: 'metric',
-  unsavedChangesBehavior: 'ask',
   captureGpsLocation: true,
   imageQuality: 'standard',
 };
