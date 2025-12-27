@@ -28,7 +28,6 @@ interface CaptureFormHeaderProps {
   includeTime: boolean;
   // Callbacks
   onTitleChange: (text: string) => void;
-  onCancel: () => void;
   onBack: () => void;
   onSave: () => void;
   onDatePress: () => void;
@@ -56,7 +55,6 @@ export function CaptureFormHeader({
   entryDate,
   includeTime,
   onTitleChange,
-  onCancel,
   onBack,
   onSave,
   onDatePress,
@@ -75,25 +73,16 @@ export function CaptureFormHeader({
   const isSaveDisabled = isSubmitting || !isDirty;
   return (
     <View style={[styles.titleBar, isFullScreen && styles.titleBarFullScreen]}>
-      {/* Left side: Cancel button (when dirty in edit mode), Back button (when clean or view mode) */}
+      {/* Left side: Back button (always shown, auto-saves if dirty) */}
       <View style={styles.headerLeftContainer}>
-        {isEditMode && isDirty ? (
-          <TouchableOpacity
-            onPress={onCancel}
-            style={styles.headerCancelButton}
-          >
-            <Text style={styles.headerCancelText}>Cancel</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            onPress={onBack}
-            style={styles.headerCancelButton}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.headerCancelButton}
+        >
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
       </View>
 
       {/* Center: Date & Time (normal mode) or Editable Title (fullscreen mode) */}

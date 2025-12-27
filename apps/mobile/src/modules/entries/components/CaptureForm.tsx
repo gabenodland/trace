@@ -144,9 +144,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const unsupportedPriority = !showPriority && formData.priority > 0;
   const unsupportedLocation = !showLocation && !!formData.locationData;
 
-  // Get unsaved changes behavior from settings
-  const unsavedChangesBehavior = settings.unsavedChangesBehavior;
-
   // Track known version to detect external updates from the entry object
   // This allows us to detect when another device has updated the entry via global sync
   const knownVersionRef = useRef<number | null>(null);
@@ -244,6 +241,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   }, [isEditing, isFormDirty, isEditMode, isFormReady, isSubmitting, formData, photoCount]);
 
   // Register beforeBack handler for gesture/hardware back interception
+  // Always saves if dirty, no prompts
   useEffect(() => {
     const beforeBackHandler = async (): Promise<boolean> => {
       // Check if there are unsaved changes
@@ -251,46 +249,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         return true; // No changes, proceed with back
       }
 
-      // Handle based on behavior setting
-      switch (unsavedChangesBehavior) {
-        case 'save':
-          // Automatically save and proceed
-          await handleSave();
-          return true;
-
-        case 'discard':
-          // Discard changes and proceed
-          return true;
-
-        case 'ask':
-        default:
-          // Show confirmation dialog and wait for user response
-          return new Promise<boolean>((resolve) => {
-            Alert.alert(
-              'Unsaved Changes',
-              'Do you want to save the changes you made to this entry?',
-              [
-                {
-                  text: 'Cancel',
-                  style: 'cancel',
-                  onPress: () => resolve(false), // Block back navigation
-                },
-                {
-                  text: 'Discard',
-                  style: 'destructive',
-                  onPress: () => resolve(true), // Allow back navigation
-                },
-                {
-                  text: 'Save',
-                  onPress: async () => {
-                    await handleSave();
-                    resolve(true); // Allow back navigation after save
-                  },
-                },
-              ]
-            );
-          });
-      }
+      // Auto-save and proceed
+      await handleSave();
+      return true;
     };
 
     // Register the handler
@@ -300,65 +261,68 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     return () => {
       setBeforeBackHandler(null);
     };
-  }, [unsavedChangesBehavior, formData.title, formData.content, formData.streamId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode]);
+  }, [formData.title, formData.content, formData.streamId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode]);
 
   // Check if there are unsaved changes - combines edit mode check with dirty tracking
-  // Uses isFormDirty from the hook instead of duplicate logic
+  // Also checks editor content directly to handle race condition where user types
+  // and quickly hits back before RichTextEditor's polling syncs to formData
   const hasUnsavedChanges = (): boolean => {
+    console.log('🔍 [hasUnsavedChanges] Checking...', { isEditMode, isFormDirty });
+
     // If not in edit mode, no changes are possible
-    if (!isEditMode) return false;
-    return isFormDirty;
+    if (!isEditMode) {
+      console.log('🔍 [hasUnsavedChanges] Not in edit mode, returning false');
+      return false;
+    }
+
+    // First check the hook's dirty state (covers title, date, stream, etc.)
+    if (isFormDirty) {
+      console.log('🔍 [hasUnsavedChanges] isFormDirty=true, returning true');
+      return true;
+    }
+
+    // Also check if editor content differs from formData (race condition fix)
+    // This catches the case where user typed but polling hasn't synced yet
+    const editorContent = editorRef.current?.getHTML?.();
+    if (typeof editorContent === 'string' && editorContent !== formData.content) {
+      console.log('🔍 [hasUnsavedChanges] Editor content differs from formData, returning true');
+      return true;
+    }
+
+    console.log('🔍 [hasUnsavedChanges] No changes detected, returning false');
+    return false;
   };
 
   // Handle navigation with unsaved changes check
-  // Note: Not memoized to avoid circular dependency with handleSave
+  // Always saves if dirty, no prompts
   const handleNavigationWithUnsavedCheck = (navigateCallback: () => void) => {
     if (!hasUnsavedChanges()) {
       navigateCallback();
       return;
     }
 
-    // Check the behavior setting
-    switch (unsavedChangesBehavior) {
-      case 'save':
-        // Automatically save and then navigate
-        handleSave().then(() => {
-          navigateCallback();
-        });
-        break;
+    // Auto-save and then navigate
+    handleSave().then(() => {
+      navigateCallback();
+    });
+  };
 
-      case 'discard':
-        // Discard changes and navigate
-        navigateCallback();
-        break;
-
-      case 'ask':
-      default:
-        // Show confirmation dialog
-        Alert.alert(
-          'Unsaved Changes',
-          'Do you want to save the changes you made to this entry?',
-          [
-            {
-              text: 'Cancel',
-              style: 'cancel',
-            },
-            {
-              text: 'Discard',
-              style: 'destructive',
-              onPress: navigateCallback,
-            },
-            {
-              text: 'Save',
-              onPress: async () => {
-                await handleSave();
-                navigateCallback();
-              },
-            },
-          ]
-        );
-        break;
+  // Back button handler - saves if dirty, then navigates
+  // Not memoized to always use latest hasUnsavedChanges/handleSave
+  const handleBack = () => {
+    console.log('⬅️ [handleBack] Called, checking for unsaved changes...');
+    if (!hasUnsavedChanges()) {
+      console.log('⬅️ [handleBack] No unsaved changes, navigating back');
+      navigateBack();
+      return;
     }
+
+    console.log('⬅️ [handleBack] Has unsaved changes, saving first...');
+    // Auto-save and then navigate
+    handleSave().then(() => {
+      console.log('⬅️ [handleBack] Save complete, navigating back');
+      navigateBack();
+    });
   };
 
   // Wrap menu items to check for unsaved changes before navigation
@@ -978,11 +942,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     };
   }, [isEditMode]); // Re-register when edit mode changes to capture current state
 
-  // Cancel handler
-  const handleCancel = () => {
-    navigateBack();
-  };
-
   // Save handler
   const handleSave = async () => {
     // Prevent multiple simultaneous saves
@@ -1134,8 +1093,19 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
   // Actual save logic extracted for reuse in conflict resolution
   const performSave = async () => {
-    // Check if there's something to save (formData.title, formData.content, photos, GPS, or location)
-    const textContent = formData.content.replace(/<[^>]*>/g, '').trim();
+    // Get the actual editor content directly - handles race condition where user
+    // types quickly and hits back/save before RichTextEditor's polling syncs
+    const editorContent = editorRef.current?.getHTML?.();
+    // Use editor content if it's a valid string, otherwise fall back to formData
+    const contentToSave = (typeof editorContent === 'string') ? editorContent : formData.content;
+    if (typeof editorContent === 'string' && editorContent !== formData.content) {
+      console.log('💾 [performSave] Using editor content directly (not yet synced to formData)');
+      // Also sync to formData for consistency
+      updateField("content", editorContent);
+    }
+
+    // Check if there's something to save (formData.title, content, photos, GPS, or location)
+    const textContent = contentToSave.replace(/<[^>]*>/g, '').trim();
     const hasTitle = formData.title.trim().length > 0;
     const hasContent = textContent.length > 0;
     const hasPhotos = isEditing ? photoCount > 0 : formData.pendingPhotos.length > 0;
@@ -1149,7 +1119,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     }
 
     try {
-      const { tags, mentions } = extractTagsAndMentions(formData.content);
+      const { tags, mentions } = extractTagsAndMentions(contentToSave);
 
       // Build GPS fields - use GPS data if available, otherwise use location coordinates
       // When a Location is set, it supersedes GPS, but we still save coords to entry_latitude/longitude
@@ -1196,7 +1166,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         // Update existing entry
         await singleEntryMutations.updateEntry({
           title: formData.title.trim() || null,
-          content: formData.content,
+          content: contentToSave,
           tags,
           mentions,
           stream_id: formData.streamId,
@@ -1213,7 +1183,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         // Create new entry
         const newEntry = await entryMutations.createEntry({
           title: formData.title.trim() || null,
-          content: formData.content,
+          content: contentToSave,
           tags,
           mentions,
           entry_date: formData.entryDate,
@@ -1504,7 +1474,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
   return (
     <View style={styles.container}>
-      {/* Header Bar with Cancel/Date/Save buttons */}
+      {/* Header Bar with Back/Date/Save buttons */}
       <CaptureFormHeader
         isEditMode={isEditMode}
         isFullScreen={isFullScreen}
@@ -1515,8 +1485,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         entryDate={formData.entryDate}
         includeTime={formData.includeTime}
         onTitleChange={(text) => updateField("title", text)}
-        onCancel={handleCancel}
-        onBack={navigateBack}
+        onBack={handleBack}
         onSave={handleSave}
         onDatePress={() => setActivePicker('entryDate')}
         onTimePress={() => setActivePicker('time')}
