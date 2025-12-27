@@ -75,6 +75,22 @@ export const IMAGE_QUALITY_PRESETS: Record<ImageQuality, { maxWidth: number | nu
 };
 
 // ============================================================================
+// STREAM VIEW PREFERENCES
+// ============================================================================
+
+import type { EntrySortMode, EntrySortOrder, EntryDisplayMode } from '../entries/EntryDisplayTypes';
+
+/**
+ * View preferences for a single stream (sort + display)
+ */
+export interface StreamSortPreference {
+  sortMode: EntrySortMode;
+  sortOrder: EntrySortOrder;
+  showPinnedFirst: boolean;
+  displayMode: EntryDisplayMode;
+}
+
+// ============================================================================
 // USER SETTINGS
 // ============================================================================
 
@@ -92,6 +108,9 @@ export interface UserSettings {
   // Photo preferences
   imageQuality: ImageQuality;
 
+  // Per-stream sort preferences (streamId -> preferences)
+  streamSortPreferences: Record<string, StreamSortPreference>;
+
   // Future settings can be added here:
   // theme: 'light' | 'dark' | 'system';
   // dateFormat: 'US' | 'EU' | 'ISO';
@@ -105,6 +124,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   units: 'metric',
   captureGpsLocation: true,
   imageQuality: 'standard',
+  streamSortPreferences: {},
 };
 
 /**

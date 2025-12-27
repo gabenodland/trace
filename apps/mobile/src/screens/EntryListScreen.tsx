@@ -6,10 +6,7 @@ import type { EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } fr
 import {
   useAuthState,
   ENTRY_DISPLAY_MODES,
-  DEFAULT_DISPLAY_MODE,
   ENTRY_SORT_MODES,
-  DEFAULT_SORT_MODE,
-  DEFAULT_SORT_ORDER,
   sortEntries,
   groupEntriesByStatus,
   groupEntriesByType,
@@ -23,7 +20,7 @@ import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
-import { usePersistedState } from "../shared/hooks/usePersistedState";
+import { useSettings } from "../shared/contexts/SettingsContext";
 import { TopBar } from "../components/layout/TopBar";
 import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
 import { TopBarDropdownContainer } from "../components/layout/TopBarDropdownContainer";
@@ -56,10 +53,24 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
   const [selectedStreamName, setSelectedStreamName] = useState<string>("Home");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [displayMode, setDisplayMode] = usePersistedState<EntryDisplayMode>('@entryListDisplayMode', DEFAULT_DISPLAY_MODE);
-  const [sortMode, setSortMode] = usePersistedState<EntrySortMode>('@entryListSortMode', DEFAULT_SORT_MODE);
-  const [orderMode, setOrderMode] = usePersistedState<EntrySortOrder>('@entryListOrderMode', DEFAULT_SORT_ORDER);
-  const [showPinnedFirst, setShowPinnedFirst] = usePersistedState<boolean>('@entryListShowPinnedFirst', false);
+  // Per-stream view preferences from settings (sort + display mode)
+  const { getStreamSortPreference, setStreamSortPreference } = useSettings();
+
+  // Get the key for the current stream's view preference
+  // Use the selectedStreamId as-is for special values ("all", "events", etc.)
+  // For null (unassigned), the helper uses "_global"
+  const viewPrefKey = typeof selectedStreamId === 'string' ? selectedStreamId : null;
+  const streamViewPref = getStreamSortPreference(viewPrefKey);
+
+  const sortMode = streamViewPref.sortMode;
+  const orderMode = streamViewPref.sortOrder;
+  const showPinnedFirst = streamViewPref.showPinnedFirst;
+  const displayMode = streamViewPref.displayMode;
+
+  const setSortMode = (mode: EntrySortMode) => setStreamSortPreference(viewPrefKey, { sortMode: mode });
+  const setOrderMode = (order: EntrySortOrder) => setStreamSortPreference(viewPrefKey, { sortOrder: order });
+  const setShowPinnedFirst = (show: boolean) => setStreamSortPreference(viewPrefKey, { showPinnedFirst: show });
+  const setDisplayMode = (mode: EntryDisplayMode) => setStreamSortPreference(viewPrefKey, { displayMode: mode });
 
   // Use hook for locations instead of direct localDB call
   const { data: locationsData } = useLocations();

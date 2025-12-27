@@ -9,9 +9,13 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   type UserSettings,
+  type StreamSortPreference,
   DEFAULT_SETTINGS,
   SETTINGS_STORAGE_KEY,
   mergeWithDefaults,
+  DEFAULT_SORT_MODE,
+  DEFAULT_SORT_ORDER,
+  DEFAULT_DISPLAY_MODE,
 } from '@trace/core';
 
 // ============================================================================
@@ -23,6 +27,9 @@ interface SettingsContextValue {
   updateSettings: (updates: Partial<UserSettings>) => void;
   resetSettings: () => void;
   isLoaded: boolean;
+  // Stream sort preference helpers
+  getStreamSortPreference: (streamId: string | null) => StreamSortPreference;
+  setStreamSortPreference: (streamId: string | null, pref: Partial<StreamSortPreference>) => void;
 }
 
 // ============================================================================
@@ -98,11 +105,44 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     setSettings(DEFAULT_SETTINGS);
   }, []);
 
+  // Default view preference for streams without a stored preference
+  const defaultSortPreference: StreamSortPreference = {
+    sortMode: DEFAULT_SORT_MODE,
+    sortOrder: DEFAULT_SORT_ORDER,
+    showPinnedFirst: false,
+    displayMode: DEFAULT_DISPLAY_MODE,
+  };
+
+  // Get sort preference for a stream (or global default if streamId is null)
+  const getStreamSortPreference = useCallback((streamId: string | null): StreamSortPreference => {
+    const key = streamId ?? '_global';
+    const stored = settings.streamSortPreferences[key];
+    return stored ?? defaultSortPreference;
+  }, [settings.streamSortPreferences]);
+
+  // Set sort preference for a stream (or global if streamId is null)
+  const setStreamSortPreference = useCallback((streamId: string | null, pref: Partial<StreamSortPreference>) => {
+    const key = streamId ?? '_global';
+    setSettings(prev => ({
+      ...prev,
+      streamSortPreferences: {
+        ...prev.streamSortPreferences,
+        [key]: {
+          ...defaultSortPreference,
+          ...prev.streamSortPreferences[key],
+          ...pref,
+        },
+      },
+    }));
+  }, []);
+
   const value: SettingsContextValue = {
     settings,
     updateSettings,
     resetSettings,
     isLoaded,
+    getStreamSortPreference,
+    setStreamSortPreference,
   };
 
   return (
