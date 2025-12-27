@@ -47,6 +47,8 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
 
   // Track which entryId+refreshKey we're currently loading to prevent duplicate loads
   const loadingKeyRef = useRef<string | null>(null);
+  // Track if we've ever loaded photos - used to avoid showing loading spinner on refresh
+  const hasInitializedRef = useRef(false);
 
   // Load photos for this entry (reload when entryId or refreshKey changes)
   // OR use pending photos if provided (for new entries)
@@ -55,6 +57,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
       // Use pending photos (new entry, not saved to DB yet)
       // Note: No logging here to avoid noise on every render
       setLoading(false);
+      hasInitializedRef.current = true;
 
       // Build URIs map from pending photos
       const uris = pendingPhotos.reduce((acc, photo) => ({
@@ -79,7 +82,8 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
     const loadData = async () => {
       if (!mounted) return;
       loadingKeyRef.current = loadKey;
-      await loadPhotos(mounted);
+      // Pass isRefresh flag - don't show loading spinner on refresh (prevents flash)
+      await loadPhotos(mounted, 0, hasInitializedRef.current);
     };
 
     loadData();
@@ -89,9 +93,12 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
     };
   }, [entryId, refreshKey, pendingPhotos]);
 
-  const loadPhotos = async (mounted: boolean = true, retryCount: number = 0) => {
+  const loadPhotos = async (mounted: boolean = true, retryCount: number = 0, isRefresh: boolean = false) => {
     try {
-      setLoading(true);
+      // Only show loading spinner on initial load, not on refresh (prevents flash)
+      if (!isRefresh) {
+        setLoading(true);
+      }
       const entryPhotos = await getPhotosForEntry(entryId);
 
       if (!mounted) return; // Prevent setState on unmounted component
@@ -131,13 +138,15 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
 
       setPhotoUris(uris);
       setPhotoDownloadStatus(downloadStatus);
+      // Mark as initialized after first successful load
+      hasInitializedRef.current = true;
     } catch (error) {
       // Handle SQLite concurrent access errors with retry
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('shared object that was already released') && retryCount < 2) {
         // Wait a bit and retry (stagger concurrent DB access)
         await new Promise(resolve => setTimeout(resolve, 100 * (retryCount + 1)));
-        return loadPhotos(mounted, retryCount + 1);
+        return loadPhotos(mounted, retryCount + 1, isRefresh);
       }
       console.error('Error loading photos:', error);
     } finally {
@@ -187,8 +196,8 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
         await onPhotoDelete(photoId);
       }
 
-      // Reload photos
-      await loadPhotos();
+      // Reload photos (isRefresh=true to avoid flash)
+      await loadPhotos(true, 0, true);
     } catch (error) {
       console.error('Error deleting photo:', error);
     }

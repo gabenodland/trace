@@ -1257,7 +1257,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         if (knownVersionRef.current !== null) {
           knownVersionRef.current = (knownVersionRef.current || 1) + 1;
         }
-        showSnackbar("Saved");
       } else {
         // For creating: navigate back to list
         navigateBack({ useCurrentStream: true });
@@ -1486,7 +1485,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         includeTime={formData.includeTime}
         onTitleChange={(text) => updateField("title", text)}
         onBack={handleBack}
-        onSave={handleSave}
         onDatePress={() => setActivePicker('entryDate')}
         onTimePress={() => setActivePicker('time')}
         onAddTime={() => {

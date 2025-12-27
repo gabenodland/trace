@@ -3,8 +3,9 @@
  * Extracted from CaptureForm for maintainability
  */
 
+import { useState, useEffect, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, Keyboard } from "react-native";
-import Svg, { Path, Circle, Line } from "react-native-svg";
+import Svg, { Path, Circle, Line, Polyline } from "react-native-svg";
 import { NavigationMenu } from "../../../components/navigation/NavigationMenu";
 import { styles } from "./CaptureForm.styles";
 
@@ -29,7 +30,6 @@ interface CaptureFormHeaderProps {
   // Callbacks
   onTitleChange: (text: string) => void;
   onBack: () => void;
-  onSave: () => void;
   onDatePress: () => void;
   onTimePress: () => void;
   onAddTime: () => void;
@@ -56,7 +56,6 @@ export function CaptureFormHeader({
   includeTime,
   onTitleChange,
   onBack,
-  onSave,
   onDatePress,
   onTimePress,
   onAddTime,
@@ -69,8 +68,21 @@ export function CaptureFormHeader({
   onMenuClose,
   editorRef,
 }: CaptureFormHeaderProps) {
-  // Determine if save should be disabled (no changes)
-  const isSaveDisabled = isSubmitting || !isDirty;
+  // Track "just saved" state to show green checkmark briefly
+  const [showSavedCheck, setShowSavedCheck] = useState(false);
+  const wasSubmittingRef = useRef(false);
+
+  // Detect save completion: isSubmitting goes from true to false
+  useEffect(() => {
+    if (wasSubmittingRef.current && !isSubmitting) {
+      // Just finished saving - show checkmark for 300ms
+      setShowSavedCheck(true);
+      const timer = setTimeout(() => setShowSavedCheck(false), 300);
+      return () => clearTimeout(timer);
+    }
+    wasSubmittingRef.current = isSubmitting;
+  }, [isSubmitting]);
+
   return (
     <View style={[styles.titleBar, isFullScreen && styles.titleBarFullScreen]}>
       {/* Left side: Back button (always shown, auto-saves if dirty) */}
@@ -155,19 +167,21 @@ export function CaptureFormHeader({
         </View>
       )}
 
-      {/* Right side: Save button (in edit mode) + Hamburger Menu (hidden in fullscreen) */}
+      {/* Right side: Status indicator (in edit mode) + Hamburger Menu (hidden in fullscreen) */}
       <View style={styles.headerRightContainer}>
-        {/* Save button only shows in edit mode */}
+        {/* Status indicator - orange when dirty, red when saving, green checkmark briefly after save */}
         {isEditMode && (
-          <TouchableOpacity
-            onPress={onSave}
-            disabled={isSaveDisabled}
-            style={[styles.headerSaveButton, isSaveDisabled && styles.headerSaveButtonDisabled]}
-          >
-            <Text style={[styles.headerSaveText, isSaveDisabled && styles.headerSaveTextDisabled]}>
-              {isSubmitting ? "Saving..." : "Save"}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.headerSaveButton}>
+            {isSubmitting ? (
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
+            ) : showSavedCheck ? (
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth={3}>
+                <Polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            ) : isDirty ? (
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f97316' }} />
+            ) : null}
+          </View>
         )}
 
         {/* Hamburger Menu - hidden in fullscreen mode */}

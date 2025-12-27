@@ -21,7 +21,6 @@ interface EntryListItemProps {
   onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
-  onResolveConflict?: (entryId: string) => void; // Dismiss conflict banner
   streamName?: string | null; // Stream name to display
   locationName?: string | null; // Location name to display
   displayMode?: EntryDisplayMode; // Display mode for content rendering
@@ -31,7 +30,7 @@ interface EntryListItemProps {
   attributeVisibility?: StreamAttributeVisibility;
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onStreamPress, onToggleComplete, onMove, onCopy, onDelete, onPin, onResolveConflict, streamName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle, attributeVisibility }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onStreamPress, onToggleComplete, onMove, onCopy, onDelete, onPin, streamName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle, attributeVisibility }: EntryListItemProps) {
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(0);
   const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
@@ -341,24 +340,6 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               items={menuItems}
               anchorPosition={menuPosition}
             />
-            {/* Conflict Warning Banner */}
-            {entry.conflict_status === 'conflicted' && (
-              <TouchableOpacity
-                style={styles.conflictBanner}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onResolveConflict?.(entry.entry_id);
-                }}
-              >
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                  <Path d="M12 2L2 7l10 5 10-5-10-5z" fill="#f59e0b" />
-                  <Path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#f59e0b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                </Svg>
-                <Text style={styles.conflictText}>
-                  Changes merged - tap to dismiss
-                </Text>
-              </TouchableOpacity>
-            )}
 
             {entry.title ? (
               /* Other modes with title */
@@ -868,23 +849,5 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 6,
     zIndex: 10,
-  },
-  conflictBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fffbeb",
-    borderLeftWidth: 3,
-    borderLeftColor: "#f59e0b",
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
-    borderRadius: theme.borderRadius.sm,
-    gap: theme.spacing.sm,
-  },
-  conflictText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: "#92400e",
-    fontWeight: theme.typography.fontWeight.medium,
-    flex: 1,
   },
 });

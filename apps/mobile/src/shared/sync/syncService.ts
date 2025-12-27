@@ -1200,22 +1200,10 @@ class SyncService {
           }
 
           const serverVersion = (serverEntry as any).version || 1;
-
-          // Save local changes as backup for user to review
-          const localBackup = {
-            title: entry.title,
-            content: entry.content,
-            status: entry.status,
-            tags: entry.tags,
-            mentions: entry.mentions,
-            edited_by: entry.last_edited_by,
-            edited_device: entry.last_edited_device,
-            version: entry.version,
-          };
-
           const serverData = serverEntry as any;
 
-          // Keep server version, mark as conflicted
+          // Server wins - take server version (local changes are lost)
+          // With realtime sync, conflicts are rare. When they happen, server version wins.
           await localDB.updateEntry(entry.entry_id, {
             title: serverData.title,
             content: serverData.content,
@@ -1224,24 +1212,21 @@ class SyncService {
             mentions: serverData.mentions,
             version: serverVersion,
             base_version: serverVersion,
-            conflict_status: 'conflicted',
-            conflict_backup: JSON.stringify(localBackup),
             last_edited_by: serverData.last_edited_by,
             last_edited_device: serverData.last_edited_device,
             synced: 1,
             sync_action: null,
           });
 
-          // Update React Query cache so UI sees the conflict
-          const conflictedEntry = await localDB.getEntry(entry.entry_id);
-          if (conflictedEntry) {
-            this.setEntryQueryData(entry.entry_id, conflictedEntry);
+          // Update React Query cache
+          const updatedLocalEntry = await localDB.getEntry(entry.entry_id);
+          if (updatedLocalEntry) {
+            this.setEntryQueryData(entry.entry_id, updatedLocalEntry);
           }
 
-          log.warn('Conflict saved - user will be prompted to resolve', {
+          log.warn('Version conflict resolved - server version accepted', {
             entryId: entry.entry_id,
             serverVersion,
-            localBackupSaved: true,
           });
 
           return;
@@ -1674,7 +1659,8 @@ class SyncService {
 
   /**
    * Update React Query cache directly for an entry
-   * This avoids triggering a refetch which would cause isFetching=true and UI flash
+   * This patches the entry in all cached lists instead of invalidating
+   * Result: smooth UI updates without full list re-render
    */
   private setEntryQueryData(entryId: string, entry: Entry | null): void {
     if (!this.queryClient || !entry) return;
@@ -1682,10 +1668,29 @@ class SyncService {
     // Update the specific entry cache
     this.queryClient.setQueryData(['entry', entryId], entry);
 
-    // Also invalidate the entries list so it refreshes in the background
-    this.queryClient.invalidateQueries({ queryKey: ['entries'] });
+    // Patch the entry in all entries list caches (different filter variations)
+    // This avoids invalidation which would cause full list refetch and UI flash
+    this.queryClient.setQueriesData(
+      { queryKey: ['entries'] },
+      (oldData: Entry[] | undefined) => {
+        if (!oldData) return oldData;
 
-    log.debug('Updated React Query cache for entry', { entryId, version: entry.version });
+        // Find and replace the entry in the list
+        const index = oldData.findIndex(e => e.entry_id === entryId);
+        if (index === -1) {
+          // Entry not in this list - might be a new entry or filtered out
+          // Don't add it here; let the next query fetch handle it
+          return oldData;
+        }
+
+        // Replace the entry at its current position
+        const newData = [...oldData];
+        newData[index] = entry;
+        return newData;
+      }
+    );
+
+    log.debug('Patched React Query cache for entry', { entryId, version: entry.version });
   }
 
   /**

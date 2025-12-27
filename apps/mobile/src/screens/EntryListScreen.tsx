@@ -361,18 +361,6 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
     }
   };
 
-  const handleResolveConflict = async (entryId: string) => {
-    try {
-      await entryMutations.updateEntry(entryId, {
-        conflict_status: null,
-        conflict_backup: null,
-      });
-    } catch (error) {
-      console.error("Failed to resolve conflict:", error);
-      Alert.alert("Error", "Failed to dismiss conflict");
-    }
-  };
-
   const handleCopyEntry = async (entryId: string) => {
     try {
       let gpsCoords: { latitude: number; longitude: number; accuracy?: number } | undefined;
@@ -470,7 +458,6 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
         onCopy={handleCopyEntry}
         onDelete={handleDeleteEntry}
         onPin={handlePinEntry}
-        onResolveConflict={handleResolveConflict}
         streams={streams}
         locations={locations}
         displayMode={displayMode}

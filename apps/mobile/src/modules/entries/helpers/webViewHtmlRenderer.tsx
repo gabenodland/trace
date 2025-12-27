@@ -27,15 +27,8 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
   const [viewerVisible, setViewerVisible] = useState(false);
   const [webViewHeight, setWebViewHeight] = useState(100);
   const webViewRef = useRef<WebView>(null);
-  const lastHtmlRef = useRef(html);
-
-  // Reset height when html changes to force recalculation
-  useEffect(() => {
-    if (html !== lastHtmlRef.current) {
-      lastHtmlRef.current = html;
-      setWebViewHeight(100); // Reset to default, will recalculate
-    }
-  }, [html]);
+  // Track if this is the first render - only then use default height
+  const hasInitializedRef = useRef(false);
 
   // Load photo URIs when HTML changes
   useEffect(() => {

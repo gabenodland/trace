@@ -77,6 +77,7 @@ function useCreateEntryMutation() {
 
 /**
  * Internal: Mutation hook for updating an entry
+ * Uses cache patching instead of invalidation for smooth UI updates
  */
 function useUpdateEntryMutation() {
   const queryClient = useQueryClient();
@@ -84,11 +85,27 @@ function useUpdateEntryMutation() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Entry> }) =>
       updateEntry(id, data),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['entries'] });
-      queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
-      queryClient.invalidateQueries({ queryKey: ['entry', data.entry_id] });
-      queryClient.invalidateQueries({ queryKey: ['streams'] });
+    onSuccess: (updatedEntry) => {
+      // Patch the single entry cache directly
+      queryClient.setQueryData(['entry', updatedEntry.entry_id], updatedEntry);
+
+      // Patch the entry in all entries list caches (smooth update, no flash)
+      queryClient.setQueriesData(
+        { queryKey: ['entries'] },
+        (oldData: Entry[] | undefined) => {
+          if (!oldData) return oldData;
+
+          const index = oldData.findIndex(e => e.entry_id === updatedEntry.entry_id);
+          if (index === -1) return oldData;
+
+          const newData = [...oldData];
+          newData[index] = updatedEntry;
+          return newData;
+        }
+      );
+
+      // These are less critical - can still invalidate for background refresh
+      // Tags/mentions only change if content changed, streams only if stream_id changed
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
@@ -98,14 +115,27 @@ function useUpdateEntryMutation() {
 
 /**
  * Internal: Mutation hook for deleting an entry
+ * Uses cache patching to remove entry smoothly
  */
 function useDeleteEntryMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: deleteEntry,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entries'] });
+    onSuccess: (_, deletedId) => {
+      // Remove from single entry cache
+      queryClient.removeQueries({ queryKey: ['entry', deletedId] });
+
+      // Remove from all entries list caches (smooth removal, no flash)
+      queryClient.setQueriesData(
+        { queryKey: ['entries'] },
+        (oldData: Entry[] | undefined) => {
+          if (!oldData) return oldData;
+          return oldData.filter(e => e.entry_id !== deletedId);
+        }
+      );
+
+      // These need refresh after delete
       queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
       queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });

@@ -22,7 +22,6 @@ interface EntryListContentProps {
   onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
-  onResolveConflict?: (entryId: string) => void;
 }
 
 /**
@@ -46,7 +45,6 @@ export function EntryListContent({
   onCopy,
   onDelete,
   onPin,
-  onResolveConflict,
 }: EntryListContentProps) {
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
@@ -67,7 +65,6 @@ export function EntryListContent({
           onCopy={onCopy}
           onDelete={onDelete}
           onPin={onPin}
-          onResolveConflict={onResolveConflict}
           streamName={entry.stream_id && streamMap ? streamMap[entry.stream_id] : null}
           locationName={entry.location_id && locationMap ? locationMap[entry.location_id] : null}
           displayMode={displayMode}

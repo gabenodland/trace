@@ -319,6 +319,10 @@ export const RichTextEditor = forwardRef(({
           const actualContent = await editor.getHTML();
           lastContent.current = actualContent;
           pendingContent.current = null;
+          // Move cursor to start after external update (prevents jump to end)
+          if (editable) {
+            editor.focus('start');
+          }
           log('setContent succeeded', { attempt, sentLength: value.length, actualLength: actualContent.length });
         } catch (e) {
           // Editor not ready, retry after delay (up to 10 attempts over ~5 seconds)
@@ -349,6 +353,10 @@ export const RichTextEditor = forwardRef(({
           lastContent.current = actualContent;
           log('Interval retry succeeded', { sentLength: pendingContent.current.length, actualLength: actualContent.length });
           pendingContent.current = null;
+          // Move cursor to start after external update (prevents jump to end)
+          if (editable) {
+            editor.focus('start');
+          }
         } catch (e) {
           // Still not ready, will try again next interval
           log('Interval retry failed, will retry');
