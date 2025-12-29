@@ -670,10 +670,42 @@ class SyncService {
           await localDB.markStreamSynced(stream.stream_id);
           newCount++;
         } else if (localStream.synced !== 0) {
+          // Check ALL stream fields for changes (not just name/color/icon)
+          // Cast to any - Supabase types may be out of date but fields exist at runtime
+          const serverStream = stream as any;
+
+          // Helper to normalize arrays for comparison
+          const arraysEqual = (a: any, b: any): boolean => {
+            const arrA = Array.isArray(a) ? a : [];
+            const arrB = Array.isArray(b) ? b : [];
+            return JSON.stringify(arrA) === JSON.stringify(arrB);
+          };
+
           const hasChanged =
-            localStream.name !== stream.name ||
-            localStream.color !== stream.color ||
-            localStream.icon !== stream.icon;
+            // Basic fields
+            localStream.name !== serverStream.name ||
+            localStream.color !== serverStream.color ||
+            localStream.icon !== serverStream.icon ||
+            // Template fields
+            localStream.entry_title_template !== serverStream.entry_title_template ||
+            localStream.entry_content_template !== serverStream.entry_content_template ||
+            // Feature toggles
+            localStream.entry_use_rating !== serverStream.entry_use_rating ||
+            localStream.entry_rating_type !== serverStream.entry_rating_type ||
+            localStream.entry_use_priority !== serverStream.entry_use_priority ||
+            localStream.entry_use_status !== serverStream.entry_use_status ||
+            localStream.entry_use_duedates !== serverStream.entry_use_duedates ||
+            localStream.entry_use_location !== serverStream.entry_use_location ||
+            localStream.entry_use_photos !== serverStream.entry_use_photos ||
+            localStream.entry_content_type !== serverStream.entry_content_type ||
+            // Status configuration (arrays)
+            !arraysEqual(localStream.entry_statuses, serverStream.entry_statuses) ||
+            localStream.entry_default_status !== serverStream.entry_default_status ||
+            // Type configuration
+            localStream.entry_use_type !== serverStream.entry_use_type ||
+            !arraysEqual(localStream.entry_types, serverStream.entry_types) ||
+            // Privacy settings
+            localStream.is_private !== serverStream.is_private;
 
           if (hasChanged) {
             await localDB.updateStream(stream.stream_id, stream);
@@ -1280,6 +1312,22 @@ class SyncService {
   private async syncStream(stream: any): Promise<void> {
     const { sync_action } = stream;
 
+    // Helper: Convert SQLite integer (0/1) to boolean
+    const toBool = (val: any): boolean => val === 1 || val === true;
+
+    // Helper: Parse JSON string to array (for Postgres TEXT[])
+    const toArray = (val: any): string[] => {
+      if (Array.isArray(val)) return val;
+      if (typeof val === 'string' && val.startsWith('[')) {
+        try {
+          return JSON.parse(val);
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    };
+
     const supabaseData = {
       stream_id: stream.stream_id,
       user_id: stream.user_id,
@@ -1293,6 +1341,27 @@ class SyncService {
       updated_at: typeof (stream.updated_at || stream.created_at) === 'number'
         ? new Date(stream.updated_at || stream.created_at).toISOString()
         : (stream.updated_at || stream.created_at),
+      // Template fields
+      entry_title_template: stream.entry_title_template || null,
+      entry_content_template: stream.entry_content_template || null,
+      // Feature toggles (convert 0/1 to boolean)
+      entry_use_rating: toBool(stream.entry_use_rating),
+      entry_rating_type: stream.entry_rating_type || 'stars',
+      entry_use_priority: toBool(stream.entry_use_priority),
+      entry_use_status: toBool(stream.entry_use_status),
+      entry_use_duedates: toBool(stream.entry_use_duedates),
+      entry_use_location: toBool(stream.entry_use_location),
+      entry_use_photos: toBool(stream.entry_use_photos),
+      entry_content_type: stream.entry_content_type || 'richformat',
+      // Status configuration (convert JSON string to array)
+      entry_statuses: toArray(stream.entry_statuses),
+      entry_default_status: stream.entry_default_status || 'new',
+      // Type configuration
+      entry_use_type: toBool(stream.entry_use_type),
+      entry_types: toArray(stream.entry_types),
+      // Privacy settings (convert 0/1 to boolean)
+      is_private: toBool(stream.is_private),
+      // Note: is_localonly streams are filtered out before reaching this function
     };
 
     if (sync_action === 'create' || sync_action === 'update') {
@@ -1731,15 +1800,42 @@ class SyncService {
       return;
     }
 
-    // Compare MEANINGFUL fields only (ignore entry_count - it's computed)
+    // Compare ALL meaningful fields (ignore entry_count - it's computed locally)
+    // Helper to normalize arrays for comparison
+    const arraysEqual = (a: any, b: any): boolean => {
+      const arrA = Array.isArray(a) ? a : [];
+      const arrB = Array.isArray(b) ? b : [];
+      return JSON.stringify(arrA) === JSON.stringify(arrB);
+    };
+
     const hasMeaningfulChanges =
+      // Basic fields
       localStream.name !== remoteStream.name ||
       localStream.color !== remoteStream.color ||
       localStream.icon !== remoteStream.icon ||
+      // Template fields
+      localStream.entry_title_template !== remoteStream.entry_title_template ||
+      localStream.entry_content_template !== remoteStream.entry_content_template ||
+      // Feature toggles
+      localStream.entry_use_rating !== remoteStream.entry_use_rating ||
+      localStream.entry_rating_type !== remoteStream.entry_rating_type ||
+      localStream.entry_use_priority !== remoteStream.entry_use_priority ||
+      localStream.entry_use_status !== remoteStream.entry_use_status ||
+      localStream.entry_use_duedates !== remoteStream.entry_use_duedates ||
+      localStream.entry_use_location !== remoteStream.entry_use_location ||
+      localStream.entry_use_photos !== remoteStream.entry_use_photos ||
+      localStream.entry_content_type !== remoteStream.entry_content_type ||
+      // Status configuration (arrays)
+      !arraysEqual(localStream.entry_statuses, remoteStream.entry_statuses) ||
+      localStream.entry_default_status !== remoteStream.entry_default_status ||
+      // Type configuration
+      localStream.entry_use_type !== remoteStream.entry_use_type ||
+      !arraysEqual(localStream.entry_types, remoteStream.entry_types) ||
+      // Privacy settings
       localStream.is_private !== remoteStream.is_private;
 
     if (!hasMeaningfulChanges) {
-      log.debug('📡 Ignoring stream realtime event - only entry_count changed', {
+      log.debug('📡 Ignoring stream realtime event - no meaningful changes', {
         streamId,
         localEntryCount: localStream.entry_count,
         remoteEntryCount: remoteStream.entry_count
@@ -1772,12 +1868,33 @@ class SyncService {
     }
 
     await localDB.updateStream(streamId, {
+      // Basic fields
       name: payloadData.name,
       color: payloadData.color,
       icon: payloadData.icon,
-      is_private: payloadData.is_private,
       entry_count: payloadData.entry_count,
       updated_at: payloadData.updated_at,
+      // Template fields
+      entry_title_template: payloadData.entry_title_template,
+      entry_content_template: payloadData.entry_content_template,
+      // Feature toggles
+      entry_use_rating: payloadData.entry_use_rating,
+      entry_rating_type: payloadData.entry_rating_type,
+      entry_use_priority: payloadData.entry_use_priority,
+      entry_use_status: payloadData.entry_use_status,
+      entry_use_duedates: payloadData.entry_use_duedates,
+      entry_use_location: payloadData.entry_use_location,
+      entry_use_photos: payloadData.entry_use_photos,
+      entry_content_type: payloadData.entry_content_type,
+      // Status configuration
+      entry_statuses: payloadData.entry_statuses,
+      entry_default_status: payloadData.entry_default_status,
+      // Type configuration
+      entry_use_type: payloadData.entry_use_type,
+      entry_types: payloadData.entry_types,
+      // Privacy settings
+      is_private: payloadData.is_private,
+      // Sync state
       synced: 1,
       sync_action: null,
     });
