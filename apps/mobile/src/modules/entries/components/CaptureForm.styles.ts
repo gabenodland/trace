@@ -145,6 +145,15 @@ export const styles = StyleSheet.create({
     margin: 0,
     textAlign: "center",
   },
+  titleTouchable: {
+    flex: 1,
+  },
+  titleText: {
+    fontSize: 22,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.text.primary,
+    textAlign: "center",
+  },
   titleBarContent: {
     flex: 1,
   },

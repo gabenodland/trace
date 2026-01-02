@@ -50,32 +50,37 @@ export async function requestGalleryPermissions(): Promise<boolean> {
  * Uses quality 1 to get full resolution - compression happens later in compressPhoto()
  */
 export async function capturePhoto(): Promise<{ uri: string; width: number; height: number } | null> {
-  const hasPermission = await requestCameraPermissions();
-  if (!hasPermission) {
-    throw new Error('Camera permission not granted');
+  try {
+    const hasPermission = await requestCameraPermissions();
+    if (!hasPermission) {
+      throw new Error('Camera permission not granted');
+    }
+
+    log.debug('Launching camera');
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: false,
+      quality: 1,
+      exif: true,
+    });
+
+    if (result.canceled) {
+      log.debug('Camera capture cancelled');
+      return null;
+    }
+
+    const asset = result.assets[0];
+    log.info('Photo captured', { width: asset.width, height: asset.height });
+
+    return {
+      uri: asset.uri,
+      width: asset.width,
+      height: asset.height,
+    };
+  } catch (error) {
+    log.error('Failed to capture photo', error);
+    throw error;
   }
-
-  log.debug('Launching camera');
-
-  const result = await ImagePicker.launchCameraAsync({
-    allowsEditing: false,
-    quality: 1,
-    exif: true,
-  });
-
-  if (result.canceled) {
-    log.debug('Camera capture cancelled');
-    return null;
-  }
-
-  const asset = result.assets[0];
-  log.info('Photo captured', { width: asset.width, height: asset.height });
-
-  return {
-    uri: asset.uri,
-    width: asset.width,
-    height: asset.height,
-  };
 }
 
 /**
@@ -83,32 +88,37 @@ export async function capturePhoto(): Promise<{ uri: string; width: number; heig
  * Uses quality 1 to get full resolution - compression happens later
  */
 export async function pickPhotoFromGallery(): Promise<{ uri: string; width: number; height: number } | null> {
-  const hasPermission = await requestGalleryPermissions();
-  if (!hasPermission) {
-    throw new Error('Gallery permission not granted');
+  try {
+    const hasPermission = await requestGalleryPermissions();
+    if (!hasPermission) {
+      throw new Error('Gallery permission not granted');
+    }
+
+    log.debug('Opening gallery picker');
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: false,
+      quality: 1,
+      exif: true,
+    });
+
+    if (result.canceled) {
+      log.debug('Gallery picker cancelled');
+      return null;
+    }
+
+    const asset = result.assets[0];
+    log.info('Photo picked from gallery', { width: asset.width, height: asset.height });
+
+    return {
+      uri: asset.uri,
+      width: asset.width,
+      height: asset.height,
+    };
+  } catch (error) {
+    log.error('Failed to pick photo from gallery', error);
+    throw error;
   }
-
-  log.debug('Opening gallery picker');
-
-  const result = await ImagePicker.launchImageLibraryAsync({
-    allowsEditing: false,
-    quality: 1,
-    exif: true,
-  });
-
-  if (result.canceled) {
-    log.debug('Gallery picker cancelled');
-    return null;
-  }
-
-  const asset = result.assets[0];
-  log.info('Photo picked from gallery', { width: asset.width, height: asset.height });
-
-  return {
-    uri: asset.uri,
-    width: asset.width,
-    height: asset.height,
-  };
 }
 
 /**
@@ -116,34 +126,39 @@ export async function pickPhotoFromGallery(): Promise<{ uri: string; width: numb
  * Uses quality 1 to get full resolution - compression happens later
  */
 export async function pickMultiplePhotosFromGallery(): Promise<{ uri: string; width: number; height: number }[]> {
-  const hasPermission = await requestGalleryPermissions();
-  if (!hasPermission) {
-    throw new Error('Gallery permission not granted');
+  try {
+    const hasPermission = await requestGalleryPermissions();
+    if (!hasPermission) {
+      throw new Error('Gallery permission not granted');
+    }
+
+    log.debug('Opening gallery picker (multi-select)');
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsMultipleSelection: true,
+      quality: 1,
+      exif: true,
+      selectionLimit: 10, // Reasonable limit to avoid memory issues
+    });
+
+    if (result.canceled) {
+      log.debug('Gallery picker cancelled');
+      return [];
+    }
+
+    const photos = result.assets.map(asset => ({
+      uri: asset.uri,
+      width: asset.width,
+      height: asset.height,
+    }));
+
+    log.info('Photos picked from gallery', { count: photos.length });
+
+    return photos;
+  } catch (error) {
+    log.error('Failed to pick photos from gallery', error);
+    throw error;
   }
-
-  log.debug('Opening gallery picker (multi-select)');
-
-  const result = await ImagePicker.launchImageLibraryAsync({
-    allowsMultipleSelection: true,
-    quality: 1,
-    exif: true,
-    selectionLimit: 10, // Reasonable limit to avoid memory issues
-  });
-
-  if (result.canceled) {
-    log.debug('Gallery picker cancelled');
-    return [];
-  }
-
-  const photos = result.assets.map(asset => ({
-    uri: asset.uri,
-    width: asset.width,
-    height: asset.height,
-  }));
-
-  log.info('Photos picked from gallery', { count: photos.length });
-
-  return photos;
 }
 
 // ============================================================================
@@ -154,57 +169,62 @@ export async function pickMultiplePhotosFromGallery(): Promise<{ uri: string; wi
  * Compress and resize photo based on quality setting
  */
 export async function compressPhoto(uri: string, quality: ImageQuality = 'standard'): Promise<CompressedPhoto> {
-  const preset = IMAGE_QUALITY_PRESETS[quality];
-  log.debug('Compressing photo', { quality, maxWidth: preset.maxWidth });
+  try {
+    const preset = IMAGE_QUALITY_PRESETS[quality];
+    log.debug('Compressing photo', { quality, maxWidth: preset.maxWidth, uri: uri.substring(0, 50) });
 
-  // For full quality, skip manipulation entirely
-  if (quality === 'full') {
-    const fileInfo = await FileSystem.getInfoAsync(uri);
-    const size = fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0;
+    // For full quality, skip manipulation entirely
+    if (quality === 'full') {
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      const size = fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0;
 
-    const infoResult = await ImageManipulator.manipulateAsync(uri, [], {
+      const infoResult = await ImageManipulator.manipulateAsync(uri, [], {
+        format: ImageManipulator.SaveFormat.JPEG,
+      });
+
+      log.debug('Full quality - no compression', { size, width: infoResult.width, height: infoResult.height });
+
+      return {
+        uri: uri,
+        width: infoResult.width,
+        height: infoResult.height,
+        file_size: size,
+        mime_type: uri.toLowerCase().includes('.heic') ? 'image/heic' :
+                   uri.toLowerCase().includes('.png') ? 'image/png' : 'image/jpeg',
+      };
+    }
+
+    // Build manipulation actions
+    const actions: ImageManipulator.Action[] = [];
+    if (preset.maxWidth !== null) {
+      actions.push({ resize: { width: preset.maxWidth } });
+    }
+
+    const manipResult = await ImageManipulator.manipulateAsync(uri, actions, {
+      compress: preset.compress,
       format: ImageManipulator.SaveFormat.JPEG,
     });
 
-    log.debug('Full quality - no compression', { size, width: infoResult.width, height: infoResult.height });
+    const fileInfo = await FileSystem.getInfoAsync(manipResult.uri);
+    const size = fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0;
+
+    log.debug('Photo compressed', {
+      width: manipResult.width,
+      height: manipResult.height,
+      size,
+    });
 
     return {
-      uri: uri,
-      width: infoResult.width,
-      height: infoResult.height,
+      uri: manipResult.uri,
+      width: manipResult.width,
+      height: manipResult.height,
       file_size: size,
-      mime_type: uri.toLowerCase().includes('.heic') ? 'image/heic' :
-                 uri.toLowerCase().includes('.png') ? 'image/png' : 'image/jpeg',
+      mime_type: 'image/jpeg',
     };
+  } catch (error) {
+    log.error('Failed to compress photo', error, { uri: uri.substring(0, 50), quality });
+    throw error;
   }
-
-  // Build manipulation actions
-  const actions: ImageManipulator.Action[] = [];
-  if (preset.maxWidth !== null) {
-    actions.push({ resize: { width: preset.maxWidth } });
-  }
-
-  const manipResult = await ImageManipulator.manipulateAsync(uri, actions, {
-    compress: preset.compress,
-    format: ImageManipulator.SaveFormat.JPEG,
-  });
-
-  const fileInfo = await FileSystem.getInfoAsync(manipResult.uri);
-  const size = fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0;
-
-  log.debug('Photo compressed', {
-    width: manipResult.width,
-    height: manipResult.height,
-    size,
-  });
-
-  return {
-    uri: manipResult.uri,
-    width: manipResult.width,
-    height: manipResult.height,
-    file_size: size,
-    mime_type: 'image/jpeg',
-  };
 }
 
 /**

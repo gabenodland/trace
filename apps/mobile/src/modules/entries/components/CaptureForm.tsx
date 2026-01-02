@@ -53,10 +53,17 @@ interface CaptureFormProps {
 }
 
 export function CaptureForm({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, returnContext, copiedEntryData }: CaptureFormProps = {}) {
+  // Track when a new entry has been saved (for autosave transition from create to update)
+  const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
+
   // Determine if we're editing an existing entry or creating a new one
   // Note: copied entries are NOT editing - they're new entries with pre-filled data
-  const isEditing = !!entryId && !copiedEntryData;
+  // After autosave creates a new entry, savedEntryId is set and we transition to "editing" mode
+  const isEditing = (!!entryId || !!savedEntryId) && !copiedEntryData;
   const isCopiedEntry = !!copiedEntryData;
+
+  // The effective entry ID to use for updates (savedEntryId takes precedence for new entries that have been autosaved)
+  const effectiveEntryId = savedEntryId || entryId;
 
   // Get user settings for default GPS capture behavior
   const { settings } = useSettings();
@@ -109,14 +116,15 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
   const { entryMutations } = useEntries();
   // When editing, refresh from server first to get latest version
+  // Use effectiveEntryId to handle autosaved new entries that transition to editing mode
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(
-    entryId || null,
-    { refreshFirst: isEditing }
+    effectiveEntryId || null,
+    { refreshFirst: !!entryId } // Only refresh if opened with an existing entryId
   );
   const { user } = useAuthState();
   const { streams } = useStreams();
   // Use React Query for photos to detect external sync changes
-  const { photos: queryPhotos } = usePhotos(isEditing ? entryId : null);
+  const { photos: queryPhotos } = usePhotos(effectiveEntryId || null);
   const { navigate, setBeforeBackHandler } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [showMenu, setShowMenu] = useState(false);
@@ -188,9 +196,16 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     }
   }, []);
 
-  // AUTOSAVE: Debounced save for editing existing entries
+  // AUTOSAVE: Debounced save for ALL entries (new and existing)
   // Triggers 2s after last change, only when dirty and in edit mode
+  // For new entries: creates the entry and transitions to "editing" mode
+  // For existing entries: updates the entry
   useEffect(() => {
+    // For new entries, only autosave if there's actual content (not just auto-captured GPS)
+    const hasContent = formData.title.trim() !== '' ||
+                       formData.content.replace(/<[^>]*>/g, '').trim() !== '' ||
+                       formData.pendingPhotos.length > 0;
+
     // Debug: Log autosave state on every evaluation
     console.log('🔍 [Autosave] Evaluating:', {
       isEditMode,
@@ -198,17 +213,20 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       isFormDirty,
       isFormReady,
       isSubmitting,
+      hasContent,
       streamId: formData.streamId,
-      willTrigger: isEditing && isFormDirty && isEditMode && isFormReady && !isSubmitting,
+      willTrigger: isFormDirty && isEditMode && isFormReady && !isSubmitting && (isEditing || hasContent),
     });
 
-    // Only autosave when:
-    // 1. Editing an existing entry (not creating new)
-    // 2. Form is dirty
-    // 3. In edit mode
-    // 4. Form is fully loaded (prevents autosave during sync reload)
-    // 5. Not currently submitting
-    if (!isEditing || !isFormDirty || !isEditMode || !isFormReady || isSubmitting) {
+    // Autosave conditions:
+    // 1. Form is dirty
+    // 2. In edit mode
+    // 3. Form is fully loaded (prevents autosave during sync reload)
+    // 4. Not currently submitting
+    // 5. Either editing existing entry OR new entry with actual content
+    const shouldAutosave = isFormDirty && isEditMode && isFormReady && !isSubmitting && (isEditing || hasContent);
+
+    if (!shouldAutosave) {
       // Clear any pending autosave if conditions no longer met
       if (autosaveTimerRef.current) {
         clearTimeout(autosaveTimerRef.current);
@@ -228,7 +246,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     console.log('🔍 [Autosave] Starting 2s debounce timer...');
     autosaveTimerRef.current = setTimeout(() => {
       console.log('🔄 [Autosave] Triggering autosave after 2s debounce');
-      handleSave();
+      handleSave(true); // Pass isAutosave=true for seamless background save
     }, AUTOSAVE_DELAY_MS);
 
     // Cleanup on unmount or when dependencies change
@@ -829,14 +847,15 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       return;
     }
 
-    // Capture GPS
-    captureGps();
+    // Capture GPS - pass isInitialCapture=true so baseline is updated
+    captureGps(false, false, true);
   }, [isEditing, settings.captureGpsLocation]);
 
   // Helper function to capture GPS coordinates (used for initial capture and reload)
   // forceRefresh: if true, skip cache and get fresh GPS reading with high accuracy
   // toPending: if true, store in pendingGpsData instead of formData (for new capture flow)
-  const captureGps = async (forceRefresh = false, toPending = false) => {
+  // isInitialCapture: if true, this is the initial auto-capture for new entries - update baseline to avoid dirty state
+  const captureGps = async (forceRefresh = false, toPending = false, isInitialCapture = false) => {
     setIsGpsLoading(true);
 
     let timeoutId: NodeJS.Timeout;
@@ -898,6 +917,12 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         } else {
           // Store directly in form data (for auto-capture on new entry)
           updateField("gpsData", gpsData);
+
+          // For initial auto-capture, also update baseline so form doesn't show as dirty
+          if (isInitialCapture) {
+            // Get current formData and update baseline with new GPS
+            setBaseline({ ...formData, gpsData });
+          }
         }
         setIsGpsLoading(false);
         if (!isEditMode) enterEditMode();
@@ -922,7 +947,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
         // Scroll cursor into view when keyboard appears
         // Use a longer delay to ensure edit mode transition is complete
-        if (editorRef.current) {
+        // IMPORTANT: Only scroll if title is NOT focused - scrollToCursor calls editor.focus()
+        // which would steal focus from the title input
+        if (editorRef.current && !titleInputRef.current?.isFocused()) {
           setTimeout(() => {
             editorRef.current?.scrollToCursor();
           }, 300);
@@ -943,13 +970,17 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   }, [isEditMode]); // Re-register when edit mode changes to capture current state
 
   // Save handler
-  const handleSave = async () => {
+  // isAutosave: when true, don't set isSubmitting to keep inputs editable (seamless background save)
+  const handleSave = async (isAutosave = false) => {
     // Prevent multiple simultaneous saves
     if (isSubmitting) {
       return;
     }
 
-    setIsSubmitting(true);
+    // Only set isSubmitting for manual saves - autosave should be seamless
+    if (!isAutosave) {
+      setIsSubmitting(true);
+    }
 
     // CONFLICT DETECTION (Option 5 from ENTRY_EDITING_DATAFLOW.md)
     // Check if another device updated this entry while we were editing
@@ -1088,11 +1119,12 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       }
     }
 
-    await performSave();
+    await performSave(isAutosave);
   };
 
   // Actual save logic extracted for reuse in conflict resolution
-  const performSave = async () => {
+  // isAutosave: when true, skip setting isSubmitting and don't show empty entry alert
+  const performSave = async (isAutosave = false) => {
     // Get the actual editor content directly - handles race condition where user
     // types quickly and hits back/save before RichTextEditor's polling syncs
     const editorContent = editorRef.current?.getHTML?.();
@@ -1113,8 +1145,11 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     const hasNamedLocation = !!formData.locationData?.name;
 
     if (!hasTitle && !hasContent && !hasPhotos && !hasGps && !hasNamedLocation) {
-      setIsSubmitting(false);
-      Alert.alert("Empty Entry", "Please add a title, content, photo, or location before saving");
+      if (!isAutosave) {
+        setIsSubmitting(false);
+        Alert.alert("Empty Entry", "Please add a title, content, photo, or location before saving");
+      }
+      // For autosave, silently skip - nothing to save yet
       return;
     }
 
@@ -1232,40 +1267,33 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           updateField("pendingPhotos", []); // Clear pending photos
         }
 
-        // Clear form only when creating
-        updateField("title", "");
-        updateField("content", "");
-        updateField("streamId", null);
-        updateField("streamName", null);
-        updateField("gpsData", null);
-        updateField("locationData", null);
-        updateField("status", "none");
-        updateField("type", null);
-        updateField("dueDate", null);
-        updateField("rating", 0);
-        updateField("priority", 0);
+        // Transition to "editing" mode - subsequent saves will update instead of create
+        setSavedEntryId(newEntry.entry_id);
+        // Initialize the known version for the new entry
+        knownVersionRef.current = 1;
       }
 
       // Note: Sync is triggered automatically in mobileEntryApi after save
 
-      if (isEditing) {
-        // For editing: stay on screen and show snackbar (easier for testing realtime)
-        markClean(); // Mark form as clean after successful save
-        setBaselinePhotoCount(photoCount); // Update photo baseline
-        // Update known version - we just created a new version with this save
-        // This prevents false conflict detection on subsequent saves
-        if (knownVersionRef.current !== null) {
-          knownVersionRef.current = (knownVersionRef.current || 1) + 1;
-        }
-      } else {
-        // For creating: navigate back to list
-        navigateBack({ useCurrentStream: true });
+      // For all saves (new and existing): stay on screen
+      markClean(); // Mark form as clean after successful save
+      setBaselinePhotoCount(photoCount); // Update photo baseline
+      // Update known version - we just created a new version with this save
+      // This prevents false conflict detection on subsequent saves
+      if (knownVersionRef.current !== null && isEditing) {
+        knownVersionRef.current = (knownVersionRef.current || 1) + 1;
       }
     } catch (error) {
       console.error(`Failed to ${isEditing ? 'update' : 'create'} entry:`, error);
-      Alert.alert("Error", `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
+      // Only show error alert for manual saves - autosave failures are silent
+      if (!isAutosave) {
+        Alert.alert("Error", `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
     } finally {
-      setIsSubmitting(false);
+      // Only reset isSubmitting for manual saves (autosave never set it to true)
+      if (!isAutosave) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -1459,8 +1487,10 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     );
   }
 
-  // Show error if editing and entry not found
-  if (isEditing && !entry) {
+  // Show error if editing an EXISTING entry (opened via entryId) and entry not found
+  // Don't show error if we just created the entry via autosave (savedEntryId is set)
+  // because we know it exists - React Query just hasn't cached it yet
+  if (isEditing && !entry && !savedEntryId) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <Text style={styles.errorText}>Entry not found</Text>
@@ -1524,7 +1554,19 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
                 {isEditMode ? "Add Title" : "Untitled"}
               </Text>
             </TouchableOpacity>
+          ) : !isEditMode ? (
+            // View mode: use Text in TouchableOpacity (TextInput with editable=false doesn't capture taps)
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleTitlePress}
+              style={styles.titleTouchable}
+            >
+              <Text style={styles.titleText}>
+                {formData.title || "Title"}
+              </Text>
+            </TouchableOpacity>
           ) : (
+            // Edit mode: direct TextInput for keyboard interaction
             <TextInput
               ref={titleInputRef}
               value={formData.title}
@@ -1532,13 +1574,15 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               placeholder="Title"
               placeholderTextColor="#9ca3af"
               style={styles.titleInputFullWidth}
-              editable={isEditMode && !isSubmitting}
+              editable={!isSubmitting}
               returnKeyType="next"
               blurOnSubmit={false}
               onFocus={() => {
                 setIsTitleExpanded(true);
                 // Clear any pending body focus - title is being focused instead
                 editorRef.current?.clearPendingFocus?.();
+                // Also blur the editor to ensure keyboard shows for title, not body
+                editorRef.current?.blur?.();
               }}
               onPressIn={handleTitlePress}
             />

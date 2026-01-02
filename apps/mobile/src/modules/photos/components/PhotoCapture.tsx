@@ -44,6 +44,7 @@ export const PhotoCapture = forwardRef<PhotoCaptureRef, PhotoCaptureProps>(funct
         onSnackbar?.("Photo captured");
       }
     } catch (error: any) {
+      console.error('📸 [PhotoCapture] Camera error:', error);
       Alert.alert('Camera Error', error.message || 'Failed to capture photo');
     } finally {
       setIsCapturing(false);
@@ -69,6 +70,7 @@ export const PhotoCapture = forwardRef<PhotoCaptureRef, PhotoCaptureProps>(funct
         onSnackbar?.(results.length === 1 ? "Photo added" : `${results.length} photos added`);
       }
     } catch (error: any) {
+      console.error('📸 [PhotoCapture] Gallery error:', error);
       Alert.alert('Gallery Error', error.message || 'Failed to pick photos');
     } finally {
       setIsCapturing(false);

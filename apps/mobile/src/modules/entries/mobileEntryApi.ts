@@ -210,10 +210,16 @@ export async function updateEntry(
   const isUserEdit = updates.sync_action === undefined || updates.sync_action === 'update';
 
   // Mark as needing sync (unless explicitly specified otherwise)
+  // IMPORTANT: Preserve 'create' sync_action if entry was never successfully synced
+  // This handles the case where initial create failed (e.g., network error) and user edits again
+  // Without this, sync would try to UPDATE a non-existent server entry, causing conflict errors
+  const shouldPreserveCreate = currentEntry.sync_action === 'create' && currentEntry.synced === 0;
   const updatesWithSync = {
     ...updates,
     synced: updates.synced !== undefined ? updates.synced : 0,
-    sync_action: updates.sync_action !== undefined ? updates.sync_action : 'update',
+    sync_action: updates.sync_action !== undefined
+      ? updates.sync_action
+      : (shouldPreserveCreate ? 'create' : 'update'),
   };
 
   // Add version tracking and attribution for user edits
