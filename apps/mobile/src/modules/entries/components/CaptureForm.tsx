@@ -80,6 +80,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
   // UI State (NOT form data - keep as individual useState)
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Separate state for save indicator - tracks both manual and autosave (isSubmitting only tracks manual)
+  const [isSaving, setIsSaving] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Consolidated picker visibility state - only one picker can be open at a time
@@ -222,9 +224,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     // 1. Form is dirty
     // 2. In edit mode
     // 3. Form is fully loaded (prevents autosave during sync reload)
-    // 4. Not currently submitting
+    // 4. Not currently submitting or saving (prevents re-entry during save)
     // 5. Either editing existing entry OR new entry with actual content
-    const shouldAutosave = isFormDirty && isEditMode && isFormReady && !isSubmitting && (isEditing || hasContent);
+    const shouldAutosave = isFormDirty && isEditMode && isFormReady && !isSubmitting && !isSaving && (isEditing || hasContent);
 
     if (!shouldAutosave) {
       // Clear any pending autosave if conditions no longer met
@@ -256,7 +258,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         autosaveTimerRef.current = null;
       }
     };
-  }, [isEditing, isFormDirty, isEditMode, isFormReady, isSubmitting, formData, photoCount]);
+  }, [isEditing, isFormDirty, isEditMode, isFormReady, isSubmitting, isSaving, formData, photoCount]);
 
   // Register beforeBack handler for gesture/hardware back interception
   // Always saves if dirty, no prompts
@@ -973,11 +975,14 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // isAutosave: when true, don't set isSubmitting to keep inputs editable (seamless background save)
   const handleSave = async (isAutosave = false) => {
     // Prevent multiple simultaneous saves
-    if (isSubmitting) {
+    if (isSubmitting || isSaving) {
       return;
     }
 
-    // Only set isSubmitting for manual saves - autosave should be seamless
+    // Always set isSaving for the indicator (tracks both manual and autosave)
+    setIsSaving(true);
+
+    // Only set isSubmitting for manual saves - autosave should be seamless (keeps inputs editable)
     if (!isAutosave) {
       setIsSubmitting(true);
     }
@@ -993,6 +998,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         const lastDevice = entry.last_edited_device || 'another device';
 
         setIsSubmitting(false);
+        setIsSaving(false);
 
         // Show conflict resolution dialog
         return new Promise<void>((resolve) => {
@@ -1147,9 +1153,12 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     if (!hasTitle && !hasContent && !hasPhotos && !hasGps && !hasNamedLocation) {
       if (!isAutosave) {
         setIsSubmitting(false);
+        setIsSaving(false);
         Alert.alert("Empty Entry", "Please add a title, content, photo, or location before saving");
+      } else {
+        // For autosave, silently skip - nothing to save yet
+        setIsSaving(false);
       }
-      // For autosave, silently skip - nothing to save yet
       return;
     }
 
@@ -1290,6 +1299,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         Alert.alert("Error", `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
       }
     } finally {
+      // Always reset isSaving (tracks both manual and autosave)
+      setIsSaving(false);
       // Only reset isSubmitting for manual saves (autosave never set it to true)
       if (!isAutosave) {
         setIsSubmitting(false);
@@ -1341,13 +1352,14 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
       if (isEditing) {
         // EXISTING ENTRY: Save photo to DB immediately using proper API
-        const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, entryId!);
+        // Use effectiveEntryId (handles autosaved new entries where savedEntryId is set but entryId prop is null)
+        const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, effectiveEntryId!);
 
         await createPhoto({
           photo_id: photoId,
-          entry_id: entryId!,
+          entry_id: effectiveEntryId!,
           user_id: userId,
-          file_path: generatePhotoPath(userId, entryId!, photoId, 'jpg'),
+          file_path: generatePhotoPath(userId, effectiveEntryId!, photoId, 'jpg'),
           local_path: localPath,
           mime_type: 'image/jpeg',
           file_size: compressed.file_size,
@@ -1406,13 +1418,14 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
         if (isEditing) {
           // EXISTING ENTRY: Save photo to DB immediately using proper API
-          const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, entryId!);
+          // Use effectiveEntryId (handles autosaved new entries where savedEntryId is set but entryId prop is null)
+          const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, effectiveEntryId!);
 
           await createPhoto({
             photo_id: photoId,
-            entry_id: entryId!,
+            entry_id: effectiveEntryId!,
             user_id: userId,
-            file_path: generatePhotoPath(userId, entryId!, photoId, 'jpg'),
+            file_path: generatePhotoPath(userId, effectiveEntryId!, photoId, 'jpg'),
             local_path: localPath,
             mime_type: 'image/jpeg',
             file_size: compressed.file_size,
@@ -1508,6 +1521,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         isEditMode={isEditMode}
         isFullScreen={isFullScreen}
         isSubmitting={isSubmitting}
+        isSaving={isSaving}
         isEditing={isEditing}
         isDirty={isFormDirty}
         title={formData.title}
@@ -1645,7 +1659,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         {/* Photo Gallery (hidden in full-screen mode) */}
         {!isFullScreen && (
           <PhotoGallery
-            entryId={entryId || tempEntryId}
+            entryId={effectiveEntryId || tempEntryId}
             refreshKey={photoCount + externalRefreshKey}
             onPhotoCountChange={setPhotoCount}
             onPhotoDelete={handlePhotoDelete}

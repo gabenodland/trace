@@ -21,6 +21,7 @@ interface CaptureFormHeaderProps {
   isEditMode: boolean;
   isFullScreen: boolean;
   isSubmitting: boolean;
+  isSaving: boolean; // For save indicator (includes autosave, unlike isSubmitting which is manual only)
   isEditing: boolean;
   isDirty: boolean;
   // Form data
@@ -49,6 +50,7 @@ export function CaptureFormHeader({
   isEditMode,
   isFullScreen,
   isSubmitting,
+  isSaving,
   isEditing,
   isDirty,
   title,
@@ -70,18 +72,18 @@ export function CaptureFormHeader({
 }: CaptureFormHeaderProps) {
   // Track "just saved" state to show green checkmark briefly
   const [showSavedCheck, setShowSavedCheck] = useState(false);
-  const wasSubmittingRef = useRef(false);
+  const wasSavingRef = useRef(false);
 
-  // Detect save completion: isSubmitting goes from true to false
+  // Detect save completion: isSaving goes from true to false (includes autosave)
   useEffect(() => {
-    if (wasSubmittingRef.current && !isSubmitting) {
+    if (wasSavingRef.current && !isSaving) {
       // Just finished saving - show checkmark for 300ms
       setShowSavedCheck(true);
       const timer = setTimeout(() => setShowSavedCheck(false), 300);
       return () => clearTimeout(timer);
     }
-    wasSubmittingRef.current = isSubmitting;
-  }, [isSubmitting]);
+    wasSavingRef.current = isSaving;
+  }, [isSaving]);
 
   return (
     <View style={[styles.titleBar, isFullScreen && styles.titleBarFullScreen]}>
@@ -172,7 +174,7 @@ export function CaptureFormHeader({
         {/* Status indicator - orange when dirty, red when saving, green checkmark briefly after save */}
         {isEditMode && (
           <View style={styles.headerSaveButton}>
-            {isSubmitting ? (
+            {isSaving ? (
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
             ) : showSavedCheck ? (
               <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth={3}>
