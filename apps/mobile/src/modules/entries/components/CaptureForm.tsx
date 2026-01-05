@@ -264,6 +264,22 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Always saves if dirty, no prompts
   useEffect(() => {
     const beforeBackHandler = async (): Promise<boolean> => {
+      // For NEW entries: check if there's actual user content worth saving
+      // (title, text, or photos - not just metadata like stream/GPS)
+      // If no user content, just discard and proceed with back
+      if (!isEditing) {
+        const editorContent = editorRef.current?.getHTML?.() ?? formData.content ?? '';
+        const hasUserContent =
+          formData.title.trim().length > 0 ||
+          (typeof editorContent === 'string' && editorContent.replace(/<[^>]*>/g, '').trim().length > 0) ||
+          formData.pendingPhotos.length > 0;
+
+        if (!hasUserContent) {
+          console.log('⬅️ [beforeBackHandler] New entry with no user content, discarding');
+          return true; // Proceed with back, no save
+        }
+      }
+
       // Check if there are unsaved changes
       if (!hasUnsavedChanges()) {
         return true; // No changes, proceed with back
@@ -281,7 +297,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     return () => {
       setBeforeBackHandler(null);
     };
-  }, [formData.title, formData.content, formData.streamId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode]);
+  }, [formData.title, formData.content, formData.streamId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode, isEditing]);
 
   // Check if there are unsaved changes - combines edit mode check with dirty tracking
   // Also checks editor content directly to handle race condition where user types
@@ -331,6 +347,24 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Not memoized to always use latest hasUnsavedChanges/handleSave
   const handleBack = () => {
     console.log('⬅️ [handleBack] Called, checking for unsaved changes...');
+
+    // For NEW entries: check if there's actual user content worth saving
+    // (title, text, or photos - not just metadata like stream/GPS)
+    // If no user content, just discard and go back
+    if (!isEditing) {
+      const editorContent = editorRef.current?.getHTML?.() ?? formData.content ?? '';
+      const hasUserContent =
+        formData.title.trim().length > 0 ||
+        (typeof editorContent === 'string' && editorContent.replace(/<[^>]*>/g, '').trim().length > 0) ||
+        formData.pendingPhotos.length > 0;
+
+      if (!hasUserContent) {
+        console.log('⬅️ [handleBack] New entry with no user content, discarding');
+        navigateBack();
+        return;
+      }
+    }
+
     if (!hasUnsavedChanges()) {
       console.log('⬅️ [handleBack] No unsaved changes, navigating back');
       navigateBack();
@@ -853,6 +887,35 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     captureGps(false, false, true);
   }, [isEditing, settings.captureGpsLocation]);
 
+  // Auto-show stream picker for new entries without a stream
+  // This helps users categorize entries right away
+  const hasShownStreamPickerRef = useRef(false);
+  useEffect(() => {
+    // Only for new entries (not editing, not copied)
+    if (isEditing || isCopiedEntry) return;
+
+    // Only if streams are loaded
+    if (streams.length === 0) return;
+
+    // Only run once
+    if (hasShownStreamPickerRef.current) return;
+
+    // Check if entry was created from a stream view (has a valid stream ID)
+    // Valid stream IDs are UUIDs, not special values like "all", "events", "streams", "tags", "people"
+    const specialStreamValues = ["all", "events", "streams", "tags", "people", null, undefined];
+    const hasValidStreamFromView = initialStreamId && !specialStreamValues.includes(initialStreamId as any);
+
+    // If entry already has a stream from navigation, don't show picker
+    if (hasValidStreamFromView) return;
+
+    // Show stream picker automatically
+    hasShownStreamPickerRef.current = true;
+    // Blur editor first to prevent it from stealing focus when picker's search is used
+    editorRef.current?.blur();
+    Keyboard.dismiss();
+    setActivePicker('stream');
+  }, [isEditing, isCopiedEntry, streams.length, initialStreamId]);
+
   // Helper function to capture GPS coordinates (used for initial capture and reload)
   // forceRefresh: if true, skip cache and get fresh GPS reading with high accuracy
   // toPending: if true, store in pendingGpsData instead of formData (for new capture flow)
@@ -949,9 +1012,10 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
         // Scroll cursor into view when keyboard appears
         // Use a longer delay to ensure edit mode transition is complete
-        // IMPORTANT: Only scroll if title is NOT focused - scrollToCursor calls editor.focus()
-        // which would steal focus from the title input
-        if (editorRef.current && !titleInputRef.current?.isFocused()) {
+        // IMPORTANT: Only scroll if:
+        // 1. Title is NOT focused - scrollToCursor calls editor.focus() which would steal focus
+        // 2. No picker is open - picker inputs (like search) need to keep their focus
+        if (editorRef.current && !titleInputRef.current?.isFocused() && !activePicker) {
           setTimeout(() => {
             editorRef.current?.scrollToCursor();
           }, 300);
@@ -969,7 +1033,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
-  }, [isEditMode]); // Re-register when edit mode changes to capture current state
+  }, [isEditMode, activePicker]); // Re-register when edit mode or picker changes
 
   // Save handler
   // isAutosave: when true, don't set isSubmitting to keep inputs editable (seamless background save)
@@ -1142,19 +1206,24 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       updateField("content", editorContent);
     }
 
-    // Check if there's something to save (formData.title, content, photos, GPS, or location)
+    // Check if there's something to save
+    // For NEW entries: only save if there's user-provided content (title, text, photos)
+    // GPS and named location alone aren't enough - they're metadata that can be auto-captured
+    // For EXISTING entries: any change is valid (entry already exists in DB)
     const textContent = contentToSave.replace(/<[^>]*>/g, '').trim();
     const hasTitle = formData.title.trim().length > 0;
-    const hasContent = textContent.length > 0;
+    const hasTextContent = textContent.length > 0;
     const hasPhotos = isEditing ? photoCount > 0 : formData.pendingPhotos.length > 0;
-    const hasGps = !!formData.gpsData;
-    const hasNamedLocation = !!formData.locationData?.name;
 
-    if (!hasTitle && !hasContent && !hasPhotos && !hasGps && !hasNamedLocation) {
+    // For new entries, require actual user content (title, text, or photos)
+    // Once entry exists (isEditing), we save any changes including metadata-only updates
+    const hasUserContent = hasTitle || hasTextContent || hasPhotos;
+
+    if (!isEditing && !hasUserContent) {
       if (!isAutosave) {
         setIsSubmitting(false);
         setIsSaving(false);
-        Alert.alert("Empty Entry", "Please add a title, content, photo, or location before saving");
+        Alert.alert("Empty Entry", "Please add a title, content, or photo before saving");
       } else {
         // For autosave, silently skip - nothing to save yet
         setIsSaving(false);
@@ -1708,10 +1777,12 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         <TopBarDropdownContainer
           visible={true}
           onClose={() => setActivePicker(null)}
+          fullHeight={true}
         >
           <StreamPicker
             visible={true}
             onClose={() => setActivePicker(null)}
+            isNewEntry={!isEditing}
             onSelect={(id, name) => {
               const hadStream = !!formData.streamId;
               const isRemoving = !id;

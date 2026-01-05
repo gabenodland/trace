@@ -5,9 +5,11 @@ interface TopBarDropdownContainerProps {
   visible: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  /** When true, dropdown extends to bottom of screen (or keyboard) instead of auto-height */
+  fullHeight?: boolean;
 }
 
-export function TopBarDropdownContainer({ visible, onClose, children }: TopBarDropdownContainerProps) {
+export function TopBarDropdownContainer({ visible, onClose, children, fullHeight = false }: TopBarDropdownContainerProps) {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -33,7 +35,17 @@ export function TopBarDropdownContainer({ visible, onClose, children }: TopBarDr
   if (!visible) return null;
 
   const screenHeight = Dimensions.get("window").height;
-  const maxDropdownHeight = screenHeight - 130 - keyboardHeight; // Account for keyboard
+  const dropdownTop = 110; // Fixed top position
+  const bottomOffset = keyboardHeight > 0 ? keyboardHeight : 0;
+
+  // For fullHeight mode: extend to bottom of screen (or keyboard)
+  // For normal mode: use maxHeight with auto content sizing
+  const dropdownHeight = fullHeight
+    ? screenHeight - dropdownTop - bottomOffset
+    : undefined;
+  const maxDropdownHeight = fullHeight
+    ? undefined
+    : screenHeight - 130 - keyboardHeight;
 
   return (
     <>
@@ -45,7 +57,11 @@ export function TopBarDropdownContainer({ visible, onClose, children }: TopBarDr
       />
 
       {/* Dropdown Content */}
-      <View style={[styles.dropdown, { maxHeight: maxDropdownHeight }]}>
+      <View style={[
+        styles.dropdown,
+        fullHeight ? { height: dropdownHeight } : { maxHeight: maxDropdownHeight },
+        fullHeight && styles.dropdownFullHeight,
+      ]}>
         {children}
       </View>
     </>
@@ -78,5 +94,10 @@ const styles = StyleSheet.create({
     elevation: 1000, // Ensure dropdown renders above backdrop and toolbar
     zIndex: 1000,
     overflow: "hidden", // Prevent content from overflowing rounded corners
+  },
+  dropdownFullHeight: {
+    // When full height, remove bottom radius since it touches keyboard/screen edge
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
 });

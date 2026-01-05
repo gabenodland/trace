@@ -1,22 +1,22 @@
 import { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions } from "react-native";
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { useStreams } from "../mobileStreamHooks";
 import { StreamList } from "./StreamList";
 import Svg, { Path, Line } from "react-native-svg";
 import { theme } from "../../../shared/theme/theme";
 
-const ITEM_HEIGHT = 45; // Approximate height of each stream item
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const MAX_LIST_HEIGHT = SCREEN_HEIGHT * 0.5; // 50% of screen height max
+const ITEM_HEIGHT = 45; // Approximate height of each stream item (used for scroll positioning)
 
 interface StreamPickerProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (streamId: string | null, streamName: string | null) => void;
   selectedStreamId: string | null;
+  /** When true, shows "Set Stream for New Entry" as title */
+  isNewEntry?: boolean;
 }
 
-export function StreamPicker({ visible, onClose, onSelect, selectedStreamId }: StreamPickerProps) {
+export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isNewEntry = false }: StreamPickerProps) {
   const { streams, isLoading } = useStreams();
   const [searchQuery, setSearchQuery] = useState("");
   const scrollViewRef = useRef<ScrollView>(null);
@@ -57,7 +57,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId }: S
     <View style={styles.container}>
       {/* Header with title and close button */}
       <View style={styles.header}>
-        <Text style={styles.title}>Set Stream</Text>
+        <Text style={styles.title}>{isNewEntry ? "Set Stream for New Entry" : "Set Stream"}</Text>
         <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
             <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
@@ -93,7 +93,9 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId }: S
       <ScrollView
         ref={scrollViewRef}
         style={styles.content}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Unassigned Option - First item */}
         <TouchableOpacity
@@ -204,7 +206,10 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   content: {
-    maxHeight: MAX_LIST_HEIGHT,
+    flex: 1, // Fill remaining space in container
+  },
+  scrollContent: {
+    paddingBottom: 20, // Ensure last item is visible above keyboard
   },
   streamItem: {
     flexDirection: "row",

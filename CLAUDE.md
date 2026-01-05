@@ -39,6 +39,10 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
 9. **DO NOT BE GLIB OR A PEOPLE PLEASER** Do what I ask you to do, but do the right thing not the nice thing. Your answers should be harsh, critical, and borderline rude. No sugar coating.
 
 10. **Never commit without being asked** - Do not run `git commit` until the user explicitly asks you to commit. Complete the work, verify it builds, but wait for the user to request the commit.
+
+11. Always use design skills when changing the UI
+After completing a task that involves tool use provide a quick summary of the work done. prefix the summary with TOOL USE: 
+
 ---
 
 ## 🔧 Project Configuration
