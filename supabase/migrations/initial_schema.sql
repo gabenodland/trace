@@ -243,6 +243,40 @@ SET default_tablespace = '';
 SET default_table_access_method = "heap";
 
 
+CREATE TABLE IF NOT EXISTS "public"."attachments" (
+    "attachment_id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "entry_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "file_path" "text" NOT NULL,
+    "thumbnail_path" "text",
+    "mime_type" "text" DEFAULT 'image/jpeg'::"text" NOT NULL,
+    "file_size" integer NOT NULL,
+    "width" integer,
+    "height" integer,
+    "position" integer DEFAULT 0 NOT NULL,
+    "captured_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE ONLY "public"."attachments" REPLICA IDENTITY FULL;
+
+
+ALTER TABLE "public"."attachments" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."attachments" IS 'Attachments (photos, documents) attached to entries';
+
+
+
+COMMENT ON COLUMN "public"."attachments"."file_path" IS 'Path in Supabase Storage bucket';
+
+
+
+COMMENT ON COLUMN "public"."attachments"."position" IS 'Order of attachment within entry (0-indexed)';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."entries" (
     "entry_id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "user_id" "uuid" NOT NULL,
@@ -391,40 +425,6 @@ ALTER TABLE ONLY "public"."locations" REPLICA IDENTITY FULL;
 ALTER TABLE "public"."locations" OWNER TO "postgres";
 
 
-CREATE TABLE IF NOT EXISTS "public"."photos" (
-    "photo_id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "entry_id" "uuid" NOT NULL,
-    "user_id" "uuid" NOT NULL,
-    "file_path" "text" NOT NULL,
-    "thumbnail_path" "text",
-    "mime_type" "text" DEFAULT 'image/jpeg'::"text" NOT NULL,
-    "file_size" integer NOT NULL,
-    "width" integer,
-    "height" integer,
-    "position" integer DEFAULT 0 NOT NULL,
-    "captured_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
-);
-
-ALTER TABLE ONLY "public"."photos" REPLICA IDENTITY FULL;
-
-
-ALTER TABLE "public"."photos" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "public"."photos" IS 'Photos attached to journal entries, stored inline within entry content';
-
-
-
-COMMENT ON COLUMN "public"."photos"."file_path" IS 'Path in Supabase Storage bucket';
-
-
-
-COMMENT ON COLUMN "public"."photos"."position" IS 'Order of photo within entry content (0-indexed)';
-
-
-
 CREATE TABLE IF NOT EXISTS "public"."streams" (
     "stream_id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "user_id" "uuid" NOT NULL,
@@ -561,6 +561,11 @@ COMMENT ON COLUMN "public"."streams"."entry_default_status" IS 'Default status a
 
 
 
+ALTER TABLE ONLY "public"."attachments"
+    ADD CONSTRAINT "attachments_pkey" PRIMARY KEY ("attachment_id");
+
+
+
 ALTER TABLE ONLY "public"."streams"
     ADD CONSTRAINT "categories_pkey" PRIMARY KEY ("stream_id");
 
@@ -576,8 +581,15 @@ ALTER TABLE ONLY "public"."locations"
 
 
 
-ALTER TABLE ONLY "public"."photos"
-    ADD CONSTRAINT "photos_pkey" PRIMARY KEY ("photo_id");
+CREATE INDEX "idx_attachments_entry_id" ON "public"."attachments" USING "btree" ("entry_id");
+
+
+
+CREATE INDEX "idx_attachments_position" ON "public"."attachments" USING "btree" ("entry_id", "position");
+
+
+
+CREATE INDEX "idx_attachments_user_id" ON "public"."attachments" USING "btree" ("user_id");
 
 
 
@@ -689,18 +701,6 @@ CREATE INDEX "idx_locations_user_id" ON "public"."locations" USING "btree" ("use
 
 
 
-CREATE INDEX "idx_photos_entry_id" ON "public"."photos" USING "btree" ("entry_id");
-
-
-
-CREATE INDEX "idx_photos_position" ON "public"."photos" USING "btree" ("entry_id", "position");
-
-
-
-CREATE INDEX "idx_photos_user_id" ON "public"."photos" USING "btree" ("user_id");
-
-
-
 CREATE INDEX "idx_streams_entry_default_status" ON "public"."streams" USING "btree" ("entry_default_status");
 
 
@@ -721,6 +721,10 @@ CREATE OR REPLACE TRIGGER "set_completed_at" BEFORE INSERT OR UPDATE ON "public"
 
 
 
+CREATE OR REPLACE TRIGGER "update_attachments_updated_at" BEFORE UPDATE ON "public"."attachments" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
 CREATE OR REPLACE TRIGGER "update_categories_updated_at" BEFORE UPDATE ON "public"."streams" FOR EACH ROW EXECUTE FUNCTION "public"."update_categories_updated_at"();
 
 
@@ -729,7 +733,13 @@ CREATE OR REPLACE TRIGGER "update_entries_updated_at" BEFORE UPDATE ON "public".
 
 
 
-CREATE OR REPLACE TRIGGER "update_photos_updated_at" BEFORE UPDATE ON "public"."photos" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+ALTER TABLE ONLY "public"."attachments"
+    ADD CONSTRAINT "attachments_entry_id_fkey" FOREIGN KEY ("entry_id") REFERENCES "public"."entries"("entry_id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."attachments"
+    ADD CONSTRAINT "attachments_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -758,21 +768,15 @@ ALTER TABLE ONLY "public"."locations"
 
 
 
-ALTER TABLE ONLY "public"."photos"
-    ADD CONSTRAINT "photos_entry_id_fkey" FOREIGN KEY ("entry_id") REFERENCES "public"."entries"("entry_id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."photos"
-    ADD CONSTRAINT "photos_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
 CREATE POLICY "Users can create their own entries" ON "public"."entries" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
 
 
 
 CREATE POLICY "Users can create their own streams" ON "public"."streams" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can delete their own attachments" ON "public"."attachments" FOR DELETE USING (("auth"."uid"() = "user_id"));
 
 
 
@@ -784,11 +788,11 @@ CREATE POLICY "Users can delete their own locations" ON "public"."locations" FOR
 
 
 
-CREATE POLICY "Users can delete their own photos" ON "public"."photos" FOR DELETE USING (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can delete their own streams" ON "public"."streams" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can insert their own attachments" ON "public"."attachments" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
 
 
 
@@ -804,11 +808,11 @@ CREATE POLICY "Users can insert their own locations" ON "public"."locations" FOR
 
 
 
-CREATE POLICY "Users can insert their own photos" ON "public"."photos" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can soft delete their own entries" ON "public"."entries" FOR UPDATE USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can update their own attachments" ON "public"."attachments" FOR UPDATE USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
 
 
 
@@ -820,11 +824,11 @@ CREATE POLICY "Users can update their own locations" ON "public"."locations" FOR
 
 
 
-CREATE POLICY "Users can update their own photos" ON "public"."photos" FOR UPDATE USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can update their own streams" ON "public"."streams" FOR UPDATE USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can view their own attachments" ON "public"."attachments" FOR SELECT USING (("auth"."uid"() = "user_id"));
 
 
 
@@ -836,10 +840,6 @@ CREATE POLICY "Users can view their own locations" ON "public"."locations" FOR S
 
 
 
-CREATE POLICY "Users can view their own photos" ON "public"."photos" FOR SELECT USING (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can view their own streams" ON "public"."streams" FOR SELECT USING (("auth"."uid"() = "user_id"));
 
 
@@ -848,13 +848,13 @@ COMMENT ON POLICY "Users can view their own streams" ON "public"."streams" IS 'R
 
 
 
+ALTER TABLE "public"."attachments" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."entries" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."locations" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."photos" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."streams" ENABLE ROW LEVEL SECURITY;
@@ -869,15 +869,15 @@ ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
 
 
 
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."attachments";
+
+
+
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."entries";
 
 
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."locations";
-
-
-
-ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."photos";
 
 
 
@@ -1111,6 +1111,12 @@ GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."attachments" TO "anon";
+GRANT ALL ON TABLE "public"."attachments" TO "authenticated";
+GRANT ALL ON TABLE "public"."attachments" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."entries" TO "anon";
 GRANT ALL ON TABLE "public"."entries" TO "authenticated";
 GRANT ALL ON TABLE "public"."entries" TO "service_role";
@@ -1120,12 +1126,6 @@ GRANT ALL ON TABLE "public"."entries" TO "service_role";
 GRANT ALL ON TABLE "public"."locations" TO "anon";
 GRANT ALL ON TABLE "public"."locations" TO "authenticated";
 GRANT ALL ON TABLE "public"."locations" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."photos" TO "anon";
-GRANT ALL ON TABLE "public"."photos" TO "authenticated";
-GRANT ALL ON TABLE "public"."photos" TO "service_role";
 
 
 

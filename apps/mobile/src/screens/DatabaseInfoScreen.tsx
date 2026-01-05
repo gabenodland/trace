@@ -598,6 +598,176 @@ export function DatabaseInfoScreen() {
     }
   };
 
+  const handleCompareCloudStorage = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Not authenticated');
+        return;
+      }
+
+      // Get all attachment records from cloud database
+      const { data: dbRecords, error: dbError } = await supabase
+        .from('attachments')
+        .select('attachment_id, file_path, entry_id')
+        .eq('user_id', user.id);
+
+      if (dbError) throw dbError;
+
+      // Get all files from attachments storage bucket
+      const { data: storageFiles, error: storageError } = await supabase.storage
+        .from('attachments')
+        .list(user.id, { limit: 1000 });
+
+      if (storageError) throw storageError;
+
+      // Build set of file paths from DB records
+      const dbFilePaths = new Set(dbRecords?.map(r => r.file_path) || []);
+
+      // Build set of file paths from storage (format: user_id/entry_id/filename)
+      // Storage list returns files in user_id folder, need to recursively get subfolders
+      const storageFilePaths = new Set<string>();
+
+      // List all entry folders under user
+      for (const item of storageFiles || []) {
+        if (item.id === null) {
+          // It's a folder (entry_id folder)
+          const { data: entryFiles } = await supabase.storage
+            .from('attachments')
+            .list(`${user.id}/${item.name}`, { limit: 1000 });
+
+          for (const file of entryFiles || []) {
+            if (file.id !== null) {
+              storageFilePaths.add(`${user.id}/${item.name}/${file.name}`);
+            }
+          }
+        } else {
+          // It's a file directly in user folder
+          storageFilePaths.add(`${user.id}/${item.name}`);
+        }
+      }
+
+      // Find orphaned files (in storage but not in DB)
+      const orphanedFiles: string[] = [];
+      for (const path of storageFilePaths) {
+        if (!dbFilePaths.has(path)) {
+          orphanedFiles.push(path);
+        }
+      }
+
+      // Find missing files (in DB but not in storage)
+      const missingFiles: string[] = [];
+      for (const path of dbFilePaths) {
+        if (!storageFilePaths.has(path)) {
+          missingFiles.push(path);
+        }
+      }
+
+      // Show results
+      const results = {
+        dbRecords: dbRecords?.length || 0,
+        storageFiles: storageFilePaths.size,
+        orphanedFiles: orphanedFiles.length,
+        missingFiles: missingFiles.length,
+        orphanedList: orphanedFiles.slice(0, 10),
+        missingList: missingFiles.slice(0, 10),
+      };
+
+      showJsonModal(results, 'Cloud Storage Comparison');
+
+    } catch (error) {
+      Alert.alert('Error', `Failed to compare: ${error}`);
+    }
+  };
+
+  const handleCleanupCloudOrphans = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Not authenticated');
+        return;
+      }
+
+      // Get all attachment records from cloud database
+      const { data: dbRecords, error: dbError } = await supabase
+        .from('attachments')
+        .select('attachment_id, file_path')
+        .eq('user_id', user.id);
+
+      if (dbError) throw dbError;
+
+      // Build set of file paths from DB records
+      const dbFilePaths = new Set(dbRecords?.map(r => r.file_path) || []);
+
+      // Get all files from attachments storage bucket
+      const { data: storageFiles, error: storageError } = await supabase.storage
+        .from('attachments')
+        .list(user.id, { limit: 1000 });
+
+      if (storageError) throw storageError;
+
+      // Find orphaned files (in storage but not in DB)
+      const orphanedFiles: string[] = [];
+
+      for (const item of storageFiles || []) {
+        if (item.id === null) {
+          // It's a folder (entry_id folder)
+          const { data: entryFiles } = await supabase.storage
+            .from('attachments')
+            .list(`${user.id}/${item.name}`, { limit: 1000 });
+
+          for (const file of entryFiles || []) {
+            if (file.id !== null) {
+              const fullPath = `${user.id}/${item.name}/${file.name}`;
+              if (!dbFilePaths.has(fullPath)) {
+                orphanedFiles.push(fullPath);
+              }
+            }
+          }
+        } else {
+          const fullPath = `${user.id}/${item.name}`;
+          if (!dbFilePaths.has(fullPath)) {
+            orphanedFiles.push(fullPath);
+          }
+        }
+      }
+
+      if (orphanedFiles.length === 0) {
+        Alert.alert('All Good', 'No orphaned files found in cloud storage.');
+        return;
+      }
+
+      Alert.alert(
+        'Delete Orphaned Files',
+        `Found ${orphanedFiles.length} file${orphanedFiles.length === 1 ? '' : 's'} in storage without database records. Delete them?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const { error: deleteError } = await supabase.storage
+                  .from('attachments')
+                  .remove(orphanedFiles);
+
+                if (deleteError) throw deleteError;
+
+                Alert.alert('Success', `Deleted ${orphanedFiles.length} orphaned file${orphanedFiles.length === 1 ? '' : 's'} from cloud storage.`);
+                setRefreshKey(prev => prev + 1);
+              } catch (err) {
+                Alert.alert('Error', `Failed to delete files: ${err}`);
+              }
+            },
+          },
+        ]
+      );
+
+    } catch (error) {
+      Alert.alert('Error', `Failed to find orphans: ${error}`);
+    }
+  };
+
   const showJsonModal = (obj: any, title: string) => {
     setJsonModalTitle(title);
     setJsonModalContent(JSON.stringify(obj, null, 2));
@@ -884,6 +1054,12 @@ export function DatabaseInfoScreen() {
                   <Text style={styles.infoText}>
                     Diff: {cloudCounts.attachments - photos.length}
                   </Text>
+                  <TouchableOpacity onPress={handleCompareCloudStorage} style={styles.cleanupButton}>
+                    <Text style={styles.cleanupButtonText}>🔍 Compare DB vs Storage</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleCleanupCloudOrphans} style={[styles.dangerButton, { marginTop: 8 }]}>
+                    <Text style={styles.dangerButtonText}>🗑️ Delete Cloud Orphans</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
