@@ -57,9 +57,10 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
 
   // Determine if we're editing an existing entry or creating a new one
-  // Note: copied entries are NOT editing - they're new entries with pre-filled data
-  // After autosave creates a new entry, savedEntryId is set and we transition to "editing" mode
-  const isEditing = (!!entryId || !!savedEntryId) && !copiedEntryData;
+  // - entryId: passed in when editing an existing entry
+  // - savedEntryId: set after autosave creates a new entry (transitions to editing mode)
+  // Note: copied entries start as "not editing" but transition to editing after first save
+  const isEditing = !!entryId || !!savedEntryId;
   const isCopiedEntry = !!copiedEntryData;
 
   // The effective entry ID to use for updates (savedEntryId takes precedence for new entries that have been autosaved)
