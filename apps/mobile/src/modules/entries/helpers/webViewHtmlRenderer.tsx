@@ -6,8 +6,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { View, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { extractPhotoIds } from '@trace/core';
-import { getPhotoUri } from '../../photos/mobilePhotoApi';
+import { extractAttachmentIds } from '@trace/core';
+import { getAttachmentUri } from '../../attachments/mobileAttachmentApi';
 import { PhotoViewer } from '../../photos/components/PhotoViewer';
 
 interface WebViewHtmlRendererProps {
@@ -33,14 +33,14 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
   // Load photo URIs when HTML changes
   useEffect(() => {
     async function loadPhotos() {
-      const extractedIds = extractPhotoIds(html);
+      const extractedIds = extractAttachmentIds(html);
       if (extractedIds.length === 0) return;
 
       setPhotoIds(extractedIds);
       const uris: Record<string, string> = {};
 
       for (const photoId of extractedIds) {
-        const uri = await getPhotoUri(photoId);
+        const uri = await getAttachmentUri(photoId);
         if (uri) {
           uris[photoId] = uri;
         }

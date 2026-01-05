@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      attachments: {
+        Row: {
+          attachment_id: string
+          captured_at: string
+          created_at: string
+          entry_id: string
+          file_path: string
+          file_size: number
+          height: number | null
+          mime_type: string
+          position: number
+          thumbnail_path: string | null
+          updated_at: string
+          user_id: string
+          width: number | null
+        }
+        Insert: {
+          attachment_id?: string
+          captured_at?: string
+          created_at?: string
+          entry_id: string
+          file_path: string
+          file_size: number
+          height?: number | null
+          mime_type?: string
+          position?: number
+          thumbnail_path?: string | null
+          updated_at?: string
+          user_id: string
+          width?: number | null
+        }
+        Update: {
+          attachment_id?: string
+          captured_at?: string
+          created_at?: string
+          entry_id?: string
+          file_path?: string
+          file_size?: number
+          height?: number | null
+          mime_type?: string
+          position?: number
+          thumbnail_path?: string | null
+          updated_at?: string
+          user_id?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "entries"
+            referencedColumns: ["entry_id"]
+          },
+        ]
+      }
       entries: {
         Row: {
           attachments: Json | null
@@ -187,62 +243,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
-      }
-      photos: {
-        Row: {
-          captured_at: string
-          created_at: string
-          entry_id: string
-          file_path: string
-          file_size: number
-          height: number | null
-          mime_type: string
-          photo_id: string
-          position: number
-          thumbnail_path: string | null
-          updated_at: string
-          user_id: string
-          width: number | null
-        }
-        Insert: {
-          captured_at?: string
-          created_at?: string
-          entry_id: string
-          file_path: string
-          file_size: number
-          height?: number | null
-          mime_type?: string
-          photo_id?: string
-          position?: number
-          thumbnail_path?: string | null
-          updated_at?: string
-          user_id: string
-          width?: number | null
-        }
-        Update: {
-          captured_at?: string
-          created_at?: string
-          entry_id?: string
-          file_path?: string
-          file_size?: number
-          height?: number | null
-          mime_type?: string
-          photo_id?: string
-          position?: number
-          thumbnail_path?: string | null
-          updated_at?: string
-          user_id?: string
-          width?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "photos_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "entries"
-            referencedColumns: ["entry_id"]
-          },
-        ]
       }
       streams: {
         Row: {

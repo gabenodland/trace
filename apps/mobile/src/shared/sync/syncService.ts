@@ -5,8 +5,8 @@
  * This is an INTERNAL module - use syncApi.ts for public functions.
  *
  * Sync Order (respects foreign key dependencies):
- * PUSH: Streams → Locations → Entries → Photos → Deletes
- * PULL: Streams → Locations → Entries → Photos
+ * PUSH: Streams → Locations → Entries → Attachments → Deletes
+ * PULL: Streams → Locations → Entries → Attachments
  */
 
 import { localDB } from '../db/localDB';
@@ -14,7 +14,7 @@ import { supabase } from '@trace/core/src/shared/supabase';
 import { Entry, LocationEntity, isCompletedStatus, ALL_STATUSES, EntryStatus } from '@trace/core';
 import NetInfo from '@react-native-community/netinfo';
 import type { QueryClient } from '@tanstack/react-query';
-import { uploadPhotoToSupabase, downloadPhotosInBackground, deletePhotoFromLocalStorage } from '../../modules/photos/mobilePhotoApi';
+import { uploadAttachmentToSupabase, downloadAttachmentsInBackground, deleteAttachmentFromLocalStorage } from '../../modules/attachments/mobileAttachmentApi';
 import { getDeviceName } from '../../modules/entries/mobileEntryApi';
 import { createScopedLogger } from '../utils/logger';
 import {
@@ -297,46 +297,46 @@ class SyncService {
         result.pushed.entries = entryResult.success;
         result.errors.entries = entryResult.errors;
 
-        // Step 4: Push photos
-        const photoResult = await this.pushPhotos(localOnlyStreamIds);
-        result.pushed.photos = photoResult.success;
-        result.errors.photos = photoResult.errors;
+        // Step 4: Push attachments
+        const attachmentResult = await this.pushAttachments(localOnlyStreamIds);
+        result.pushed.attachments = attachmentResult.success;
+        result.errors.attachments = attachmentResult.errors;
 
-        // Step 5: Push entry deletes (after photos to avoid FK issues)
+        // Step 5: Push entry deletes (after attachments to avoid FK issues)
         const deleteResult = await this.pushEntryDeletes(localOnlyStreamIds);
         result.pushed.entries += deleteResult.success;
         result.errors.entries += deleteResult.errors;
 
         // Log push summary
-        const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.photos;
+        const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.attachments;
         if (totalPushed > 0) {
           log.debug(`PUSHED ${totalPushed} items`, result.pushed);
         }
       }
 
-      // PULL REMAINING: Server → Local (entries and photos)
+      // PULL REMAINING: Server → Local (entries and attachments)
       if (options.pull) {
         // Step 3: Pull entries
         const entryResult = await this.pullEntries(forceFullPull, pullStartTime);
         result.pulled.entries = entryResult.new + entryResult.updated;
 
-        // Step 4: Pull photos
-        const photoResult = await this.pullPhotos(forceFullPull);
-        result.pulled.photos = photoResult.new + photoResult.updated + photoResult.deleted;
+        // Step 4: Pull attachments
+        const attachmentResult = await this.pullAttachments(forceFullPull);
+        result.pulled.attachments = attachmentResult.new + attachmentResult.updated + attachmentResult.deleted;
 
         // Save pull timestamp for incremental sync
         await this.saveLastPullTimestamp(pullStartTime);
 
         // Log pull summary
-        const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.photos;
+        const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.attachments;
         if (totalPulled > 0) {
           log.debug(`PULLED ${totalPulled} items`, result.pulled);
         }
       }
 
       // Calculate totals
-      const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.photos;
-      const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.photos;
+      const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.attachments;
+      const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.attachments;
 
       // Only invalidate React Query cache if we pulled new data from server
       // (Push-only syncs don't need invalidation since mutations already did it)
@@ -344,8 +344,8 @@ class SyncService {
         this.invalidateQueryCache();
       }
 
-      // Start background photo download (non-blocking)
-      this.startBackgroundPhotoDownload();
+      // Start background attachment download (non-blocking)
+      this.startBackgroundAttachmentDownload();
 
       result.success = true;
       result.duration = Date.now() - startTime;
@@ -488,137 +488,137 @@ class SyncService {
     return { success, errors };
   }
 
-  private async pushPhotos(localOnlyStreamIds: Set<string>): Promise<{ success: number; errors: number }> {
+  private async pushAttachments(localOnlyStreamIds: Set<string>): Promise<{ success: number; errors: number }> {
     let success = 0;
     let errors = 0;
 
-    // Upload photo files
-    const photosToUpload = await localDB.getPhotosNeedingUpload();
-    if (photosToUpload.length > 0) {
-      log.debug('Uploading photo files', { count: photosToUpload.length });
+    // Upload attachment files
+    const attachmentsToUpload = await localDB.getAttachmentsNeedingUpload();
+    if (attachmentsToUpload.length > 0) {
+      log.debug('Uploading attachment files', { count: attachmentsToUpload.length });
 
-      for (const photo of photosToUpload) {
-        // Check if photo's entry belongs to local-only stream
-        const entry = await localDB.getEntry(photo.entry_id);
+      for (const attachment of attachmentsToUpload) {
+        // Check if attachment's entry belongs to local-only stream
+        const entry = await localDB.getEntry(attachment.entry_id);
         if (entry && entry.stream_id && localOnlyStreamIds.has(entry.stream_id)) {
-          log.debug('Skipping local-only photo upload', { photoId: photo.photo_id, streamId: entry.stream_id });
+          log.debug('Skipping local-only attachment upload', { attachmentId: attachment.attachment_id, streamId: entry.stream_id });
           // Mark as uploaded so it doesn't keep trying
-          await localDB.updatePhoto(photo.photo_id, { uploaded: true, synced: 1, sync_action: null });
+          await localDB.updateAttachment(attachment.attachment_id, { uploaded: true, synced: 1, sync_action: null });
           continue;
         }
 
         try {
-          if (photo.local_path) {
-            await uploadPhotoToSupabase(photo.local_path, photo.file_path);
-            await localDB.updatePhoto(photo.photo_id, { uploaded: true });
+          if (attachment.local_path) {
+            await uploadAttachmentToSupabase(attachment.local_path, attachment.file_path);
+            await localDB.updateAttachment(attachment.attachment_id, { uploaded: true });
             success++;
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           if (errorMessage.includes('Local file does not exist') || errorMessage.includes('File not found')) {
-            log.debug('Photo file missing locally (orphaned)', { photoId: photo.photo_id });
-            await localDB.updatePhoto(photo.photo_id, { uploaded: true });
+            log.debug('Attachment file missing locally (orphaned)', { attachmentId: attachment.attachment_id });
+            await localDB.updateAttachment(attachment.attachment_id, { uploaded: true });
           } else {
-            log.warn('Failed to upload photo', { photoId: photo.photo_id, error });
+            log.warn('Failed to upload attachment', { attachmentId: attachment.attachment_id, error });
           }
           errors++;
         }
       }
     }
 
-    // Sync photo metadata
-    const photosNeedingSync = await localDB.getPhotosNeedingSync();
-    log.info('Photos needing sync query result', {
-      total: photosNeedingSync.length,
-      photos: photosNeedingSync.map(p => ({
-        id: p.photo_id,
-        entryId: p.entry_id,
-        synced: p.synced,
-        sync_action: p.sync_action,
-        file_size: p.file_size,
-        mime_type: p.mime_type,
+    // Sync attachment metadata
+    const attachmentsNeedingSync = await localDB.getAttachmentsNeedingSync();
+    log.info('Attachments needing sync query result', {
+      total: attachmentsNeedingSync.length,
+      attachments: attachmentsNeedingSync.map(a => ({
+        id: a.attachment_id,
+        entryId: a.entry_id,
+        synced: a.synced,
+        sync_action: a.sync_action,
+        file_size: a.file_size,
+        mime_type: a.mime_type,
       }))
     });
-    const photosToCreateOrUpdate = photosNeedingSync.filter(p => p.sync_action !== 'delete');
+    const attachmentsToCreateOrUpdate = attachmentsNeedingSync.filter(a => a.sync_action !== 'delete');
 
-    if (photosToCreateOrUpdate.length > 0) {
-      log.info('Syncing photo metadata', { count: photosToCreateOrUpdate.length });
+    if (attachmentsToCreateOrUpdate.length > 0) {
+      log.info('Syncing attachment metadata', { count: attachmentsToCreateOrUpdate.length });
 
-      for (const photo of photosToCreateOrUpdate) {
+      for (const attachment of attachmentsToCreateOrUpdate) {
         try {
-          if (!photo.file_size || !photo.mime_type) {
-            log.debug('Skipping incomplete photo', { photoId: photo.photo_id });
-            await localDB.updatePhoto(photo.photo_id, { synced: 1, sync_action: null });
+          if (!attachment.file_size || !attachment.mime_type) {
+            log.debug('Skipping incomplete attachment', { attachmentId: attachment.attachment_id });
+            await localDB.updateAttachment(attachment.attachment_id, { synced: 1, sync_action: null });
             continue;
           }
 
-          const entry = await localDB.getEntry(photo.entry_id);
+          const entry = await localDB.getEntry(attachment.entry_id);
           if (!entry || entry.deleted_at) {
-            log.debug('Skipping orphaned photo', { photoId: photo.photo_id });
-            await localDB.deletePhoto(photo.photo_id);
+            log.debug('Skipping orphaned attachment', { attachmentId: attachment.attachment_id });
+            await localDB.deleteAttachment(attachment.attachment_id);
             continue;
           }
 
-          // Skip photos from local-only streams - mark as synced so they don't keep trying
+          // Skip attachments from local-only streams - mark as synced so they don't keep trying
           if (entry.stream_id && localOnlyStreamIds.has(entry.stream_id)) {
-            log.debug('Skipping local-only photo metadata sync', { photoId: photo.photo_id, streamId: entry.stream_id });
-            await localDB.updatePhoto(photo.photo_id, { synced: 1, sync_action: null });
+            log.debug('Skipping local-only attachment metadata sync', { attachmentId: attachment.attachment_id, streamId: entry.stream_id });
+            await localDB.updateAttachment(attachment.attachment_id, { synced: 1, sync_action: null });
             continue;
           }
 
           const { error } = await supabase
-            .from('photos')
+            .from('attachments' as any)
             .upsert({
-              photo_id: photo.photo_id,
-              entry_id: photo.entry_id,
-              user_id: photo.user_id,
-              file_path: photo.file_path,
-              mime_type: photo.mime_type,
-              file_size: photo.file_size,
-              width: photo.width || null,
-              height: photo.height || null,
-              position: photo.position,
+              attachment_id: attachment.attachment_id,
+              entry_id: attachment.entry_id,
+              user_id: attachment.user_id,
+              file_path: attachment.file_path,
+              mime_type: attachment.mime_type,
+              file_size: attachment.file_size,
+              width: attachment.width || null,
+              height: attachment.height || null,
+              position: attachment.position,
             });
 
           if (error) throw error;
 
-          await localDB.updatePhoto(photo.photo_id, { synced: 1, sync_action: null });
+          await localDB.updateAttachment(attachment.attachment_id, { synced: 1, sync_action: null });
           success++;
         } catch (error) {
-          log.warn('Failed to sync photo metadata', { photoId: photo.photo_id, error });
+          log.warn('Failed to sync attachment metadata', { attachmentId: attachment.attachment_id, error });
           errors++;
         }
       }
     }
 
-    // Delete photos
-    const photosToDelete = photosNeedingSync.filter(p => p.sync_action === 'delete');
-    log.info('📸 Photo delete sync check', {
-      totalPhotosNeedingSync: photosNeedingSync.length,
-      photosToDeleteCount: photosToDelete.length,
-      photosToDelete: photosToDelete.map(p => ({ id: p.photo_id, entryId: p.entry_id })),
+    // Delete attachments
+    const attachmentsToDelete = attachmentsNeedingSync.filter(a => a.sync_action === 'delete');
+    log.info('📎 Attachment delete sync check', {
+      totalAttachmentsNeedingSync: attachmentsNeedingSync.length,
+      attachmentsToDeleteCount: attachmentsToDelete.length,
+      attachmentsToDelete: attachmentsToDelete.map(a => ({ id: a.attachment_id, entryId: a.entry_id })),
     });
-    if (photosToDelete.length > 0) {
-      log.info('📸 Deleting photos from server', { count: photosToDelete.length });
+    if (attachmentsToDelete.length > 0) {
+      log.info('📎 Deleting attachments from server', { count: attachmentsToDelete.length });
 
-      for (const photo of photosToDelete) {
+      for (const attachment of attachmentsToDelete) {
         try {
-          log.info('📸 Deleting photo from Supabase', { photoId: photo.photo_id, filePath: photo.file_path });
-          const { error: dbError } = await supabase.from('photos').delete().eq('photo_id', photo.photo_id);
+          log.info('📎 Deleting attachment from Supabase', { attachmentId: attachment.attachment_id, filePath: attachment.file_path });
+          const { error: dbError } = await supabase.from('attachments' as any).delete().eq('attachment_id', attachment.attachment_id);
           if (dbError) {
-            log.error('📸 Failed to delete photo from DB', { photoId: photo.photo_id, error: dbError });
+            log.error('📎 Failed to delete attachment from DB', { attachmentId: attachment.attachment_id, error: dbError });
           }
-          if (photo.file_path) {
-            const { error: storageError } = await supabase.storage.from('photos').remove([photo.file_path]);
+          if (attachment.file_path) {
+            const { error: storageError } = await supabase.storage.from('attachments').remove([attachment.file_path]);
             if (storageError) {
-              log.warn('📸 Failed to delete photo from storage', { photoId: photo.photo_id, error: storageError });
+              log.warn('📎 Failed to delete attachment from storage', { attachmentId: attachment.attachment_id, error: storageError });
             }
           }
-          await localDB.permanentlyDeletePhoto(photo.photo_id);
-          log.info('📸 Photo deleted successfully', { photoId: photo.photo_id });
+          await localDB.permanentlyDeleteAttachment(attachment.attachment_id);
+          log.info('📎 Attachment deleted successfully', { attachmentId: attachment.attachment_id });
           success++;
         } catch (error) {
-          log.error('📸 Failed to delete photo', { photoId: photo.photo_id, error });
+          log.error('📎 Failed to delete attachment', { attachmentId: attachment.attachment_id, error });
           errors++;
         }
       }
@@ -956,18 +956,18 @@ class SyncService {
     return { new: newCount, updated: updatedCount, deleted: deletedCount };
   }
 
-  private async pullPhotos(forceFullPull: boolean): Promise<{ new: number; updated: number; deleted: number }> {
+  private async pullAttachments(forceFullPull: boolean): Promise<{ new: number; updated: number; deleted: number }> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { new: 0, updated: 0, deleted: 0 };
 
-    const { data: remotePhotos, error } = await supabase
-      .from('photos')
+    const { data: remoteAttachments, error } = await supabase
+      .from('attachments' as any)
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
-      log.error('Failed to fetch photos', error);
+      log.error('Failed to fetch attachments', error);
       return { new: 0, updated: 0, deleted: 0 };
     }
 
@@ -975,81 +975,81 @@ class SyncService {
     let updatedCount = 0;
     let deletedCount = 0;
 
-    // Build set of remote photo IDs for deletion detection
-    const remotePhotoIds = new Set<string>(
-      (remotePhotos || []).map(p => p.photo_id)
+    // Build set of remote attachment IDs for deletion detection
+    const remoteAttachmentIds = new Set<string>(
+      (remoteAttachments || []).map((a: any) => a.attachment_id)
     );
 
-    for (const remotePhoto of (remotePhotos || [])) {
+    for (const remoteAttachment of (remoteAttachments || [])) {
       try {
-        const localPhotos = await localDB.runCustomQuery(
-          'SELECT * FROM photos WHERE photo_id = ?',
-          [remotePhoto.photo_id]
+        const localAttachments = await localDB.runCustomQuery(
+          'SELECT * FROM attachments WHERE attachment_id = ?',
+          [(remoteAttachment as any).attachment_id]
         );
-        const localPhoto = localPhotos.length > 0 ? localPhotos[0] : null;
+        const localAttachment = localAttachments.length > 0 ? localAttachments[0] : null;
 
-        const photo = {
-          photo_id: remotePhoto.photo_id,
-          entry_id: remotePhoto.entry_id,
-          user_id: remotePhoto.user_id,
-          file_path: remotePhoto.file_path,
-          local_path: localPhoto?.local_path || undefined,
-          mime_type: remotePhoto.mime_type,
-          file_size: remotePhoto.file_size || undefined,
-          width: remotePhoto.width || undefined,
-          height: remotePhoto.height || undefined,
-          position: remotePhoto.position,
-          created_at: new Date(remotePhoto.created_at).getTime(),
-          updated_at: new Date(remotePhoto.updated_at).getTime(),
+        const attachment = {
+          attachment_id: (remoteAttachment as any).attachment_id,
+          entry_id: (remoteAttachment as any).entry_id,
+          user_id: (remoteAttachment as any).user_id,
+          file_path: (remoteAttachment as any).file_path,
+          local_path: localAttachment?.local_path || undefined,
+          mime_type: (remoteAttachment as any).mime_type,
+          file_size: (remoteAttachment as any).file_size || undefined,
+          width: (remoteAttachment as any).width || undefined,
+          height: (remoteAttachment as any).height || undefined,
+          position: (remoteAttachment as any).position,
+          created_at: new Date((remoteAttachment as any).created_at).getTime(),
+          updated_at: new Date((remoteAttachment as any).updated_at).getTime(),
           uploaded: true,
           synced: 1,
           sync_action: null,
         };
 
-        if (!localPhoto) {
-          await localDB.createPhoto(photo, true);
+        if (!localAttachment) {
+          await localDB.createAttachment(attachment, true);
           newCount++;
         } else {
           const hasChanged =
-            localPhoto.position !== photo.position ||
-            localPhoto.mime_type !== photo.mime_type;
+            localAttachment.position !== attachment.position ||
+            localAttachment.mime_type !== attachment.mime_type;
 
           if (hasChanged) {
-            await localDB.updatePhoto(photo.photo_id, photo);
+            await localDB.updateAttachment(attachment.attachment_id, attachment);
             updatedCount++;
           }
         }
       } catch (error) {
-        log.warn('Failed to process photo', { photoId: remotePhoto.photo_id, error });
+        log.warn('Failed to process attachment', { attachmentId: (remoteAttachment as any).attachment_id, error });
       }
     }
 
-    // Detect and delete photos that exist locally but were deleted on server
-    // Only delete photos that are synced (uploaded) - not local-only unsynced photos
+    // Detect and delete attachments that exist locally but were deleted on server
+    // Only delete attachments that are synced (uploaded) - not local-only unsynced attachments
     try {
-      const localSyncedPhotos = await localDB.runCustomQuery(
-        'SELECT photo_id, local_path FROM photos WHERE user_id = ? AND synced = 1 AND (sync_action IS NULL OR sync_action != ?)',
+      const localSyncedAttachments = await localDB.runCustomQuery(
+        'SELECT attachment_id, local_path FROM attachments WHERE user_id = ? AND synced = 1 AND (sync_action IS NULL OR sync_action != ?)',
         [user.id, 'delete']
       );
 
-      for (const localPhoto of localSyncedPhotos) {
-        if (!remotePhotoIds.has(localPhoto.photo_id)) {
-          log.info('Photo deleted on server, removing locally', { photoId: localPhoto.photo_id });
+      for (const localAttachment of localSyncedAttachments) {
+        if (!remoteAttachmentIds.has(localAttachment.attachment_id)) {
+          log.info('Attachment deleted on server, removing locally', { attachmentId: localAttachment.attachment_id });
           // Delete local file if exists
-          if (localPhoto.local_path) {
+          if (localAttachment.local_path) {
             try {
-              await deletePhotoFromLocalStorage(localPhoto.local_path);
+              await deleteAttachmentFromLocalStorage(localAttachment.local_path);
             } catch (err) {
-              log.warn('Failed to delete local photo file', { path: localPhoto.local_path, error: err });
+              log.warn('Failed to delete local attachment file', { path: localAttachment.local_path, error: err });
             }
           }
           // Permanently delete from local DB
-          await localDB.permanentlyDeletePhoto(localPhoto.photo_id);
+          await localDB.permanentlyDeleteAttachment(localAttachment.attachment_id);
           deletedCount++;
         }
       }
     } catch (error) {
-      log.warn('Failed to detect deleted photos', { error });
+      log.warn('Failed to detect deleted attachments', { error });
     }
 
     return { new: newCount, updated: updatedCount, deleted: deletedCount };
@@ -1462,10 +1462,10 @@ class SyncService {
             log.error('Failed to process stream realtime event', err);
           });
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'photos' }, (payload) => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attachments' }, (payload) => {
           const entryId = (payload.new as any)?.entry_id || (payload.old as any)?.entry_id;
-          log.info('📡 Photos realtime event received', { eventType: payload.eventType, entryId });
-          this.handleRealtimeChange('photos', entryId);
+          log.info('📡 Attachments realtime event received', { eventType: payload.eventType, entryId });
+          this.handleRealtimeChange('attachments', entryId);
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, (payload) => {
           log.info('📡 Locations realtime event received', { eventType: payload.eventType });
@@ -1473,7 +1473,7 @@ class SyncService {
         })
         .subscribe(async (status, err) => {
           if (status === 'SUBSCRIBED') {
-            log.info('✅ Global realtime subscription ACTIVE for entries/streams/photos/locations');
+            log.info('✅ Global realtime subscription ACTIVE for entries/streams/attachments/locations');
             // Reset reconnection state on successful connection
             this.realtimeReconnectAttempts = 0;
             if (this.realtimeReconnectTimer) {
@@ -1940,7 +1940,7 @@ class SyncService {
       log.info(`🔄 Pulling remote changes for ${table}...`);
       try {
         const result = await this.pullChanges('realtime');
-        const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.photos;
+        const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.attachments;
 
         if (totalPulled > 0) {
           log.info(`✅ Pulled ${result.pulled.entries} entries, ${result.pulled.streams} streams from realtime`);
@@ -2093,14 +2093,14 @@ class SyncService {
         await localDB.runCustomQuery('DELETE FROM streams WHERE user_id != ?', [user.id]);
       }
 
-      const wrongUserPhotos = await localDB.runCustomQuery(
-        'SELECT photo_id FROM photos WHERE user_id != ?',
+      const wrongUserAttachments = await localDB.runCustomQuery(
+        'SELECT attachment_id FROM attachments WHERE user_id != ?',
         [user.id]
       );
 
-      if (wrongUserPhotos.length > 0) {
-        log.debug('Cleaning up photos from previous user', { count: wrongUserPhotos.length });
-        await localDB.runCustomQuery('DELETE FROM photos WHERE user_id != ?', [user.id]);
+      if (wrongUserAttachments.length > 0) {
+        log.debug('Cleaning up attachments from previous user', { count: wrongUserAttachments.length });
+        await localDB.runCustomQuery('DELETE FROM attachments WHERE user_id != ?', [user.id]);
       }
 
       const wrongUserLocations = await localDB.runCustomQuery(
@@ -2149,14 +2149,14 @@ class SyncService {
       this.queryClient.invalidateQueries({ queryKey: ['locations'] });
       this.queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
 
-      // Also invalidate specific entry and photo queries if IDs provided
+      // Also invalidate specific entry and attachment queries if IDs provided
       // This ensures CaptureForm updates when editing the same entry on another device
       // Note: Entry query keys are ['entry', id, 'local'] or ['entry', id, 'refresh']
-      // Photo query keys are ['photos', 'entry', entryId]
+      // Attachment query keys are ['attachments', 'entry', entryId]
       // so we use predicate matching to invalidate both variants
       if (entryIds && entryIds.length > 0) {
         for (const entryId of entryIds) {
-          log.debug('🔄 [Sync] Invalidating individual entry and photo queries', { entryId });
+          log.debug('🔄 [Sync] Invalidating individual entry and attachment queries', { entryId });
           // Invalidate entry queries
           this.queryClient.invalidateQueries({
             predicate: (query) => {
@@ -2164,34 +2164,34 @@ class SyncService {
               return Array.isArray(key) && key[0] === 'entry' && key[1] === entryId;
             }
           });
-          // Invalidate photo queries for this entry: ['photos', 'entry', entryId]
+          // Invalidate attachment queries for this entry: ['attachments', 'entry', entryId]
           this.queryClient.invalidateQueries({
-            queryKey: ['photos', 'entry', entryId]
+            queryKey: ['attachments', 'entry', entryId]
           });
         }
       }
     }
   }
 
-  private startBackgroundPhotoDownload(): void {
+  private startBackgroundAttachmentDownload(): void {
     setTimeout(() => {
-      downloadPhotosInBackground(10).catch(error => {
-        log.warn('Background photo download error', { error });
+      downloadAttachmentsInBackground(10).catch((error: unknown) => {
+        log.warn('Background attachment download error', { error });
       });
     }, 1000);
   }
 
   private async logSyncResult(trigger: SyncTrigger, result: SyncResult): Promise<void> {
     const hasErrors = result.errors.entries > 0 || result.errors.streams > 0 ||
-                      result.errors.locations > 0 || result.errors.photos > 0;
+                      result.errors.locations > 0 || result.errors.attachments > 0;
     const logLevel = hasErrors ? 'warning' : 'info';
 
     const totalPushed = result.pushed.entries + result.pushed.streams +
-                        result.pushed.locations + result.pushed.photos;
+                        result.pushed.locations + result.pushed.attachments;
     const totalPulled = result.pulled.entries + result.pulled.streams +
-                        result.pulled.locations + result.pulled.photos;
+                        result.pulled.locations + result.pulled.attachments;
     const totalErrors = result.errors.entries + result.errors.streams +
-                        result.errors.locations + result.errors.photos;
+                        result.errors.locations + result.errors.attachments;
 
     let message = `Sync (${trigger}) completed in ${(result.duration / 1000).toFixed(1)}s`;
     if (totalPushed > 0) message += ` - Pushed: ${totalPushed}`;
@@ -2203,8 +2203,8 @@ class SyncService {
       entries_errors: result.errors.entries,
       streams_pushed: result.pushed.streams,
       streams_errors: result.errors.streams,
-      photos_pushed: result.pushed.photos,
-      photos_errors: result.errors.photos,
+      attachments_pushed: result.pushed.attachments,
+      attachments_errors: result.errors.attachments,
       entries_pulled: result.pulled.entries,
     });
   }

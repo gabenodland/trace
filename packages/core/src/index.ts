@@ -5,7 +5,7 @@
 export * from "./modules/auth";
 export * from "./modules/streams";
 export * from "./modules/entries";
-export * from "./modules/photos";
+export * from "./modules/attachments";
 export * from "./modules/locations";
 export * from "./modules/settings";
 

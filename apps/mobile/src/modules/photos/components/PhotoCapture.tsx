@@ -10,7 +10,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { TopBarDropdownContainer } from '../../../components/layout/TopBarDropdownContainer';
 import { theme } from '../../../shared/theme/theme';
-import { capturePhoto, pickMultiplePhotosFromGallery } from '../mobilePhotoApi';
+import { capturePhoto, pickMultiplePhotosFromGallery } from '../../attachments/mobileAttachmentApi';
 
 interface PhotoCaptureProps {
   onPhotoSelected: (uri: string, width: number, height: number) => void;

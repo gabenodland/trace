@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
 import * as Location from "expo-location";
-import { extractTagsAndMentions, useAuthState, generatePhotoPath, type Location as LocationType, locationToCreateInput, type EntryStatus } from "@trace/core";
+import { extractTagsAndMentions, useAuthState, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus } from "@trace/core";
 import { getDeviceName } from "../mobileEntryApi";
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
-import { usePhotos } from "../../photos/mobilePhotoHooks";
+import { useAttachments } from "../../attachments/mobileAttachmentHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
@@ -17,7 +17,7 @@ import { useNavigationMenu } from "../../../shared/hooks/useNavigationMenu";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { LocationPicker } from "../../locations/components/LocationPicker";
-import { compressPhoto, savePhotoToLocalStorage, deletePhoto, createPhoto, getPhotosForEntry } from "../../photos/mobilePhotoApi";
+import { compressAttachment, saveAttachmentToLocalStorage, deleteAttachment, createAttachment, getAttachmentsForEntry } from "../../attachments/mobileAttachmentApi";
 import * as Crypto from "expo-crypto";
 import { useCaptureFormState } from "./hooks/useCaptureFormState";
 import { styles } from "./CaptureForm.styles";
@@ -126,7 +126,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const { user } = useAuthState();
   const { streams } = useStreams();
   // Use React Query for photos to detect external sync changes
-  const { photos: queryPhotos } = usePhotos(effectiveEntryId || null);
+  const { attachments: queryAttachments } = useAttachments(effectiveEntryId || null);
   const { navigate, setBeforeBackHandler } = useNavigation();
   const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
   const [showMenu, setShowMenu] = useState(false);
@@ -523,7 +523,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     // Gate: Must be editing, form ready, AND baseline photo count established
     if (!isEditing || !entryId || !isFormReady || baselinePhotoCount === null) return;
 
-    const queryPhotoCount = queryPhotos.length;
+    const queryPhotoCount = queryAttachments.length;
 
     // First time this effect runs after all gates pass - initialize known count
     if (knownPhotoCountRef.current === null) {
@@ -557,7 +557,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       setExternalRefreshKey(prev => prev + 1);
       setPhotoCount(queryPhotoCount);
     }
-  }, [queryPhotos.length, isEditing, entryId, isFormReady, baselinePhotoCount]);
+  }, [queryAttachments.length, isEditing, entryId, isFormReady, baselinePhotoCount]);
 
   // Handle tap on title to enter edit mode
   const handleTitlePress = () => {
@@ -740,11 +740,11 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   }, [isEditing, isFormReady, formData, setBaseline, updateField]);
 
   // Set baseline photo count for editing after initial load
-  // Use queryPhotos.length directly to avoid race with photoCount state
+  // Use queryAttachments.length directly to avoid race with photoCount state
   // The form data baseline is set atomically in the load effect above
   useEffect(() => {
     if (isEditing && isFormReady && baselinePhotoCount === null) {
-      const actualPhotoCount = queryPhotos.length;
+      const actualPhotoCount = queryAttachments.length;
       console.log('📸 [CaptureForm] Setting baseline photo count:', actualPhotoCount);
       setBaselinePhotoCount(actualPhotoCount);
       // Also sync photoCount if it differs
@@ -752,7 +752,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         setPhotoCount(actualPhotoCount);
       }
     }
-  }, [isEditing, isFormReady, baselinePhotoCount, queryPhotos.length, photoCount]);
+  }, [isEditing, isFormReady, baselinePhotoCount, queryAttachments.length, photoCount]);
 
   // Load copied entry data (for copy workflow - entry is NOT saved to DB yet)
   // Pattern: Build complete form data object, set baseline AND form atomically, then mark ready
@@ -1327,8 +1327,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
             });
 
             // Save to DB with real entry_id using proper API
-            await createPhoto({
-              photo_id: photo.photoId,
+            await createAttachment({
+              attachment_id: photo.photoId,
               entry_id: newEntry.entry_id,
               user_id: user!.id,
               file_path: newFilePath,
@@ -1413,7 +1413,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       }
 
       // Compress photo using quality setting
-      const compressed = await compressPhoto(uri, settings.imageQuality);
+      const compressed = await compressAttachment(uri, settings.imageQuality);
 
       // Generate IDs
       const photoId = Crypto.randomUUID();
@@ -1422,13 +1422,13 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       if (isEditing) {
         // EXISTING ENTRY: Save photo to DB immediately using proper API
         // Use effectiveEntryId (handles autosaved new entries where savedEntryId is set but entryId prop is null)
-        const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, effectiveEntryId!);
+        const localPath = await saveAttachmentToLocalStorage(compressed.uri, photoId, userId, effectiveEntryId!);
 
-        await createPhoto({
-          photo_id: photoId,
+        await createAttachment({
+          attachment_id: photoId,
           entry_id: effectiveEntryId!,
           user_id: userId,
-          file_path: generatePhotoPath(userId, effectiveEntryId!, photoId, 'jpg'),
+          file_path: generateAttachmentPath(userId, effectiveEntryId!, photoId, 'jpg'),
           local_path: localPath,
           mime_type: 'image/jpeg',
           file_size: compressed.file_size,
@@ -1441,12 +1441,12 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         setPhotoCount(photoCount + 1);
       } else {
         // NEW ENTRY: Store photo in state only (don't save to DB until entry is saved)
-        const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, tempEntryId);
+        const localPath = await saveAttachmentToLocalStorage(compressed.uri, photoId, userId, tempEntryId);
 
         addPendingPhoto({
           photoId,
           localPath,
-          filePath: generatePhotoPath(userId, tempEntryId, photoId, 'jpg'),
+          filePath: generateAttachmentPath(userId, tempEntryId, photoId, 'jpg'),
           mimeType: 'image/jpeg',
           fileSize: compressed.file_size,
           width: compressed.width,
@@ -1479,7 +1479,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
       for (const photo of photos) {
         // Compress photo using quality setting
-        const compressed = await compressPhoto(photo.uri, settings.imageQuality);
+        const compressed = await compressAttachment(photo.uri, settings.imageQuality);
 
         // Generate IDs
         const photoId = Crypto.randomUUID();
@@ -1488,13 +1488,13 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         if (isEditing) {
           // EXISTING ENTRY: Save photo to DB immediately using proper API
           // Use effectiveEntryId (handles autosaved new entries where savedEntryId is set but entryId prop is null)
-          const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, effectiveEntryId!);
+          const localPath = await saveAttachmentToLocalStorage(compressed.uri, photoId, userId, effectiveEntryId!);
 
-          await createPhoto({
-            photo_id: photoId,
+          await createAttachment({
+            attachment_id: photoId,
             entry_id: effectiveEntryId!,
             user_id: userId,
-            file_path: generatePhotoPath(userId, effectiveEntryId!, photoId, 'jpg'),
+            file_path: generateAttachmentPath(userId, effectiveEntryId!, photoId, 'jpg'),
             local_path: localPath,
             mime_type: 'image/jpeg',
             file_size: compressed.file_size,
@@ -1505,12 +1505,12 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           });
         } else {
           // NEW ENTRY: Store photo in state only
-          const localPath = await savePhotoToLocalStorage(compressed.uri, photoId, userId, tempEntryId);
+          const localPath = await saveAttachmentToLocalStorage(compressed.uri, photoId, userId, tempEntryId);
 
           addPendingPhoto({
             photoId,
             localPath,
-            filePath: generatePhotoPath(userId, tempEntryId, photoId, 'jpg'),
+            filePath: generateAttachmentPath(userId, tempEntryId, photoId, 'jpg'),
             mimeType: 'image/jpeg',
             fileSize: compressed.file_size,
             width: compressed.width,
@@ -1545,7 +1545,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
       if (isEditing) {
         // EXISTING ENTRY: Delete from DB
-        await deletePhoto(photoId);
+        await deleteAttachment(photoId);
       } else {
         // NEW ENTRY: Remove from pending photos state
         removePendingPhoto(photoId);

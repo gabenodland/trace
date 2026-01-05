@@ -1,23 +1,23 @@
 /**
- * Photo Types
+ * Attachment Types
  *
- * Types for inline photos attached to journal entries
+ * Types for attachments (photos, documents) attached to entries
  */
 
-export interface Photo {
-  photo_id: string;
+export interface Attachment {
+  attachment_id: string;
   entry_id: string;
   user_id: string;
 
   // File paths
-  file_path: string;          // Supabase Storage path: {user_id}/{entry_id}/{photo_id}.jpg
+  file_path: string;          // Supabase Storage path: {user_id}/{entry_id}/{attachment_id}.jpg
   local_path?: string | null; // Mobile only: Local file system path
 
   // File metadata
-  mime_type: string;          // image/jpeg, image/png, etc.
+  mime_type: string;          // image/jpeg, image/png, application/pdf, etc.
   file_size?: number | null;  // File size in bytes
-  width?: number | null;      // Image width in pixels
-  height?: number | null;     // Image height in pixels
+  width?: number | null;      // Image width in pixels (null for non-image files)
+  height?: number | null;     // Image height in pixels (null for non-image files)
 
   // Positioning
   position: number;           // Order within entry (0, 1, 2...)
@@ -33,9 +33,9 @@ export interface Photo {
 }
 
 /**
- * Photo creation input (fields required when creating a new photo)
+ * Attachment creation input (fields required when creating a new attachment)
  */
-export interface CreatePhotoInput {
+export interface CreateAttachmentInput {
   entry_id: string;
   user_id: string;
   file_path: string;
@@ -46,9 +46,9 @@ export interface CreatePhotoInput {
 }
 
 /**
- * Photo update input (fields that can be updated)
+ * Attachment update input (fields that can be updated)
  */
-export interface UpdatePhotoInput {
+export interface UpdateAttachmentInput {
   file_path?: string;
   position?: number;
   uploaded?: boolean;
@@ -57,27 +57,27 @@ export interface UpdatePhotoInput {
 }
 
 /**
- * Photo with entry reference (for queries that join photos with entries)
+ * Attachment with entry reference (for queries that join attachments with entries)
  */
-export interface PhotoWithEntry extends Photo {
+export interface AttachmentWithEntry extends Attachment {
   entry_title?: string;
   entry_content?: string;
 }
 
 /**
- * Photo upload progress
+ * Attachment upload progress
  */
-export interface PhotoUploadProgress {
-  photo_id: string;
+export interface AttachmentUploadProgress {
+  attachment_id: string;
   progress: number;  // 0-100
   status: 'uploading' | 'completed' | 'failed';
   error?: string;
 }
 
 /**
- * Compressed photo result
+ * Compressed attachment result (for images)
  */
-export interface CompressedPhoto {
+export interface CompressedAttachment {
   uri: string;
   width: number;
   height: number;

@@ -7,8 +7,8 @@
 import { useWindowDimensions, Image, TouchableOpacity, ActivityIndicator, View } from 'react-native';
 import RenderHtml from 'react-native-render-html';
 import React, { useState, useEffect, useMemo } from 'react';
-import { extractPhotoIds } from '@trace/core';
-import { getPhotoUri } from '../../photos/mobilePhotoApi';
+import { extractAttachmentIds } from '@trace/core';
+import { getAttachmentUri } from '../../attachments/mobileAttachmentApi';
 import { PhotoViewer } from '../../photos/components/PhotoViewer';
 
 interface HtmlRendererProps {
@@ -31,7 +31,7 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
   // Load photo URIs when HTML changes
   useEffect(() => {
     async function loadPhotos() {
-      const extractedIds = extractPhotoIds(html);
+      const extractedIds = extractAttachmentIds(html);
       if (extractedIds.length === 0) return;
 
       setPhotoIds(extractedIds);
@@ -39,7 +39,7 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
       const uris: Record<string, string> = {};
 
       for (const photoId of extractedIds) {
-        const uri = await getPhotoUri(photoId);
+        const uri = await getAttachmentUri(photoId);
         if (uri) {
           uris[photoId] = uri;
         }

@@ -395,7 +395,7 @@ async function copyPhotosForEntry(
 
   try {
     // Get photos from the original entry
-    const originalPhotos = await localDB.getPhotosForEntry(originalEntryId);
+    const originalPhotos = await localDB.getAttachmentsForEntry(originalEntryId);
 
     if (originalPhotos.length === 0) {
       return pendingPhotos;

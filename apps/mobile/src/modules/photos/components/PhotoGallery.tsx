@@ -9,9 +9,9 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
-import { getPhotoUri, ensurePhotoDownloaded, getPhotosForEntry } from '../mobilePhotoApi';
+import { getAttachmentUri, ensureAttachmentDownloaded, getAttachmentsForEntry } from '../../attachments/mobileAttachmentApi';
 import { PhotoViewer } from './PhotoViewer';
-import type { Photo } from '@trace/core';
+import type { Attachment } from '@trace/core';
 
 interface PendingPhoto {
   photoId: string;
@@ -37,7 +37,7 @@ interface PhotoGalleryProps {
 }
 
 export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoDelete, pendingPhotos, collapsible, isCollapsed, onCollapsedChange, onAddPhoto }: PhotoGalleryProps) {
-  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [photos, setPhotos] = useState<Attachment[]>([]);
   const [photoUris, setPhotoUris] = useState<Record<string, string>>({});
   const [photoDownloadStatus, setPhotoDownloadStatus] = useState<Record<string, boolean>>({}); // true = downloaded locally
   const [loading, setLoading] = useState(true);
@@ -99,7 +99,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
       if (!isRefresh) {
         setLoading(true);
       }
-      const entryPhotos = await getPhotosForEntry(entryId);
+      const entryPhotos = await getAttachmentsForEntry(entryId);
 
       if (!mounted) return; // Prevent setState on unmounted component
 
@@ -124,12 +124,12 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
             isDownloaded = false;
           }
         }
-        downloadStatus[photo.photo_id] = isDownloaded;
+        downloadStatus[photo.attachment_id] = isDownloaded;
 
         // Get URI (local or cloud)
-        const uri = await getPhotoUri(photo.photo_id);
+        const uri = await getAttachmentUri(photo.attachment_id);
         if (uri) {
-          uris[photo.photo_id] = uri;
+          uris[photo.attachment_id] = uri;
         }
         // Note: Removed per-photo logging to reduce noise
       }
@@ -166,22 +166,22 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
       const photo = photos[photoIndex];
 
       // If photo is not downloaded yet, download it in background for offline use
-      if (!photoDownloadStatus[photo.photo_id] && !downloadingPhotos.has(photo.photo_id)) {
-        console.log(`📥 Triggering background download for photo ${photo.photo_id}`);
-        setDownloadingPhotos(prev => new Set(prev).add(photo.photo_id));
+      if (!photoDownloadStatus[photo.attachment_id] && !downloadingPhotos.has(photo.attachment_id)) {
+        console.log(`📥 Triggering background download for photo ${photo.attachment_id}`);
+        setDownloadingPhotos(prev => new Set(prev).add(photo.attachment_id));
 
         try {
-          await ensurePhotoDownloaded(photo.photo_id);
+          await ensureAttachmentDownloaded(photo.attachment_id);
 
           // Update download status
-          setPhotoDownloadStatus(prev => ({ ...prev, [photo.photo_id]: true }));
-          console.log(`✅ Photo ${photo.photo_id} downloaded for offline use`);
+          setPhotoDownloadStatus(prev => ({ ...prev, [photo.attachment_id]: true }));
+          console.log(`✅ Photo ${photo.attachment_id} downloaded for offline use`);
         } catch (error) {
-          console.error(`Failed to download photo ${photo.photo_id}:`, error);
+          console.error(`Failed to download photo ${photo.attachment_id}:`, error);
         } finally {
           setDownloadingPhotos(prev => {
             const newSet = new Set(prev);
-            newSet.delete(photo.photo_id);
+            newSet.delete(photo.attachment_id);
             return newSet;
           });
         }
@@ -204,7 +204,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
   };
 
   // Determine which photos to display (pending or from DB)
-  const displayPhotos = pendingPhotos || photos.map(p => ({ photoId: p.photo_id }));
+  const displayPhotos = pendingPhotos || photos.map(p => ({ photoId: p.attachment_id }));
 
   // Show nothing if no photos
   if (!loading && displayPhotos.length === 0) {
@@ -305,7 +305,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
           // For pending photos, get from photo object
           // For DB photos, get from photos array
           const dbPhoto = pendingPhotos === undefined
-            ? photos.find(p => p.photo_id === photo.photoId)
+            ? photos.find(p => p.attachment_id === photo.photoId)
             : null;
           const pendingPhoto = pendingPhotos
             ? pendingPhotos.find(p => p.photoId === photo.photoId)

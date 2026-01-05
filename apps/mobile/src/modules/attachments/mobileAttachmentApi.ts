@@ -1,7 +1,7 @@
 /**
- * Mobile Photo API - Offline-first photo operations
+ * Mobile Attachment API - Offline-first attachment operations
  *
- * Handles local file system operations for photos on mobile.
+ * Handles local file system operations for attachments on mobile.
  * Includes image compression, thumbnail generation, and file management.
  *
  * Architecture:
@@ -17,9 +17,9 @@ import { supabase, IMAGE_QUALITY_PRESETS } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
 import { triggerPushSync } from '../../shared/sync';
 import { createScopedLogger } from '../../shared/utils/logger';
-import type { CompressedPhoto, ImageQuality } from '@trace/core';
+import type { CompressedAttachment, ImageQuality } from '@trace/core';
 
-const log = createScopedLogger('PhotoApi');
+const log = createScopedLogger('AttachmentApi');
 
 // ============================================================================
 // PERMISSIONS
@@ -47,7 +47,7 @@ export async function requestGalleryPermissions(): Promise<boolean> {
 
 /**
  * Launch camera to capture a photo
- * Uses quality 1 to get full resolution - compression happens later in compressPhoto()
+ * Uses quality 1 to get full resolution - compression happens later in compressAttachment()
  */
 export async function capturePhoto(): Promise<{ uri: string; width: number; height: number } | null> {
   try {
@@ -168,10 +168,10 @@ export async function pickMultiplePhotosFromGallery(): Promise<{ uri: string; wi
 /**
  * Compress and resize photo based on quality setting
  */
-export async function compressPhoto(uri: string, quality: ImageQuality = 'standard'): Promise<CompressedPhoto> {
+export async function compressAttachment(uri: string, quality: ImageQuality = 'standard'): Promise<CompressedAttachment> {
   try {
     const preset = IMAGE_QUALITY_PRESETS[quality];
-    log.debug('Compressing photo', { quality, maxWidth: preset.maxWidth, uri: uri.substring(0, 50) });
+    log.debug('Compressing attachment', { quality, maxWidth: preset.maxWidth, uri: uri.substring(0, 50) });
 
     // For full quality, skip manipulation entirely
     if (quality === 'full') {
@@ -208,7 +208,7 @@ export async function compressPhoto(uri: string, quality: ImageQuality = 'standa
     const fileInfo = await FileSystem.getInfoAsync(manipResult.uri);
     const size = fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0;
 
-    log.debug('Photo compressed', {
+    log.debug('Attachment compressed', {
       width: manipResult.width,
       height: manipResult.height,
       size,
@@ -222,15 +222,15 @@ export async function compressPhoto(uri: string, quality: ImageQuality = 'standa
       mime_type: 'image/jpeg',
     };
   } catch (error) {
-    log.error('Failed to compress photo', error, { uri: uri.substring(0, 50), quality });
+    log.error('Failed to compress attachment', error, { uri: uri.substring(0, 50), quality });
     throw error;
   }
 }
 
 /**
- * Generate thumbnail from photo (200x200px)
+ * Generate thumbnail from attachment (200x200px)
  */
-export async function generateThumbnail(uri: string): Promise<CompressedPhoto> {
+export async function generateThumbnail(uri: string): Promise<CompressedAttachment> {
   log.debug('Generating thumbnail');
 
   const manipResult = await ImageManipulator.manipulateAsync(
@@ -256,52 +256,52 @@ export async function generateThumbnail(uri: string): Promise<CompressedPhoto> {
 // ============================================================================
 
 /**
- * Save photo to local file system
+ * Save attachment to local file system
  */
-export async function savePhotoToLocalStorage(
+export async function saveAttachmentToLocalStorage(
   uri: string,
-  photoId: string,
+  attachmentId: string,
   userId: string,
   entryId: string
 ): Promise<string> {
-  const dirPath = `${FileSystem.documentDirectory}photos/${userId}/${entryId}/`;
+  const dirPath = `${FileSystem.documentDirectory}attachments/${userId}/${entryId}/`;
   await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
 
-  const targetPath = `${dirPath}${photoId}.jpg`;
+  const targetPath = `${dirPath}${attachmentId}.jpg`;
 
-  log.debug('Saving photo to local storage', { photoId, targetPath });
+  log.debug('Saving attachment to local storage', { attachmentId, targetPath });
 
   await FileSystem.copyAsync({
     from: uri,
     to: targetPath,
   });
 
-  log.info('Photo saved locally', { photoId });
+  log.info('Attachment saved locally', { attachmentId });
   return targetPath;
 }
 
 /**
- * Delete photo from local file system
+ * Delete attachment from local file system
  */
-export async function deletePhotoFromLocalStorage(localPath: string): Promise<void> {
+export async function deleteAttachmentFromLocalStorage(localPath: string): Promise<void> {
   try {
     const fileInfo = await FileSystem.getInfoAsync(localPath);
     if (fileInfo.exists) {
       await FileSystem.deleteAsync(localPath);
-      log.debug('Local photo file deleted', { path: localPath });
+      log.debug('Local attachment file deleted', { path: localPath });
     } else {
-      log.debug('Local photo file not found', { path: localPath });
+      log.debug('Local attachment file not found', { path: localPath });
     }
   } catch (error) {
-    log.warn('Could not delete local photo file', { path: localPath, error });
+    log.warn('Could not delete local attachment file', { path: localPath, error });
   }
 }
 
 /**
- * Create photo input type
+ * Create attachment input type
  */
-export interface CreatePhotoInput {
-  photo_id: string;
+export interface CreateAttachmentInput {
+  attachment_id: string;
   entry_id: string;
   user_id: string;
   file_path: string;
@@ -315,14 +315,14 @@ export interface CreatePhotoInput {
 }
 
 /**
- * Create a photo record in the local database
- * This is the proper API function for creating photos - components should use this instead of localDB directly
+ * Create an attachment record in the local database
+ * This is the proper API function for creating attachments - components should use this instead of localDB directly
  */
-export async function createPhoto(data: CreatePhotoInput): Promise<void> {
-  log.info('Creating photo', { photoId: data.photo_id, entryId: data.entry_id });
+export async function createAttachment(data: CreateAttachmentInput): Promise<void> {
+  log.info('Creating attachment', { attachmentId: data.attachment_id, entryId: data.entry_id });
 
-  await localDB.createPhoto({
-    photo_id: data.photo_id,
+  await localDB.createAttachment({
+    attachment_id: data.attachment_id,
     entry_id: data.entry_id,
     user_id: data.user_id,
     file_path: data.file_path,
@@ -338,48 +338,48 @@ export async function createPhoto(data: CreatePhotoInput): Promise<void> {
   // Trigger sync in background
   triggerPushSync();
 
-  log.success('Photo created', { photoId: data.photo_id });
+  log.success('Attachment created', { attachmentId: data.attachment_id });
 }
 
 /**
- * Get all photos for an entry
+ * Get all attachments for an entry
  */
-export async function getPhotosForEntry(entryId: string): Promise<any[]> {
-  log.debug('Getting photos for entry', { entryId });
-  return await localDB.getPhotosForEntry(entryId);
+export async function getAttachmentsForEntry(entryId: string): Promise<any[]> {
+  log.debug('Getting attachments for entry', { entryId });
+  return await localDB.getAttachmentsForEntry(entryId);
 }
 
 /**
- * Delete photo completely (database entry + local file)
+ * Delete attachment completely (database entry + local file)
  */
-export async function deletePhoto(photoId: string): Promise<void> {
-  log.info('📸 deletePhoto called', { photoId });
+export async function deleteAttachment(attachmentId: string): Promise<void> {
+  log.info('📎 deleteAttachment called', { attachmentId });
 
   try {
-    const photo = await localDB.getPhoto(photoId);
-    if (!photo) {
-      log.warn('📸 Photo not found in database', { photoId });
+    const attachment = await localDB.getAttachment(attachmentId);
+    if (!attachment) {
+      log.warn('📎 Attachment not found in database', { attachmentId });
       return;
     }
 
-    log.info('📸 Photo found, marking for deletion', { photoId, entryId: photo.entry_id, synced: photo.synced });
+    log.info('📎 Attachment found, marking for deletion', { attachmentId, entryId: attachment.entry_id, synced: attachment.synced });
 
     // Delete local file if exists
-    if (photo.local_path) {
-      await deletePhotoFromLocalStorage(photo.local_path);
+    if (attachment.local_path) {
+      await deleteAttachmentFromLocalStorage(attachment.local_path);
     }
 
     // Delete database record (marks for sync deletion)
-    await localDB.deletePhoto(photoId);
-    log.info('📸 Photo marked for sync deletion in localDB', { photoId });
+    await localDB.deleteAttachment(attachmentId);
+    log.info('📎 Attachment marked for sync deletion in localDB', { attachmentId });
 
     // Trigger sync in background
-    log.info('📸 Triggering push sync for photo deletion');
+    log.info('📎 Triggering push sync for attachment deletion');
     triggerPushSync();
 
-    log.success('📸 Photo delete initiated', { photoId });
+    log.success('📎 Attachment delete initiated', { attachmentId });
   } catch (error) {
-    log.error('📸 Failed to delete photo', error, { photoId });
+    log.error('📎 Failed to delete attachment', error, { attachmentId });
     throw error;
   }
 }
@@ -389,13 +389,13 @@ export async function deletePhoto(photoId: string): Promise<void> {
 // ============================================================================
 
 /**
- * Upload photo to Supabase Storage
+ * Upload attachment to Supabase Storage
  */
-export async function uploadPhotoToSupabase(
+export async function uploadAttachmentToSupabase(
   localPath: string,
   remotePath: string
 ): Promise<{ url: string; size: number }> {
-  log.debug('Uploading photo to Supabase', { remotePath });
+  log.debug('Uploading attachment to Supabase', { remotePath });
 
   const fileInfo = await FileSystem.getInfoAsync(localPath);
   if (!fileInfo.exists) {
@@ -413,7 +413,7 @@ export async function uploadPhotoToSupabase(
   }
 
   const { data, error } = await supabase.storage
-    .from('photos')
+    .from('attachments')
     .upload(remotePath, bytes, {
       contentType: 'image/jpeg',
       cacheControl: '3600',
@@ -423,10 +423,10 @@ export async function uploadPhotoToSupabase(
   if (error) throw error;
 
   const { data: urlData } = supabase.storage
-    .from('photos')
+    .from('attachments')
     .getPublicUrl(remotePath);
 
-  log.info('Photo uploaded to Supabase', { remotePath, size: bytes.length });
+  log.info('Attachment uploaded to Supabase', { remotePath, size: bytes.length });
 
   return {
     url: urlData.publicUrl,
@@ -435,21 +435,21 @@ export async function uploadPhotoToSupabase(
 }
 
 /**
- * Download photo from Supabase to local storage
+ * Download attachment from Supabase to local storage
  */
-export async function downloadPhotoToLocal(
+export async function downloadAttachmentToLocal(
   remotePath: string,
   localPath: string
 ): Promise<void> {
-  log.debug('Downloading photo from Supabase', { remotePath });
+  log.debug('Downloading attachment from Supabase', { remotePath });
 
   const { data, error } = await supabase.storage
-    .from('photos')
+    .from('attachments')
     .download(remotePath);
 
   if (error) {
     if (error.message?.includes('not found') || error.message?.includes('does not exist')) {
-      throw new Error(`Photo file not found in storage: ${remotePath}`);
+      throw new Error(`Attachment file not found in storage: ${remotePath}`);
     }
     throw error;
   }
@@ -471,100 +471,100 @@ export async function downloadPhotoToLocal(
     encoding: FileSystem.EncodingType.Base64,
   });
 
-  log.info('Photo downloaded from Supabase', { remotePath, localPath });
+  log.info('Attachment downloaded from Supabase', { remotePath, localPath });
 }
 
 // ============================================================================
-// PHOTO RETRIEVAL
+// ATTACHMENT RETRIEVAL
 // ============================================================================
 
 /**
- * Get photo URI (local first, then download from cloud if needed)
+ * Get attachment URI (local first, then download from cloud if needed)
  */
-export async function getPhotoUri(photoId: string): Promise<string | null> {
+export async function getAttachmentUri(attachmentId: string): Promise<string | null> {
   try {
-    const photo = await localDB.getPhoto(photoId);
-    if (!photo) {
+    const attachment = await localDB.getAttachment(attachmentId);
+    if (!attachment) {
       return null;
     }
 
     // Check if local file exists
-    if (photo.local_path) {
-      const fileInfo = await FileSystem.getInfoAsync(photo.local_path);
+    if (attachment.local_path) {
+      const fileInfo = await FileSystem.getInfoAsync(attachment.local_path);
       if (fileInfo.exists) {
-        return photo.local_path;
+        return attachment.local_path;
       }
     }
 
-    // Photo is from cloud but not downloaded yet
-    if (photo.file_path && photo.uploaded) {
-      log.debug('Photo not local, attempting download', { photoId });
-      const localPath = await ensurePhotoDownloaded(photoId);
+    // Attachment is from cloud but not downloaded yet
+    if (attachment.file_path && attachment.uploaded) {
+      log.debug('Attachment not local, attempting download', { attachmentId });
+      const localPath = await ensureAttachmentDownloaded(attachmentId);
       if (localPath) {
         return localPath;
       }
-      log.debug('Photo file missing - cannot display', { photoId });
+      log.debug('Attachment file missing - cannot display', { attachmentId });
       return null;
     }
 
     // Fallback: Return Supabase signed URL
-    if (photo.file_path) {
+    if (attachment.file_path) {
       try {
         const { data, error } = await supabase.storage
-          .from('photos')
-          .createSignedUrl(photo.file_path, 3600);
+          .from('attachments')
+          .createSignedUrl(attachment.file_path, 3600);
 
         if (error) {
-          log.debug('Photo file not found in storage (orphaned entry)', { photoId });
+          log.debug('Attachment file not found in storage (orphaned entry)', { attachmentId });
           return null;
         }
 
         return data.signedUrl;
       } catch (signedUrlError) {
-        log.debug('Could not create signed URL', { photoId });
+        log.debug('Could not create signed URL', { attachmentId });
         return null;
       }
     }
 
     return null;
   } catch (error) {
-    log.error('Error getting photo URI', error, { photoId });
+    log.error('Error getting attachment URI', error, { attachmentId });
     return null;
   }
 }
 
 /**
- * Ensure photo is downloaded locally (on-demand download)
+ * Ensure attachment is downloaded locally (on-demand download)
  * Returns local URI if available, downloads from cloud if needed
  */
-export async function ensurePhotoDownloaded(photoId: string): Promise<string | null> {
+export async function ensureAttachmentDownloaded(attachmentId: string): Promise<string | null> {
   try {
-    const photo = await localDB.getPhoto(photoId);
-    if (!photo) {
-      log.debug('Photo not found in local DB', { photoId });
+    const attachment = await localDB.getAttachment(attachmentId);
+    if (!attachment) {
+      log.debug('Attachment not found in local DB', { attachmentId });
       return null;
     }
 
     // Check if already downloaded
-    if (photo.local_path) {
-      const fileInfo = await FileSystem.getInfoAsync(photo.local_path);
+    if (attachment.local_path) {
+      const fileInfo = await FileSystem.getInfoAsync(attachment.local_path);
       if (fileInfo.exists) {
-        return photo.local_path;
+        return attachment.local_path;
       }
     }
 
     // Download from cloud
-    log.debug('Downloading photo from cloud', { photoId });
+    log.debug('Downloading attachment from cloud', { attachmentId });
 
-    const dirPath = `${FileSystem.documentDirectory}photos/${photo.user_id}/${photo.entry_id}/`;
+    const dirPath = `${FileSystem.documentDirectory}attachments/${attachment.user_id}/${attachment.entry_id}/`;
     await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
 
-    const localPath = `${dirPath}${photoId}.jpg`;
+    const localPath = `${dirPath}${attachmentId}.jpg`;
 
-    await downloadPhotoToLocal(photo.file_path, localPath);
-    await localDB.updatePhoto(photoId, { local_path: localPath });
+    await downloadAttachmentToLocal(attachment.file_path, localPath);
+    await localDB.updateAttachment(attachmentId, { local_path: localPath });
 
-    log.success('Photo downloaded', { photoId });
+    log.success('Attachment downloaded', { attachmentId });
     return localPath;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -576,60 +576,60 @@ export async function ensurePhotoDownloaded(photoId: string): Promise<string | n
                        errorMessage.includes('does not exist');
 
     if (isNotFound) {
-      log.debug('Photo file missing from storage (orphaned DB entry)', { photoId });
+      log.debug('Attachment file missing from storage (orphaned DB entry)', { attachmentId });
       return null;
     }
 
-    log.error('Error downloading photo', error, { photoId });
+    log.error('Error downloading attachment', error, { attachmentId });
     return null;
   }
 }
 
 /**
- * Download photos in background (for photos pulled from cloud during sync)
+ * Download attachments in background (for attachments pulled from cloud during sync)
  */
-export async function downloadPhotosInBackground(limit: number = 10): Promise<void> {
+export async function downloadAttachmentsInBackground(limit: number = 10): Promise<void> {
   try {
-    const allPhotos = await localDB.getAllPhotos();
-    const photosToDownload: any[] = [];
+    const allAttachments = await localDB.getAllAttachments();
+    const attachmentsToDownload: any[] = [];
 
-    for (const photo of allPhotos) {
-      if (photosToDownload.length >= limit) break;
+    for (const attachment of allAttachments) {
+      if (attachmentsToDownload.length >= limit) break;
 
-      if (photo.local_path) {
-        const fileInfo = await FileSystem.getInfoAsync(photo.local_path);
+      if (attachment.local_path) {
+        const fileInfo = await FileSystem.getInfoAsync(attachment.local_path);
         if (fileInfo.exists) {
           continue;
         }
       }
 
-      if (photo.file_path && photo.uploaded) {
-        photosToDownload.push(photo);
+      if (attachment.file_path && attachment.uploaded) {
+        attachmentsToDownload.push(attachment);
       }
     }
 
-    if (photosToDownload.length === 0) {
-      log.debug('No photos to download in background');
+    if (attachmentsToDownload.length === 0) {
+      log.debug('No attachments to download in background');
       return;
     }
 
-    log.info('Starting background photo download', { count: photosToDownload.length });
+    log.info('Starting background attachment download', { count: attachmentsToDownload.length });
 
     let successCount = 0;
     let errorCount = 0;
 
-    for (const photo of photosToDownload) {
+    for (const attachment of attachmentsToDownload) {
       try {
-        await ensurePhotoDownloaded(photo.photo_id);
+        await ensureAttachmentDownloaded(attachment.attachment_id);
         successCount++;
       } catch (error) {
-        log.warn('Failed to download photo', { photoId: photo.photo_id, error });
+        log.warn('Failed to download attachment', { attachmentId: attachment.attachment_id, error });
         errorCount++;
       }
     }
 
-    log.success('Background photo download complete', { success: successCount, errors: errorCount });
+    log.success('Background attachment download complete', { success: successCount, errors: errorCount });
   } catch (error) {
-    log.error('Background photo download failed', error);
+    log.error('Background attachment download failed', error);
   }
 }

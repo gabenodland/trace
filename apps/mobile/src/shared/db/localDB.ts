@@ -410,6 +410,110 @@ class LocalDatabase {
     } catch (error) {
       console.error('Migration error (streams entry_rating_type):', error);
     }
+
+    // Migration: Add missing columns to attachments table FIRST (before data copy)
+    try {
+      const attachmentsExists = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='attachments'`
+      );
+
+      if (attachmentsExists) {
+        const columns = await this.db.getAllAsync<{ name: string }>(
+          `PRAGMA table_info(attachments)`
+        );
+        const columnNames = columns.map(c => c.name);
+
+        if (!columnNames.includes('thumbnail_path')) {
+          await this.db.execAsync(`ALTER TABLE attachments ADD COLUMN thumbnail_path TEXT`);
+          console.log('📦 Added thumbnail_path column to attachments');
+        }
+        if (!columnNames.includes('captured_at')) {
+          await this.db.execAsync(`ALTER TABLE attachments ADD COLUMN captured_at TEXT`);
+          console.log('📦 Added captured_at column to attachments');
+        }
+        if (!columnNames.includes('sync_error')) {
+          await this.db.execAsync(`ALTER TABLE attachments ADD COLUMN sync_error TEXT`);
+          console.log('📦 Added sync_error column to attachments');
+        }
+      }
+    } catch (error) {
+      console.error('Migration error (attachments columns):', error);
+    }
+
+    // Migration: Rename photos table to attachments
+    try {
+      // Check if old 'photos' table exists
+      const photosTableCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='photos'`
+      );
+
+      // Check if new 'attachments' table already exists
+      const attachmentsTableCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='attachments'`
+      );
+
+      if (photosTableCheck) {
+        console.log('📦 Running migration: Migrating photos table to attachments...');
+
+        if (attachmentsTableCheck) {
+          // Both tables exist - copy data from photos to attachments, then drop photos
+          console.log('📦 Both tables exist - copying data and dropping old table...');
+
+          // Get columns from both tables to find common ones
+          const photosColumns = await this.db.getAllAsync<{ name: string }>(
+            `PRAGMA table_info(photos)`
+          );
+          const attachmentsColumns = await this.db.getAllAsync<{ name: string }>(
+            `PRAGMA table_info(attachments)`
+          );
+
+          const photosColNames = new Set(photosColumns.map(c => c.name));
+          const attachmentsColNames = new Set(attachmentsColumns.map(c => c.name));
+
+          // Find common columns (excluding photo_id which maps to attachment_id)
+          const commonCols: string[] = [];
+          for (const col of photosColNames) {
+            if (col === 'photo_id') continue; // handled separately
+            if (attachmentsColNames.has(col)) {
+              commonCols.push(col);
+            }
+          }
+
+          // Build dynamic INSERT
+          const attachmentsCols = ['attachment_id', ...commonCols].join(', ');
+          const photosCols = ['photo_id', ...commonCols].join(', ');
+
+          console.log('📦 Copying columns:', attachmentsCols);
+
+          await this.db.execAsync(`
+            INSERT OR IGNORE INTO attachments (${attachmentsCols})
+            SELECT ${photosCols} FROM photos
+          `);
+
+          // Drop the old photos table
+          await this.db.execAsync(`DROP TABLE photos`);
+          console.log('✅ Data migrated and old photos table dropped');
+        } else {
+          // Only photos table exists - rename it
+          await this.db.execAsync(`ALTER TABLE photos RENAME TO attachments`);
+          await this.db.execAsync(`ALTER TABLE attachments RENAME COLUMN photo_id TO attachment_id`);
+          console.log('✅ Photos table renamed to attachments');
+        }
+
+        // Drop old indexes (they may or may not exist)
+        await this.db.execAsync(`
+          DROP INDEX IF EXISTS idx_photos_entry_id;
+          DROP INDEX IF EXISTS idx_photos_user_id;
+          DROP INDEX IF EXISTS idx_photos_position;
+          DROP INDEX IF EXISTS idx_photos_uploaded;
+          DROP INDEX IF EXISTS idx_photos_synced;
+        `);
+
+        console.log('✅ Migration complete: photos migrated to attachments');
+      }
+    } catch (error) {
+      console.error('Migration error (photos to attachments):', error);
+    }
   }
 
   private async createTables(): Promise<void> {
@@ -532,27 +636,30 @@ class LocalDatabase {
 
       -- Indexes for streams are created in createIndexes() after migrations
 
-      -- Photos table
-      CREATE TABLE IF NOT EXISTS photos (
-        photo_id TEXT PRIMARY KEY,
+      -- Attachments table (renamed from photos)
+      CREATE TABLE IF NOT EXISTS attachments (
+        attachment_id TEXT PRIMARY KEY,
         entry_id TEXT NOT NULL,
         user_id TEXT NOT NULL,
         file_path TEXT NOT NULL,
+        thumbnail_path TEXT,
         local_path TEXT,
         mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
         file_size INTEGER,
         width INTEGER,
         height INTEGER,
         position INTEGER NOT NULL DEFAULT 0,
+        captured_at TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         uploaded INTEGER DEFAULT 0,
         synced INTEGER DEFAULT 0,
+        sync_error TEXT,
         sync_action TEXT,
         FOREIGN KEY (entry_id) REFERENCES entries(entry_id) ON DELETE CASCADE
       );
 
-      -- Indexes for photos are created in createIndexes() after migrations
+      -- Indexes for attachments are created in createIndexes() after migrations
 
       -- Sync metadata table
       CREATE TABLE IF NOT EXISTS sync_metadata (
@@ -573,8 +680,8 @@ class LocalDatabase {
         entries_errors INTEGER DEFAULT 0,
         streams_pushed INTEGER DEFAULT 0,
         streams_errors INTEGER DEFAULT 0,
-        photos_pushed INTEGER DEFAULT 0,
-        photos_errors INTEGER DEFAULT 0,
+        attachments_pushed INTEGER DEFAULT 0,
+        attachments_errors INTEGER DEFAULT 0,
         entries_pulled INTEGER DEFAULT 0
       );
 
@@ -613,12 +720,12 @@ class LocalDatabase {
       CREATE INDEX IF NOT EXISTS idx_streams_user_id ON streams(user_id);
       CREATE INDEX IF NOT EXISTS idx_streams_synced ON streams(synced);
 
-      -- Indexes for photos
-      CREATE INDEX IF NOT EXISTS idx_photos_entry_id ON photos(entry_id);
-      CREATE INDEX IF NOT EXISTS idx_photos_user_id ON photos(user_id);
-      CREATE INDEX IF NOT EXISTS idx_photos_position ON photos(entry_id, position);
-      CREATE INDEX IF NOT EXISTS idx_photos_uploaded ON photos(uploaded);
-      CREATE INDEX IF NOT EXISTS idx_photos_synced ON photos(synced);
+      -- Indexes for attachments
+      CREATE INDEX IF NOT EXISTS idx_attachments_entry_id ON attachments(entry_id);
+      CREATE INDEX IF NOT EXISTS idx_attachments_user_id ON attachments(user_id);
+      CREATE INDEX IF NOT EXISTS idx_attachments_position ON attachments(entry_id, position);
+      CREATE INDEX IF NOT EXISTS idx_attachments_uploaded ON attachments(uploaded);
+      CREATE INDEX IF NOT EXISTS idx_attachments_synced ON attachments(synced);
 
       -- Indexes for sync_logs
       CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp DESC);
@@ -883,10 +990,10 @@ class LocalDatabase {
 
     const now = Date.now();
 
-    // Mark all associated photos for deletion
-    const photos = await this.getPhotosForEntry(entryId);
-    for (const photo of photos) {
-      await this.deletePhoto(photo.photo_id);
+    // Mark all associated attachments for deletion
+    const attachments = await this.getAttachmentsForEntry(entryId);
+    for (const attachment of attachments) {
+      await this.deleteAttachment(attachment.attachment_id);
     }
 
     if (entry.local_only) {
@@ -1836,8 +1943,8 @@ class LocalDatabase {
       entries_errors?: number;
       streams_pushed?: number;
       streams_errors?: number;
-      photos_pushed?: number;
-      photos_errors?: number;
+      attachments_pushed?: number;
+      attachments_errors?: number;
       entries_pulled?: number;
     }
   ): Promise<void> {
@@ -1907,16 +2014,16 @@ class LocalDatabase {
   }
 
   // ========================================
-  // PHOTO OPERATIONS
+  // ATTACHMENT OPERATIONS
   // ========================================
 
   /**
-   * Create a new photo record
-   * @param photo - Photo data
-   * @param fromSync - If true, photo is from cloud sync (already synced, no sync_action needed)
+   * Create a new attachment record
+   * @param attachment - Attachment data
+   * @param fromSync - If true, attachment is from cloud sync (already synced, no sync_action needed)
    */
-  async createPhoto(photo: {
-    photo_id: string;
+  async createAttachment(attachment: {
+    attachment_id: string;
     entry_id: string;
     user_id: string;
     file_path: string;
@@ -1936,41 +2043,41 @@ class LocalDatabase {
     const now = Date.now();
 
     await this.db.runAsync(
-      `INSERT INTO photos (
-        photo_id, entry_id, user_id, file_path, local_path,
+      `INSERT INTO attachments (
+        attachment_id, entry_id, user_id, file_path, local_path,
         mime_type, file_size, width, height, position,
         created_at, updated_at, uploaded, synced, sync_action
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        photo.photo_id,
-        photo.entry_id,
-        photo.user_id,
-        photo.file_path,
-        photo.local_path || null,
-        photo.mime_type,
-        photo.file_size || null,
-        photo.width || null,
-        photo.height || null,
-        photo.position,
-        photo.created_at || now,
-        photo.updated_at || now,
-        photo.uploaded ? 1 : 0,
+        attachment.attachment_id,
+        attachment.entry_id,
+        attachment.user_id,
+        attachment.file_path,
+        attachment.local_path || null,
+        attachment.mime_type,
+        attachment.file_size || null,
+        attachment.width || null,
+        attachment.height || null,
+        attachment.position,
+        attachment.created_at || now,
+        attachment.updated_at || now,
+        attachment.uploaded ? 1 : 0,
         fromSync ? 1 : 0,           // If from sync, mark as synced
         fromSync ? null : 'create', // If from sync, no sync action needed
       ]
     );
 
-    console.log(`📸 Photo created: ${photo.photo_id}${fromSync ? ' (from sync)' : ''}`);
+    console.log(`📎 Attachment created: ${attachment.attachment_id}${fromSync ? ' (from sync)' : ''}`);
   }
 
   /**
-   * Get all photos for an entry
+   * Get all attachments for an entry
    */
-  async getPhotosForEntry(entryId: string): Promise<any[]> {
+  async getAttachmentsForEntry(entryId: string): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    let query = 'SELECT * FROM photos WHERE entry_id = ? AND (sync_action IS NULL OR sync_action != ?)';
+    let query = 'SELECT * FROM attachments WHERE entry_id = ? AND (sync_action IS NULL OR sync_action != ?)';
     const params: any[] = [entryId, 'delete'];
 
     if (this.currentUserId) {
@@ -1980,33 +2087,33 @@ class LocalDatabase {
 
     query += ' ORDER BY position ASC';
 
-    const photos = await this.db.getAllAsync<any>(query, params);
-    return photos;
+    const attachments = await this.db.getAllAsync<any>(query, params);
+    return attachments;
   }
 
   /**
-   * Get a single photo by ID
+   * Get a single attachment by ID
    */
-  async getPhoto(photoId: string): Promise<any | null> {
+  async getAttachment(attachmentId: string): Promise<any | null> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    let query = 'SELECT * FROM photos WHERE photo_id = ?';
-    const params: any[] = [photoId];
+    let query = 'SELECT * FROM attachments WHERE attachment_id = ?';
+    const params: any[] = [attachmentId];
 
     if (this.currentUserId) {
       query += ' AND user_id = ?';
       params.push(this.currentUserId);
     }
 
-    const photo = await this.db.getFirstAsync<any>(query, params);
-    return photo || null;
+    const attachment = await this.db.getFirstAsync<any>(query, params);
+    return attachment || null;
   }
 
   /**
-   * Update a photo
+   * Update an attachment
    */
-  async updatePhoto(photoId: string, updates: Partial<{
+  async updateAttachment(attachmentId: string, updates: Partial<{
     file_path: string;
     local_path: string;
     file_size: number;
@@ -2065,46 +2172,46 @@ class LocalDatabase {
     fields.push('updated_at = ?');
     values.push(Date.now());
 
-    values.push(photoId);
+    values.push(attachmentId);
 
-    const sql = `UPDATE photos SET ${fields.join(', ')} WHERE photo_id = ?`;
+    const sql = `UPDATE attachments SET ${fields.join(', ')} WHERE attachment_id = ?`;
     await this.db.runAsync(sql, values);
 
-    console.log(`📸 Photo updated: ${photoId}`);
+    console.log(`📎 Attachment updated: ${attachmentId}`);
   }
 
   /**
-   * Update entry_id for all photos
+   * Update entry_id for all attachments
    */
-  async updatePhotoEntryIds(oldEntryId: string, newEntryId: string): Promise<void> {
+  async updateAttachmentEntryIds(oldEntryId: string, newEntryId: string): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    console.log(`📸 updatePhotoEntryIds: ${oldEntryId} → ${newEntryId}`);
+    console.log(`📎 updateAttachmentEntryIds: ${oldEntryId} → ${newEntryId}`);
 
-    const photos = await this.db.getAllAsync<any>(
-      'SELECT photo_id, file_path, local_path FROM photos WHERE entry_id = ?',
+    const attachments = await this.db.getAllAsync<any>(
+      'SELECT attachment_id, file_path, local_path FROM attachments WHERE entry_id = ?',
       [oldEntryId]
     );
 
-    console.log(`📸 Found ${photos.length} photos to update`);
+    console.log(`📎 Found ${attachments.length} attachments to update`);
 
-    if (photos.length === 0) return;
+    if (attachments.length === 0) return;
 
     const FileSystem = await import('expo-file-system/legacy');
 
-    for (const photo of photos) {
-      console.log(`📸 Processing photo ${photo.photo_id}:`);
-      console.log(`  Old path: ${photo.local_path}`);
+    for (const attachment of attachments) {
+      console.log(`📎 Processing attachment ${attachment.attachment_id}:`);
+      console.log(`  Old path: ${attachment.local_path}`);
 
-      const newFilePath = photo.file_path.replace(oldEntryId, newEntryId);
-      let newLocalPath = photo.local_path ? photo.local_path.replace(oldEntryId, newEntryId) : null;
+      const newFilePath = attachment.file_path.replace(oldEntryId, newEntryId);
+      let newLocalPath = attachment.local_path ? attachment.local_path.replace(oldEntryId, newEntryId) : null;
 
       console.log(`  New path: ${newLocalPath}`);
 
-      if (photo.local_path && newLocalPath) {
+      if (attachment.local_path && newLocalPath) {
         try {
-          const oldFileInfo = await FileSystem.getInfoAsync(photo.local_path);
+          const oldFileInfo = await FileSystem.getInfoAsync(attachment.local_path);
           console.log(`  Old file exists: ${oldFileInfo.exists}`);
 
           if (oldFileInfo.exists) {
@@ -2115,68 +2222,68 @@ class LocalDatabase {
 
             console.log(`  Moving file...`);
             await FileSystem.moveAsync({
-              from: photo.local_path,
+              from: attachment.local_path,
               to: newLocalPath,
             });
 
-            console.log(`✅ Moved photo file successfully`);
+            console.log(`✅ Moved attachment file successfully`);
 
             const newFileInfo = await FileSystem.getInfoAsync(newLocalPath);
             console.log(`  New file exists: ${newFileInfo.exists}`);
           } else {
-            console.log(`⚠️ Old file doesn't exist at ${photo.local_path}`);
+            console.log(`⚠️ Old file doesn't exist at ${attachment.local_path}`);
           }
         } catch (error) {
-          console.error(`❌ Failed to move photo file ${photo.photo_id}:`, error);
+          console.error(`❌ Failed to move attachment file ${attachment.attachment_id}:`, error);
         }
       }
 
       await this.db.runAsync(
-        'UPDATE photos SET entry_id = ?, file_path = ?, local_path = ?, synced = 0 WHERE photo_id = ?',
-        [newEntryId, newFilePath, newLocalPath, photo.photo_id]
+        'UPDATE attachments SET entry_id = ?, file_path = ?, local_path = ?, synced = 0 WHERE attachment_id = ?',
+        [newEntryId, newFilePath, newLocalPath, attachment.attachment_id]
       );
-      console.log(`✅ Updated database for photo ${photo.photo_id}`);
+      console.log(`✅ Updated database for attachment ${attachment.attachment_id}`);
     }
 
-    console.log(`📸 Finished updating ${photos.length} photos`);
+    console.log(`📎 Finished updating ${attachments.length} attachments`);
   }
 
   /**
-   * Delete a photo
+   * Delete an attachment
    */
-  async deletePhoto(photoId: string): Promise<void> {
+  async deleteAttachment(attachmentId: string): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.runAsync(
-      'UPDATE photos SET sync_action = ?, synced = 0 WHERE photo_id = ?',
-      ['delete', photoId]
+      'UPDATE attachments SET sync_action = ?, synced = 0 WHERE attachment_id = ?',
+      ['delete', attachmentId]
     );
 
-    console.log(`📸 Photo marked for deletion: ${photoId}`);
+    console.log(`📎 Attachment marked for deletion: ${attachmentId}`);
   }
 
   /**
-   * Permanently delete a photo
+   * Permanently delete an attachment
    */
-  async permanentlyDeletePhoto(photoId: string): Promise<void> {
+  async permanentlyDeleteAttachment(attachmentId: string): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    await this.db.runAsync('DELETE FROM photos WHERE photo_id = ?', [photoId]);
-    console.log(`📸 Photo permanently deleted: ${photoId}`);
+    await this.db.runAsync('DELETE FROM attachments WHERE attachment_id = ?', [attachmentId]);
+    console.log(`📎 Attachment permanently deleted: ${attachmentId}`);
   }
 
   /**
-   * Clean up orphaned photos
+   * Clean up orphaned attachments
    */
-  async cleanupOrphanedPhotos(): Promise<number> {
+  async cleanupOrphanedAttachments(): Promise<number> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    console.log('🧹 Searching for orphaned photos...');
+    console.log('🧹 Searching for orphaned attachments...');
 
-    let query = 'SELECT * FROM photos WHERE sync_action IS NULL OR sync_action != ?';
+    let query = 'SELECT * FROM attachments WHERE sync_action IS NULL OR sync_action != ?';
     const params: any[] = ['delete'];
 
     if (this.currentUserId) {
@@ -2184,36 +2291,36 @@ class LocalDatabase {
       params.push(this.currentUserId);
     }
 
-    const photos = await this.db.getAllAsync<any>(query, params);
+    const attachments = await this.db.getAllAsync<any>(query, params);
     let orphanCount = 0;
 
-    for (const photo of photos) {
-      const entry = await this.getEntry(photo.entry_id);
+    for (const attachment of attachments) {
+      const entry = await this.getEntry(attachment.entry_id);
 
       if (!entry || entry.deleted_at) {
-        console.log(`🗑️ Found orphaned photo ${photo.photo_id} (entry ${photo.entry_id} ${!entry ? 'not found' : 'deleted'})`);
-        await this.deletePhoto(photo.photo_id);
+        console.log(`🗑️ Found orphaned attachment ${attachment.attachment_id} (entry ${attachment.entry_id} ${!entry ? 'not found' : 'deleted'})`);
+        await this.deleteAttachment(attachment.attachment_id);
         orphanCount++;
       }
     }
 
     if (orphanCount > 0) {
-      console.log(`🧹 Cleanup complete: Found and marked ${orphanCount} orphaned photos for deletion`);
+      console.log(`🧹 Cleanup complete: Found and marked ${orphanCount} orphaned attachments for deletion`);
     } else {
-      console.log('✅ No orphaned photos found');
+      console.log('✅ No orphaned attachments found');
     }
 
     return orphanCount;
   }
 
   /**
-   * Get all photos needing upload
+   * Get all attachments needing upload
    */
-  async getPhotosNeedingUpload(): Promise<any[]> {
+  async getAttachmentsNeedingUpload(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    let query = 'SELECT * FROM photos WHERE uploaded = 0';
+    let query = 'SELECT * FROM attachments WHERE uploaded = 0';
     const params: any[] = [];
 
     if (this.currentUserId) {
@@ -2223,46 +2330,46 @@ class LocalDatabase {
 
     query += ' ORDER BY created_at ASC';
 
-    const photos = await this.db.getAllAsync<any>(query, params);
-    return photos;
+    const attachments = await this.db.getAllAsync<any>(query, params);
+    return attachments;
   }
 
   /**
-   * Get all photos needing sync
+   * Get all attachments needing sync
    */
-  async getPhotosNeedingSync(): Promise<any[]> {
+  async getAttachmentsNeedingSync(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
     let query = `
-      SELECT p.*
-      FROM photos p
-      LEFT JOIN entries e ON p.entry_id = e.entry_id
-      WHERE p.synced = 0
-        AND p.sync_action IS NOT NULL
-        AND (e.synced = 1 OR p.sync_action = 'delete' OR e.entry_id IS NULL)
+      SELECT a.*
+      FROM attachments a
+      LEFT JOIN entries e ON a.entry_id = e.entry_id
+      WHERE a.synced = 0
+        AND a.sync_action IS NOT NULL
+        AND (e.synced = 1 OR a.sync_action = 'delete' OR e.entry_id IS NULL)
     `;
     const params: any[] = [];
 
     if (this.currentUserId) {
-      query += ' AND p.user_id = ?';
+      query += ' AND a.user_id = ?';
       params.push(this.currentUserId);
     }
 
-    query += ' ORDER BY p.created_at ASC';
+    query += ' ORDER BY a.created_at ASC';
 
-    const photos = await this.db.getAllAsync<any>(query, params);
-    return photos;
+    const attachments = await this.db.getAllAsync<any>(query, params);
+    return attachments;
   }
 
   /**
-   * Get all photos for current user
+   * Get all attachments for current user
    */
-  async getAllPhotos(): Promise<any[]> {
+  async getAllAttachments(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    let query = 'SELECT * FROM photos';
+    let query = 'SELECT * FROM attachments';
     const params: any[] = [];
 
     if (this.currentUserId) {
@@ -2272,8 +2379,8 @@ class LocalDatabase {
 
     query += ' ORDER BY created_at DESC';
 
-    const photos = await this.db.getAllAsync<any>(query, params);
-    return photos;
+    const attachments = await this.db.getAllAsync<any>(query, params);
+    return attachments;
   }
 
   // ========================================
@@ -2301,7 +2408,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.execAsync(`
-      DELETE FROM photos;
+      DELETE FROM attachments;
       DELETE FROM entries;
       DELETE FROM streams;
       DELETE FROM locations;
@@ -2338,7 +2445,7 @@ class LocalDatabase {
     console.log('Opened fresh database connection');
 
     // Drop all tables one by one (more robust than multi-statement)
-    const tables = ['photos', 'entries', 'streams', 'locations', 'sync_metadata', 'sync_logs', 'entries_new'];
+    const tables = ['attachments', 'photos', 'entries', 'streams', 'locations', 'sync_metadata', 'sync_logs', 'entries_new'];
     for (const table of tables) {
       try {
         await this.db.execAsync(`DROP TABLE IF EXISTS ${table};`);

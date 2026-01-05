@@ -11,17 +11,17 @@ import { useNavigationMenu } from '../shared/hooks/useNavigationMenu';
 import { TopBar } from '../components/layout/TopBar';
 import { localDB } from '../shared/db/localDB';
 import { useSync, getSyncStatus } from '../shared/sync';
-import { deletePhotoFromLocalStorage } from '../modules/photos/mobilePhotoApi';
+import { deleteAttachmentFromLocalStorage } from '../modules/attachments/mobileAttachmentApi';
 import Svg, { Path } from 'react-native-svg';
 
-type TabType = 'status' | 'entries' | 'streams' | 'locations' | 'photos' | 'logs';
+type TabType = 'status' | 'entries' | 'streams' | 'locations' | 'attachments' | 'logs';
 type SyncFilter = 'all' | 'synced' | 'unsynced' | 'errors';
 
 interface CloudCounts {
   entries: number;
   streams: number;
   locations: number;
-  photos: number;
+  attachments: number;
 }
 
 export function DatabaseInfoScreen() {
@@ -34,7 +34,7 @@ export function DatabaseInfoScreen() {
   const [photos, setPhotos] = useState<any[]>([]);
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
-  const [cloudCounts, setCloudCounts] = useState<CloudCounts>({ entries: 0, streams: 0, locations: 0, photos: 0 });
+  const [cloudCounts, setCloudCounts] = useState<CloudCounts>({ entries: 0, streams: 0, locations: 0, attachments: 0 });
   const [syncStatus, setSyncStatus] = useState<any>(null);
   const [entrySyncFilter, setEntrySyncFilter] = useState<SyncFilter>('all');
   const [streamSyncFilter, setStreamSyncFilter] = useState<SyncFilter>('all');
@@ -61,26 +61,26 @@ export function DatabaseInfoScreen() {
       const allStreams = await localDB.runCustomQuery('SELECT * FROM streams ORDER BY name');
       setStreams(allStreams);
 
-      // Get all photos from SQLite
-      const allPhotos = await localDB.runCustomQuery('SELECT * FROM photos ORDER BY created_at DESC');
+      // Get all attachments from SQLite
+      const allPhotos = await localDB.runCustomQuery('SELECT * FROM attachments ORDER BY created_at DESC');
       setPhotos(allPhotos);
 
       // Get all locations from SQLite
       const allLocations = await localDB.runCustomQuery('SELECT * FROM locations ORDER BY name');
       setLocations(allLocations);
 
-      // Check which photo files exist locally
+      // Check which attachment files exist locally
       const fileExistenceMap: Record<string, boolean> = {};
       for (const photo of allPhotos) {
         if (photo.local_path) {
           try {
             const fileInfo = await FileSystem.getInfoAsync(photo.local_path);
-            fileExistenceMap[photo.photo_id] = fileInfo.exists;
+            fileExistenceMap[photo.attachment_id] = fileInfo.exists;
           } catch (error) {
-            fileExistenceMap[photo.photo_id] = false;
+            fileExistenceMap[photo.attachment_id] = false;
           }
         } else {
-          fileExistenceMap[photo.photo_id] = false;
+          fileExistenceMap[photo.attachment_id] = false;
         }
       }
       setPhotoFilesExist(fileExistenceMap);
@@ -117,7 +117,7 @@ export function DatabaseInfoScreen() {
             .select('*', { count: 'exact', head: true })
             .eq('user_id', user.id),
           supabase
-            .from('photos')
+            .from('attachments')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', user.id),
         ]);
@@ -126,7 +126,7 @@ export function DatabaseInfoScreen() {
           entries: entriesCount.count || 0,
           streams: streamsCount.count || 0,
           locations: locationsCount.count || 0,
-          photos: photosCount.count || 0,
+          attachments: photosCount.count || 0,
         });
       }
     } catch (error) {
@@ -544,38 +544,38 @@ export function DatabaseInfoScreen() {
 
   const handleClearLocalPhotos = () => {
     Alert.alert(
-      'Clear Local Photos',
-      'This will delete all photo files and database records. Photos will re-download from Cloud on next sync if they were uploaded.',
+      'Clear Local Attachments',
+      'This will delete all attachment files and database records. Attachments will re-download from Cloud on next sync if they were uploaded.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear Photos',
+          text: 'Clear Attachments',
           style: 'destructive',
           onPress: async () => {
             try {
-              // Get all photos
-              const allPhotos = await localDB.runCustomQuery('SELECT * FROM photos');
+              // Get all attachments
+              const allAttachments = await localDB.runCustomQuery('SELECT * FROM attachments');
 
-              // Delete all local photo files
+              // Delete all local attachment files
               let deletedCount = 0;
-              for (const photo of allPhotos) {
-                if (photo.local_path) {
+              for (const attachment of allAttachments) {
+                if (attachment.local_path) {
                   try {
-                    await deletePhotoFromLocalStorage(photo.local_path);
+                    await deleteAttachmentFromLocalStorage(attachment.local_path);
                     deletedCount++;
                   } catch (err) {
-                    console.warn(`Failed to delete photo file: ${photo.local_path}`, err);
+                    console.warn(`Failed to delete attachment file: ${attachment.local_path}`, err);
                   }
                 }
               }
 
-              // Delete all photo records from database
-              await localDB.runCustomQuery('DELETE FROM photos');
+              // Delete all attachment records from database
+              await localDB.runCustomQuery('DELETE FROM attachments');
 
               setRefreshKey(prev => prev + 1);
-              Alert.alert('Success', `Cleared ${allPhotos.length} photo records and deleted ${deletedCount} local files. Uploaded photos will re-download from Cloud on next sync.`);
+              Alert.alert('Success', `Cleared ${allAttachments.length} attachment records and deleted ${deletedCount} local files. Uploaded attachments will re-download from Cloud on next sync.`);
             } catch (error) {
-              Alert.alert('Error', `Failed to clear photos: ${error}`);
+              Alert.alert('Error', `Failed to clear attachments: ${error}`);
             }
           },
         },
@@ -585,16 +585,16 @@ export function DatabaseInfoScreen() {
 
   const handleCleanupOrphanedPhotos = async () => {
     try {
-      const orphanCount = await localDB.cleanupOrphanedPhotos();
+      const orphanCount = await localDB.cleanupOrphanedAttachments();
       setRefreshKey(prev => prev + 1);
 
       if (orphanCount > 0) {
-        Alert.alert('Success', `Found and marked ${orphanCount} orphaned photo${orphanCount === 1 ? '' : 's'} for deletion. They will be removed on next sync.`);
+        Alert.alert('Success', `Found and marked ${orphanCount} orphaned attachment${orphanCount === 1 ? '' : 's'} for deletion. They will be removed on next sync.`);
       } else {
-        Alert.alert('All Good', 'No orphaned photos found.');
+        Alert.alert('All Good', 'No orphaned attachments found.');
       }
     } catch (error) {
-      Alert.alert('Error', `Failed to cleanup orphaned photos: ${error}`);
+      Alert.alert('Error', `Failed to cleanup orphaned attachments: ${error}`);
     }
   };
 
@@ -706,11 +706,11 @@ export function DatabaseInfoScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'photos' && styles.tabActive]}
-          onPress={() => setActiveTab('photos')}
+          style={[styles.tab, activeTab === 'attachments' && styles.tabActive]}
+          onPress={() => setActiveTab('attachments')}
         >
-          <Text style={[styles.tabText, activeTab === 'photos' && styles.tabTextActive]}>
-            Photos
+          <Text style={[styles.tabText, activeTab === 'attachments' && styles.tabTextActive]}>
+            Attachments
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -735,7 +735,7 @@ export function DatabaseInfoScreen() {
                   Schema Version: <Text style={styles.versionNumber}>{schemaVersion}</Text>
                 </Text>
                 <Text style={styles.infoTextSmall}>
-                  {schemaVersion === 7 ? '✅ Latest version (includes photos table)' :
+                  {schemaVersion === 7 ? '✅ Latest version (includes attachments table)' :
                    schemaVersion < 7 ? '⚠️ Old version - clear app data to upgrade' :
                    '❓ Unknown version'}
                 </Text>
@@ -854,7 +854,7 @@ export function DatabaseInfoScreen() {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Photos</Text>
+              <Text style={styles.sectionTitle}>Attachments</Text>
               <View style={styles.statsRow}>
                 <View style={[styles.infoBox, styles.statsBox]}>
                   <Text style={styles.statsLabel}>Local</Text>
@@ -872,7 +872,7 @@ export function DatabaseInfoScreen() {
                     Errors: {photos.filter(p => p.sync_error).length}
                   </Text>
                   <TouchableOpacity onPress={handleClearLocalPhotos} style={styles.smallClearButton}>
-                    <Text style={styles.smallClearButtonText}>Clear Local Photos</Text>
+                    <Text style={styles.smallClearButtonText}>Clear Local Attachments</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={handleCleanupOrphanedPhotos} style={styles.cleanupButton}>
                     <Text style={styles.cleanupButtonText}>🧹 Cleanup Orphans</Text>
@@ -880,9 +880,9 @@ export function DatabaseInfoScreen() {
                 </View>
                 <View style={[styles.infoBox, styles.statsBox]}>
                   <Text style={styles.statsLabel}>Cloud</Text>
-                  <Text style={styles.statsCount}>{cloudCounts.photos}</Text>
+                  <Text style={styles.statsCount}>{cloudCounts.attachments}</Text>
                   <Text style={styles.infoText}>
-                    Diff: {cloudCounts.photos - photos.length}
+                    Diff: {cloudCounts.attachments - photos.length}
                   </Text>
                 </View>
               </View>
@@ -1169,8 +1169,8 @@ export function DatabaseInfoScreen() {
           </>
         )}
 
-        {/* PHOTOS TAB */}
-        {activeTab === 'photos' && (
+        {/* ATTACHMENTS TAB */}
+        {activeTab === 'attachments' && (
           <>
             {/* Filter Tabs */}
             <View style={styles.filterContainer}>
@@ -1208,22 +1208,22 @@ export function DatabaseInfoScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Photos List */}
+            {/* Attachments List */}
             <View style={styles.section}>
               {filteredPhotos.length === 0 ? (
                 <View style={styles.infoBox}>
-                  <Text style={styles.infoText}>No photos found</Text>
+                  <Text style={styles.infoText}>No attachments found</Text>
                 </View>
               ) : (
                 filteredPhotos.map((photo, index) => (
                   <TouchableOpacity
-                    key={photo.photo_id}
+                    key={photo.attachment_id}
                     style={styles.photoCard}
-                    onLongPress={() => showJsonModal(photo, `Photo: ${photo.photo_id.slice(0, 8)}`)}
+                    onLongPress={() => showJsonModal(photo, `Attachment: ${photo.attachment_id.slice(0, 8)}`)}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.photoTitle}>
-                      {index + 1}. Photo {photo.photo_id.slice(0, 8)}...
+                      {index + 1}. Attachment {photo.attachment_id.slice(0, 8)}...
                     </Text>
                     <View style={styles.photoMetaContainer}>
                       <Text style={styles.photoMeta}>
@@ -1239,8 +1239,8 @@ export function DatabaseInfoScreen() {
                         Position: {photo.position}
                       </Text>
                       {photo.local_path && (
-                        <Text style={[styles.photoMeta, !photoFilesExist[photo.photo_id] && styles.errorText]}>
-                          Local: {photoFilesExist[photo.photo_id] ? '✓ File exists' : '⚠️ File missing'}
+                        <Text style={[styles.photoMeta, !photoFilesExist[photo.attachment_id] && styles.errorText]}>
+                          Local: {photoFilesExist[photo.attachment_id] ? '✓ File exists' : '⚠️ File missing'}
                         </Text>
                       )}
                     </View>
@@ -1261,7 +1261,7 @@ export function DatabaseInfoScreen() {
                     {photo.sync_error && (
                       <Text style={styles.errorMessage}>{photo.sync_error}</Text>
                     )}
-                    <Text style={styles.photoId}>ID: {photo.photo_id}</Text>
+                    <Text style={styles.photoId}>ID: {photo.attachment_id}</Text>
                   </TouchableOpacity>
                 ))
               )}
