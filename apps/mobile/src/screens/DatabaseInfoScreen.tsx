@@ -26,7 +26,7 @@ interface CloudCounts {
 
 export function DatabaseInfoScreen() {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { sync, forcePull } = useSync();
   const [activeTab, setActiveTab] = useState<TabType>('status');
   const [entries, setEntries] = useState<any[]>([]);
@@ -827,6 +827,8 @@ export function DatabaseInfoScreen() {
         title="Database Info"
         menuItems={menuItems}
         userEmail={userEmail}
+        displayName={displayName}
+        avatarUrl={avatarUrl}
         onProfilePress={onProfilePress}
       >
         <TouchableOpacity onPress={() => setRefreshKey(prev => prev + 1)} style={styles.refreshButton}>

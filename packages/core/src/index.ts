@@ -3,6 +3,7 @@
 
 // Modules
 export * from "./modules/auth";
+export * from "./modules/profile";
 export * from "./modules/streams";
 export * from "./modules/entries";
 export * from "./modules/attachments";

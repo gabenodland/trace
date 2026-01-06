@@ -17,7 +17,7 @@ import { TopBar } from "../components/layout/TopBar";
 
 export function StreamsScreen() {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { streams, isLoading, streamMutations } = useStreams();
 
   const [searchText, setSearchText] = useState("");
@@ -130,6 +130,8 @@ export function StreamsScreen() {
         title="Streams"
         menuItems={menuItems}
         userEmail={userEmail}
+        displayName={displayName}
+        avatarUrl={avatarUrl}
         onProfilePress={onProfilePress}
       />
 

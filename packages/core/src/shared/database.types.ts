@@ -244,6 +244,36 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          id: string
+          name: string
+          profile_complete: boolean | null
+          updated_at: string | null
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id: string
+          name: string
+          profile_complete?: boolean | null
+          updated_at?: string | null
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          profile_complete?: boolean | null
+          updated_at?: string | null
+          username?: string
+        }
+        Relationships: []
+      }
       streams: {
         Row: {
           base_version: number | null
@@ -348,6 +378,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_username_available: {
+        Args: { username_param: string }
+        Returns: boolean
+      }
+      generate_username_from_email: { Args: { email: string }; Returns: string }
       is_entry_owner: { Args: { p_entry_id: string }; Returns: boolean }
       is_stream_owner: { Args: { p_stream_id: string }; Returns: boolean }
     }

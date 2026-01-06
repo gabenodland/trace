@@ -414,7 +414,7 @@ export const styles = StyleSheet.create({
   },
   snackbar: {
     position: "absolute",
-    top: Platform.OS === "ios" ? 60 : 40,
+    top: Platform.OS === "ios" ? 50 : (StatusBar.currentHeight || 24) + 5,
     alignSelf: "center",
     backgroundColor: "rgba(0, 0, 0, 0.8)",
     paddingVertical: 10,

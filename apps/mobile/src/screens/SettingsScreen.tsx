@@ -11,7 +11,7 @@ import { UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
 
 export function SettingsScreen() {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { settings, updateSettings } = useSettings();
 
   const [showUnitSelector, setShowUnitSelector] = useState(false);
@@ -27,6 +27,8 @@ export function SettingsScreen() {
         title="Settings"
         menuItems={menuItems}
         userEmail={userEmail}
+        displayName={displayName}
+        avatarUrl={avatarUrl}
         onProfilePress={onProfilePress}
       />
 

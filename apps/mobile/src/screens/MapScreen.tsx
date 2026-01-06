@@ -78,7 +78,7 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
 
 export function MapScreen() {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { streams } = useStreams();
 
   // Stream filter state
@@ -432,6 +432,8 @@ export function MapScreen() {
           title="Map"
           menuItems={menuItems}
           userEmail={userEmail}
+          displayName={displayName}
+          avatarUrl={avatarUrl}
           onProfilePress={onProfilePress}
         />
         <View style={styles.loadingContainer}>
@@ -447,6 +449,8 @@ export function MapScreen() {
       <TopBar
         menuItems={menuItems}
         userEmail={userEmail}
+        displayName={displayName}
+        avatarUrl={avatarUrl}
         onProfilePress={onProfilePress}
       >
         {/* Custom title with stream filter dropdown */}

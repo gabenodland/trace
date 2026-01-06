@@ -74,7 +74,7 @@ type ZoomLevel = "day" | "month" | "year";
 
 export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenProps = {}) {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const [zoomLevel, setZoomLevel] = useState<ZoomLevel>("day");
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const today = new Date();
@@ -756,6 +756,8 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
       <TopBar
         menuItems={menuItems}
         userEmail={userEmail}
+        displayName={displayName}
+        avatarUrl={avatarUrl}
         onProfilePress={onProfilePress}
       >
         {/* Custom title with date field dropdown */}

@@ -1,10 +1,12 @@
 import Svg, { Path, Circle } from "react-native-svg";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigation } from "../contexts/NavigationContext";
+import { useProfile } from "@trace/core";
 
 export function useNavigationMenu() {
   const { user, signOut } = useAuth();
   const { navigate } = useNavigation();
+  const { profile } = useProfile(user?.id);
 
   const menuItems = [
     {
@@ -82,9 +84,14 @@ export function useNavigationMenu() {
 
   const handleProfilePress = () => navigate("profile");
 
+  // Display name priority: name > username > email
+  const displayName = profile?.name || (profile?.username ? `@${profile.username}` : null) || user?.email || null;
+
   return {
     menuItems,
     userEmail: user?.email,
+    displayName,
+    avatarUrl: profile?.avatar_url || null,
     onProfilePress: handleProfilePress,
   };
 }

@@ -31,6 +31,8 @@ interface TopBarProps {
   // Hamburger menu (customizable menu items)
   menuItems?: NavigationMenuItem[];
   userEmail?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
   onProfilePress?: () => void;
 }
 
@@ -49,6 +51,8 @@ export function TopBar({
   isSearchActive = false,
   menuItems = [],
   userEmail,
+  displayName,
+  avatarUrl,
   onProfilePress,
 }: TopBarProps) {
   const [showMenu, setShowMenu] = useState(false);
@@ -144,6 +148,8 @@ export function TopBar({
               onClose={() => setShowMenu(false)}
               menuItems={menuItems}
               userEmail={userEmail}
+              displayName={displayName}
+              avatarUrl={avatarUrl}
               onProfilePress={onProfilePress}
             />
           </View>
