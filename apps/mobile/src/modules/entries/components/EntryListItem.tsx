@@ -149,13 +149,14 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             ]} numberOfLines={1}>
               {entry.title || getFirstLineOfText(entry.content)}
             </Text>
-            {/* Menu Button */}
+            {/* Menu Button - fixed width reserved area */}
             <TouchableOpacity
-              style={styles.titleOnlyMenuButton}
+              style={styles.menuButton}
               onPress={handleMenuPress}
               activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
                 <Circle cx={12} cy={6} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
                 <Circle cx={12} cy={12} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
                 <Circle cx={12} cy={18} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
@@ -293,24 +294,24 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
           </View>
         </>
       ) : (
-        /* Other display modes - original layout */
-        <View style={styles.contentRow}>
-          {/* Status Icon - shows for any task (entry with status != "none") - only if stream supports status */}
-          {showStatus && isATask && (
-            <TouchableOpacity
-              style={styles.statusIcon}
-              onPress={handleCheckboxPress}
-              activeOpacity={0.7}
-            >
-              <StatusIcon status={entry.status} size={22} />
-            </TouchableOpacity>
-          )}
+        /* Other display modes - restructured layout */
+        <>
+          {/* First line row: status icon + title/first line + menu */}
+          <View style={styles.firstLineRow}>
+            {/* Status Icon - shows for any task (entry with status != "none") - only if stream supports status */}
+            {showStatus && isATask && (
+              <TouchableOpacity
+                style={styles.statusIcon}
+                onPress={handleCheckboxPress}
+                activeOpacity={0.7}
+              >
+                <StatusIcon status={entry.status} size={22} />
+              </TouchableOpacity>
+            )}
 
-          {/* Content */}
-          <View style={styles.contentWrapper}>
-            {/* Pin Icon - Upper Right (if pinned) */}
+            {/* Pin Icon inline */}
             {entry.is_pinned && (
-              <View style={styles.pinIcon}>
+              <View style={styles.firstLinePinIcon}>
                 <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
                   <Path
                     d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"
@@ -320,11 +321,21 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               </View>
             )}
 
-            {/* Menu Button - Upper Right */}
+            {/* Title or first line of content */}
+            <Text style={[
+              entry.title ? styles.title : styles.contentFirstLine,
+              isCompletedStatus(entry.status) && styles.strikethrough,
+              styles.firstLineText
+            ]} numberOfLines={entry.title ? undefined : 1}>
+              {entry.title || getFirstLineOfText(entry.content)}
+            </Text>
+
+            {/* Menu Button - fixed width reserved area */}
             <TouchableOpacity
               style={styles.menuButton}
               onPress={handleMenuPress}
               activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
                 <Circle cx={12} cy={6} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
@@ -332,107 +343,108 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 <Circle cx={12} cy={18} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
               </Svg>
             </TouchableOpacity>
+          </View>
 
-            {/* Dropdown menu modal */}
-            <DropdownMenu
-              visible={showMenu}
-              onClose={() => onMenuToggle?.()}
-              items={menuItems}
-              anchorPosition={menuPosition}
-            />
+          {/* Dropdown menu modal */}
+          <DropdownMenu
+            visible={showMenu}
+            onClose={() => onMenuToggle?.()}
+            items={menuItems}
+            anchorPosition={menuPosition}
+          />
 
-            {entry.title ? (
-              /* Other modes with title */
-              <>
-                <Text style={[
-                  styles.title,
-                  isCompletedStatus(entry.status) && styles.strikethrough
-                ]}>
-                  {entry.title}
-                </Text>
-                {displayMode === 'flow' && (
-                  <View style={styles.flowDateRow}>
-                    <Text style={styles.dateSmall}>{entryDateStr}</Text>
-                    {entry.status !== "none" && (
-                      <View style={styles.statusBadge}>
-                        <StatusIcon status={entry.status} size={12} />
-                        <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
-                          {getStatusLabel(entry.status)}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-                {displayMode === 'flow' && (
-                  <PhotoGallery
-                    entryId={entry.entry_id}
-                    collapsible={true}
-                    isCollapsed={photosCollapsed}
-                    onCollapsedChange={setPhotosCollapsed}
-                    onPhotoCountChange={setPhotoCount}
-                  />
-                )}
-                {displayMode === 'flow' ? (
-                  <WebViewHtmlRenderer
-                    html={entry.content || ''}
-                    style={[
-                      styles.preview,
-                      isCompletedStatus(entry.status) && styles.strikethrough
-                    ]}
-                    strikethrough={isCompletedStatus(entry.status)}
-                  />
-                ) : (
+          {/* Rest of content - full width */}
+          {entry.title ? (
+            /* Has title - show remaining content */
+            <>
+              {displayMode === 'flow' && (
+                <View style={styles.flowDateRow}>
+                  <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                  {entry.status !== "none" && (
+                    <View style={styles.statusBadge}>
+                      <StatusIcon status={entry.status} size={12} />
+                      <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
+                        {getStatusLabel(entry.status)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+              {displayMode === 'flow' && (
+                <PhotoGallery
+                  entryId={entry.entry_id}
+                  collapsible={true}
+                  isCollapsed={photosCollapsed}
+                  onCollapsedChange={setPhotosCollapsed}
+                  onPhotoCountChange={setPhotoCount}
+                />
+              )}
+              {displayMode === 'flow' ? (
+                <WebViewHtmlRenderer
+                  html={entry.content || ''}
+                  style={[
+                    styles.preview,
+                    isCompletedStatus(entry.status) && styles.strikethrough
+                  ]}
+                  strikethrough={isCompletedStatus(entry.status)}
+                />
+              ) : (
+                formattedContent && (
                   <Text style={[
                     styles.preview,
                     isCompletedStatus(entry.status) && styles.strikethrough
                   ]} numberOfLines={maxLines}>
                     {formattedContent}
                   </Text>
-                )}
+                )
+              )}
+            </>
+          ) : (
+            /* No title - show content after first line */
+            displayMode === 'flow' ? (
+              <>
+                <View style={styles.flowDateRow}>
+                  <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                  {entry.status !== "none" && (
+                    <View style={styles.statusBadge}>
+                      <StatusIcon status={entry.status} size={12} />
+                      <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
+                        {getStatusLabel(entry.status)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <PhotoGallery
+                  entryId={entry.entry_id}
+                  collapsible={true}
+                  isCollapsed={photosCollapsed}
+                  onCollapsedChange={setPhotosCollapsed}
+                  onPhotoCountChange={setPhotoCount}
+                />
+                <WebViewHtmlRenderer
+                  html={entry.content || ''}
+                  style={[
+                    styles.content,
+                    isCompletedStatus(entry.status) && styles.strikethrough
+                  ]}
+                  strikethrough={isCompletedStatus(entry.status)}
+                />
               </>
             ) : (
-              /* Other modes without title */
-              displayMode === 'flow' ? (
-                <>
-                  <View style={styles.flowDateRow}>
-                    <Text style={styles.dateSmall}>{entryDateStr}</Text>
-                    {entry.status !== "none" && (
-                      <View style={styles.statusBadge}>
-                        <StatusIcon status={entry.status} size={12} />
-                        <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
-                          {getStatusLabel(entry.status)}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <PhotoGallery
-                    entryId={entry.entry_id}
-                    collapsible={true}
-                    isCollapsed={photosCollapsed}
-                    onCollapsedChange={setPhotosCollapsed}
-                    onPhotoCountChange={setPhotoCount}
-                  />
-                  <WebViewHtmlRenderer
-                    html={entry.content || ''}
-                    style={[
-                      styles.content,
-                      isCompletedStatus(entry.status) && styles.strikethrough
-                    ]}
-                    strikethrough={isCompletedStatus(entry.status)}
-                  />
-                </>
-              ) : (
+              /* Show remaining lines after first line was shown above */
+              formattedContent && formattedContent.includes('\n') && (
                 <Text style={[
                   styles.content,
                   isCompletedStatus(entry.status) && styles.strikethrough
-                ]} numberOfLines={maxLines}>
-                  {formattedContent}
+                ]} numberOfLines={maxLines - 1}>
+                  {formattedContent.substring(formattedContent.indexOf('\n') + 1)}
                 </Text>
               )
-            )}
+            )
+          )}
 
-            {/* Metadata */}
-            <View style={styles.metadata}>
+          {/* Metadata */}
+          <View style={styles.metadata}>
               <Text style={styles.date}>Updated {updatedDateStr}</Text>
 
               {/* Photo Count Badge (when collapsed) */}
@@ -574,9 +586,8 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                   )}
                 </View>
               )}
-            </View>
           </View>
-        </View>
+        </>
       )}
     </TouchableOpacity>
   );
@@ -608,10 +619,6 @@ const styles = StyleSheet.create({
   titleOnlyPinIcon: {
     flexShrink: 0,
   },
-  titleOnlyMenuButton: {
-    flexShrink: 0,
-    padding: 4,
-  },
   titleOnlyMetadata: {
     flexDirection: "row",
     alignItems: "center",
@@ -619,31 +626,48 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.xs,
     flexWrap: "wrap",
   },
-  contentRow: {
+  firstLineRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: theme.spacing.md,
+    alignItems: "center",
+    gap: theme.spacing.sm,
+  },
+  firstLinePinIcon: {
+    flexShrink: 0,
+  },
+  firstLineText: {
+    flex: 1,
+  },
+  menuButton: {
+    flexShrink: 0,
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: theme.spacing.xs,
   },
   statusIcon: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
+    flexShrink: 0,
   },
-  contentWrapper: {
-    flex: 1,
+  contentFirstLine: {
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.primary,
+    lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.tight,
   },
   titleOnlyText: {
+    flex: 1,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.text.primary,
     lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.tight,
   },
   title: {
-    fontSize: theme.typography.fontSize.xxl,
+    fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.text.primary,
-    marginBottom: theme.spacing.sm,
-    lineHeight: theme.typography.fontSize.xxl * theme.typography.lineHeight.tight,
+    lineHeight: theme.typography.fontSize.lg * theme.typography.lineHeight.tight,
   },
   dateSmall: {
     fontSize: theme.typography.fontSize.xs,
@@ -653,6 +677,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.md,
+    marginTop: theme.spacing.sm,
     marginBottom: theme.spacing.md,
   },
   statusBadge: {
@@ -672,11 +697,13 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.text.secondary,
     lineHeight: theme.typography.fontSize.sm * theme.typography.lineHeight.relaxed,
+    marginTop: theme.spacing.sm,
   },
   content: {
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.text.primary,
     lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.relaxed,
+    marginTop: theme.spacing.sm,
   },
   metadata: {
     flexDirection: "row",
@@ -835,19 +862,5 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.text.tertiary,
     fontWeight: theme.typography.fontWeight.medium,
-  },
-  pinIcon: {
-    position: "absolute",
-    top: 4,
-    right: 32,
-    padding: 2,
-    zIndex: 9,
-  },
-  menuButton: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    padding: 6,
-    zIndex: 10,
   },
 });
