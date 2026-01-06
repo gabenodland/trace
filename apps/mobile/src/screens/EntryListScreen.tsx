@@ -43,7 +43,7 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
   const { navigate } = useNavigation();
   const { streams } = useStreams();
   const { user } = useAuthState();
-  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const [showStreamDropdown, setShowStreamDropdown] = useState(false);
   const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
   const [showSortModeSelector, setShowSortModeSelector] = useState(false);
@@ -426,6 +426,8 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
         badge={filteredEntries.length}
         menuItems={menuItems}
         userEmail={userEmail}
+        displayName={displayName}
+        avatarUrl={avatarUrl}
         onProfilePress={onProfilePress}
         onSearchPress={() => setIsSearchOpen(!isSearchOpen)}
         isSearchActive={isSearchOpen}

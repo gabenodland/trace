@@ -1,6 +1,7 @@
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { ReactNode } from "react";
 import Svg, { Path, Circle } from "react-native-svg";
+import { getDefaultAvatarUrl } from "@trace/core";
 
 export interface NavigationMenuItem {
   label?: string;
@@ -16,11 +17,17 @@ interface NavigationMenuProps {
   onClose: () => void;
   menuItems: NavigationMenuItem[];
   userEmail?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
   onProfilePress?: () => void;
 }
 
-export function NavigationMenu({ visible, onClose, menuItems, userEmail, onProfilePress }: NavigationMenuProps) {
+export function NavigationMenu({ visible, onClose, menuItems, userEmail, displayName, avatarUrl, onProfilePress }: NavigationMenuProps) {
   if (!visible) return null;
+
+  // Get avatar URL - use actual avatar or generate default from display name
+  const effectiveDisplayName = displayName || userEmail || "User";
+  const effectiveAvatarUrl = avatarUrl || getDefaultAvatarUrl(effectiveDisplayName);
 
   return (
     <>
@@ -34,7 +41,7 @@ export function NavigationMenu({ visible, onClose, menuItems, userEmail, onProfi
       {/* Menu Dropdown */}
       <View style={styles.menu}>
         {/* User Profile Section */}
-        {userEmail && (
+        {(displayName || userEmail) && (
           <>
             <TouchableOpacity
               style={styles.userSection}
@@ -44,13 +51,11 @@ export function NavigationMenu({ visible, onClose, menuItems, userEmail, onProfi
               }}
               activeOpacity={0.7}
             >
-              <Text style={styles.userEmail}>{userEmail}</Text>
-              <View style={styles.profileIconCircle}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
-                  <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx="12" cy="7" r="4" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </View>
+              <Text style={styles.userName} numberOfLines={1}>{effectiveDisplayName}</Text>
+              <Image
+                source={{ uri: effectiveAvatarUrl }}
+                style={styles.avatarImage}
+              />
             </TouchableOpacity>
             <View style={styles.divider} />
           </>
@@ -121,23 +126,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
   },
-  userEmail: {
-    fontSize: 14,
+  userName: {
+    fontSize: 16,
     color: "#1f2937",
     fontWeight: "600",
     flex: 1,
   },
-  profileIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#3b82f6",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 12,
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#e5e7eb",
   },
   divider: {
     height: 1,

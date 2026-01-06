@@ -28,7 +28,7 @@ interface LocationNode {
 
 export function LocationsScreen() {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
 
   // Use hook for locations with counts instead of direct localDB call
   const { data: locationsData, isLoading } = useLocationsWithCounts();
@@ -140,6 +140,8 @@ export function LocationsScreen() {
           title="Locations"
           menuItems={menuItems}
           userEmail={userEmail}
+          displayName={displayName}
+          avatarUrl={avatarUrl}
           onProfilePress={onProfilePress}
         />
         <View style={styles.loadingContainer}>
@@ -157,6 +159,8 @@ export function LocationsScreen() {
         badge={totalLocations}
         menuItems={menuItems}
         userEmail={userEmail}
+        displayName={displayName}
+        avatarUrl={avatarUrl}
         onProfilePress={onProfilePress}
       />
 

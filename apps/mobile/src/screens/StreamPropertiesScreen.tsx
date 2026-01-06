@@ -9,6 +9,8 @@ import {
   Switch,
   Alert,
   Animated,
+  Platform,
+  StatusBar,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
@@ -37,7 +39,7 @@ interface StreamPropertiesScreenProps {
 
 export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps) {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
+  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { streams, streamMutations } = useStreams();
 
   const isCreateMode = streamId === null;
@@ -82,22 +84,45 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   // Snackbar state
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const snackbarOpacity = useRef(new Animated.Value(0)).current;
+  const snackbarTranslateY = useRef(new Animated.Value(-20)).current;
 
-  // Show snackbar helper
+  // Show snackbar with pop-down animation
   const showSnackbar = (message: string) => {
     setSnackbarMessage(message);
+    // Reset position
+    snackbarTranslateY.setValue(-20);
+    snackbarOpacity.setValue(0);
+
     Animated.sequence([
-      Animated.timing(snackbarOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.delay(2000),
-      Animated.timing(snackbarOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
+      // Pop down
+      Animated.parallel([
+        Animated.timing(snackbarOpacity, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.spring(snackbarTranslateY, {
+          toValue: 0,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]),
+      // Hold
+      Animated.delay(1500),
+      // Pop away
+      Animated.parallel([
+        Animated.timing(snackbarOpacity, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(snackbarTranslateY, {
+          toValue: -20,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]),
     ]).start(() => setSnackbarMessage(null));
   };
 
@@ -271,6 +296,8 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
           }}
           menuItems={menuItems}
           userEmail={userEmail}
+          displayName={displayName}
+          avatarUrl={avatarUrl}
           onProfilePress={onProfilePress}
         />
         <View style={styles.emptyContainer}>
@@ -642,6 +669,8 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         onBreadcrumbPress={handleBreadcrumbPress}
         menuItems={menuItems}
         userEmail={userEmail}
+        displayName={displayName}
+        avatarUrl={avatarUrl}
         onProfilePress={onProfilePress}
       />
 
@@ -721,7 +750,12 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
 
       {/* Snackbar */}
       {snackbarMessage && (
-        <Animated.View style={[styles.snackbar, { opacity: snackbarOpacity }]}>
+        <Animated.View
+          style={[
+            styles.snackbar,
+            { opacity: snackbarOpacity, transform: [{ translateY: snackbarTranslateY }] },
+          ]}
+        >
           <Text style={styles.snackbarText}>{snackbarMessage}</Text>
         </Animated.View>
       )}
@@ -917,22 +951,18 @@ const styles = StyleSheet.create({
   },
   snackbar: {
     position: "absolute",
-    bottom: 100,
-    left: 20,
-    right: 20,
-    backgroundColor: "#1f2937",
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    top: Platform.OS === "ios" ? 50 : (StatusBar.currentHeight || 24) + 5,
+    alignSelf: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    maxWidth: "70%",
   },
   snackbarText: {
-    color: "#ffffff",
+    color: "#fff",
     fontSize: 14,
     fontWeight: "500",
+    textAlign: "center",
   },
 });
