@@ -129,24 +129,21 @@ export const styles = StyleSheet.create({
     padding: 2,
   },
   titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: 6,
     backgroundColor: "#fafafa",
   },
   titleInputFullWidth: {
-    flex: 1,
     fontSize: 22,
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.text.primary,
     padding: 0,
     margin: 0,
     textAlign: "center",
+    textAlignVertical: "center",
   },
   titleTouchable: {
-    flex: 1,
+    width: "100%",
   },
   titleText: {
     fontSize: 22,
@@ -277,8 +274,8 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   titleCollapsed: {
-    flex: 1,
-    alignItems: "center",
+    width: "100%",
+    paddingVertical: 4,
   },
   titlePlaceholder: {
     fontSize: 22,

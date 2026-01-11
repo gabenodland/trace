@@ -436,7 +436,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 <Text style={[
                   styles.content,
                   isCompletedStatus(entry.status) && styles.strikethrough
-                ]} numberOfLines={maxLines - 1}>
+                ]} numberOfLines={maxLines ? maxLines - 1 : undefined}>
                   {formattedContent.substring(formattedContent.indexOf('\n') + 1)}
                 </Text>
               )

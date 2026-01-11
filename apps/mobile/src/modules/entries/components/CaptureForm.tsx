@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
 import * as Location from "expo-location";
-import { extractTagsAndMentions, useAuthState, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus } from "@trace/core";
+import { extractTagsAndMentions, useAuthState, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate } from "@trace/core";
 import { getDeviceName } from "../mobileEntryApi";
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
@@ -103,6 +103,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const [originalStreamId, setOriginalStreamId] = useState<string | null>(null);
   const [originalStreamName, setOriginalStreamName] = useState<string | null>(null);
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
+  const [isTitleFocused, setIsTitleFocused] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const snackbarOpacity = useRef(new Animated.Value(0)).current;
   const editorRef = useRef<any>(null);
@@ -621,13 +622,14 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   }, [returnContext, navigate, formData.entryDate, formData.streamId, formData.streamName, isEditing, originalStreamId, originalStreamName]);
 
   // Auto-collapse formData.title when user starts typing in body without a formData.title
+  // Don't collapse while title is focused (prevents keyboard dismissal while typing)
   useEffect(() => {
-    if (!formData.title.trim() && formData.content.trim().length > 0) {
+    if (!formData.title.trim() && formData.content.trim().length > 0 && !isTitleFocused) {
       setIsTitleExpanded(false);
     } else if (formData.title.trim()) {
       setIsTitleExpanded(true);
     }
-  }, [formData.title, formData.content]);
+  }, [formData.title, formData.content, isTitleFocused]);
 
   // Load entry data when editing (INITIAL LOAD ONLY)
   // Pattern: Build complete form data object, set baseline AND form atomically, then mark ready
@@ -916,6 +918,63 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     Keyboard.dismiss();
     setActivePicker('stream');
   }, [isEditing, isCopiedEntry, streams.length, initialStreamId]);
+
+  // Apply templates when form loads with an initial stream
+  // This handles the case where user navigates from a stream view and clicks "new"
+  const hasAppliedInitialTemplateRef = useRef(false);
+  useEffect(() => {
+    // Only for new entries (not editing, not copied)
+    if (isEditing || isCopiedEntry) return;
+
+    // Only run once
+    if (hasAppliedInitialTemplateRef.current) return;
+
+    // Only if streams are loaded
+    if (streams.length === 0) return;
+
+    // Only if we have an initial stream ID that's a valid stream (not a filter)
+    const specialStreamValues = ["all", "events", "streams", "tags", "people", null, undefined];
+    const hasValidStreamFromView = initialStreamId && !specialStreamValues.includes(initialStreamId as any);
+    if (!hasValidStreamFromView) return;
+
+    // Find the stream
+    const selectedStream = streams.find(s => s.stream_id === initialStreamId);
+    if (!selectedStream) return;
+
+    // Mark as applied
+    hasAppliedInitialTemplateRef.current = true;
+
+    const templateDate = new Date();
+    const titleIsBlank = !formData.title.trim();
+    const contentIsBlank = !formData.content.trim();
+
+    // Apply title template if title is blank (independent of content)
+    if (titleIsBlank && selectedStream.entry_title_template) {
+      const newTitle = applyTitleTemplate(selectedStream.entry_title_template, {
+        date: templateDate,
+        streamName: selectedStream.name,
+      });
+      if (newTitle) {
+        updateField("title", newTitle);
+      }
+    }
+
+    // Apply content template if content is blank (independent of title)
+    if (contentIsBlank && selectedStream.entry_content_template) {
+      const newContent = applyContentTemplate(selectedStream.entry_content_template, {
+        date: templateDate,
+        streamName: selectedStream.name,
+      });
+      if (newContent) {
+        updateField("content", newContent);
+      }
+    }
+
+    // Apply default status if stream has one
+    if (selectedStream.entry_default_status && selectedStream.entry_default_status !== "none") {
+      updateField("status", selectedStream.entry_default_status);
+    }
+  }, [isEditing, isCopiedEntry, streams, initialStreamId, formData.title, formData.content, updateField]);
 
   // Helper function to capture GPS coordinates (used for initial capture and reload)
   // forceRefresh: if true, skip cache and get fresh GPS reading with high accuracy
@@ -1655,19 +1714,21 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               ref={titleInputRef}
               value={formData.title}
               onChangeText={(text) => updateField("title", text)}
-              placeholder="Title"
+              placeholder={isTitleFocused ? "" : "Add Title"}
               placeholderTextColor="#9ca3af"
               style={styles.titleInputFullWidth}
               editable={!isSubmitting}
               returnKeyType="next"
               blurOnSubmit={false}
               onFocus={() => {
+                setIsTitleFocused(true);
                 setIsTitleExpanded(true);
                 // Clear any pending body focus - title is being focused instead
                 editorRef.current?.clearPendingFocus?.();
                 // Also blur the editor to ensure keyboard shows for title, not body
                 editorRef.current?.blur?.();
               }}
+              onBlur={() => setIsTitleFocused(false)}
               onPressIn={handleTitlePress}
             />
           )}
@@ -1790,14 +1851,41 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               updateField("streamId", id);
               updateField("streamName", name);
 
-              // Apply default status for new stream if:
-              // 1. Not editing an existing entry (new entry)
-              // 2. Current status is "none" (no status set yet)
-              // 3. New stream has status enabled and a default status
-              if (!isEditing && formData.status === "none" && id) {
+              // Apply templates when stream is selected (not removed)
+              if (id) {
                 const selectedStream = streams.find(s => s.stream_id === id);
-                if (selectedStream?.entry_use_status && selectedStream?.entry_default_status) {
-                  updateField("status", selectedStream.entry_default_status);
+
+                if (selectedStream) {
+                  const templateDate = new Date();
+                  const titleIsBlank = !formData.title.trim();
+                  const contentIsBlank = !formData.content.trim();
+
+                  // Apply title template if title is blank (independent of content)
+                  if (titleIsBlank && selectedStream.entry_title_template) {
+                    const newTitle = applyTitleTemplate(selectedStream.entry_title_template, {
+                      date: templateDate,
+                      streamName: selectedStream.name,
+                    });
+                    if (newTitle) {
+                      updateField("title", newTitle);
+                    }
+                  }
+
+                  // Apply content template if content is blank (independent of title)
+                  if (contentIsBlank && selectedStream.entry_content_template) {
+                    const newContent = applyContentTemplate(selectedStream.entry_content_template, {
+                      date: templateDate,
+                      streamName: selectedStream.name,
+                    });
+                    if (newContent) {
+                      updateField("content", newContent);
+                    }
+                  }
+
+                  // Apply default status if current status is "none"
+                  if (formData.status === "none" && selectedStream.entry_use_status && selectedStream.entry_default_status) {
+                    updateField("status", selectedStream.entry_default_status);
+                  }
                 }
               }
 

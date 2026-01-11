@@ -12,7 +12,7 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Circle } from "react-native-svg";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import {
   type UpdateStreamInput,
@@ -29,6 +29,8 @@ import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
 import { StatusConfigModal } from "../modules/streams/components/StatusConfigModal";
 import { TypeConfigModal } from "../modules/streams/components/TypeConfigModal";
 import { RatingConfigModal } from "../modules/streams/components/RatingConfigModal";
+import { TemplateHelpModal } from "../modules/streams/components/TemplateHelpModal";
+import { TemplateEditorModal } from "../modules/streams/components/TemplateEditorModal";
 import { type RatingType, getRatingTypeLabel } from "@trace/core";
 
 type TabType = "features" | "template" | "general";
@@ -80,6 +82,11 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   const [useType, setUseType] = useState(false);
   const [entryTypes, setEntryTypes] = useState<string[]>([]);
   const [showTypeConfig, setShowTypeConfig] = useState(false);
+
+  // Template modals
+  const [showTitleHelp, setShowTitleHelp] = useState(false);
+  const [showContentHelp, setShowContentHelp] = useState(false);
+  const [showContentTemplateEditor, setShowContentTemplateEditor] = useState(false);
 
   // Snackbar state
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
@@ -314,13 +321,6 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
     );
   }
 
-  const contentTypes = [
-    { value: "text", label: "Plain Text" },
-    { value: "list", label: "List" },
-    { value: "bullet", label: "Bullet Points" },
-    { value: "richformat", label: "Rich Format" },
-  ];
-
   // Render Features Tab
   const renderFeaturesTab = () => (
     <View style={styles.section}>
@@ -492,11 +492,24 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   const renderTemplateTab = () => (
     <View style={styles.section}>
       <Text style={styles.sectionDescription}>
-        Default values for new entries in this stream
+        Templates auto-fill when creating new empty entries in this stream.
+        Use variables like {"{date}"} and basic markdown formatting.
       </Text>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Title Template</Text>
+        <View style={styles.labelWithInfo}>
+          <Text style={styles.inputLabel}>Title Template</Text>
+          <TouchableOpacity
+            style={styles.infoButton}
+            onPress={() => setShowTitleHelp(true)}
+            activeOpacity={0.7}
+          >
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Circle cx={12} cy={12} r={10} />
+              <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
+            </Svg>
+          </TouchableOpacity>
+        </View>
         <TextInput
           style={styles.textInput}
           value={entryTitleTemplate}
@@ -504,54 +517,46 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
             setEntryTitleTemplate(text);
             markChanged();
           }}
-          placeholder="e.g., Meeting Notes - "
+          placeholder="e.g., Meeting Notes - {date}"
           placeholderTextColor="#9ca3af"
         />
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Content Template</Text>
-        <TextInput
-          style={[styles.textInput, styles.multilineInput]}
-          value={entryContentTemplate}
-          onChangeText={(text) => {
-            setEntryContentTemplate(text);
-            markChanged();
-          }}
-          placeholder="e.g., Attendees:\n\nAgenda:\n\nNotes:"
-          placeholderTextColor="#9ca3af"
-          multiline
-          numberOfLines={4}
-        />
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Content Type</Text>
-        <View style={styles.segmentedControl}>
-          {contentTypes.map((type) => (
-            <TouchableOpacity
-              key={type.value}
-              style={[
-                styles.segmentButton,
-                entryContentType === type.value && styles.segmentButtonActive,
-              ]}
-              onPress={() => {
-                setEntryContentType(type.value);
-                markChanged();
-              }}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.segmentButtonText,
-                  entryContentType === type.value && styles.segmentButtonTextActive,
-                ]}
-              >
-                {type.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.labelWithInfo}>
+          <Text style={styles.inputLabel}>Content Template</Text>
+          <TouchableOpacity
+            style={styles.infoButton}
+            onPress={() => setShowContentHelp(true)}
+            activeOpacity={0.7}
+          >
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Circle cx={12} cy={12} r={10} />
+              <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
+            </Svg>
+          </TouchableOpacity>
         </View>
+        <TouchableOpacity
+          style={[styles.textInput, styles.contentTemplatePreview]}
+          onPress={() => setShowContentTemplateEditor(true)}
+          activeOpacity={0.7}
+        >
+          {entryContentTemplate ? (
+            <Text style={styles.contentTemplatePreviewText} numberOfLines={5}>
+              {entryContentTemplate}
+            </Text>
+          ) : (
+            <Text style={styles.contentTemplatePreviewPlaceholder}>
+              Tap to add content template...
+            </Text>
+          )}
+          <View style={styles.editIndicator}>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+              <Path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -748,6 +753,31 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         }}
       />
 
+      {/* Title Help Modal */}
+      <TemplateHelpModal
+        visible={showTitleHelp}
+        onClose={() => setShowTitleHelp(false)}
+        mode="title"
+      />
+
+      {/* Content Help Modal */}
+      <TemplateHelpModal
+        visible={showContentHelp}
+        onClose={() => setShowContentHelp(false)}
+        mode="content"
+      />
+
+      {/* Template Editor Modal */}
+      <TemplateEditorModal
+        visible={showContentTemplateEditor}
+        onClose={() => setShowContentTemplateEditor(false)}
+        value={entryContentTemplate}
+        onSave={(value) => {
+          setEntryContentTemplate(value);
+          markChanged();
+        }}
+      />
+
       {/* Snackbar */}
       {snackbarMessage && (
         <Animated.View
@@ -845,6 +875,40 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
     textAlignVertical: "top",
+  },
+  contentTemplatePreview: {
+    height: 120,
+    paddingTop: 12,
+    paddingBottom: 12,
+    position: "relative",
+  },
+  contentTemplatePreviewText: {
+    fontFamily: "monospace",
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#374151",
+  },
+  contentTemplatePreviewPlaceholder: {
+    fontSize: 14,
+    color: "#9ca3af",
+    fontStyle: "italic",
+  },
+  editIndicator: {
+    position: "absolute",
+    right: 12,
+    bottom: 12,
+    backgroundColor: "#f3f4f6",
+    borderRadius: 4,
+    padding: 4,
+  },
+  labelWithInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  infoButton: {
+    padding: 4,
   },
   segmentedControl: {
     flexDirection: "row",
