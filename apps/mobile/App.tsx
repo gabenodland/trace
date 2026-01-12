@@ -144,6 +144,11 @@ function AuthGate() {
 
   // Handle navigation - simple screen change, no history stack
   const handleNavigate = (tabId: string, params?: Record<string, any>) => {
+    // Handle "back" navigation specially - go to main view
+    if (tabId === "back") {
+      handleBackAsync();
+      return;
+    }
     setActiveTab(tabId);
     setNavParams(params || {});
   };
