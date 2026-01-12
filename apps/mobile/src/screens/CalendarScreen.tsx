@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder, Dimensions } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import type { Entry, EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
 import {
@@ -82,8 +82,62 @@ export function CalendarScreen() {
     setCalendarDate,
     calendarZoom,
     setCalendarZoom,
+    drawerControl,
   } = useDrawer();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
+
+  // Screen width for swipe threshold calculation (1/3 of screen)
+  const screenWidth = Dimensions.get("window").width;
+  const SWIPE_THRESHOLD = screenWidth / 3;
+
+  // Ref to hold current drawerControl - needed because PanResponder callbacks
+  // capture values at creation time, so we need a ref to access current value
+  const drawerControlRef = useRef(drawerControl);
+  useEffect(() => {
+    drawerControlRef.current = drawerControl;
+  }, [drawerControl]);
+
+  // Swipe-right gesture for opening drawer - uses capture phase to intercept before ScrollView
+  const drawerPanResponder = useRef(
+    PanResponder.create({
+      // Don't capture initial touch - allows taps and scroll to start
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      // Capture horizontal right swipes before ScrollView gets them
+      onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
+        // Only capture if clearly horizontal and moving right
+        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
+        const isSwipingRight = gestureState.dx > 20;
+        // Don't capture from the very left edge (Android back gesture zone)
+        const notInBackZone = evt.nativeEvent.pageX > 25;
+        return isHorizontalSwipe && isSwipingRight && notInBackZone;
+      },
+      onMoveShouldSetPanResponder: () => false,
+      onPanResponderGrant: () => {},
+      onPanResponderMove: (_, gestureState) => {
+        const control = drawerControlRef.current;
+        if (control && gestureState.dx > 0) {
+          control.setPosition(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const control = drawerControlRef.current;
+        if (!control) return;
+        const shouldOpen = gestureState.dx > SWIPE_THRESHOLD || gestureState.vx > 0.5;
+        if (shouldOpen) {
+          control.animateOpen();
+        } else {
+          control.animateClose();
+        }
+      },
+      onPanResponderTerminate: () => {
+        const control = drawerControlRef.current;
+        if (control) {
+          control.animateClose();
+        }
+      },
+    })
+  ).current;
 
   // Use DrawerContext for state (persisted across navigations)
   const zoomLevel = calendarZoom as ZoomLevel;
@@ -798,7 +852,7 @@ export function CalendarScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} {...drawerPanResponder.panHandlers}>
       <TopBar
         breadcrumbs={breadcrumbs}
         onBreadcrumbPress={openDrawer}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, Alert, PanResponder, Dimensions } from "react-native";
 import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useNavigation } from "../shared/contexts/NavigationContext";
@@ -89,9 +89,59 @@ export function MapScreen() {
     openDrawer,
     mapRegion: persistedRegion,
     setMapRegion: persistRegion,
+    drawerControl,
   } = useDrawer();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { streams } = useStreams();
+
+  // Screen width for swipe threshold calculation (1/3 of screen)
+  const screenWidth = Dimensions.get("window").width;
+  const SWIPE_THRESHOLD = screenWidth / 3;
+
+  // Ref to hold current drawerControl - needed because PanResponder callbacks
+  // capture values at creation time, so we need a ref to access current value
+  const drawerControlRef = useRef(drawerControl);
+  useEffect(() => {
+    drawerControlRef.current = drawerControl;
+  }, [drawerControl]);
+
+  // Swipe-right gesture for opening drawer - only on lower portion (not map)
+  const drawerPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
+        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
+        const isSwipingRight = gestureState.dx > 20;
+        const notInBackZone = evt.nativeEvent.pageX > 25;
+        return isHorizontalSwipe && isSwipingRight && notInBackZone;
+      },
+      onMoveShouldSetPanResponder: () => false,
+      onPanResponderGrant: () => {},
+      onPanResponderMove: (_, gestureState) => {
+        const control = drawerControlRef.current;
+        if (control && gestureState.dx > 0) {
+          control.setPosition(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const control = drawerControlRef.current;
+        if (!control) return;
+        const shouldOpen = gestureState.dx > SWIPE_THRESHOLD || gestureState.vx > 0.5;
+        if (shouldOpen) {
+          control.animateOpen();
+        } else {
+          control.animateClose();
+        }
+      },
+      onPanResponderTerminate: () => {
+        const control = drawerControlRef.current;
+        if (control) {
+          control.animateClose();
+        }
+      },
+    })
+  ).current;
 
   // Use the proper hooks - privacy filtering is handled automatically by useEntries
   // When selectedStreamId is "all", we pass undefined for stream_id which triggers auto-filtering
@@ -582,47 +632,50 @@ export function MapScreen() {
         )}
       </View>
 
-      {/* Entry count bar */}
-      <View style={styles.countBar}>
-        <Text style={styles.countText}>
-          {visibleEntries.length} {visibleEntries.length === 1 ? "entry" : "entries"} in view
-        </Text>
-      </View>
-
-      {/* Entry List */}
-      {entries.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Svg width={64} height={64} viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth={1.5}>
-            <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-            <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-          <Text style={styles.emptyText}>No entries with locations</Text>
-          <Text style={styles.emptySubtext}>Add GPS coordinates to your entries to see them on the map</Text>
+      {/* Lower portion with swipe gesture for drawer */}
+      <View style={styles.lowerSection} {...drawerPanResponder.panHandlers}>
+        {/* Entry count bar */}
+        <View style={styles.countBar}>
+          <Text style={styles.countText}>
+            {visibleEntries.length} {visibleEntries.length === 1 ? "entry" : "entries"} in view
+          </Text>
         </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={visibleEntries}
-          renderItem={renderEntryItem}
-          keyExtractor={item => item.entry_id}
-          style={styles.entryList}
-          contentContainerStyle={styles.entryListContent}
-          onScrollToIndexFailed={(info) => {
-            // Handle scroll failure gracefully
-            setTimeout(() => {
-              if (listRef.current && visibleEntries.length > info.index) {
-                listRef.current.scrollToIndex({ index: info.index, animated: true });
-              }
-            }, 100);
-          }}
-          ListEmptyComponent={
-            <View style={styles.emptyListContainer}>
-              <Text style={styles.emptyListText}>No entries in this area</Text>
-              <Text style={styles.emptyListSubtext}>Pan or zoom the map to see entries</Text>
-            </View>
-          }
-        />
-      )}
+
+        {/* Entry List */}
+        {entries.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Svg width={64} height={64} viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth={1.5}>
+              <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+              <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+            <Text style={styles.emptyText}>No entries with locations</Text>
+            <Text style={styles.emptySubtext}>Add GPS coordinates to your entries to see them on the map</Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={visibleEntries}
+            renderItem={renderEntryItem}
+            keyExtractor={item => item.entry_id}
+            style={styles.entryList}
+            contentContainerStyle={styles.entryListContent}
+            onScrollToIndexFailed={(info) => {
+              // Handle scroll failure gracefully
+              setTimeout(() => {
+                if (listRef.current && visibleEntries.length > info.index) {
+                  listRef.current.scrollToIndex({ index: info.index, animated: true });
+                }
+              }, 100);
+            }}
+            ListEmptyComponent={
+              <View style={styles.emptyListContainer}>
+                <Text style={styles.emptyListText}>No entries in this area</Text>
+                <Text style={styles.emptyListSubtext}>Pan or zoom the map to see entries</Text>
+              </View>
+            }
+          />
+        )}
+      </View>
 
     </View>
   );
@@ -632,6 +685,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background.secondary,
+  },
+  lowerSection: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

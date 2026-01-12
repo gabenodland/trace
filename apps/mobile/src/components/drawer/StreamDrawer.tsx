@@ -12,7 +12,7 @@
  * - Tap backdrop to close
  */
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -35,15 +35,16 @@ export function StreamDrawer() {
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   // Track if drawer is currently visible (for pointer events)
-  const isVisible = useRef(false);
+  // Using state instead of ref so changes trigger re-render and update pointerEvents
+  const [isVisible, setIsVisible] = useState(false);
   // Track if being dragged externally (swipe-to-open from list)
-  const isDragging = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Set drawer position directly (for external gesture control)
   // Position is in terms of how far drawer has moved: 0 = fully closed, DRAWER_WIDTH = fully open
   const setPosition = useCallback((position: number) => {
-    isDragging.current = true;
-    isVisible.current = true;
+    setIsDragging(true);
+    setIsVisible(true);
     // translateX goes from -DRAWER_WIDTH (closed) to 0 (open)
     // position goes from 0 (closed) to DRAWER_WIDTH (open)
     const clampedPosition = Math.max(0, Math.min(position, DRAWER_WIDTH));
@@ -54,8 +55,8 @@ export function StreamDrawer() {
 
   // Animate drawer to open position
   const animateOpen = useCallback(() => {
-    isDragging.current = false;
-    isVisible.current = true;
+    setIsDragging(false);
+    setIsVisible(true);
     openDrawer(); // Update state
     Animated.parallel([
       Animated.timing(translateX, {
@@ -73,7 +74,7 @@ export function StreamDrawer() {
 
   // Animate drawer to closed position
   const animateClose = useCallback(() => {
-    isDragging.current = false;
+    setIsDragging(false);
     closeDrawer(); // Update state
     Animated.parallel([
       Animated.timing(translateX, {
@@ -87,7 +88,7 @@ export function StreamDrawer() {
         useNativeDriver: true,
       }),
     ]).start(() => {
-      isVisible.current = false;
+      setIsVisible(false);
     });
   }, [translateX, backdropOpacity, closeDrawer]);
 
@@ -150,10 +151,10 @@ export function StreamDrawer() {
   // Animate open/close based on state (for non-gesture triggers like button press)
   useEffect(() => {
     // Skip if we're being dragged - let the gesture control position
-    if (isDragging.current) return;
+    if (isDragging) return;
 
     if (isOpen) {
-      isVisible.current = true;
+      setIsVisible(true);
       Animated.parallel([
         Animated.timing(translateX, {
           toValue: 0,
@@ -179,18 +180,18 @@ export function StreamDrawer() {
           useNativeDriver: true,
         }),
       ]).start(() => {
-        isVisible.current = false;
+        setIsVisible(false);
       });
     }
-  }, [isOpen, translateX, backdropOpacity]);
+  }, [isOpen, isDragging, translateX, backdropOpacity]);
 
-  // Don't render anything if not visible and not being dragged
-  if (!isOpen && !isVisible.current && !isDragging.current) {
-    return null;
-  }
+  // Always render the drawer - it starts off-screen (translateX = -DRAWER_WIDTH)
+  // and backdrop is invisible (opacity = 0). Using pointerEvents to control interaction.
+  // This ensures the drawer is ready to respond immediately to swipe gestures.
+  const isActive = isOpen || isVisible || isDragging;
 
   return (
-    <View style={styles.container} pointerEvents={isOpen || isDragging.current ? "auto" : "none"}>
+    <View style={styles.container} pointerEvents={isActive ? "auto" : "none"}>
       {/* Backdrop */}
       <TouchableWithoutFeedback onPress={animateClose}>
         <Animated.View
