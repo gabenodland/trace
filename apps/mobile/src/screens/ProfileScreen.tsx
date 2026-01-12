@@ -26,8 +26,7 @@ import {
 import Svg, { Path, Circle, Line } from "react-native-svg";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useNavigation } from "../shared/contexts/NavigationContext";
-import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
-import { TopBar } from "../components/layout/TopBar";
+import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { useSync } from "../shared/sync";
 import { createScopedLogger } from "../shared/utils/logger";
 import {
@@ -45,7 +44,6 @@ const log = createScopedLogger("ProfileScreen");
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { sync } = useSync();
 
   // Profile data - pass user.id to ensure mutations work even before profile loads
@@ -279,14 +277,7 @@ export function ProfileScreen() {
   if (isLoading && !profile) {
     return (
       <View style={styles.container}>
-        <TopBar
-          title="Profile"
-          menuItems={menuItems}
-          userEmail={userEmail}
-          displayName={displayName}
-          avatarUrl={avatarUrl}
-          onProfilePress={onProfilePress}
-        />
+        <SecondaryHeader title="Profile" />
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading profile...</Text>
         </View>
@@ -298,14 +289,7 @@ export function ProfileScreen() {
   if (error && !profile) {
     return (
       <View style={styles.container}>
-        <TopBar
-          title="Profile"
-          menuItems={menuItems}
-          userEmail={userEmail}
-          displayName={displayName}
-          avatarUrl={avatarUrl}
-          onProfilePress={onProfilePress}
-        />
+        <SecondaryHeader title="Profile" />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Failed to load profile</Text>
           <Text style={styles.errorDetail}>{error.message}</Text>
@@ -316,14 +300,7 @@ export function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar
-        title="Profile"
-        menuItems={menuItems}
-        userEmail={userEmail}
-        displayName={displayName}
-        avatarUrl={avatarUrl}
-        onProfilePress={onProfilePress}
-      />
+      <SecondaryHeader title="Profile" />
 
       <KeyboardAvoidingView
         style={styles.keyboardView}

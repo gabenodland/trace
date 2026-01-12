@@ -1,16 +1,18 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, Alert, Modal, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, Alert } from "react-native";
 import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useDrawer } from "../shared/contexts/DrawerContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { TopBar } from "../components/layout/TopBar";
+import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
 import { theme } from "../shared/theme/theme";
 import Svg, { Path, Circle } from "react-native-svg";
-import { formatRelativeTime, type Entry, type Stream } from "@trace/core";
+import { formatRelativeTime, type Entry } from "@trace/core";
 
 // Cluster entries that are close together
 interface EntryCluster {
@@ -78,12 +80,16 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
 
 export function MapScreen() {
   const { navigate } = useNavigation();
+  const {
+    registerStreamHandler,
+    selectedStreamId,
+    selectedStreamName,
+    setSelectedStreamId,
+    setSelectedStreamName,
+    openDrawer
+  } = useDrawer();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { streams } = useStreams();
-
-  // Stream filter state
-  const [selectedStreamId, setSelectedStreamId] = useState<string | null>("all"); // "all" = show all
-  const [showStreamPicker, setShowStreamPicker] = useState(false);
 
   // Use the proper hooks - privacy filtering is handled automatically by useEntries
   // When selectedStreamId is "all", we pass undefined for stream_id which triggers auto-filtering
@@ -92,13 +98,33 @@ export function MapScreen() {
     if (selectedStreamId === "all") {
       return {}; // No stream_id filter = show all (with auto privacy filtering)
     }
-    if (selectedStreamId === "no-stream") {
+    if (selectedStreamId === "no-stream" || selectedStreamId === null) {
       return { stream_id: null }; // Explicitly null = unassigned only
+    }
+    // Handle tag: prefix
+    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("tag:")) {
+      const tag = selectedStreamId.substring(4);
+      return { tag };
+    }
+    // Handle mention: prefix
+    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("mention:")) {
+      const mention = selectedStreamId.substring(8);
+      return { mention };
+    }
+    // Handle location: prefix
+    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("location:")) {
+      const locationId = selectedStreamId.substring(9);
+      return { location_id: locationId };
     }
     return { stream_id: selectedStreamId }; // Specific stream
   }, [selectedStreamId]);
 
-  const { entries: allEntriesFromHook, isLoading } = useEntries(entryFilter);
+  const { entries: allEntriesFromHook, isLoading, isFetching } = useEntries(entryFilter);
+
+  // Build breadcrumbs for header (matches EntryListScreen style)
+  const breadcrumbs = useMemo((): BreadcrumbSegment[] => {
+    return [{ id: selectedStreamId || "all", label: selectedStreamName }];
+  }, [selectedStreamId, selectedStreamName]);
   const { data: locationsData } = useLocations();
 
   // Filter entries to only those with GPS coordinates
@@ -130,28 +156,56 @@ export function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const listRef = useRef<FlatList<Entry>>(null);
   const regionRef = useRef<Region>(region); // Track region without causing re-renders
-  const hasInitializedMap = useRef(false);
-
-  // Center map on entries when data first loads
-  useEffect(() => {
-    if (!hasInitializedMap.current && allEntries.length > 0 && !isLoading) {
-      const bounds = calculateBounds(allEntries);
-      regionRef.current = bounds;
-      setRegion(bounds);
-      hasInitializedMap.current = true;
-    }
-  }, [allEntries, isLoading]);
+  const [isMapReady, setIsMapReady] = useState(false);
+  const previousStreamIdRef = useRef<string | null | undefined>(undefined); // Start undefined to detect first load
+  const pendingFitRef = useRef(false); // Track if we need to fit when data settles
+  const fitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Debounce fit operations
 
   // entries is now the same as allEntries (filtering already done by hook)
   const entries = allEntries;
 
-  // Get selected stream name for display
-  const selectedStreamName = useMemo(() => {
-    if (selectedStreamId === "all") return "All Streams";
-    if (selectedStreamId === "no-stream") return "Unassigned";
-    const stream = streams.find(s => s.stream_id === selectedStreamId);
-    return stream?.name || "All Streams";
-  }, [selectedStreamId, streams]);
+  // Register stream selection handler for drawer
+  useEffect(() => {
+    registerStreamHandler((streamId, streamName) => {
+      setSelectedStreamId(streamId);
+      setSelectedStreamName(streamName);
+    });
+    // Cleanup on unmount
+    return () => registerStreamHandler(null);
+  }, [registerStreamHandler, setSelectedStreamId, setSelectedStreamName]);
+
+  // Fit map to show all entries when stream selection changes or on first load
+  useEffect(() => {
+    // Detect when selectedStreamId changes (or on first render when undefined)
+    if (previousStreamIdRef.current !== selectedStreamId) {
+      previousStreamIdRef.current = selectedStreamId;
+      pendingFitRef.current = true; // Mark that we need to fit when data settles
+
+      // Clear any pending timeout from previous fit attempt
+      if (fitTimeoutRef.current) {
+        clearTimeout(fitTimeoutRef.current);
+        fitTimeoutRef.current = null;
+      }
+    }
+
+    // Execute pending fit when: map is ready, data settled (!isFetching), and have entries
+    // Using !isFetching ensures we wait for background refetch to complete with correct data
+    if (pendingFitRef.current && isMapReady && !isFetching && entries.length > 0 && mapRef.current) {
+      pendingFitRef.current = false; // Clear pending flag before fit
+
+      // Small delay to let React settle
+      fitTimeoutRef.current = setTimeout(() => {
+        const bounds = calculateBounds(entries);
+        mapRef.current?.animateToRegion(bounds, 500);
+      }, 100);
+    }
+
+    return () => {
+      if (fitTimeoutRef.current) {
+        clearTimeout(fitTimeoutRef.current);
+      }
+    };
+  }, [selectedStreamId, entries, isFetching, isMapReady]);
 
   // Calculate map bounds to fit all entries
   const calculateBounds = (entries: Entry[]): Region => {
@@ -429,7 +483,10 @@ export function MapScreen() {
     return (
       <View style={styles.container}>
         <TopBar
-          title="Map"
+          onLeftMenuPress={openDrawer}
+          breadcrumbs={breadcrumbs}
+          onBreadcrumbPress={() => {}}
+          badge={0}
           menuItems={menuItems}
           userEmail={userEmail}
           displayName={displayName}
@@ -447,27 +504,16 @@ export function MapScreen() {
   return (
     <View style={styles.container}>
       <TopBar
+        onLeftMenuPress={openDrawer}
+        breadcrumbs={breadcrumbs}
+        onBreadcrumbPress={() => {}}
+        badge={entries.length}
         menuItems={menuItems}
         userEmail={userEmail}
         displayName={displayName}
         avatarUrl={avatarUrl}
         onProfilePress={onProfilePress}
-      >
-        {/* Custom title with stream filter dropdown */}
-        <View style={styles.titleRow}>
-          <Text style={styles.titleText}>Map</Text>
-          <TouchableOpacity
-            style={styles.streamFilterSelector}
-            onPress={() => setShowStreamPicker(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.streamFilterSelectorText}>{selectedStreamName}</Text>
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-        </View>
-      </TopBar>
+      />
 
       {/* Map */}
       <View style={styles.mapContainer}>
@@ -475,6 +521,7 @@ export function MapScreen() {
           ref={mapRef}
           style={styles.map}
           initialRegion={region}
+          onMapReady={() => setIsMapReady(true)}
           onRegionChangeComplete={handleRegionChange}
           mapType="standard"
           userInterfaceStyle="light"
@@ -570,112 +617,6 @@ export function MapScreen() {
         />
       )}
 
-      {/* Stream Picker Modal */}
-      <Modal
-        visible={showStreamPicker}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowStreamPicker(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowStreamPicker(false)}
-        >
-          <View style={styles.streamPickerContainer}>
-            <View style={styles.streamPickerHeader}>
-              <Text style={styles.streamPickerTitle}>Filter by Stream</Text>
-              <TouchableOpacity onPress={() => setShowStreamPicker(false)}>
-                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth={2}>
-                  <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.streamPickerList}>
-              {/* All Streams option */}
-              <TouchableOpacity
-                style={[
-                  styles.streamPickerItem,
-                  selectedStreamId === "all" && styles.streamPickerItemSelected
-                ]}
-                onPress={() => {
-                  setSelectedStreamId("all");
-                  setShowStreamPicker(false);
-                }}
-              >
-                <Text style={[
-                  styles.streamPickerItemText,
-                  selectedStreamId === "all" && styles.streamPickerItemTextSelected
-                ]}>
-                  All Streams
-                </Text>
-                {selectedStreamId === "all" && (
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
-                    <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
-                )}
-              </TouchableOpacity>
-
-              {/* Unassigned option */}
-              <TouchableOpacity
-                style={[
-                  styles.streamPickerItem,
-                  selectedStreamId === "no-stream" && styles.streamPickerItemSelected
-                ]}
-                onPress={() => {
-                  setSelectedStreamId("no-stream");
-                  setShowStreamPicker(false);
-                }}
-              >
-                <Text style={[
-                  styles.streamPickerItemText,
-                  selectedStreamId === "no-stream" && styles.streamPickerItemTextSelected
-                ]}>
-                  Unassigned
-                </Text>
-                {selectedStreamId === "no-stream" && (
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
-                    <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
-                )}
-              </TouchableOpacity>
-
-              {/* Separator */}
-              <View style={styles.streamPickerSeparator} />
-
-              {/* Stream list */}
-              {streams.map(stream => (
-                <TouchableOpacity
-                  key={stream.stream_id}
-                  style={[
-                    styles.streamPickerItem,
-                    selectedStreamId === stream.stream_id && styles.streamPickerItemSelected
-                  ]}
-                  onPress={() => {
-                    setSelectedStreamId(stream.stream_id);
-                    setShowStreamPicker(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.streamPickerItemText,
-                      selectedStreamId === stream.stream_id && styles.streamPickerItemTextSelected
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {stream.name}
-                  </Text>
-                  {selectedStreamId === stream.stream_id && (
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
-                      <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
 }
@@ -760,27 +701,6 @@ const styles = StyleSheet.create({
   },
   singleMarker: {
     // Container for single marker pin
-  },
-  // Title row styles
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 32,
-  },
-  titleText: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  streamFilterSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  streamFilterSelectorText: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#6b7280",
   },
   countBar: {
     backgroundColor: theme.colors.background.primary,
@@ -875,67 +795,5 @@ const styles = StyleSheet.create({
   emptyListSubtext: {
     fontSize: 14,
     color: "#9ca3af",
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  streamPickerContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    width: "100%",
-    maxWidth: 400,
-    maxHeight: "70%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  streamPickerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border.light,
-  },
-  streamPickerTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: theme.colors.text.primary,
-  },
-  streamPickerList: {
-    maxHeight: 400,
-  },
-  streamPickerItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border.light,
-  },
-  streamPickerItemSelected: {
-    backgroundColor: "#f0f9ff",
-  },
-  streamPickerItemText: {
-    fontSize: 15,
-    color: theme.colors.text.primary,
-    flex: 1,
-  },
-  streamPickerItemTextSelected: {
-    color: "#3b82f6",
-    fontWeight: "500",
-  },
-  streamPickerSeparator: {
-    height: 8,
-    backgroundColor: theme.colors.background.secondary,
   },
 });

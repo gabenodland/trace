@@ -1,9 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ScrollView } from "react-native";
 import { useNavigation } from "../shared/contexts/NavigationContext";
-import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { useLocationsWithCounts } from "../modules/locations/mobileLocationHooks";
-import { TopBar } from "../components/layout/TopBar";
+import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { SubBar } from "../components/layout/SubBar";
 import Svg, { Path, Circle } from "react-native-svg";
 import { theme } from "../shared/theme/theme";
@@ -28,7 +27,6 @@ interface LocationNode {
 
 export function LocationsScreen() {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
 
   // Use hook for locations with counts instead of direct localDB call
   const { data: locationsData, isLoading } = useLocationsWithCounts();
@@ -136,14 +134,7 @@ export function LocationsScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <TopBar
-          title="Locations"
-          menuItems={menuItems}
-          userEmail={userEmail}
-          displayName={displayName}
-          avatarUrl={avatarUrl}
-          onProfilePress={onProfilePress}
-        />
+        <SecondaryHeader title="Locations" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.text.tertiary} />
           <Text style={styles.loadingText}>Loading locations...</Text>
@@ -154,15 +145,7 @@ export function LocationsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar
-        title="Locations"
-        badge={totalLocations}
-        menuItems={menuItems}
-        userEmail={userEmail}
-        displayName={displayName}
-        avatarUrl={avatarUrl}
-        onProfilePress={onProfilePress}
-      />
+      <SecondaryHeader title="Locations" />
 
       <SubBar>
         {/* Search Input */}

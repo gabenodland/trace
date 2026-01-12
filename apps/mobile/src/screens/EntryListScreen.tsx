@@ -19,6 +19,7 @@ import { useEntries, MobileEntryFilter } from "../modules/entries/mobileEntryHoo
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useDrawer } from "../shared/contexts/DrawerContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { TopBar } from "../components/layout/TopBar";
@@ -27,7 +28,6 @@ import { TopBarDropdownContainer } from "../components/layout/TopBarDropdownCont
 import { SubBar, SubBarSelector } from "../components/layout/SubBar";
 import { SearchBar } from "../components/layout/SearchBar";
 import { EntryList } from "../modules/entries/components/EntryList";
-import { EntryNavigator } from "../components/navigation/EntryNavigator";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
 import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
 import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
@@ -44,13 +44,18 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
   const { streams } = useStreams();
   const { user } = useAuthState();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
-  const [showStreamDropdown, setShowStreamDropdown] = useState(false);
+  const {
+    registerStreamHandler,
+    selectedStreamId,
+    selectedStreamName,
+    setSelectedStreamId,
+    setSelectedStreamName,
+    openDrawer
+  } = useDrawer();
   const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
   const [showSortModeSelector, setShowSortModeSelector] = useState(false);
   const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
-  const [selectedStreamId, setSelectedStreamId] = useState<string | null | "all" | "events" | "streams" | "tags" | "people">("all");
-  const [selectedStreamName, setSelectedStreamName] = useState<string>("Home");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   // Per-stream view preferences from settings (sort + display mode)
@@ -82,7 +87,17 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
       setSelectedStreamId(returnStreamId);
       setSelectedStreamName(returnStreamName);
     }
-  }, [returnStreamId, returnStreamName]);
+  }, [returnStreamId, returnStreamName, setSelectedStreamId, setSelectedStreamName]);
+
+  // Register stream selection handler for drawer
+  useEffect(() => {
+    registerStreamHandler((streamId, streamName) => {
+      setSelectedStreamId(streamId);
+      setSelectedStreamName(streamName);
+    });
+    // Cleanup on unmount
+    return () => registerStreamHandler(null);
+  }, [registerStreamHandler, setSelectedStreamId, setSelectedStreamName]);
 
   // Build breadcrumbs from selected stream (flat - no hierarchy)
   const breadcrumbs = useMemo((): BreadcrumbSegment[] => {
@@ -300,11 +315,6 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
     setSelectedStreamName(streamName);
   };
 
-  const handleStreamSelect = (streamId: string | null | "all" | "events" | "streams" | "tags" | "people", streamName: string) => {
-    setSelectedStreamId(streamId);
-    setSelectedStreamName(streamName);
-  };
-
   const handleBreadcrumbPress = (segment: BreadcrumbSegment) => {
     if (segment.id === "all") {
       setSelectedStreamId("all");
@@ -420,9 +430,9 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
   return (
     <View style={styles.container}>
       <TopBar
+        onLeftMenuPress={openDrawer}
         breadcrumbs={breadcrumbs}
         onBreadcrumbPress={handleBreadcrumbPress}
-        onBreadcrumbDropdownPress={() => setShowStreamDropdown(true)}
         badge={filteredEntries.length}
         menuItems={menuItems}
         userEmail={userEmail}
@@ -476,19 +486,6 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
         displayMode={displayMode}
         fullStreams={streams}
       />
-
-      {/* Stream Navigator Dropdown */}
-      <TopBarDropdownContainer
-        visible={showStreamDropdown}
-        onClose={() => setShowStreamDropdown(false)}
-      >
-        <EntryNavigator
-          visible={showStreamDropdown}
-          onClose={() => setShowStreamDropdown(false)}
-          onSelect={handleStreamSelect}
-          selectedStreamId={selectedStreamId}
-        />
-      </TopBarDropdownContainer>
 
       {/* Display Mode Selector */}
       <DisplayModeSelector

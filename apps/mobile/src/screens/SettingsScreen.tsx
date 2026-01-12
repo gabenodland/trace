@@ -1,17 +1,13 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from "react-native";
 import { useState } from "react";
 import Svg, { Path } from "react-native-svg";
-import { useNavigation } from "../shared/contexts/NavigationContext";
-import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { useSettings } from "../shared/contexts/SettingsContext";
-import { TopBar } from "../components/layout/TopBar";
+import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { UnitSystemSelector } from "../components/settings/UnitSystemSelector";
 import { ImageQualitySelector } from "../components/settings/ImageQualitySelector";
 import { UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
 
 export function SettingsScreen() {
-  const { navigate } = useNavigation();
-  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { settings, updateSettings } = useSettings();
 
   const [showUnitSelector, setShowUnitSelector] = useState(false);
@@ -23,14 +19,7 @@ export function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar
-        title="Settings"
-        menuItems={menuItems}
-        userEmail={userEmail}
-        displayName={displayName}
-        avatarUrl={avatarUrl}
-        onProfilePress={onProfilePress}
-      />
+      <SecondaryHeader title="Settings" />
 
       <ScrollView style={styles.content}>
         {/* Entry Settings */}

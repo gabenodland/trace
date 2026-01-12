@@ -13,10 +13,9 @@ interface BreadcrumbProps {
   segments: BreadcrumbSegment[];
   onSegmentPress: (segment: BreadcrumbSegment) => void;
   badge?: number;
-  onDropdownPress?: () => void;
 }
 
-export function Breadcrumb({ segments, onSegmentPress, badge, onDropdownPress }: BreadcrumbProps) {
+export function Breadcrumb({ segments, onSegmentPress, badge }: BreadcrumbProps) {
   return (
     <View style={styles.container}>
       <ScrollView
@@ -35,7 +34,7 @@ export function Breadcrumb({ segments, onSegmentPress, badge, onDropdownPress }:
 
             {/* Segment */}
             <TouchableOpacity
-              onPress={() => index === segments.length - 1 && onDropdownPress ? onDropdownPress() : onSegmentPress(segment)}
+              onPress={() => onSegmentPress(segment)}
               activeOpacity={0.7}
               style={styles.segment}
             >
@@ -53,13 +52,6 @@ export function Breadcrumb({ segments, onSegmentPress, badge, onDropdownPress }:
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{badge}</Text>
                 </View>
-              )}
-
-              {/* Dropdown arrow on last segment */}
-              {index === segments.length - 1 && onDropdownPress && (
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2} style={styles.dropdownArrowInline}>
-                  <Path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
               )}
             </TouchableOpacity>
           </View>
@@ -115,8 +107,5 @@ const styles = StyleSheet.create({
     color: theme.colors.text.secondary,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.semibold,
-  },
-  dropdownArrowInline: {
-    marginLeft: theme.spacing.xs,
   },
 });

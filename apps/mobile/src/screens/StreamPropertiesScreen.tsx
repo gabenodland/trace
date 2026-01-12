@@ -23,9 +23,7 @@ import {
 } from "@trace/core";
 import { supabase } from "@trace/core/src/shared/supabase";
 import { useNavigation } from "../shared/contexts/NavigationContext";
-import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
-import { TopBar } from "../components/layout/TopBar";
-import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
+import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { StatusConfigModal } from "../modules/streams/components/StatusConfigModal";
 import { TypeConfigModal } from "../modules/streams/components/TypeConfigModal";
 import { RatingConfigModal } from "../modules/streams/components/RatingConfigModal";
@@ -41,17 +39,13 @@ interface StreamPropertiesScreenProps {
 
 export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps) {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { streams, streamMutations } = useStreams();
 
   const isCreateMode = streamId === null;
   const stream = isCreateMode ? null : streams.find((s) => s.stream_id === streamId);
 
-  // Build breadcrumbs
-  const breadcrumbs: BreadcrumbSegment[] = [
-    { id: "streams", label: "Streams" },
-    { id: streamId, label: isCreateMode ? "New Stream" : stream?.name || "Stream" },
-  ];
+  // Screen title
+  const screenTitle = isCreateMode ? "New Stream" : stream?.name || "Stream";
 
   // Active tab - default to "general"
   const [activeTab, setActiveTab] = useState<TabType>("general");
@@ -281,32 +275,11 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
     }
   };
 
-  // Handle breadcrumb press
-  const handleBreadcrumbPress = (segment: BreadcrumbSegment) => {
-    if (segment.id === "streams") {
-      handleBack();
-    }
-  };
-
   // Show not found only for edit mode when stream doesn't exist
   if (!isCreateMode && !stream) {
-    const notFoundBreadcrumbs: BreadcrumbSegment[] = [
-      { id: "streams", label: "Streams" },
-      { id: null, label: "Not Found" },
-    ];
     return (
       <View style={styles.container}>
-        <TopBar
-          breadcrumbs={notFoundBreadcrumbs}
-          onBreadcrumbPress={(segment) => {
-            if (segment.id === "streams") navigate("streams");
-          }}
-          menuItems={menuItems}
-          userEmail={userEmail}
-          displayName={displayName}
-          avatarUrl={avatarUrl}
-          onProfilePress={onProfilePress}
-        />
+        <SecondaryHeader title="Not Found" onBack={() => navigate("streams")} />
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>Stream not found</Text>
           <TouchableOpacity
@@ -669,15 +642,7 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
 
   return (
     <View style={styles.container}>
-      <TopBar
-        breadcrumbs={breadcrumbs}
-        onBreadcrumbPress={handleBreadcrumbPress}
-        menuItems={menuItems}
-        userEmail={userEmail}
-        displayName={displayName}
-        avatarUrl={avatarUrl}
-        onProfilePress={onProfilePress}
-      />
+      <SecondaryHeader title={screenTitle} onBack={handleBack} />
 
       {/* Tabs */}
       <View style={styles.tabContainer}>

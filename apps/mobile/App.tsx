@@ -6,8 +6,10 @@ import { useFonts, MavenPro_400Regular, MavenPro_500Medium, MavenPro_600SemiBold
 import * as Linking from "expo-linking";
 import { setSession } from "@trace/core";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
-import { NavigationProvider, BeforeBackHandler } from "./src/shared/contexts/NavigationContext";
+import { NavigationProvider, BeforeBackHandler, useNavigation } from "./src/shared/contexts/NavigationContext";
 import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
+import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/DrawerContext";
+import { StreamDrawer } from "./src/components/drawer";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { EntryScreen } from "./src/screens/EntryScreen";
@@ -209,18 +211,49 @@ function AuthGate() {
 
   // User is authenticated - show main app with new navigation
   return (
-    <NavigationProvider
-      navigate={handleNavigate}
-      setBeforeBackHandler={setBeforeBackHandler}
-      checkBeforeBack={checkBeforeBack}
-    >
-      <View style={styles.appContainer}>
-        {/* Active Screen */}
-        {renderScreen()}
+    <DrawerProvider>
+      <NavigationProvider
+        navigate={handleNavigate}
+        setBeforeBackHandler={setBeforeBackHandler}
+        checkBeforeBack={checkBeforeBack}
+      >
+        <AppContent renderScreen={renderScreen} />
+      </NavigationProvider>
+    </DrawerProvider>
+  );
+}
 
-        <ExpoStatusBar style="dark" />
-      </View>
-    </NavigationProvider>
+/**
+ * AppContent - Inner component that uses drawer context
+ * Handles view mode changes and renders the app content
+ */
+function AppContent({ renderScreen }: { renderScreen: () => React.ReactNode }) {
+  const { navigate } = useNavigation();
+  const { registerViewModeHandler } = useDrawer();
+
+  // Register view mode handler to navigate when mode changes
+  useEffect(() => {
+    registerViewModeHandler((mode: ViewMode) => {
+      const screenMap: Record<ViewMode, string> = {
+        list: "inbox",
+        map: "map",
+        calendar: "calendar",
+      };
+      navigate(screenMap[mode]);
+    });
+    return () => registerViewModeHandler(null);
+  }, [registerViewModeHandler, navigate]);
+
+  return (
+    <View style={styles.appContainer}>
+      {/* Active Screen */}
+      {renderScreen()}
+
+      {/* Stream Drawer - renders as overlay */}
+      <StreamDrawer />
+
+      <ExpoStatusBar style="dark" />
+    </View>
   );
 }
 

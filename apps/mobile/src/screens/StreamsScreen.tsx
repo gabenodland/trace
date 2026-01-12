@@ -12,12 +12,10 @@ import Svg, { Path } from "react-native-svg";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import type { Stream } from "@trace/core";
 import { useNavigation } from "../shared/contexts/NavigationContext";
-import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
-import { TopBar } from "../components/layout/TopBar";
+import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 
 export function StreamsScreen() {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { streams, isLoading, streamMutations } = useStreams();
 
   const [searchText, setSearchText] = useState("");
@@ -124,16 +122,21 @@ export function StreamsScreen() {
     );
   };
 
+  const addButton = (
+    <TouchableOpacity
+      style={styles.headerAddButton}
+      onPress={handleCreateStream}
+      activeOpacity={0.7}
+    >
+      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
+        <Path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
-      <TopBar
-        title="Streams"
-        menuItems={menuItems}
-        userEmail={userEmail}
-        displayName={displayName}
-        avatarUrl={avatarUrl}
-        onProfilePress={onProfilePress}
-      />
+      <SecondaryHeader title="Streams" rightAction={addButton} />
 
       {/* Search bar */}
       <View style={styles.searchContainer}>
@@ -156,17 +159,6 @@ export function StreamsScreen() {
             </TouchableOpacity>
           )}
         </View>
-
-        {/* Add stream button */}
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={handleCreateStream}
-          activeOpacity={0.7}
-        >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
-            <Path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        </TouchableOpacity>
       </View>
 
       {/* Stream list */}
@@ -239,6 +231,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#3b82f6",
     alignItems: "center",
     justifyContent: "center",
+  },
+  headerAddButton: {
+    padding: 4,
   },
   listContent: {
     padding: 16,

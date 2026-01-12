@@ -57,7 +57,6 @@ interface MetadataBarProps {
   onRatingPress: () => void;
   onPriorityPress: () => void;
   onPhotosPress: () => void;
-  onMenuPress: () => void;
   // Editor ref for blur
   editorRef: React.RefObject<any>;
 }
@@ -99,7 +98,6 @@ export function MetadataBar({
   onRatingPress,
   onPriorityPress,
   onPhotosPress,
-  onMenuPress,
   editorRef,
 }: MetadataBarProps) {
   const handlePress = (callback: () => void, needsEditMode = false) => {
@@ -449,18 +447,6 @@ export function MetadataBar({
           </TouchableOpacity>
         </>
       )}
-
-      {/* Entry Menu Button (...) */}
-      <TouchableOpacity
-        style={styles.entryMenuButton}
-        onPress={() => handlePress(onMenuPress)}
-      >
-        <Svg width={16} height={16} viewBox="0 0 24 24" fill="#6b7280" stroke="none">
-          <Circle cx={12} cy={5} r={2} />
-          <Circle cx={12} cy={12} r={2} />
-          <Circle cx={12} cy={19} r={2} />
-        </Svg>
-      </TouchableOpacity>
     </View>
   );
 }

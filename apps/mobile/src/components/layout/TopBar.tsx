@@ -1,9 +1,10 @@
-import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar, Image } from "react-native";
 import Svg, { Path, Line, Circle } from "react-native-svg";
 import { useState } from "react";
 import { NavigationMenu, NavigationMenuItem } from "../navigation/NavigationMenu";
 import { Breadcrumb, BreadcrumbSegment } from "./Breadcrumb";
 import { theme } from "../../shared/theme/theme";
+import { getDefaultAvatarUrl } from "@trace/core";
 
 interface TopBarProps {
   // Title mode (for list screens)
@@ -15,7 +16,6 @@ interface TopBarProps {
   // Breadcrumb mode (for hierarchical navigation)
   breadcrumbs?: BreadcrumbSegment[];
   onBreadcrumbPress?: (segment: BreadcrumbSegment) => void;
-  onBreadcrumbDropdownPress?: () => void;
 
   // Custom content mode (for editing screens)
   children?: React.ReactNode;
@@ -23,6 +23,9 @@ interface TopBarProps {
   // Back button
   showBackButton?: boolean;
   onBackPress?: () => void;
+
+  // Left hamburger menu (drawer toggle)
+  onLeftMenuPress?: () => void;
 
   // Search button
   onSearchPress?: () => void;
@@ -43,10 +46,10 @@ export function TopBar({
   showDropdownArrow = false,
   breadcrumbs,
   onBreadcrumbPress,
-  onBreadcrumbDropdownPress,
   children,
   showBackButton = false,
   onBackPress,
+  onLeftMenuPress,
   onSearchPress,
   isSearchActive = false,
   menuItems = [],
@@ -59,6 +62,21 @@ export function TopBar({
 
   return (
     <View style={styles.container}>
+      {/* Left Hamburger Menu (Drawer Toggle) */}
+      {onLeftMenuPress && (
+        <TouchableOpacity
+          style={styles.leftMenuButton}
+          onPress={onLeftMenuPress}
+          activeOpacity={0.7}
+        >
+          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
+            <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
+            <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
+            <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
+          </Svg>
+        </TouchableOpacity>
+      )}
+
       {/* Back Button - Hidden for minimalist design */}
       {false && showBackButton && onBackPress && (
         <TouchableOpacity
@@ -79,7 +97,6 @@ export function TopBar({
             segments={breadcrumbs}
             onSegmentPress={onBreadcrumbPress}
             badge={badge}
-            onDropdownPress={onBreadcrumbDropdownPress}
           />
         </View>
       )}
@@ -129,18 +146,18 @@ export function TopBar({
           </TouchableOpacity>
         )}
 
-        {/* Hamburger Menu */}
+        {/* Profile Avatar Menu */}
         {menuItems.length > 0 && (
           <View style={styles.menuContainer}>
             <TouchableOpacity
-              style={styles.iconButton}
+              style={styles.avatarButton}
               onPress={() => setShowMenu(!showMenu)}
+              activeOpacity={0.7}
             >
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
-                <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
-                <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
-                <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
-              </Svg>
+              <Image
+                source={{ uri: avatarUrl || getDefaultAvatarUrl(displayName || userEmail || "User") }}
+                style={styles.avatarImage}
+              />
             </TouchableOpacity>
 
             <NavigationMenu
@@ -169,6 +186,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  leftMenuButton: {
+    padding: theme.spacing.sm,
+    marginRight: theme.spacing.sm,
   },
   backButton: {
     padding: theme.spacing.sm,
@@ -221,5 +242,14 @@ const styles = StyleSheet.create({
   },
   menuContainer: {
     position: "relative",
+  },
+  avatarButton: {
+    padding: 2,
+  },
+  avatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#e5e7eb",
   },
 });

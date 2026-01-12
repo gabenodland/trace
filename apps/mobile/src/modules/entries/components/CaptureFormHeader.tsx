@@ -5,16 +5,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, Keyboard } from "react-native";
-import Svg, { Path, Circle, Line, Polyline } from "react-native-svg";
-import { NavigationMenu } from "../../../components/navigation/NavigationMenu";
+import Svg, { Path, Circle, Polyline } from "react-native-svg";
 import { styles } from "./CaptureForm.styles";
-
-interface MenuItem {
-  label?: string;
-  onPress?: () => void;
-  destructive?: boolean;
-  isDivider?: boolean;
-}
 
 interface CaptureFormHeaderProps {
   // Mode flags
@@ -34,14 +26,8 @@ interface CaptureFormHeaderProps {
   onDatePress: () => void;
   onTimePress: () => void;
   onAddTime: () => void;
-  onMenuToggle: () => void;
+  onAttributesPress: () => void;
   enterEditMode: () => void;
-  // Menu
-  showMenu: boolean;
-  menuItems: MenuItem[];
-  userEmail: string | null;
-  onProfilePress: () => void;
-  onMenuClose: () => void;
   // Refs
   editorRef: React.RefObject<any>;
 }
@@ -61,13 +47,8 @@ export function CaptureFormHeader({
   onDatePress,
   onTimePress,
   onAddTime,
-  onMenuToggle,
+  onAttributesPress,
   enterEditMode,
-  showMenu,
-  menuItems,
-  userEmail,
-  onProfilePress,
-  onMenuClose,
   editorRef,
 }: CaptureFormHeaderProps) {
   // Track "just saved" state to show green checkmark briefly
@@ -169,7 +150,7 @@ export function CaptureFormHeader({
         </View>
       )}
 
-      {/* Right side: Status indicator (in edit mode) + Hamburger Menu (hidden in fullscreen) */}
+      {/* Right side: Status indicator (in edit mode) + Attributes menu */}
       <View style={styles.headerRightContainer}>
         {/* Status indicator - orange when dirty, red when saving, green checkmark briefly after save */}
         {isEditMode && (
@@ -186,27 +167,19 @@ export function CaptureFormHeader({
           </View>
         )}
 
-        {/* Hamburger Menu - hidden in fullscreen mode */}
+        {/* Attributes menu button (...) - hidden in fullscreen mode */}
         {!isFullScreen && (
           <TouchableOpacity
             style={styles.menuButton}
-            onPress={onMenuToggle}
+            onPress={onAttributesPress}
           >
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
-              <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
-              <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
-              <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="#6b7280" stroke="none">
+              <Circle cx={12} cy={5} r={2} />
+              <Circle cx={12} cy={12} r={2} />
+              <Circle cx={12} cy={19} r={2} />
             </Svg>
           </TouchableOpacity>
         )}
-
-        <NavigationMenu
-          visible={showMenu}
-          onClose={onMenuClose}
-          menuItems={menuItems}
-          userEmail={userEmail ?? undefined}
-          onProfilePress={onProfilePress}
-        />
       </View>
     </View>
   );

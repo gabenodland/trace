@@ -7,8 +7,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Cli
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase, reverseGeocode, parseMapboxHierarchy } from '@trace/core';
 import { useNavigation } from '../shared/contexts/NavigationContext';
-import { useNavigationMenu } from '../shared/hooks/useNavigationMenu';
-import { TopBar } from '../components/layout/TopBar';
+import { SecondaryHeader } from '../components/layout/SecondaryHeader';
 import { localDB } from '../shared/db/localDB';
 import { useSync, getSyncStatus } from '../shared/sync';
 import { deleteAttachmentFromLocalStorage } from '../modules/attachments/mobileAttachmentApi';
@@ -26,7 +25,6 @@ interface CloudCounts {
 
 export function DatabaseInfoScreen() {
   const { navigate } = useNavigation();
-  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { sync, forcePull } = useSync();
   const [activeTab, setActiveTab] = useState<TabType>('status');
   const [entries, setEntries] = useState<any[]>([]);
@@ -821,22 +819,17 @@ export function DatabaseInfoScreen() {
     );
   };
 
+  const refreshButton = (
+    <TouchableOpacity onPress={() => setRefreshKey(prev => prev + 1)} style={styles.refreshButton}>
+      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
+        <Path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0118.8-4.3M22 12.5a10 10 0 01-18.8 4.2" strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
-      <TopBar
-        title="Database Info"
-        menuItems={menuItems}
-        userEmail={userEmail}
-        displayName={displayName}
-        avatarUrl={avatarUrl}
-        onProfilePress={onProfilePress}
-      >
-        <TouchableOpacity onPress={() => setRefreshKey(prev => prev + 1)} style={styles.refreshButton}>
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
-            <Path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0118.8-4.3M22 12.5a10 10 0 01-18.8 4.2" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        </TouchableOpacity>
-      </TopBar>
+      <SecondaryHeader title="Database Info" rightAction={refreshButton} />
 
       {/* Tab Menu */}
       <ScrollView

@@ -19,9 +19,11 @@ import {
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useDrawer } from "../shared/contexts/DrawerContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { usePersistedState } from "../shared/hooks/usePersistedState";
 import { TopBar } from "../components/layout/TopBar";
+import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
 import { EntryListContent } from "../modules/entries/components/EntryListContent";
 import { EntryListHeader, StickyEntryListHeader } from "../modules/entries/components/EntryListHeader";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
@@ -74,6 +76,14 @@ type ZoomLevel = "day" | "month" | "year";
 
 export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenProps = {}) {
   const { navigate } = useNavigation();
+  const {
+    registerStreamHandler,
+    selectedStreamId,
+    selectedStreamName,
+    setSelectedStreamId,
+    setSelectedStreamName,
+    openDrawer
+  } = useDrawer();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const [zoomLevel, setZoomLevel] = useState<ZoomLevel>("day");
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -142,8 +152,47 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     }
   }, [returnDate, returnZoomLevel]);
 
+  // Register stream handler for drawer selection
+  useEffect(() => {
+    registerStreamHandler((streamId, streamName) => {
+      setSelectedStreamId(streamId);
+      setSelectedStreamName(streamName);
+    });
+  }, [registerStreamHandler, setSelectedStreamId, setSelectedStreamName]);
+
+  // Entry filter based on selected stream/location/tag/mention
+  const entryFilter = useMemo(() => {
+    if (selectedStreamId === "all") {
+      return {}; // No filter = show all
+    }
+    if (selectedStreamId === "no-stream" || selectedStreamId === null) {
+      return { stream_id: null }; // Unassigned only
+    }
+    // Handle tag: prefix
+    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("tag:")) {
+      const tag = selectedStreamId.substring(4);
+      return { tag };
+    }
+    // Handle mention: prefix
+    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("mention:")) {
+      const mention = selectedStreamId.substring(8);
+      return { mention };
+    }
+    // Handle location: prefix
+    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("location:")) {
+      const locationId = selectedStreamId.substring(9);
+      return { location_id: locationId };
+    }
+    return { stream_id: selectedStreamId }; // Specific stream
+  }, [selectedStreamId]);
+
+  // Build breadcrumbs for header
+  const breadcrumbs = useMemo((): BreadcrumbSegment[] => {
+    return [{ id: selectedStreamId || "all", label: selectedStreamName }];
+  }, [selectedStreamId, selectedStreamName]);
+
   // Data hooks
-  const { entries } = useEntries({});
+  const { entries } = useEntries(entryFilter);
   const { streams } = useStreams();
 
   // Entry counts - based on selected date field
@@ -754,27 +803,31 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
   return (
     <View style={styles.container}>
       <TopBar
+        breadcrumbs={breadcrumbs}
+        onBreadcrumbPress={openDrawer}
+        onLeftMenuPress={openDrawer}
+        badge={entries.length}
         menuItems={menuItems}
         userEmail={userEmail}
         displayName={displayName}
         avatarUrl={avatarUrl}
         onProfilePress={onProfilePress}
-      >
-        {/* Custom title with date field dropdown */}
-        <View style={styles.titleRow}>
-          <Text style={styles.titleText}>Calendar</Text>
-          <TouchableOpacity
-            style={styles.dateFieldSelector}
-            onPress={() => setShowDateFieldSelector(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.dateFieldText}>{dateFieldLabel}</Text>
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-        </View>
-      </TopBar>
+      />
+
+      {/* SubBar with date field selector */}
+      <View style={styles.subBar}>
+        <TouchableOpacity
+          style={styles.dateFieldSelector}
+          onPress={() => setShowDateFieldSelector(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.dateFieldLabel}>Show by:</Text>
+          <Text style={styles.dateFieldText}>{dateFieldLabel}</Text>
+          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
+      </View>
 
       {/* Date Field Selector Modal */}
       <Modal
@@ -1133,26 +1186,28 @@ const styles = StyleSheet.create({
   yearCellTextSelected: {
     color: "#ffffff",
   },
-  // Title row styles
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 32,
-  },
-  titleText: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#111827",
+  // SubBar styles
+  subBar: {
+    backgroundColor: theme.colors.background.primary,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border.light,
   },
   dateFieldSelector: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
+  },
+  dateFieldLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#9ca3af",
   },
   dateFieldText: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#6b7280",
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
   },
   // Modal styles
   modalOverlay: {

@@ -186,6 +186,7 @@ export function useEntries(filter?: MobileEntryFilter) {
     // Data
     entries: entriesQuery.data || [],
     isLoading: entriesQuery.isLoading,
+    isFetching: entriesQuery.isFetching,
     error: entriesQuery.error,
 
     // Mutations (offline-capable)

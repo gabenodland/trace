@@ -13,7 +13,6 @@ import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { StreamPicker } from "../../streams/components/StreamPicker";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdownContainer";
-import { useNavigationMenu } from "../../../shared/hooks/useNavigationMenu";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { LocationPicker } from "../../locations/components/LocationPicker";
@@ -130,8 +129,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Use React Query for photos to detect external sync changes
   const { attachments: queryAttachments } = useAttachments(effectiveEntryId || null);
   const { navigate, setBeforeBackHandler } = useNavigation();
-  const { menuItems, userEmail, onProfilePress } = useNavigationMenu();
-  const [showMenu, setShowMenu] = useState(false);
 
   // Get current stream for visibility controls
   const currentStream = streams.find(s => s.stream_id === formData.streamId);
@@ -331,20 +328,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     return false;
   };
 
-  // Handle navigation with unsaved changes check
-  // Always saves if dirty, no prompts
-  const handleNavigationWithUnsavedCheck = (navigateCallback: () => void) => {
-    if (!hasUnsavedChanges()) {
-      navigateCallback();
-      return;
-    }
-
-    // Auto-save and then navigate
-    handleSave().then(() => {
-      navigateCallback();
-    });
-  };
-
   // Back button handler - saves if dirty, then navigates
   // Not memoized to always use latest hasUnsavedChanges/handleSave
   const handleBack = () => {
@@ -380,29 +363,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       navigateBack();
     });
   };
-
-  // Wrap menu items to check for unsaved changes before navigation
-  const wrappedMenuItems = useMemo(() => menuItems.map(item => {
-    if (item.isDivider || !item.onPress) {
-      return item; // Don't wrap dividers or items without onPress
-    }
-
-    return {
-      ...item,
-      onPress: () => {
-        handleNavigationWithUnsavedCheck(() => {
-          item.onPress?.();
-        });
-      },
-    };
-  }), [menuItems]);
-
-  // Wrap profile press to check for unsaved changes
-  const wrappedOnProfilePress = useCallback(() => {
-    if (onProfilePress) {
-      handleNavigationWithUnsavedCheck(onProfilePress);
-    }
-  }, [onProfilePress]);
 
   // Enter edit mode - RichTextEditor handles focus automatically
   // when editor receives focus while in read-only UI mode
@@ -1666,13 +1626,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           date.setMilliseconds(0);
           updateField("entryDate", date.toISOString());
         }}
-        onMenuToggle={() => setShowMenu(!showMenu)}
+        onAttributesPress={() => setActivePicker('attributes')}
         enterEditMode={enterEditMode}
-        showMenu={showMenu}
-        menuItems={wrappedMenuItems}
-        userEmail={userEmail || null}
-        onProfilePress={wrappedOnProfilePress}
-        onMenuClose={() => setShowMenu(false)}
         editorRef={editorRef}
       />
 
@@ -1774,7 +1729,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           onRatingPress={() => unsupportedRating ? setActivePicker('unsupportedRating') : setActivePicker('rating')}
           onPriorityPress={() => unsupportedPriority ? setActivePicker('unsupportedPriority') : setActivePicker('priority')}
           onPhotosPress={() => setPhotosCollapsed(false)}
-          onMenuPress={() => setActivePicker('attributes')}
           editorRef={editorRef}
         />
       )}
