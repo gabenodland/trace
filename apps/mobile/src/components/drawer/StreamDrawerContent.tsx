@@ -10,11 +10,12 @@ import { useState, useCallback, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import Svg, { Path, Rect, Circle } from "react-native-svg";
 import { useDrawer, type ViewMode } from "../../shared/contexts/DrawerContext";
+import { useTheme } from "../../shared/contexts/ThemeContext";
+import { themeBase } from "../../shared/theme/themeBase";
 import { useStreams } from "../../modules/streams/mobileStreamHooks";
 import { useEntryCounts, useTags, useMentions } from "../../modules/entries/mobileEntryHooks";
 import { useLocationsWithCounts } from "../../modules/locations/mobileLocationHooks";
 import { StreamDrawerItem, QuickFilterItem } from "./StreamDrawerItem";
-import { theme } from "../../shared/theme/theme";
 import type { Stream } from "@trace/core";
 
 /** View mode option for the selector */
@@ -56,6 +57,7 @@ const VIEW_MODES: ViewModeOption[] = [
 ];
 
 export function StreamDrawerContent() {
+  const theme = useTheme();
   const {
     closeDrawer,
     onStreamSelect,
@@ -177,16 +179,17 @@ export function StreamDrawerContent() {
   return (
     <View style={styles.container}>
       {/* View Mode Section - Fixed with shadow */}
-      <View style={styles.viewSectionWrapper}>
+      <View style={[styles.viewSectionWrapper, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>VIEW</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary }]}>VIEW</Text>
           <View style={styles.viewModeList}>
             {VIEW_MODES.map((option) => (
               <TouchableOpacity
                 key={option.mode}
                 style={[
                   styles.viewModeItem,
-                  viewMode === option.mode && styles.viewModeItemSelected,
+                  { backgroundColor: theme.colors.background.secondary },
+                  viewMode === option.mode && { backgroundColor: theme.colors.background.tertiary },
                 ]}
                 onPress={() => handleViewModeChange(option.mode)}
                 activeOpacity={0.6}
@@ -199,7 +202,8 @@ export function StreamDrawerContent() {
                 )}
                 <Text style={[
                   styles.viewModeLabel,
-                  viewMode === option.mode && styles.viewModeLabelSelected,
+                  { color: theme.colors.text.tertiary },
+                  viewMode === option.mode && { fontWeight: "600", color: theme.colors.text.primary },
                 ]}>
                   {option.label}
                 </Text>
@@ -233,7 +237,7 @@ export function StreamDrawerContent() {
           >
             <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={styles.sectionTitle}>STREAMS</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary }]}>STREAMS</Text>
         </TouchableOpacity>
 
         {/* Streams Content - Collapsible */}
@@ -269,7 +273,7 @@ export function StreamDrawerContent() {
 
         {/* LOCATIONS Section Header - Collapsible */}
         <TouchableOpacity
-          style={[styles.sectionHeader, styles.sectionHeaderWithMargin]}
+          style={[styles.sectionHeader, styles.sectionHeaderWithMargin, { borderTopColor: theme.colors.border.light }]}
           onPress={() => setLocationsExpanded(!locationsExpanded)}
           activeOpacity={0.6}
           delayPressIn={0}
@@ -285,7 +289,7 @@ export function StreamDrawerContent() {
           >
             <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={styles.sectionTitle}>LOCATIONS</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary }]}>LOCATIONS</Text>
         </TouchableOpacity>
 
         {/* Locations Content - Collapsible */}
@@ -297,19 +301,19 @@ export function StreamDrawerContent() {
                 return (
                   <TouchableOpacity
                     key={location.locationId}
-                    style={[styles.locationItem, isSelected && styles.locationItemSelected]}
+                    style={[styles.locationItem, isSelected && { backgroundColor: theme.colors.background.tertiary }]}
                     onPress={() => handleLocationSelect(location.locationId, location.name)}
                     activeOpacity={0.6}
                     delayPressIn={0}
                   >
                     <Text
-                      style={[styles.locationName, isSelected && styles.locationNameSelected]}
+                      style={[styles.locationName, { color: theme.colors.text.primary }, isSelected && { fontWeight: "600" }]}
                       numberOfLines={1}
                     >
                       {location.name}
                     </Text>
                     {location.entryCount > 0 && (
-                      <Text style={[styles.locationCount, isSelected && styles.locationCountSelected]}>
+                      <Text style={[styles.locationCount, { color: theme.colors.text.tertiary }, isSelected && { color: theme.colors.text.secondary }]}>
                         {location.entryCount}
                       </Text>
                     )}
@@ -318,7 +322,7 @@ export function StreamDrawerContent() {
               })
             ) : (
               <View style={styles.emptyLocations}>
-                <Text style={styles.emptyText}>No locations yet</Text>
+                <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No locations yet</Text>
               </View>
             )}
           </>
@@ -326,7 +330,7 @@ export function StreamDrawerContent() {
 
         {/* TAGS Section Header - Collapsible */}
         <TouchableOpacity
-          style={[styles.sectionHeader, styles.sectionHeaderWithMargin]}
+          style={[styles.sectionHeader, styles.sectionHeaderWithMargin, { borderTopColor: theme.colors.border.light }]}
           onPress={() => setTagsExpanded(!tagsExpanded)}
           activeOpacity={0.6}
           delayPressIn={0}
@@ -342,7 +346,7 @@ export function StreamDrawerContent() {
           >
             <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={styles.sectionTitle}>TAGS</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary }]}>TAGS</Text>
         </TouchableOpacity>
 
         {/* Tags Content - Collapsible */}
@@ -354,19 +358,19 @@ export function StreamDrawerContent() {
                 return (
                   <TouchableOpacity
                     key={`tag:${item.value}`}
-                    style={[styles.locationItem, isSelected && styles.locationItemSelected]}
+                    style={[styles.locationItem, isSelected && { backgroundColor: theme.colors.background.tertiary }]}
                     onPress={() => handleTagSelect("tag", item.value, item.label)}
                     activeOpacity={0.6}
                     delayPressIn={0}
                   >
                     <Text
-                      style={[styles.locationName, isSelected && styles.locationNameSelected]}
+                      style={[styles.locationName, { color: theme.colors.text.primary }, isSelected && { fontWeight: "600" }]}
                       numberOfLines={1}
                     >
                       {item.label}
                     </Text>
                     {item.count > 0 && (
-                      <Text style={[styles.locationCount, isSelected && styles.locationCountSelected]}>
+                      <Text style={[styles.locationCount, { color: theme.colors.text.tertiary }, isSelected && { color: theme.colors.text.secondary }]}>
                         {item.count}
                       </Text>
                     )}
@@ -375,7 +379,7 @@ export function StreamDrawerContent() {
               })
             ) : (
               <View style={styles.emptyLocations}>
-                <Text style={styles.emptyText}>No tags yet</Text>
+                <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No tags yet</Text>
               </View>
             )}
           </>
@@ -383,7 +387,7 @@ export function StreamDrawerContent() {
 
         {/* MENTIONS Section Header - Collapsible */}
         <TouchableOpacity
-          style={[styles.sectionHeader, styles.sectionHeaderWithMargin]}
+          style={[styles.sectionHeader, styles.sectionHeaderWithMargin, { borderTopColor: theme.colors.border.light }]}
           onPress={() => setMentionsExpanded(!mentionsExpanded)}
           activeOpacity={0.6}
           delayPressIn={0}
@@ -399,7 +403,7 @@ export function StreamDrawerContent() {
           >
             <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={styles.sectionTitle}>MENTIONS</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary }]}>MENTIONS</Text>
         </TouchableOpacity>
 
         {/* Mentions Content - Collapsible */}
@@ -411,19 +415,19 @@ export function StreamDrawerContent() {
                 return (
                   <TouchableOpacity
                     key={`mention:${item.value}`}
-                    style={[styles.locationItem, isSelected && styles.locationItemSelected]}
+                    style={[styles.locationItem, isSelected && { backgroundColor: theme.colors.background.tertiary }]}
                     onPress={() => handleTagSelect("mention", item.value, item.label)}
                     activeOpacity={0.6}
                     delayPressIn={0}
                   >
                     <Text
-                      style={[styles.locationName, isSelected && styles.locationNameSelected]}
+                      style={[styles.locationName, { color: theme.colors.text.primary }, isSelected && { fontWeight: "600" }]}
                       numberOfLines={1}
                     >
                       {item.label}
                     </Text>
                     {item.count > 0 && (
-                      <Text style={[styles.locationCount, isSelected && styles.locationCountSelected]}>
+                      <Text style={[styles.locationCount, { color: theme.colors.text.tertiary }, isSelected && { color: theme.colors.text.secondary }]}>
                         {item.count}
                       </Text>
                     )}
@@ -432,7 +436,7 @@ export function StreamDrawerContent() {
               })
             ) : (
               <View style={styles.emptyLocations}>
-                <Text style={styles.emptyText}>No mentions yet</Text>
+                <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No mentions yet</Text>
               </View>
             )}
           </>
@@ -450,10 +454,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   viewSectionWrapper: {
-    backgroundColor: theme.colors.background.primary,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(0, 0, 0, 0.06)",
     zIndex: 1,
   },
   section: {
@@ -471,13 +473,11 @@ const styles = StyleSheet.create({
   sectionHeaderWithMargin: {
     marginTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.border.light,
     paddingTop: 16,
   },
   sectionTitle: {
     fontSize: 11,
     fontWeight: "600",
-    color: theme.colors.text.tertiary,
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
@@ -500,19 +500,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 4,
     borderRadius: 8,
-    backgroundColor: "#f9fafb",
-  },
-  viewModeItemSelected: {
-    backgroundColor: "#f3f4f6",
   },
   viewModeLabel: {
     fontSize: 13,
     fontWeight: "500",
-    color: theme.colors.text.tertiary,
-  },
-  viewModeLabelSelected: {
-    fontWeight: "600",
-    color: theme.colors.text.primary,
   },
   scrollContent: {
     flex: 1,
@@ -532,28 +523,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     borderRadius: 8,
   },
-  locationItemSelected: {
-    backgroundColor: "#f3f4f6",
-  },
   locationName: {
     flex: 1,
     fontSize: 16,
     fontWeight: "400",
-    color: theme.colors.text.primary,
     letterSpacing: -0.2,
-  },
-  locationNameSelected: {
-    fontWeight: "600",
-    color: theme.colors.text.primary,
   },
   locationCount: {
     fontSize: 14,
     fontWeight: "500",
-    color: theme.colors.text.tertiary,
     marginLeft: 12,
-  },
-  locationCountSelected: {
-    color: theme.colors.text.secondary,
   },
   emptyLocations: {
     paddingHorizontal: 20,
@@ -561,7 +540,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: theme.colors.text.tertiary,
   },
   bottomPadding: {
     height: 32,

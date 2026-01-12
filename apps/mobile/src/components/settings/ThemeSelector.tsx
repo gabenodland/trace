@@ -1,29 +1,32 @@
 /**
- * Image Quality Selector - Modal for choosing photo compression quality
+ * Theme Selector - Modal for choosing app theme
+ *
+ * Shows available themes with color preview swatches.
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { type ImageQuality, IMAGE_QUALITY_OPTIONS } from '@trace/core';
+import { getThemeOptions } from '../../shared/theme/themes';
 import { useTheme } from '../../shared/contexts/ThemeContext';
 
-interface ImageQualitySelectorProps {
+interface ThemeSelectorProps {
   visible: boolean;
-  selectedQuality: ImageQuality;
-  onSelect: (quality: ImageQuality) => void;
+  selectedTheme: string;
+  onSelect: (themeId: string) => void;
   onClose: () => void;
 }
 
-export function ImageQualitySelector({
+export function ThemeSelector({
   visible,
-  selectedQuality,
+  selectedTheme,
   onSelect,
   onClose,
-}: ImageQualitySelectorProps) {
+}: ThemeSelectorProps) {
   const theme = useTheme();
+  const themeOptions = getThemeOptions();
 
-  const handleSelect = (quality: ImageQuality) => {
-    onSelect(quality);
+  const handleSelect = (themeId: string) => {
+    onSelect(themeId);
     onClose();
   };
 
@@ -37,7 +40,7 @@ export function ImageQualitySelector({
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         {/* Header */}
         <View style={[styles.header, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
-          <Text style={[styles.title, { color: theme.colors.text.primary }]}>Photo Quality</Text>
+          <Text style={[styles.title, { color: theme.colors.text.primary }]}>Theme</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
               <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
@@ -47,41 +50,62 @@ export function ImageQualitySelector({
 
         {/* Options */}
         <View style={styles.optionsList}>
-          {IMAGE_QUALITY_OPTIONS.map((option) => (
+          {themeOptions.map((option) => (
             <TouchableOpacity
-              key={option.value}
+              key={option.id}
               style={[
                 styles.optionItem,
                 { backgroundColor: theme.colors.background.primary },
-                selectedQuality === option.value && [styles.optionItemSelected, { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight }],
+                selectedTheme === option.id && [styles.optionItemSelected, { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight }],
               ]}
-              onPress={() => handleSelect(option.value)}
+              onPress={() => handleSelect(option.id)}
               activeOpacity={0.7}
             >
+              {/* Color preview swatches */}
+              <View style={styles.previewContainer}>
+                <View
+                  style={[
+                    styles.previewSwatch,
+                    { backgroundColor: option.preview.background, borderColor: theme.colors.border.light },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.previewText,
+                      { backgroundColor: option.preview.text },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.previewAccent,
+                      { backgroundColor: option.preview.accent },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              {/* Label and description */}
               <View style={styles.optionContent}>
                 <Text style={[
                   styles.optionLabel,
                   { color: theme.colors.text.primary },
-                  selectedQuality === option.value && { color: theme.colors.functional.accent },
+                  selectedTheme === option.id && { color: theme.colors.functional.accent },
                 ]}>
-                  {option.label}
+                  {option.name}
                 </Text>
-                <Text style={[styles.optionDescription, { color: theme.colors.text.secondary }]}>{option.description}</Text>
+                {option.description && (
+                  <Text style={[styles.optionDescription, { color: theme.colors.text.secondary }]}>{option.description}</Text>
+                )}
               </View>
-              {selectedQuality === option.value && (
+
+              {/* Checkmark */}
+              {selectedTheme === option.id && (
                 <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.accent} strokeWidth={2}>
                   <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
               )}
             </TouchableOpacity>
           ))}
-        </View>
-
-        {/* Info text */}
-        <View style={styles.infoContainer}>
-          <Text style={[styles.infoText, { color: theme.colors.text.tertiary }]}>
-            Higher quality photos use more storage space. Full Quality preserves the original image from your camera.
-          </Text>
         </View>
       </SafeAreaView>
     </Modal>
@@ -117,7 +141,6 @@ const styles = StyleSheet.create({
   optionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#ffffff',
     padding: 16,
     borderRadius: 12,
@@ -129,6 +152,31 @@ const styles = StyleSheet.create({
     borderColor: '#2563eb',
     backgroundColor: '#eff6ff',
   },
+  previewContainer: {
+    marginRight: 16,
+  },
+  previewSwatch: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    padding: 8,
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  previewBackground: {
+    // backgroundColor set dynamically
+  },
+  previewText: {
+    width: 24,
+    height: 4,
+    borderRadius: 2,
+  },
+  previewAccent: {
+    width: 16,
+    height: 4,
+    borderRadius: 2,
+  },
   optionContent: {
     flex: 1,
     marginRight: 12,
@@ -137,7 +185,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1f2937',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   optionLabelSelected: {
     color: '#2563eb',
@@ -145,14 +193,5 @@ const styles = StyleSheet.create({
   optionDescription: {
     fontSize: 14,
     color: '#6b7280',
-  },
-  infoContainer: {
-    paddingHorizontal: 20,
-  },
-  infoText: {
-    fontSize: 13,
-    color: '#9ca3af',
-    textAlign: 'center',
-    lineHeight: 18,
   },
 });

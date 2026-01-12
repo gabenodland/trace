@@ -10,7 +10,7 @@ import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { TopBar } from "../components/layout/TopBar";
 import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
-import { theme } from "../shared/theme/theme";
+import { useTheme } from "../shared/contexts/ThemeContext";
 import Svg, { Path, Circle } from "react-native-svg";
 import { formatRelativeTime, type Entry } from "@trace/core";
 
@@ -79,6 +79,7 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
 }
 
 export function MapScreen() {
+  const theme = useTheme();
   const { navigate } = useNavigation();
   const {
     registerStreamHandler,
@@ -510,25 +511,29 @@ export function MapScreen() {
 
     return (
       <TouchableOpacity
-        style={[styles.entryItem, isSelected && styles.entryItemSelected]}
+        style={[
+          styles.entryItem,
+          { borderBottomColor: theme.colors.border.light },
+          isSelected && styles.entryItemSelected,
+        ]}
         onPress={() => handleEntryPress(item)}
         onLongPress={() => navigate("capture", { entryId: item.entry_id })}
         activeOpacity={0.7}
       >
         <View style={styles.entryContent}>
           {item.title ? (
-            <Text style={styles.entryTitle} numberOfLines={1}>{item.title}</Text>
+            <Text style={[styles.entryTitle, { color: theme.colors.text.primary }]} numberOfLines={1}>{item.title}</Text>
           ) : (
-            <Text style={styles.entryPreview} numberOfLines={2}>
+            <Text style={[styles.entryPreview, { color: theme.colors.text.secondary }]} numberOfLines={2}>
               {item.content?.replace(/<[^>]*>/g, '') || "No content"}
             </Text>
           )}
           <View style={styles.entryMeta}>
-            <Text style={styles.entryDate}>{dateStr}</Text>
-            <Text style={styles.entryLocation} numberOfLines={1}>{locationName}</Text>
+            <Text style={[styles.entryDate, { color: theme.colors.text.tertiary }]}>{dateStr}</Text>
+            <Text style={[styles.entryLocation, { color: theme.colors.text.tertiary }]} numberOfLines={1}>{locationName}</Text>
           </View>
         </View>
-        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#ef4444" : "#9ca3af"} strokeWidth={2}>
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#ef4444" : theme.colors.text.tertiary} strokeWidth={2}>
           <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
           <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
@@ -538,7 +543,7 @@ export function MapScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <TopBar
           onLeftMenuPress={openDrawer}
           breadcrumbs={breadcrumbs}
@@ -552,14 +557,14 @@ export function MapScreen() {
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.text.tertiary} />
-          <Text style={styles.loadingText}>Loading entries...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.text.tertiary }]}>Loading entries...</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       <TopBar
         onLeftMenuPress={openDrawer}
         breadcrumbs={breadcrumbs}
@@ -609,8 +614,8 @@ export function MapScreen() {
         </MapView>
 
         {/* My Location Button */}
-        <TouchableOpacity style={styles.locationButton} onPress={goToCurrentLocation}>
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth={2}>
+        <TouchableOpacity style={[styles.locationButton, { backgroundColor: theme.colors.background.primary }]} onPress={goToCurrentLocation}>
+          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
             <Circle cx="12" cy="12" r="10" />
             <Path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
           </Svg>
@@ -619,13 +624,13 @@ export function MapScreen() {
         {/* Fit All Button */}
         {entries.length > 0 && (
           <TouchableOpacity
-            style={styles.fitButton}
+            style={[styles.fitButton, { backgroundColor: theme.colors.background.primary }]}
             onPress={() => {
               const bounds = calculateBounds(entries);
               mapRef.current?.animateToRegion(bounds, 500);
             }}
           >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth={2}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
               <Path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
@@ -635,8 +640,8 @@ export function MapScreen() {
       {/* Lower portion with swipe gesture for drawer */}
       <View style={styles.lowerSection} {...drawerPanResponder.panHandlers}>
         {/* Entry count bar */}
-        <View style={styles.countBar}>
-          <Text style={styles.countText}>
+        <View style={[styles.countBar, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
+          <Text style={[styles.countBarText, { color: theme.colors.text.tertiary }]}>
             {visibleEntries.length} {visibleEntries.length === 1 ? "entry" : "entries"} in view
           </Text>
         </View>
@@ -644,12 +649,12 @@ export function MapScreen() {
         {/* Entry List */}
         {entries.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Svg width={64} height={64} viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth={1.5}>
+            <Svg width={64} height={64} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={1.5}>
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
               <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-            <Text style={styles.emptyText}>No entries with locations</Text>
-            <Text style={styles.emptySubtext}>Add GPS coordinates to your entries to see them on the map</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No entries with locations</Text>
+            <Text style={[styles.emptySubtext, { color: theme.colors.text.tertiary }]}>Add GPS coordinates to your entries to see them on the map</Text>
           </View>
         ) : (
           <FlatList
@@ -657,7 +662,7 @@ export function MapScreen() {
             data={visibleEntries}
             renderItem={renderEntryItem}
             keyExtractor={item => item.entry_id}
-            style={styles.entryList}
+            style={[styles.entryList, { backgroundColor: theme.colors.background.primary }]}
             contentContainerStyle={styles.entryListContent}
             onScrollToIndexFailed={(info) => {
               // Handle scroll failure gracefully
@@ -669,8 +674,8 @@ export function MapScreen() {
             }}
             ListEmptyComponent={
               <View style={styles.emptyListContainer}>
-                <Text style={styles.emptyListText}>No entries in this area</Text>
-                <Text style={styles.emptyListSubtext}>Pan or zoom the map to see entries</Text>
+                <Text style={[styles.emptyListText, { color: theme.colors.text.tertiary }]}>No entries in this area</Text>
+                <Text style={[styles.emptyListSubtext, { color: theme.colors.text.tertiary }]}>Pan or zoom the map to see entries</Text>
               </View>
             }
           />
@@ -684,7 +689,6 @@ export function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background.secondary,
   },
   lowerSection: {
     flex: 1,
@@ -697,7 +701,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: theme.colors.text.tertiary,
   },
   mapContainer: {
     height: 300,
@@ -713,7 +716,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -729,7 +731,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -766,20 +767,16 @@ const styles = StyleSheet.create({
     // Container for single marker pin
   },
   countBar: {
-    backgroundColor: theme.colors.background.primary,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border.light,
   },
-  countText: {
+  countBarText: {
     fontSize: 13,
-    color: theme.colors.text.tertiary,
     fontWeight: "500",
   },
   entryList: {
     flex: 1,
-    backgroundColor: theme.colors.background.primary,
   },
   entryListContent: {
     paddingBottom: 20,
@@ -790,7 +787,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border.light,
   },
   entryItemSelected: {
     backgroundColor: "#fef2f2",
@@ -804,12 +800,10 @@ const styles = StyleSheet.create({
   entryTitle: {
     fontSize: 15,
     fontWeight: "600",
-    color: theme.colors.text.primary,
     marginBottom: 4,
   },
   entryPreview: {
     fontSize: 14,
-    color: theme.colors.text.secondary,
     marginBottom: 4,
     lineHeight: 20,
   },
@@ -820,11 +814,9 @@ const styles = StyleSheet.create({
   },
   entryDate: {
     fontSize: 12,
-    color: theme.colors.text.tertiary,
   },
   entryLocation: {
     fontSize: 12,
-    color: theme.colors.text.tertiary,
     flex: 1,
   },
   emptyContainer: {
@@ -836,13 +828,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#9ca3af",
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#9ca3af",
     textAlign: "center",
   },
   emptyListContainer: {
@@ -852,11 +842,9 @@ const styles = StyleSheet.create({
   emptyListText: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#9ca3af",
     marginBottom: 4,
   },
   emptyListSubtext: {
     fontSize: 14,
-    color: "#9ca3af",
   },
 });

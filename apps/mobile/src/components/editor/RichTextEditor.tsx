@@ -6,6 +6,7 @@ import {
   TenTapStartKit,
   CoreBridge,
 } from "@10play/tentap-editor";
+import { useTheme } from "../../shared/contexts/ThemeContext";
 
 // Debug logging for editor content/focus issues
 const DEBUG_FOCUS = false;
@@ -35,6 +36,7 @@ export const RichTextEditor = forwardRef(({
   onPress,
   onReady,
 }: RichTextEditorProps, ref) => {
+  const theme = useTheme();
   const isLocalChange = useRef(false);
   // Initialize to null - first poll will sync to editor's normalized content
   const lastContent = useRef<string | null>(null);
@@ -46,13 +48,19 @@ export const RichTextEditor = forwardRef(({
   // Track pending content that needs to be set once editor is ready
   const pendingContent = useRef<string | null>(null);
 
+  // Dynamic CSS with theme colors
   const customCSS = `
     * {
       line-height: 1.4 !important;
     }
+    body {
+      background-color: ${theme.colors.background.primary} !important;
+      color: ${theme.colors.text.primary} !important;
+    }
     p {
       margin: 0 !important;
       padding: 0 !important;
+      color: ${theme.colors.text.primary} !important;
     }
     p + p {
       margin-top: 4px !important;
@@ -61,16 +69,19 @@ export const RichTextEditor = forwardRef(({
       font-size: 24px !important;
       font-weight: bold !important;
       margin: 8px 0 4px 0 !important;
+      color: ${theme.colors.text.primary} !important;
     }
     h2 {
       font-size: 20px !important;
       font-weight: bold !important;
       margin: 6px 0 4px 0 !important;
+      color: ${theme.colors.text.primary} !important;
     }
     ul, ol {
       padding-left: 24px !important;
       margin-top: 4px !important;
       margin-bottom: 4px !important;
+      color: ${theme.colors.text.primary} !important;
     }
     /* Nested regular lists - exclude task lists */
     ul:not([data-type="taskList"]) ul:not([data-type="taskList"]),
@@ -117,6 +128,8 @@ export const RichTextEditor = forwardRef(({
     }
     .ProseMirror {
       -webkit-text-size-adjust: 100%;
+      background-color: ${theme.colors.background.primary} !important;
+      color: ${theme.colors.text.primary} !important;
     }
     /* Add space before first content element */
     .ProseMirror > *:first-child {
@@ -126,6 +139,14 @@ export const RichTextEditor = forwardRef(({
       content: "";
       display: block;
       height: 10px;
+    }
+    /* Placeholder styling */
+    .ProseMirror p.is-editor-empty:first-child::before {
+      color: ${theme.colors.text.disabled} !important;
+    }
+    /* Link styling */
+    a {
+      color: ${theme.colors.functional.accent} !important;
     }
   `;
 
@@ -415,7 +436,7 @@ export const RichTextEditor = forwardRef(({
   }, [editable, editor, onPress]);
 
   return (
-    <View ref={containerRef} style={styles.container}>
+    <View ref={containerRef} style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
       <RichText
         editor={editor}
         showsVerticalScrollIndicator={true}

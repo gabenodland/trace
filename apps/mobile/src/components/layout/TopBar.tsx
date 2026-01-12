@@ -3,7 +3,8 @@ import Svg, { Path, Line, Circle } from "react-native-svg";
 import { useState } from "react";
 import { NavigationMenu, NavigationMenuItem } from "../navigation/NavigationMenu";
 import { Breadcrumb, BreadcrumbSegment } from "./Breadcrumb";
-import { theme } from "../../shared/theme/theme";
+import { useTheme, type ThemeContextValue } from "../../shared/contexts/ThemeContext";
+import { themeBase } from "../../shared/theme/themeBase";
 import { getDefaultAvatarUrl } from "@trace/core";
 
 interface TopBarProps {
@@ -58,10 +59,11 @@ export function TopBar({
   avatarUrl,
   onProfilePress,
 }: TopBarProps) {
+  const theme = useTheme();
   const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
       {/* Left Hamburger Menu (Drawer Toggle) */}
       {onLeftMenuPress && (
         <TouchableOpacity
@@ -69,7 +71,7 @@ export function TopBar({
           onPress={onLeftMenuPress}
           activeOpacity={0.7}
         >
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
+          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
             <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
             <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
             <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
@@ -84,7 +86,7 @@ export function TopBar({
           onPress={onBackPress}
           activeOpacity={0.7}
         >
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
+          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
             <Path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </TouchableOpacity>
@@ -97,6 +99,7 @@ export function TopBar({
             segments={breadcrumbs}
             onSegmentPress={onBreadcrumbPress}
             badge={badge}
+            theme={theme}
           />
         </View>
       )}
@@ -109,14 +112,14 @@ export function TopBar({
           disabled={!onTitlePress}
           activeOpacity={onTitlePress ? 0.7 : 1}
         >
-          <Text style={styles.title}>{title}</Text>
+          <Text style={[styles.title, { color: theme.colors.text.primary }]}>{title}</Text>
           {badge !== undefined && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{badge}</Text>
+            <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
+              <Text style={[styles.badgeText, { color: theme.colors.text.secondary }]}>{badge}</Text>
             </View>
           )}
           {showDropdownArrow && (
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth={2} style={styles.dropdownArrow}>
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2} style={styles.dropdownArrow}>
               <Path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           )}
@@ -139,7 +142,7 @@ export function TopBar({
             onPress={onSearchPress}
             activeOpacity={0.7}
           >
-            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={isSearchActive ? "#3b82f6" : "#1f2937"} strokeWidth={2}>
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={isSearchActive ? theme.colors.functional.accent : theme.colors.text.primary} strokeWidth={2}>
               <Circle cx={11} cy={11} r={8} />
               <Line x1={21} y1={21} x2={16.65} y2={16.65} strokeLinecap="round" />
             </Svg>
@@ -156,7 +159,7 @@ export function TopBar({
             >
               <Image
                 source={{ uri: avatarUrl || getDefaultAvatarUrl(displayName || userEmail || "User") }}
-                style={styles.avatarImage}
+                style={[styles.avatarImage, { backgroundColor: theme.colors.background.tertiary }]}
               />
             </TouchableOpacity>
 
@@ -180,20 +183,19 @@ const styles = StyleSheet.create({
   container: {
     height: 110,
     paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.md,
-    backgroundColor: theme.colors.background.primary,
+    paddingHorizontal: themeBase.spacing.lg,
+    paddingBottom: themeBase.spacing.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   leftMenuButton: {
-    padding: theme.spacing.sm,
-    marginRight: theme.spacing.sm,
+    padding: themeBase.spacing.sm,
+    marginRight: themeBase.spacing.sm,
   },
   backButton: {
-    padding: theme.spacing.sm,
-    marginRight: theme.spacing.sm,
+    padding: themeBase.spacing.sm,
+    marginRight: themeBase.spacing.sm,
   },
   breadcrumbContainer: {
     flex: 1,
@@ -201,27 +203,24 @@ const styles = StyleSheet.create({
   titleContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
     flex: 1,
   },
   title: {
     fontSize: 28,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
+    fontWeight: themeBase.typography.fontWeight.bold,
   },
   badge: {
-    backgroundColor: theme.colors.background.tertiary,
-    borderRadius: theme.borderRadius.full,
-    paddingHorizontal: theme.spacing.sm,
+    borderRadius: themeBase.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
     paddingVertical: 2,
     minWidth: 24,
     alignItems: "center",
     justifyContent: "center",
   },
   badgeText: {
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.semibold,
+    fontSize: themeBase.typography.fontSize.sm,
+    fontWeight: themeBase.typography.fontWeight.semibold,
   },
   dropdownArrow: {
     marginLeft: 4,
@@ -230,15 +229,15 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.md,
+    gap: themeBase.spacing.md,
   },
   rightButtons: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.xs,
+    gap: themeBase.spacing.xs,
   },
   iconButton: {
-    padding: theme.spacing.sm,
+    padding: themeBase.spacing.sm,
   },
   menuContainer: {
     position: "relative",
@@ -250,6 +249,5 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#e5e7eb",
   },
 });

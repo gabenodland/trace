@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import Svg, { Path } from "react-native-svg";
-import { theme } from "../../shared/theme/theme";
+import { type ThemeContextValue } from "../../shared/contexts/ThemeContext";
+import { themeBase } from "../../shared/theme/themeBase";
 import { ReactNode } from "react";
 
 export interface BreadcrumbSegment {
@@ -13,9 +14,10 @@ interface BreadcrumbProps {
   segments: BreadcrumbSegment[];
   onSegmentPress: (segment: BreadcrumbSegment) => void;
   badge?: number;
+  theme: ThemeContextValue;
 }
 
-export function Breadcrumb({ segments, onSegmentPress, badge }: BreadcrumbProps) {
+export function Breadcrumb({ segments, onSegmentPress, badge, theme }: BreadcrumbProps) {
   return (
     <View style={styles.container}>
       <ScrollView
@@ -42,15 +44,16 @@ export function Breadcrumb({ segments, onSegmentPress, badge }: BreadcrumbProps)
               {index === segments.length - 1 && segment.icon}
               <Text style={[
                 styles.segmentText,
-                index === segments.length - 1 && styles.segmentTextLast
+                { color: theme.colors.text.tertiary },
+                index === segments.length - 1 && [styles.segmentTextLast, { color: theme.colors.text.primary }]
               ]}>
                 {segment.label}
               </Text>
 
               {/* Badge on last segment */}
               {index === segments.length - 1 && badge !== undefined && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{badge}</Text>
+                <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
+                  <Text style={[styles.badgeText, { color: theme.colors.text.secondary }]}>{badge}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -69,43 +72,39 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     alignItems: "center",
-    paddingRight: theme.spacing.md,
+    paddingRight: themeBase.spacing.md,
   },
   segmentContainer: {
     flexDirection: "row",
     alignItems: "center",
   },
   separator: {
-    marginHorizontal: theme.spacing.xs,
+    marginHorizontal: themeBase.spacing.xs,
   },
   segment: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.xs,
-    paddingVertical: theme.spacing.xs,
+    gap: themeBase.spacing.xs,
+    paddingVertical: themeBase.spacing.xs,
   },
   segmentText: {
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.tertiary,
+    fontSize: themeBase.typography.fontSize.base,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   segmentTextLast: {
     fontSize: 20,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
+    fontWeight: themeBase.typography.fontWeight.bold,
   },
   badge: {
-    backgroundColor: theme.colors.background.tertiary,
-    borderRadius: theme.borderRadius.full,
-    paddingHorizontal: theme.spacing.sm,
+    borderRadius: themeBase.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
     paddingVertical: 2,
     minWidth: 24,
     alignItems: "center",
     justifyContent: "center",
   },
   badgeText: {
-    color: theme.colors.text.secondary,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.semibold,
+    fontSize: themeBase.typography.fontSize.sm,
+    fontWeight: themeBase.typography.fontWeight.semibold,
   },
 });

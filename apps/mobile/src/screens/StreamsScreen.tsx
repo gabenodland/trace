@@ -13,9 +13,11 @@ import { useStreams } from "../modules/streams/mobileStreamHooks";
 import type { Stream } from "@trace/core";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
+import { useTheme } from "../shared/contexts/ThemeContext";
 
 export function StreamsScreen() {
   const { navigate } = useNavigation();
+  const theme = useTheme();
   const { streams, isLoading, streamMutations } = useStreams();
 
   const [searchText, setSearchText] = useState("");
@@ -77,7 +79,7 @@ export function StreamsScreen() {
   // Render a single stream item
   const renderStreamItem = ({ item: stream }: { item: Stream }) => {
     return (
-      <View style={styles.streamItem}>
+      <View style={[styles.streamItem, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
         <TouchableOpacity
           style={styles.streamMain}
           onPress={() => handleOpenSettings(stream)}
@@ -88,7 +90,7 @@ export function StreamsScreen() {
           <View
             style={[
               styles.streamIcon,
-              { backgroundColor: stream.color || "#6b7280" },
+              { backgroundColor: stream.color || theme.colors.text.secondary },
             ]}
           >
             {stream.icon ? (
@@ -104,7 +106,7 @@ export function StreamsScreen() {
 
           {/* Stream name */}
           <View style={styles.streamInfo}>
-            <Text style={styles.streamName}>{stream.name}</Text>
+            <Text style={[styles.streamName, { color: theme.colors.text.primary }]}>{stream.name}</Text>
           </View>
         </TouchableOpacity>
 
@@ -114,7 +116,7 @@ export function StreamsScreen() {
           onPress={() => handleDeleteStream(stream)}
           activeOpacity={0.7}
         >
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}>
+          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.overdue} strokeWidth={2}>
             <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </TouchableOpacity>
@@ -128,32 +130,32 @@ export function StreamsScreen() {
       onPress={handleCreateStream}
       activeOpacity={0.7}
     >
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
+      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.accent} strokeWidth={2}>
         <Path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
       </Svg>
     </TouchableOpacity>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       <SecondaryHeader title="Streams" rightAction={addButton} />
 
       {/* Search bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputWrapper}>
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+      <View style={[styles.searchContainer, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
+        <View style={[styles.searchInputWrapper, { backgroundColor: theme.colors.background.tertiary }]}>
+          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
             <Path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: theme.colors.text.primary }]}
             placeholder="Search streams..."
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={theme.colors.text.tertiary}
             value={searchText}
             onChangeText={setSearchText}
           />
           {searchText.length > 0 && (
             <TouchableOpacity onPress={() => setSearchText("")}>
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
                 <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             </TouchableOpacity>
@@ -164,16 +166,16 @@ export function StreamsScreen() {
       {/* Stream list */}
       {isLoading ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Loading streams...</Text>
+          <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>Loading streams...</Text>
         </View>
       ) : sortedStreams.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
             {searchText ? "No streams match your search" : "No streams yet"}
           </Text>
           {!searchText && (
             <TouchableOpacity
-              style={styles.emptyButton}
+              style={[styles.emptyButton, { backgroundColor: theme.colors.functional.accent }]}
               onPress={handleCreateStream}
               activeOpacity={0.7}
             >
@@ -197,7 +199,6 @@ export function StreamsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
   },
   searchContainer: {
     flexDirection: "row",
@@ -205,15 +206,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
-    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
   },
   searchInputWrapper: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f3f4f6",
     borderRadius: 8,
     paddingHorizontal: 12,
     gap: 8,
@@ -222,13 +220,11 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     fontSize: 16,
-    color: "#1f2937",
   },
   addButton: {
     width: 40,
     height: 40,
     borderRadius: 8,
-    backgroundColor: "#3b82f6",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -241,15 +237,9 @@ const styles = StyleSheet.create({
   streamItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   streamMain: {
     flex: 1,
@@ -273,7 +263,6 @@ const styles = StyleSheet.create({
   streamName: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#1f2937",
   },
   actionButton: {
     width: 36,
@@ -290,12 +279,10 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: "#6b7280",
     textAlign: "center",
     marginBottom: 16,
   },
   emptyButton: {
-    backgroundColor: "#3b82f6",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,

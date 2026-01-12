@@ -1,10 +1,9 @@
 import { StyleSheet, Platform, StatusBar } from "react-native";
-import { theme } from "../../../shared/theme/theme";
+import { themeBase } from "../../../shared/theme/themeBase";
 
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
   },
   loadingContainer: {
     justifyContent: "center",
@@ -12,30 +11,25 @@ export const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: "#6b7280",
   },
   errorText: {
     fontSize: 16,
-    color: "#ef4444",
     marginBottom: 16,
   },
   backButton: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: "#3b82f6",
     borderRadius: 8,
   },
   backButtonText: {
-    color: "#ffffff",
     fontSize: 16,
     fontWeight: "600",
   },
   titleBar: {
     height: 90,
     paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: themeBase.spacing.sm,
     paddingBottom: 4,
-    backgroundColor: "#fafafa",
     flexDirection: "row",
     alignItems: "center",
   },
@@ -52,13 +46,11 @@ export const styles = StyleSheet.create({
   headerTitleText: {
     fontSize: 17,
     fontWeight: "600",
-    color: "#1f2937",
     textAlign: "center",
   },
   headerTitleInput: {
     fontSize: 17,
     fontWeight: "600",
-    color: "#1f2937",
     textAlign: "center",
     flex: 1,
     padding: 0,
@@ -84,7 +76,6 @@ export const styles = StyleSheet.create({
   headerCancelText: {
     fontSize: 16,
     lineHeight: 24,
-    color: "#6b7280",
     fontWeight: "500",
     includeFontPadding: false,
     textAlignVertical: "center",
@@ -101,13 +92,12 @@ export const styles = StyleSheet.create({
   headerSaveText: {
     fontSize: 16,
     lineHeight: 24,
-    color: "#2563eb",
     fontWeight: "600",
     includeFontPadding: false,
     textAlignVertical: "center",
   },
   headerSaveTextDisabled: {
-    color: "#9ca3af",
+    opacity: 0.5,
   },
   headerDateContainer: {
     flex: 1,
@@ -118,7 +108,6 @@ export const styles = StyleSheet.create({
   },
   headerDateText: {
     fontSize: 15,
-    color: "#6b7280",
     fontWeight: "500",
   },
   headerTimeContainer: {
@@ -129,46 +118,40 @@ export const styles = StyleSheet.create({
     padding: 2,
   },
   titleRow: {
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: themeBase.spacing.lg,
     paddingVertical: 6,
-    backgroundColor: "#fafafa",
   },
   titleInputFullWidth: {
     fontSize: 22,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
+    fontWeight: themeBase.typography.fontWeight.bold,
     padding: 0,
     margin: 0,
     textAlign: "center",
-    textAlignVertical: "center",
   },
   titleTouchable: {
     width: "100%",
   },
   titleText: {
     fontSize: 22,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
+    fontWeight: themeBase.typography.fontWeight.bold,
     textAlign: "center",
   },
   titleBarContent: {
     flex: 1,
   },
   menuButton: {
-    padding: theme.spacing.sm,
+    padding: themeBase.spacing.sm,
   },
   metadataBar: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: themeBase.spacing.lg,
     paddingTop: 10,
     paddingBottom: 10,
-    backgroundColor: "#fafafa",
     rowGap: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(0, 0, 0, 0.08)",
     // Subtle iOS-style shadow
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
@@ -188,21 +171,17 @@ export const styles = StyleSheet.create({
   },
   metadataText: {
     fontSize: 13,
-    color: theme.colors.text.secondary,
     fontWeight: "500",
     letterSpacing: -0.2,
   },
   metadataTextActive: {
-    color: theme.colors.text.primary,
     fontWeight: "600",
   },
   metadataTextUnsupported: {
     textDecorationLine: "line-through",
-    color: "#9ca3af",
   },
   metadataDivider: {
     fontSize: 10,
-    color: "#d1d5db",
     paddingHorizontal: 8,
   },
   entryMenuButton: {
@@ -211,60 +190,52 @@ export const styles = StyleSheet.create({
     opacity: 0.6,
   },
   attributePickerContainer: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.md,
-    gap: theme.spacing.xs,
+    borderRadius: themeBase.borderRadius.lg,
+    padding: themeBase.spacing.md,
+    gap: themeBase.spacing.xs,
   },
   attributePickerTitle: {
     fontSize: 16,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.sm,
+    fontWeight: themeBase.typography.fontWeight.semibold,
+    marginBottom: themeBase.spacing.sm,
   },
   attributePickerItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
+    gap: themeBase.spacing.md,
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.sm,
+    borderRadius: themeBase.borderRadius.md,
   },
   attributePickerItemIcon: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: theme.colors.background.secondary,
     justifyContent: "center",
     alignItems: "center",
   },
   attributePickerItemText: {
     fontSize: 16,
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   menuDivider: {
     height: 1,
-    backgroundColor: "#e5e7eb",
-    marginVertical: theme.spacing.sm,
+    marginVertical: themeBase.spacing.sm,
   },
   topBarButtonTask: {
     // No background color
   },
   topBarButtonTaskText: {
-    color: theme.colors.text.primary,
   },
   topBarButtonComplete: {
     // No background color
   },
   topBarButtonCompleteText: {
-    color: theme.colors.text.primary,
   },
   topBarButtonDue: {
     // No background color
   },
   topBarButtonDueText: {
-    color: theme.colors.text.primary,
   },
   contentContainer: {
     flex: 1,
@@ -279,14 +250,12 @@ export const styles = StyleSheet.create({
   },
   titlePlaceholder: {
     fontSize: 22,
-    color: theme.colors.text.disabled,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: themeBase.typography.fontWeight.bold,
     textAlign: "center",
   },
   titleInput: {
     fontSize: 22,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
+    fontWeight: themeBase.typography.fontWeight.bold,
     padding: 0,
     margin: 0,
   },
@@ -298,11 +267,9 @@ export const styles = StyleSheet.create({
     paddingRight: 16,
     paddingTop: 0,
     paddingBottom: 4,
-    backgroundColor: "#fafafa",
   },
   entryDateText: {
     fontSize: 19,
-    color: "#6b7280",
     fontWeight: "500",
   },
   timeContainer: {
@@ -328,7 +295,6 @@ export const styles = StyleSheet.create({
   toolbarDivider: {
     width: 1,
     height: 20,
-    backgroundColor: "#d1d5db",
     marginHorizontal: 4,
   },
   fullScreenEditor: {
@@ -347,67 +313,60 @@ export const styles = StyleSheet.create({
   headingButtonText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#6b7280",
   },
   deleteButton: {
-    padding: theme.spacing.sm,
+    padding: themeBase.spacing.sm,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: theme.spacing.sm,
+    marginLeft: themeBase.spacing.sm,
   },
   cancelButton: {
-    padding: theme.spacing.sm,
+    padding: themeBase.spacing.sm,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: theme.spacing.sm,
+    marginLeft: themeBase.spacing.sm,
   },
   buttonDisabled: {
     opacity: 0.3,
   },
   saveButton: {
-    padding: theme.spacing.sm,
+    padding: themeBase.spacing.sm,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: theme.spacing.sm,
+    marginLeft: themeBase.spacing.sm,
   },
   saveButtonDisabled: {
     opacity: 0.3,
   },
   editButton: {
-    padding: theme.spacing.sm,
+    padding: themeBase.spacing.sm,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: theme.spacing.sm,
+    marginLeft: themeBase.spacing.sm,
   },
   datePickerContainer: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    borderRadius: themeBase.borderRadius.lg,
+    padding: themeBase.spacing.lg,
+    gap: themeBase.spacing.md,
   },
   datePickerTitle: {
     fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.sm,
+    fontWeight: themeBase.typography.fontWeight.semibold,
+    marginBottom: themeBase.spacing.sm,
   },
   datePickerButton: {
-    backgroundColor: theme.colors.background.secondary,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.borderRadius.md,
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.lg,
+    borderRadius: themeBase.borderRadius.md,
     alignItems: "center",
   },
   datePickerButtonText: {
     fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   datePickerButtonDanger: {
-    backgroundColor: "#fee2e2",
   },
   datePickerButtonDangerText: {
-    color: "#dc2626",
   },
   snackbar: {
     position: "absolute",
@@ -427,47 +386,42 @@ export const styles = StyleSheet.create({
   },
   // Rating and Priority Picker Styles
   pickerContainer: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    borderRadius: themeBase.borderRadius.lg,
+    padding: themeBase.spacing.lg,
+    gap: themeBase.spacing.md,
   },
   pickerTitle: {
     fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.sm,
+    fontWeight: themeBase.typography.fontWeight.semibold,
+    marginBottom: themeBase.spacing.sm,
   },
   starRatingRow: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: theme.spacing.xs,
-    paddingVertical: theme.spacing.lg,
+    gap: themeBase.spacing.xs,
+    paddingVertical: themeBase.spacing.lg,
   },
   starRatingButton: {
-    padding: theme.spacing.sm,
+    padding: themeBase.spacing.sm,
   },
   starRatingIcon: {
     fontSize: 40,
-    color: "#d1d5db",
   },
   starRatingIconActive: {
-    color: "#fbbf24",
   },
   priorityDisplay: {
     alignItems: "center",
-    paddingVertical: theme.spacing.xl,
+    paddingVertical: themeBase.spacing.xl,
   },
   priorityValueText: {
     fontSize: 48,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
+    fontWeight: themeBase.typography.fontWeight.bold,
   },
   sliderContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
+    paddingVertical: themeBase.spacing.sm,
   },
   slider: {
     flex: 1,
@@ -475,8 +429,7 @@ export const styles = StyleSheet.create({
   },
   sliderLabel: {
     fontSize: 14,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.secondary,
+    fontWeight: themeBase.typography.fontWeight.medium,
     minWidth: 30,
     textAlign: "center",
   },
@@ -488,70 +441,56 @@ export const styles = StyleSheet.create({
   },
   sliderSegment: {
     flex: 1,
-    backgroundColor: theme.colors.background.secondary,
     borderRadius: 2,
   },
   sliderSegmentActive: {
-    backgroundColor: "#3b82f6",
   },
   quickButtonRow: {
     flexDirection: "row",
-    gap: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
     justifyContent: "space-between",
   },
   quickButton: {
     flex: 1,
-    backgroundColor: theme.colors.background.secondary,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
+    paddingVertical: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
     alignItems: "center",
   },
   quickButtonSelected: {
-    backgroundColor: "#dbeafe",
   },
   quickButtonText: {
     fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   quickButtonTextSelected: {
-    color: "#3b82f6",
   },
   pickerButton: {
-    backgroundColor: theme.colors.background.secondary,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.borderRadius.md,
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.lg,
+    borderRadius: themeBase.borderRadius.md,
     alignItems: "center",
   },
   pickerButtonDanger: {
-    backgroundColor: "#fee2e2",
   },
   pickerButtonDangerText: {
-    color: "#dc2626",
   },
   pickerActionRow: {
     flexDirection: "row",
-    gap: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
   },
   pickerActionButton: {
     flex: 1,
-    backgroundColor: theme.colors.background.secondary,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
+    paddingVertical: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
     alignItems: "center",
   },
   pickerButtonPrimary: {
-    backgroundColor: "#3b82f6",
   },
   pickerButtonSecondary: {
-    backgroundColor: theme.colors.background.secondary,
     borderWidth: 1,
-    borderColor: theme.colors.border.medium,
   },
   pickerButtonText: {
     fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
 });

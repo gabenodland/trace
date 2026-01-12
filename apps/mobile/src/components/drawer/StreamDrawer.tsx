@@ -23,11 +23,13 @@ import {
   StatusBar,
 } from "react-native";
 import { useDrawer, type DrawerControl } from "../../shared/contexts/DrawerContext";
+import { useTheme } from "../../shared/contexts/ThemeContext";
 import { StreamDrawerContent } from "./StreamDrawerContent";
 
 const DRAWER_WIDTH = 280;
 
 export function StreamDrawer() {
+  const theme = useTheme();
   const { isOpen, openDrawer, closeDrawer, registerDrawerControl } = useDrawer();
 
   // Animation values
@@ -206,7 +208,7 @@ export function StreamDrawer() {
       <Animated.View
         style={[
           styles.drawer,
-          { transform: [{ translateX }] },
+          { transform: [{ translateX }], backgroundColor: theme.colors.background.primary },
         ]}
         {...panResponder.panHandlers}
       >
@@ -231,7 +233,6 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     width: DRAWER_WIDTH,
-    backgroundColor: "#ffffff",
     paddingTop: Platform.OS === "ios" ? 40 : (StatusBar.currentHeight || 24) + 4,
     // Shadow on right edge
     shadowColor: "#000",

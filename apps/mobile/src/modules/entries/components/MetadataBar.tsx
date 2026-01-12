@@ -5,7 +5,7 @@
 
 import { View, Text, TouchableOpacity, Keyboard } from "react-native";
 import Svg, { Path, Circle, Line } from "react-native-svg";
-import { theme } from "../../../shared/theme/theme";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { styles } from "./CaptureForm.styles";
 import { StatusIcon } from "../../../shared/components/StatusIcon";
 import { getStatusLabel, isLegacyType, formatRatingDisplay, decimalToStars, type Location as LocationType, type EntryStatus, type RatingType } from "@trace/core";
@@ -100,6 +100,8 @@ export function MetadataBar({
   onPhotosPress,
   editorRef,
 }: MetadataBarProps) {
+  const theme = useTheme();
+
   const handlePress = (callback: () => void, needsEditMode = false) => {
     editorRef.current?.blur();
     Keyboard.dismiss();
@@ -110,7 +112,7 @@ export function MetadataBar({
   };
 
   return (
-    <View style={styles.metadataBar}>
+    <View style={[styles.metadataBar, { backgroundColor: theme.colors.background.secondary, borderBottomColor: theme.colors.border.light }]}>
       {/* Stream - always shown */}
       <TouchableOpacity
         style={styles.metadataLink}
@@ -122,7 +124,7 @@ export function MetadataBar({
             <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
             <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary }]} numberOfLines={1} ellipsizeMode="tail">
             {streamName || "No Stream"}
           </Text>
         </View>
@@ -131,19 +133,20 @@ export function MetadataBar({
       {/* Type - show if supported OR unsupported with value */}
       {(showType || unsupportedType) && type && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={onTypePress}
           >
             <View style={styles.metadataLinkContent}>
               {/* Bookmark Icon */}
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={unsupportedType ? "#9ca3af" : isLegacyType(type, availableTypes) ? "#f59e0b" : "#6b7280"} strokeWidth={2.5}>
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={unsupportedType ? "#9ca3af" : isLegacyType(type, availableTypes) ? "#f59e0b" : theme.colors.text.secondary} strokeWidth={2.5}>
                 <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
+                { color: theme.colors.text.primary },
                 unsupportedType && styles.metadataTextUnsupported,
                 !unsupportedType && isLegacyType(type, availableTypes) && { color: "#f59e0b" }
               ]} numberOfLines={1} ellipsizeMode="tail">
@@ -157,16 +160,16 @@ export function MetadataBar({
       {/* Type placeholder - show if stream assigned AND supported but not set */}
       {streamName && showType && !unsupportedType && !type && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={onTypePress}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth={2.5}>
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2.5}>
                 <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={styles.metadataText} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Type
               </Text>
             </View>
@@ -177,7 +180,7 @@ export function MetadataBar({
       {/* GPS - only if coordinates are set AND no named location (Location takes priority) */}
       {gpsData && !locationData?.name && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={() => handlePress(onGpsPress)}
@@ -192,7 +195,7 @@ export function MetadataBar({
                 <Line x1={2} y1={12} x2={6} y2={12} strokeLinecap="round" />
                 <Line x1={18} y1={12} x2={22} y2={12} strokeLinecap="round" />
               </Svg>
-              <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary }]} numberOfLines={1} ellipsizeMode="tail">
                 GPS
               </Text>
             </View>
@@ -203,7 +206,7 @@ export function MetadataBar({
       {/* Location (named place) - show if supported OR unsupported with value */}
       {(showLocation || unsupportedLocation) && locationData && locationData.name && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={() => handlePress(onLocationPress)}
@@ -217,6 +220,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
+                { color: theme.colors.text.primary },
                 unsupportedLocation && styles.metadataTextUnsupported
               ]} numberOfLines={1} ellipsizeMode="tail">
                 {locationData.name}
@@ -229,17 +233,17 @@ export function MetadataBar({
       {/* Location placeholder - show if stream assigned AND supported but not set */}
       {streamName && showLocation && !unsupportedLocation && (!locationData || !locationData.name) && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={() => handlePress(onLocationPress)}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth={2.5}>
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2.5}>
                 <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                <Circle cx={12} cy={10} r={3} fill="#d1d5db" />
+                <Circle cx={12} cy={10} r={3} fill={theme.colors.text.disabled} />
               </Svg>
-              <Text style={styles.metadataText} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Location
               </Text>
             </View>
@@ -250,7 +254,7 @@ export function MetadataBar({
       {/* Status - show if supported OR unsupported with value */}
       {(showStatus || unsupportedStatus) && status !== "none" && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={onStatusPress}
@@ -260,6 +264,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
+                { color: theme.colors.text.primary },
                 unsupportedStatus && styles.metadataTextUnsupported
               ]} numberOfLines={1} ellipsizeMode="tail">
                 {getStatusLabel(status)}
@@ -272,14 +277,14 @@ export function MetadataBar({
       {/* Status placeholder - show if stream assigned AND supported but not set */}
       {streamName && showStatus && !unsupportedStatus && status === "none" && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={onStatusPress}
           >
             <View style={styles.metadataLinkContent}>
-              <StatusIcon status="none" size={12} color="#d1d5db" />
-              <Text style={styles.metadataText} numberOfLines={1} ellipsizeMode="tail">
+              <StatusIcon status="none" size={12} color={theme.colors.text.disabled} />
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Status
               </Text>
             </View>
@@ -290,7 +295,7 @@ export function MetadataBar({
       {/* Due Date - show if supported OR unsupported with value */}
       {(showDueDate || unsupportedDueDate) && dueDate && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={() => handlePress(onDueDatePress, true)}
@@ -305,6 +310,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
+                { color: theme.colors.text.primary },
                 unsupportedDueDate && styles.metadataTextUnsupported
               ]} numberOfLines={1} ellipsizeMode="tail">
                 {new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
@@ -317,19 +323,19 @@ export function MetadataBar({
       {/* Due Date placeholder - show if stream assigned AND supported but not set */}
       {streamName && showDueDate && !unsupportedDueDate && !dueDate && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={() => handlePress(onDueDatePress, true)}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth={2.5}>
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2.5}>
                 <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
                 <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
                 <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
                 <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={styles.metadataText} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Due Date
               </Text>
             </View>
@@ -340,7 +346,7 @@ export function MetadataBar({
       {/* Rating - show if supported OR unsupported with value */}
       {(showRating || unsupportedRating) && rating > 0 && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={() => handlePress(onRatingPress, true)}
@@ -352,6 +358,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
+                { color: theme.colors.text.primary },
                 unsupportedRating && styles.metadataTextUnsupported
               ]} numberOfLines={1} ellipsizeMode="tail">
                 {formatRatingDisplay(rating, ratingType)}
@@ -364,16 +371,16 @@ export function MetadataBar({
       {/* Rating placeholder - show if stream assigned AND supported but not set */}
       {streamName && showRating && !unsupportedRating && rating === 0 && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={() => handlePress(onRatingPress, true)}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth={2}>
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2}>
                 <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={styles.metadataText} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
                 {ratingType === 'stars' ? 'Rate ☆/5' : ratingType === 'decimal_whole' ? 'Rate ?/10' : 'Rate ?.?/10'}
               </Text>
             </View>
@@ -384,7 +391,7 @@ export function MetadataBar({
       {/* Priority - show if supported OR unsupported with value */}
       {(showPriority || unsupportedPriority) && priority > 0 && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={() => handlePress(onPriorityPress, true)}
@@ -397,6 +404,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
+                { color: theme.colors.text.primary },
                 unsupportedPriority && styles.metadataTextUnsupported
               ]} numberOfLines={1} ellipsizeMode="tail">
                 P{priority}
@@ -409,17 +417,17 @@ export function MetadataBar({
       {/* Priority placeholder - show if stream assigned AND supported but not set */}
       {streamName && showPriority && !unsupportedPriority && priority === 0 && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={() => handlePress(onPriorityPress, true)}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth={2}>
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2}>
                 <Path d="M5 3v18" strokeLinecap="round" />
                 <Path d="M5 3h13l-4 5 4 5H5z" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={styles.metadataText} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Priority
               </Text>
             </View>
@@ -430,7 +438,7 @@ export function MetadataBar({
       {/* Photos - only if has photos and collapsed */}
       {showPhotos && photoCount > 0 && photosCollapsed && (
         <>
-          <Text style={styles.metadataDivider}>·</Text>
+          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
             onPress={onPhotosPress}
@@ -440,7 +448,7 @@ export function MetadataBar({
                 <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
                 <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={[styles.metadataText, styles.metadataTextActive]} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary }]} numberOfLines={1} ellipsizeMode="tail">
                 {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
               </Text>
             </View>

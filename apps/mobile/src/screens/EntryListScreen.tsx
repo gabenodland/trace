@@ -32,10 +32,11 @@ import { FloatingActionButton } from "../components/buttons/FloatingActionButton
 import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
 import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
-import { theme } from "../shared/theme/theme";
+import { useTheme } from "../shared/contexts/ThemeContext";
 
 export function EntryListScreen() {
   const { navigate } = useNavigation();
+  const theme = useTheme();
   const { streams } = useStreams();
   const { user } = useAuthState();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
@@ -176,7 +177,7 @@ export function EntryListScreen() {
           id: selectedStreamId,
           label: selectedStreamName || "Location",
           icon: (
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
               <Circle cx={12} cy={10} r={3} />
             </Svg>
@@ -460,7 +461,7 @@ export function EntryListScreen() {
   const entryToMoveStreamId = entryToMoveData?.stream_id || null;
 
   return (
-    <View style={styles.container} {...drawerPanResponder.panHandlers}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...drawerPanResponder.panHandlers}>
       <TopBar
         onLeftMenuPress={openDrawer}
         breadcrumbs={breadcrumbs}
@@ -566,6 +567,5 @@ export function EntryListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background.secondary,
   },
 });

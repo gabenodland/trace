@@ -5,7 +5,7 @@ import { useLocationsWithCounts } from "../modules/locations/mobileLocationHooks
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { SubBar } from "../components/layout/SubBar";
 import Svg, { Path, Circle } from "react-native-svg";
-import { theme } from "../shared/theme/theme";
+import { useTheme, type ThemeContextValue } from "../shared/contexts/ThemeContext";
 import type { LocationEntity } from "@trace/core";
 
 interface LocationNode {
@@ -26,6 +26,7 @@ interface LocationNode {
 }
 
 export function LocationsScreen() {
+  const theme = useTheme();
   const { navigate } = useNavigation();
 
   // Use hook for locations with counts instead of direct localDB call
@@ -133,38 +134,38 @@ export function LocationsScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Locations" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.text.tertiary} />
-          <Text style={styles.loadingText}>Loading locations...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.text.tertiary }]}>Loading locations...</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       <SecondaryHeader title="Locations" />
 
       <SubBar>
         {/* Search Input */}
-        <View style={styles.searchContainer}>
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2} style={styles.searchIcon}>
+        <View style={[styles.searchContainer, { backgroundColor: theme.colors.background.tertiary }]}>
+          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2} style={styles.searchIcon}>
             <Path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search locations..."
-            placeholderTextColor="#9ca3af"
-            style={styles.searchInput}
+            placeholderTextColor={theme.colors.text.tertiary}
+            style={[styles.searchInput, { color: theme.colors.text.primary }]}
             autoCapitalize="none"
             autoCorrect={false}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearSearch}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
                 <Path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             </TouchableOpacity>
@@ -172,15 +173,15 @@ export function LocationsScreen() {
         </View>
       </SubBar>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={[styles.content, { backgroundColor: theme.colors.background.primary }]}>
         {filteredTree.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Svg width={64} height={64} viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth={1.5}>
+            <Svg width={64} height={64} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={1.5}>
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
               <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-            <Text style={styles.emptyText}>No locations yet</Text>
-            <Text style={styles.emptySubtext}>Add locations to your entries to see them here</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No locations yet</Text>
+            <Text style={[styles.emptySubtext, { color: theme.colors.text.tertiary }]}>Add locations to your entries to see them here</Text>
           </View>
         ) : (
           <View style={styles.locationList}>
@@ -191,6 +192,7 @@ export function LocationsScreen() {
                 depth={0}
                 searchQuery={searchQuery}
                 navigate={navigate}
+                theme={theme}
               />
             ))}
           </View>
@@ -261,39 +263,41 @@ interface LocationTreeNodeProps {
   depth: number;
   searchQuery: string;
   navigate: (screen: string, params?: any) => void;
+  theme: ThemeContextValue;
 }
 
-function LocationTreeNode({ node, depth, searchQuery, navigate }: LocationTreeNodeProps) {
+function LocationTreeNode({ node, depth, searchQuery, navigate, theme }: LocationTreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasChildren = node.children.length > 0;
   const paddingLeft = 16 + depth * 24;
 
   // Get icon based on level
   const getIcon = () => {
+    const iconColor = theme.colors.text.secondary;
     switch (node.level) {
       case "country":
         return (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
             <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
             <Path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         );
       case "region":
         return (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
             <Path d="M3 21h18M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7H3l2-4h14l2 4M5 21V10.85M19 21V10.85M9 21v-4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         );
       case "city":
         return (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
             <Path d="M3 21h18M9 8h1M9 12h1M9 16h1M14 8h1M14 12h1M14 16h1" strokeLinecap="round" strokeLinejoin="round" />
             <Path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         );
       case "neighborhood":
         return (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
             <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" strokeLinecap="round" strokeLinejoin="round" />
             <Path d="M9 22V12h6v10" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
@@ -301,7 +305,7 @@ function LocationTreeNode({ node, depth, searchQuery, navigate }: LocationTreeNo
       case "place":
       default:
         return (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
             <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
             <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
@@ -326,7 +330,7 @@ function LocationTreeNode({ node, depth, searchQuery, navigate }: LocationTreeNo
   return (
     <View>
       <TouchableOpacity
-        style={[styles.locationNode, { paddingLeft }]}
+        style={[styles.locationNode, { paddingLeft, borderBottomColor: theme.colors.border.light, backgroundColor: theme.colors.background.primary }]}
         onPress={handlePress}
         activeOpacity={0.7}
       >
@@ -341,7 +345,7 @@ function LocationTreeNode({ node, depth, searchQuery, navigate }: LocationTreeNo
               height={16}
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#6b7280"
+              stroke={theme.colors.text.secondary}
               strokeWidth={2}
               style={[styles.chevron, isExpanded && styles.chevronExpanded]}
             >
@@ -355,13 +359,13 @@ function LocationTreeNode({ node, depth, searchQuery, navigate }: LocationTreeNo
         {/* Icon and Name */}
         <View style={styles.locationNameContainer}>
           {getIcon()}
-          <Text style={styles.locationName}>{node.name}</Text>
+          <Text style={[styles.locationName, { color: theme.colors.text.primary }]}>{node.name}</Text>
         </View>
 
         {/* Entry count badge */}
         {node.entryCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{node.entryCount}</Text>
+          <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
+            <Text style={[styles.badgeText, { color: theme.colors.text.tertiary }]}>{node.entryCount}</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -376,6 +380,7 @@ function LocationTreeNode({ node, depth, searchQuery, navigate }: LocationTreeNo
               depth={depth + 1}
               searchQuery={searchQuery}
               navigate={navigate}
+              theme={theme}
             />
           ))}
         </View>
@@ -387,7 +392,6 @@ function LocationTreeNode({ node, depth, searchQuery, navigate }: LocationTreeNo
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background.secondary,
   },
   loadingContainer: {
     flex: 1,
@@ -397,17 +401,15 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: theme.colors.text.tertiary,
   },
   searchContainer: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: theme.colors.background.tertiary,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginRight: theme.spacing.md,
+    marginRight: 12,
   },
   searchIcon: {
     marginRight: 8,
@@ -415,7 +417,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: theme.colors.text.primary,
     padding: 0,
   },
   clearSearch: {
@@ -423,7 +424,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    backgroundColor: theme.colors.background.primary,
   },
   emptyContainer: {
     flex: 1,
@@ -435,13 +435,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#9ca3af",
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#9ca3af",
     textAlign: "center",
     marginBottom: 24,
   },
@@ -455,8 +453,6 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     gap: 8,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border.light,
-    backgroundColor: theme.colors.background.primary,
   },
   chevronButton: {
     width: 24,
@@ -479,11 +475,9 @@ const styles = StyleSheet.create({
   locationName: {
     flex: 1,
     fontSize: 16,
-    color: theme.colors.text.primary,
     fontWeight: "500",
   },
   badge: {
-    backgroundColor: theme.colors.background.tertiary,
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -493,6 +487,5 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     fontWeight: "600",
-    color: theme.colors.text.tertiary,
   },
 });

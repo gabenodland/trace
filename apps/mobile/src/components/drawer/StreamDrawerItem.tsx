@@ -8,7 +8,7 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import type { Stream } from "@trace/core";
-import { theme } from "../../shared/theme/theme";
+import { useTheme } from "../../shared/contexts/ThemeContext";
 
 interface StreamDrawerItemProps {
   stream: Stream;
@@ -21,21 +21,23 @@ export const StreamDrawerItem = React.memo(function StreamDrawerItem({
   isSelected,
   onPress,
 }: StreamDrawerItemProps) {
+  const theme = useTheme();
+
   return (
     <TouchableOpacity
-      style={[styles.item, isSelected && styles.itemSelected]}
+      style={[styles.item, isSelected && { backgroundColor: theme.colors.background.tertiary }]}
       onPress={onPress}
       activeOpacity={0.6}
       delayPressIn={0}
     >
       <Text
-        style={[styles.name, isSelected && styles.nameSelected]}
+        style={[styles.name, { color: theme.colors.text.primary }, isSelected && { fontWeight: "600" }]}
         numberOfLines={1}
       >
         {stream.name}
       </Text>
       {stream.entry_count > 0 && (
-        <Text style={[styles.count, isSelected && styles.countSelected]}>
+        <Text style={[styles.count, { color: theme.colors.text.tertiary }, isSelected && { color: theme.colors.text.secondary }]}>
           {stream.entry_count}
         </Text>
       )}
@@ -59,21 +61,23 @@ export const QuickFilterItem = React.memo(function QuickFilterItem({
   isSelected,
   onPress,
 }: QuickFilterItemProps) {
+  const theme = useTheme();
+
   return (
     <TouchableOpacity
-      style={[styles.item, isSelected && styles.itemSelected]}
+      style={[styles.item, isSelected && { backgroundColor: theme.colors.background.tertiary }]}
       onPress={onPress}
       activeOpacity={0.6}
       delayPressIn={0}
     >
       <Text
-        style={[styles.name, isSelected && styles.nameSelected]}
+        style={[styles.name, { color: theme.colors.text.primary }, isSelected && { fontWeight: "600" }]}
         numberOfLines={1}
       >
         {label}
       </Text>
       {count > 0 && (
-        <Text style={[styles.count, isSelected && styles.countSelected]}>
+        <Text style={[styles.count, { color: theme.colors.text.tertiary }, isSelected && { color: theme.colors.text.secondary }]}>
           {count}
         </Text>
       )}
@@ -91,27 +95,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     borderRadius: 8,
   },
-  itemSelected: {
-    backgroundColor: "#f3f4f6",
-  },
   name: {
     flex: 1,
     fontSize: 16,
     fontWeight: "400",
-    color: theme.colors.text.primary,
     letterSpacing: -0.2,
-  },
-  nameSelected: {
-    fontWeight: "600",
-    color: theme.colors.text.primary,
   },
   count: {
     fontSize: 14,
     fontWeight: "500",
-    color: theme.colors.text.tertiary,
     marginLeft: 12,
-  },
-  countSelected: {
-    color: theme.colors.text.secondary,
   },
 });

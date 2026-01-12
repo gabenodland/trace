@@ -12,7 +12,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useNavigation } from "../../shared/contexts/NavigationContext";
-import { theme } from "../../shared/theme/theme";
+import { useTheme } from "../../shared/contexts/ThemeContext";
 import type { ReactNode } from "react";
 
 interface SecondaryHeaderProps {
@@ -28,6 +28,7 @@ interface SecondaryHeaderProps {
 
 export function SecondaryHeader({ title, rightAction, onBack, children }: SecondaryHeaderProps) {
   const { navigate } = useNavigation();
+  const theme = useTheme();
 
   const handleBack = () => {
     if (onBack) {
@@ -38,14 +39,14 @@ export function SecondaryHeader({ title, rightAction, onBack, children }: Second
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
       {/* Left: Back button */}
       <TouchableOpacity
         style={styles.backButton}
         onPress={handleBack}
         activeOpacity={0.7}
       >
-        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth={2}>
+        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
           <Path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       </TouchableOpacity>
@@ -53,7 +54,7 @@ export function SecondaryHeader({ title, rightAction, onBack, children }: Second
       {/* Center: Title or children */}
       <View style={styles.titleContainer}>
         {children || (
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={[styles.title, { color: theme.colors.text.primary }]} numberOfLines={1}>
             {title}
           </Text>
         )}
@@ -71,32 +72,30 @@ const styles = StyleSheet.create({
   container: {
     height: 110,
     paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.md,
-    backgroundColor: theme.colors.background.primary,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   backButton: {
-    padding: theme.spacing.sm,
-    marginLeft: -theme.spacing.sm,
-    marginRight: theme.spacing.sm,
+    padding: 8,
+    marginLeft: -8,
+    marginRight: 8,
   },
   titleContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
+    gap: 8,
     flex: 1,
   },
   title: {
     fontSize: 28,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
+    fontWeight: "700",
   },
   rightSection: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.xs,
+    gap: 4,
   },
 });

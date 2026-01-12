@@ -1,132 +1,36 @@
 /**
  * Shared theme and design system for the mobile app
- * Modern, minimalist, grayscale design
+ *
+ * BACKWARD COMPATIBILITY:
+ * This file exports a static 'theme' object that uses the light theme values.
+ * Components that haven't been migrated to useTheme() will continue to work.
+ *
+ * NEW COMPONENTS should use:
+ *   import { useTheme } from '../shared/contexts/ThemeContext';
+ *   const theme = useTheme();
+ *
+ * This allows components to respond to theme changes dynamically.
  */
 
+import { lightTheme } from './themes';
+import { themeBase } from './themeBase';
+
+/**
+ * Static theme object for backward compatibility
+ *
+ * @deprecated Use useTheme() hook for dynamic theming
+ */
 export const theme = {
-  // Colors - Grayscale palette
-  colors: {
-    // Backgrounds
-    background: {
-      primary: '#FFFFFF',      // Pure white for main background
-      secondary: '#F9FAFB',    // Very light gray for secondary surfaces
-      tertiary: '#F3F4F6',     // Light gray for subtle contrast
-    },
+  // Colors from light theme (static - won't change with theme setting)
+  colors: lightTheme.colors,
 
-    // Text colors
-    text: {
-      primary: '#111827',      // Almost black for primary text
-      secondary: '#4B5563',    // Medium-dark gray for secondary text
-      tertiary: '#9CA3AF',     // Medium gray for muted/metadata text
-      disabled: '#D1D5DB',     // Light gray for disabled text
-    },
+  // Base values (shared across all themes)
+  spacing: themeBase.spacing,
+  typography: themeBase.typography,
+  borderRadius: themeBase.borderRadius,
 
-    // Borders and dividers (use sparingly)
-    border: {
-      light: '#F3F4F6',        // Very subtle border
-      medium: '#E5E7EB',       // Subtle border
-      dark: '#D1D5DB',         // Visible but soft border
-    },
-
-    // Shadows (very subtle)
-    shadow: 'rgba(0, 0, 0, 0.03)',
-    shadowMedium: 'rgba(0, 0, 0, 0.06)',
-
-    // Functional colors (very muted)
-    functional: {
-      complete: '#10B981',     // Muted green for completed tasks
-      incomplete: '#9CA3AF',   // Gray for incomplete
-      overdue: '#EF4444',      // Muted red for overdue
-    },
-  },
-
-  // Spacing scale (multiples of 4)
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    xxl: 24,
-    xxxl: 32,
-  },
-
-  // Typography
-  typography: {
-    // Font family
-    fontFamily: {
-      regular: 'MavenPro_400Regular',
-      medium: 'MavenPro_500Medium',
-      semibold: 'MavenPro_600SemiBold',
-      bold: 'MavenPro_700Bold',
-    },
-
-    // Font sizes
-    fontSize: {
-      xs: 11,
-      sm: 13,
-      base: 15,
-      lg: 17,
-      xl: 20,
-      xxl: 24,
-    },
-
-    // Font weights
-    fontWeight: {
-      normal: '400' as const,
-      medium: '500' as const,
-      semibold: '600' as const,
-      bold: '700' as const,
-    },
-
-    // Line heights
-    lineHeight: {
-      tight: 1.2,
-      normal: 1.5,
-      relaxed: 1.7,
-    },
-  },
-
-  // Border radius
-  borderRadius: {
-    sm: 6,
-    md: 8,
-    lg: 12,
-    xl: 16,
-    full: 999,
-  },
-
-  // Shadows (very subtle for minimalist design)
-  shadows: {
-    none: {
-      shadowColor: 'transparent',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0,
-      shadowRadius: 0,
-      elevation: 0,
-    },
-    xs: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.03,
-      shadowRadius: 2,
-      elevation: 1,
-    },
-    sm: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 3,
-      elevation: 2,
-    },
-    md: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.07,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-  },
+  // Shadows from light theme
+  shadows: lightTheme.shadows,
 } as const;
 
 // Helper to create consistent component styles

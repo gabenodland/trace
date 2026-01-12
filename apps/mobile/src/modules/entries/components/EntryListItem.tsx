@@ -6,7 +6,8 @@ import { formatEntryDateTime, formatEntryDateOnly, formatRelativeTime, isTask, f
 import { HtmlRenderer } from "../helpers/htmlRenderer";
 import { WebViewHtmlRenderer } from "../helpers/webViewHtmlRenderer";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
-import { theme } from "../../../shared/theme/theme";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
+import { themeBase } from "../../../shared/theme/themeBase";
 import { DropdownMenu, type DropdownMenuItem } from "../../../components/layout/DropdownMenu";
 import { StatusIcon } from "../../../shared/components/StatusIcon";
 
@@ -31,6 +32,7 @@ interface EntryListItemProps {
 }
 
 export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onStreamPress, onToggleComplete, onMove, onCopy, onDelete, onPin, streamName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle, attributeVisibility }: EntryListItemProps) {
+  const theme = useTheme();
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(0);
   const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
@@ -111,8 +113,10 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
     <TouchableOpacity
       style={[
         styles.container,
+        { backgroundColor: theme.colors.background.primary },
+        theme.shadows.xs,
         displayMode === 'title' && styles.containerTitleOnly,
-        isOverdue && styles.containerOverdue
+        isOverdue && { backgroundColor: theme.colors.background.secondary }
       ]}
       onPress={onPress}
       activeOpacity={0.7}
@@ -145,6 +149,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             )}
             <Text style={[
               styles.titleOnlyText,
+              { color: theme.colors.text.primary },
               isCompletedStatus(entry.status) && styles.strikethrough
             ]} numberOfLines={1}>
               {entry.title || getFirstLineOfText(entry.content)}
@@ -172,21 +177,21 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
           />
           {/* Metadata row for title-only mode */}
           <View style={styles.titleOnlyMetadata}>
-            <Text style={styles.date}>
+            <Text style={[styles.date, { color: theme.colors.text.tertiary }]}>
               {formatEntryDateOnly(entry.entry_date || entry.updated_at)}
             </Text>
             {/* Location Badge - only show if stream supports location */}
             {showLocation && (locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
-              <View style={styles.locationBadge}>
-                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+              <View style={[styles.locationBadge, { backgroundColor: theme.colors.background.tertiary }]}>
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.tertiary} stroke="none">
                   <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                 </Svg>
-                <Text style={styles.locationText}>{locationName || "GPS"}</Text>
+                <Text style={[styles.locationText, { color: theme.colors.text.tertiary }]}>{locationName || "GPS"}</Text>
               </View>
             )}
             {/* Stream Badge */}
             <TouchableOpacity
-              style={styles.stream}
+              style={[styles.stream, { backgroundColor: theme.colors.background.tertiary }]}
               onPress={(e) => {
                 e.stopPropagation();
                 if (onStreamPress) {
@@ -200,31 +205,33 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                 <Path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
               </Svg>
-              <Text style={styles.streamText}>{streamName || "Unassigned"}</Text>
+              <Text style={[styles.streamText, { color: theme.colors.text.tertiary }]}>{streamName || "Unassigned"}</Text>
             </TouchableOpacity>
             {/* Type Badge - only show if stream supports type */}
             {showType && entry.type && (
-              <View style={styles.typeBadge}>
+              <View style={[styles.typeBadge, { backgroundColor: theme.colors.background.tertiary }]}>
                 <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
                   <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
-                <Text style={styles.typeText}>{entry.type}</Text>
+                <Text style={[styles.typeText, { color: theme.colors.text.tertiary }]}>{entry.type}</Text>
               </View>
             )}
             {/* Due Date Badge - only show if stream supports due dates */}
             {showDueDate && dueDateStr && (
               <View style={[
                 styles.dueDate,
-                isOverdue && styles.dueDateOverdue,
-                dueDateStr === "Today" && styles.dueDateToday
+                { backgroundColor: theme.colors.background.tertiary },
+                isOverdue && { backgroundColor: theme.colors.functional.overdue + '15' },
+                dueDateStr === "Today" && { backgroundColor: theme.colors.background.tertiary }
               ]}>
-                <Svg width={10} height={10} viewBox="0 0 24 24" fill={isOverdue ? "#dc2626" : dueDateStr === "Today" ? theme.colors.text.secondary : theme.colors.text.secondary} stroke="none">
+                <Svg width={10} height={10} viewBox="0 0 24 24" fill={isOverdue ? theme.colors.functional.overdue : theme.colors.text.secondary} stroke="none">
                   <Path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
                 </Svg>
                 <Text style={[
                   styles.dueDateText,
-                  isOverdue && styles.dueDateTextOverdue,
-                  dueDateStr === "Today" && styles.dueDateTextToday
+                  { color: theme.colors.text.tertiary },
+                  isOverdue && { color: theme.colors.functional.overdue },
+                  dueDateStr === "Today" && { color: theme.colors.text.secondary }
                 ]}>
                   {dueDateStr}
                 </Text>
@@ -232,21 +239,21 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             )}
             {/* Priority Badge - only show if stream supports priority */}
             {showPriority && (entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
-              <View style={styles.priorityBadge}>
+              <View style={[styles.priorityBadge, { backgroundColor: theme.colors.background.tertiary }]}>
                 <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                   <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.secondary} />
                   <Path d="M5 3h13l-4 5 4 5H5z" />
                 </Svg>
-                <Text style={styles.priorityText}>{entry.priority}</Text>
+                <Text style={[styles.priorityText, { color: theme.colors.text.tertiary }]}>{entry.priority}</Text>
               </View>
             )}
             {/* Rating Badge - only show if stream supports rating */}
             {showRating && (entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
-              <View style={styles.ratingBadge}>
+              <View style={[styles.ratingBadge, { backgroundColor: theme.colors.background.tertiary }]}>
                 <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                   <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </Svg>
-                <Text style={styles.ratingText}>{formatRatingDisplay(entry.rating, ratingType)}</Text>
+                <Text style={[styles.ratingText, { color: theme.colors.text.tertiary }]}>{formatRatingDisplay(entry.rating, ratingType)}</Text>
               </View>
             )}
             {/* Tags */}
@@ -255,18 +262,18 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 {entry.tags.slice(0, 3).map((tag) => (
                   <TouchableOpacity
                     key={tag}
-                    style={styles.tag}
+                    style={[styles.tag, { backgroundColor: theme.colors.background.tertiary }]}
                     onPress={(e) => {
                       e.stopPropagation();
                       onTagPress?.(tag);
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.tagText}>#{tag}</Text>
+                    <Text style={[styles.tagText, { color: theme.colors.text.tertiary }]}>#{tag}</Text>
                   </TouchableOpacity>
                 ))}
                 {entry.tags.length > 3 && (
-                  <Text style={styles.moreText}>+{entry.tags.length - 3}</Text>
+                  <Text style={[styles.moreText, { color: theme.colors.text.tertiary }]}>+{entry.tags.length - 3}</Text>
                 )}
               </View>
             )}
@@ -276,18 +283,18 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 {entry.mentions.slice(0, 3).map((mention) => (
                   <TouchableOpacity
                     key={mention}
-                    style={styles.mention}
+                    style={[styles.mention, { backgroundColor: theme.colors.background.tertiary }]}
                     onPress={(e) => {
                       e.stopPropagation();
                       onMentionPress?.(mention);
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.mentionText}>@{mention}</Text>
+                    <Text style={[styles.mentionText, { color: theme.colors.text.tertiary }]}>@{mention}</Text>
                   </TouchableOpacity>
                 ))}
                 {entry.mentions.length > 3 && (
-                  <Text style={styles.moreText}>+{entry.mentions.length - 3}</Text>
+                  <Text style={[styles.moreText, { color: theme.colors.text.tertiary }]}>+{entry.mentions.length - 3}</Text>
                 )}
               </View>
             )}
@@ -324,6 +331,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             {/* Title or first line of content */}
             <Text style={[
               entry.title ? styles.title : styles.contentFirstLine,
+              { color: theme.colors.text.primary },
               isCompletedStatus(entry.status) && styles.strikethrough,
               styles.firstLineText
             ]} numberOfLines={entry.title ? undefined : 1}>
@@ -359,7 +367,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             <>
               {displayMode === 'flow' && (
                 <View style={styles.flowDateRow}>
-                  <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                  <Text style={[styles.dateSmall, { color: theme.colors.text.tertiary }]}>{entryDateStr}</Text>
                   {entry.status !== "none" && (
                     <View style={styles.statusBadge}>
                       <StatusIcon status={entry.status} size={12} />
@@ -384,6 +392,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                   html={entry.content || ''}
                   style={[
                     styles.preview,
+                    { color: theme.colors.text.secondary },
                     isCompletedStatus(entry.status) && styles.strikethrough
                   ]}
                   strikethrough={isCompletedStatus(entry.status)}
@@ -392,6 +401,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 formattedContent && (
                   <Text style={[
                     styles.preview,
+                    { color: theme.colors.text.secondary },
                     isCompletedStatus(entry.status) && styles.strikethrough
                   ]} numberOfLines={maxLines}>
                     {formattedContent}
@@ -404,7 +414,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             displayMode === 'flow' ? (
               <>
                 <View style={styles.flowDateRow}>
-                  <Text style={styles.dateSmall}>{entryDateStr}</Text>
+                  <Text style={[styles.dateSmall, { color: theme.colors.text.tertiary }]}>{entryDateStr}</Text>
                   {entry.status !== "none" && (
                     <View style={styles.statusBadge}>
                       <StatusIcon status={entry.status} size={12} />
@@ -425,6 +435,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                   html={entry.content || ''}
                   style={[
                     styles.content,
+                    { color: theme.colors.text.primary },
                     isCompletedStatus(entry.status) && styles.strikethrough
                   ]}
                   strikethrough={isCompletedStatus(entry.status)}
@@ -435,6 +446,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               formattedContent && formattedContent.includes('\n') && (
                 <Text style={[
                   styles.content,
+                  { color: theme.colors.text.primary },
                   isCompletedStatus(entry.status) && styles.strikethrough
                 ]} numberOfLines={maxLines ? maxLines - 1 : undefined}>
                   {formattedContent.substring(formattedContent.indexOf('\n') + 1)}
@@ -445,19 +457,19 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
 
           {/* Metadata */}
           <View style={styles.metadata}>
-              <Text style={styles.date}>Updated {updatedDateStr}</Text>
+              <Text style={[styles.date, { color: theme.colors.text.tertiary }]}>Updated {updatedDateStr}</Text>
 
               {/* Photo Count Badge (when collapsed) */}
               {displayMode === 'flow' && photosCollapsed && photoCount > 0 && (
                 <TouchableOpacity
-                  style={styles.photoBadge}
+                  style={[styles.photoBadge, { backgroundColor: theme.colors.background.tertiary }]}
                   onPress={(e) => {
                     e.stopPropagation();
                     setPhotosCollapsed(false);
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.photoBadgeText}>
+                  <Text style={[styles.photoBadgeText, { color: theme.colors.text.tertiary }]}>
                     {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
                   </Text>
                 </TouchableOpacity>
@@ -465,17 +477,17 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
 
               {/* Location Badge - only show if stream supports location */}
               {showLocation && (locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
-                <View style={styles.locationBadge}>
-                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+                <View style={[styles.locationBadge, { backgroundColor: theme.colors.background.tertiary }]}>
+                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.tertiary} stroke="none">
                     <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                   </Svg>
-                  <Text style={styles.locationText}>{locationName || "GPS"}</Text>
+                  <Text style={[styles.locationText, { color: theme.colors.text.tertiary }]}>{locationName || "GPS"}</Text>
                 </View>
               )}
 
               {/* Stream Badge */}
               <TouchableOpacity
-                style={styles.stream}
+                style={[styles.stream, { backgroundColor: theme.colors.background.tertiary }]}
                 onPress={(e) => {
                   e.stopPropagation();
                   if (onStreamPress) {
@@ -489,16 +501,16 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                   <Path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                 </Svg>
-                <Text style={styles.streamText}>{streamName || "Unassigned"}</Text>
+                <Text style={[styles.streamText, { color: theme.colors.text.tertiary }]}>{streamName || "Unassigned"}</Text>
               </TouchableOpacity>
 
               {/* Type Badge - only show if stream supports type */}
               {showType && entry.type && (
-                <View style={styles.typeBadge}>
+                <View style={[styles.typeBadge, { backgroundColor: theme.colors.background.tertiary }]}>
                   <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
                     <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
-                  <Text style={styles.typeText}>{entry.type}</Text>
+                  <Text style={[styles.typeText, { color: theme.colors.text.tertiary }]}>{entry.type}</Text>
                 </View>
               )}
 
@@ -506,16 +518,18 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               {showDueDate && dueDateStr && (
                 <View style={[
                   styles.dueDate,
-                  isOverdue && styles.dueDateOverdue,
-                  dueDateStr === "Today" && styles.dueDateToday
+                  { backgroundColor: theme.colors.background.tertiary },
+                  isOverdue && { backgroundColor: theme.colors.functional.overdue + '15' },
+                  dueDateStr === "Today" && { backgroundColor: theme.colors.background.tertiary }
                 ]}>
-                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={isOverdue ? "#dc2626" : dueDateStr === "Today" ? theme.colors.text.secondary : theme.colors.text.secondary} stroke="none">
+                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={isOverdue ? theme.colors.functional.overdue : theme.colors.text.secondary} stroke="none">
                     <Path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
                   </Svg>
                   <Text style={[
                     styles.dueDateText,
-                    isOverdue && styles.dueDateTextOverdue,
-                    dueDateStr === "Today" && styles.dueDateTextToday
+                    { color: theme.colors.text.tertiary },
+                    isOverdue && { color: theme.colors.functional.overdue },
+                    dueDateStr === "Today" && { color: theme.colors.text.secondary }
                   ]}>
                     {dueDateStr}
                   </Text>
@@ -524,22 +538,22 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
 
               {/* Priority Badge - only show if stream supports priority */}
               {showPriority && (entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
-                <View style={styles.priorityBadge}>
+                <View style={[styles.priorityBadge, { backgroundColor: theme.colors.background.tertiary }]}>
                   <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                     <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.secondary} />
                     <Path d="M5 3h13l-4 5 4 5H5z" />
                   </Svg>
-                  <Text style={styles.priorityText}>{entry.priority}</Text>
+                  <Text style={[styles.priorityText, { color: theme.colors.text.tertiary }]}>{entry.priority}</Text>
                 </View>
               )}
 
               {/* Rating Badge - only show if stream supports rating */}
               {showRating && (entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
-                <View style={styles.ratingBadge}>
+                <View style={[styles.ratingBadge, { backgroundColor: theme.colors.background.tertiary }]}>
                   <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
                     <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                   </Svg>
-                  <Text style={styles.ratingText}>{formatRatingDisplay(entry.rating, ratingType)}</Text>
+                  <Text style={[styles.ratingText, { color: theme.colors.text.tertiary }]}>{formatRatingDisplay(entry.rating, ratingType)}</Text>
                 </View>
               )}
 
@@ -549,18 +563,18 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                   {entry.tags.slice(0, 3).map((tag) => (
                     <TouchableOpacity
                       key={tag}
-                      style={styles.tag}
+                      style={[styles.tag, { backgroundColor: theme.colors.background.tertiary }]}
                       onPress={(e) => {
                         e.stopPropagation();
                         onTagPress?.(tag);
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.tagText}>#{tag}</Text>
+                      <Text style={[styles.tagText, { color: theme.colors.text.tertiary }]}>#{tag}</Text>
                     </TouchableOpacity>
                   ))}
                   {entry.tags.length > 3 && (
-                    <Text style={styles.moreText}>+{entry.tags.length - 3}</Text>
+                    <Text style={[styles.moreText, { color: theme.colors.text.tertiary }]}>+{entry.tags.length - 3}</Text>
                   )}
                 </View>
               )}
@@ -571,18 +585,18 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                   {entry.mentions.slice(0, 3).map((mention) => (
                     <TouchableOpacity
                       key={mention}
-                      style={styles.mention}
+                      style={[styles.mention, { backgroundColor: theme.colors.background.tertiary }]}
                       onPress={(e) => {
                         e.stopPropagation();
                         onMentionPress?.(mention);
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.mentionText}>@{mention}</Text>
+                      <Text style={[styles.mentionText, { color: theme.colors.text.tertiary }]}>@{mention}</Text>
                     </TouchableOpacity>
                   ))}
                   {entry.mentions.length > 3 && (
-                    <Text style={styles.moreText}>+{entry.mentions.length - 3}</Text>
+                    <Text style={[styles.moreText, { color: theme.colors.text.tertiary }]}>+{entry.mentions.length - 3}</Text>
                   )}
                 </View>
               )}
@@ -595,23 +609,21 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.xl,
-    marginBottom: theme.spacing.lg,
-    ...theme.shadows.xs,
+    borderRadius: themeBase.borderRadius.lg,
+    padding: themeBase.spacing.xl,
+    marginBottom: themeBase.spacing.lg,
   },
   containerTitleOnly: {
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
+    padding: themeBase.spacing.md,
+    marginBottom: themeBase.spacing.sm,
   },
   containerOverdue: {
-    backgroundColor: theme.colors.background.secondary,
+    // Dynamic color applied inline
   },
   titleOnlyRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
   },
   titleOnlyStatusIcon: {
     flexShrink: 0,
@@ -622,14 +634,14 @@ const styles = StyleSheet.create({
   titleOnlyMetadata: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.xs,
+    gap: themeBase.spacing.sm,
+    marginTop: themeBase.spacing.xs,
     flexWrap: "wrap",
   },
   firstLineRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
   },
   firstLinePinIcon: {
     flexShrink: 0,
@@ -643,7 +655,7 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: theme.spacing.xs,
+    marginLeft: themeBase.spacing.xs,
   },
   statusIcon: {
     alignItems: "center",
@@ -651,34 +663,30 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   contentFirstLine: {
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
-    lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.tight,
+    fontSize: themeBase.typography.fontSize.base,
+    fontWeight: themeBase.typography.fontWeight.semibold,
+    lineHeight: themeBase.typography.fontSize.base * themeBase.typography.lineHeight.tight,
   },
   titleOnlyText: {
     flex: 1,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
-    lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.tight,
+    fontSize: themeBase.typography.fontSize.base,
+    fontWeight: themeBase.typography.fontWeight.semibold,
+    lineHeight: themeBase.typography.fontSize.base * themeBase.typography.lineHeight.tight,
   },
   title: {
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
-    lineHeight: theme.typography.fontSize.lg * theme.typography.lineHeight.tight,
+    fontSize: themeBase.typography.fontSize.lg,
+    fontWeight: themeBase.typography.fontWeight.bold,
+    lineHeight: themeBase.typography.fontSize.lg * themeBase.typography.lineHeight.tight,
   },
   dateSmall: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
+    fontSize: themeBase.typography.fontSize.xs,
   },
   flowDateRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
+    gap: themeBase.spacing.md,
+    marginTop: themeBase.spacing.sm,
+    marginBottom: themeBase.spacing.md,
   },
   statusBadge: {
     flexDirection: "row",
@@ -686,181 +694,157 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statusText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
+    fontSize: themeBase.typography.fontSize.xs,
   },
   strikethrough: {
     textDecorationLine: "line-through",
     opacity: 0.5,
   },
   preview: {
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.text.secondary,
-    lineHeight: theme.typography.fontSize.sm * theme.typography.lineHeight.relaxed,
-    marginTop: theme.spacing.sm,
+    fontSize: themeBase.typography.fontSize.sm,
+    lineHeight: themeBase.typography.fontSize.sm * themeBase.typography.lineHeight.relaxed,
+    marginTop: themeBase.spacing.sm,
   },
   content: {
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.text.primary,
-    lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.relaxed,
-    marginTop: theme.spacing.sm,
+    fontSize: themeBase.typography.fontSize.base,
+    lineHeight: themeBase.typography.fontSize.base * themeBase.typography.lineHeight.relaxed,
+    marginTop: themeBase.spacing.sm,
   },
   metadata: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.lg,
+    gap: themeBase.spacing.sm,
+    marginTop: themeBase.spacing.lg,
     flexWrap: "wrap",
   },
   date: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
+    fontSize: themeBase.typography.fontSize.xs,
   },
   locationBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs - 2,
-    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
+    paddingVertical: themeBase.spacing.xs - 2,
+    borderRadius: themeBase.borderRadius.full,
   },
   locationText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.xs,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   stream: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs - 2,
-    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
+    paddingVertical: themeBase.spacing.xs - 2,
+    borderRadius: themeBase.borderRadius.full,
   },
   streamText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.xs,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   photoBadge: {
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs - 2,
-    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
+    paddingVertical: themeBase.spacing.xs - 2,
+    borderRadius: themeBase.borderRadius.full,
   },
   photoBadgeText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.xs,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   tags: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.xs,
+    gap: themeBase.spacing.xs,
   },
   tag: {
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs - 2,
-    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
+    paddingVertical: themeBase.spacing.xs - 2,
+    borderRadius: themeBase.borderRadius.full,
   },
   tagText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.xs,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   mentions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.xs,
+    gap: themeBase.spacing.xs,
   },
   mention: {
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs - 2,
-    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
+    paddingVertical: themeBase.spacing.xs - 2,
+    borderRadius: themeBase.borderRadius.full,
   },
   mentionText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.xs,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   moreText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
+    fontSize: themeBase.typography.fontSize.xs,
   },
   location: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
+    fontSize: themeBase.typography.fontSize.xs,
   },
   dueDate: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs - 2,
-    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
+    paddingVertical: themeBase.spacing.xs - 2,
+    borderRadius: themeBase.borderRadius.full,
   },
   dueDateText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.xs,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   dueDateOverdue: {
-    backgroundColor: "#fef2f2",
+    // Dynamic color applied inline
   },
   dueDateTextOverdue: {
-    color: "#dc2626",
+    // Dynamic color applied inline
   },
   dueDateToday: {
-    backgroundColor: theme.colors.background.tertiary,
+    // Dynamic color applied inline
   },
   dueDateTextToday: {
-    color: theme.colors.text.secondary,
+    // Dynamic color applied inline
   },
   priorityBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs - 2,
-    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
+    paddingVertical: themeBase.spacing.xs - 2,
+    borderRadius: themeBase.borderRadius.full,
   },
   priorityText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.xs,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   ratingBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs - 2,
-    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
+    paddingVertical: themeBase.spacing.xs - 2,
+    borderRadius: themeBase.borderRadius.full,
   },
   ratingText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.xs,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
   typeBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs - 2,
-    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: themeBase.spacing.sm,
+    paddingVertical: themeBase.spacing.xs - 2,
+    borderRadius: themeBase.borderRadius.full,
   },
   typeText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.xs,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
 });

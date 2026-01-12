@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, Keyboard } from "react-native";
 import Svg, { Path, Circle, Polyline } from "react-native-svg";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { styles } from "./CaptureForm.styles";
 
 interface CaptureFormHeaderProps {
@@ -51,6 +52,8 @@ export function CaptureFormHeader({
   enterEditMode,
   editorRef,
 }: CaptureFormHeaderProps) {
+  const theme = useTheme();
+
   // Track "just saved" state to show green checkmark briefly
   const [showSavedCheck, setShowSavedCheck] = useState(false);
   const wasSavingRef = useRef(false);
@@ -67,14 +70,14 @@ export function CaptureFormHeader({
   }, [isSaving]);
 
   return (
-    <View style={[styles.titleBar, isFullScreen && styles.titleBarFullScreen]}>
+    <View style={[styles.titleBar, { backgroundColor: theme.colors.background.secondary }, isFullScreen && styles.titleBarFullScreen]}>
       {/* Left side: Back button (always shown, auto-saves if dirty) */}
       <View style={styles.headerLeftContainer}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.headerCancelButton}
         >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
             <Path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </TouchableOpacity>
@@ -87,8 +90,8 @@ export function CaptureFormHeader({
             value={title}
             onChangeText={onTitleChange}
             placeholder="Untitled"
-            placeholderTextColor="#9ca3af"
-            style={styles.headerTitleInput}
+            placeholderTextColor={theme.colors.text.disabled}
+            style={[styles.headerTitleInput, { color: theme.colors.text.primary }]}
             editable={isEditMode && !isSubmitting}
             returnKeyType="done"
             blurOnSubmit={true}
@@ -107,7 +110,7 @@ export function CaptureFormHeader({
               }, 100);
             }}
           >
-            <Text style={styles.headerDateText}>
+            <Text style={[styles.headerDateText, { color: theme.colors.text.secondary }]}>
               {entryDate ? new Date(entryDate).toLocaleDateString(undefined, {
                 month: 'short',
                 day: 'numeric',
@@ -125,7 +128,7 @@ export function CaptureFormHeader({
                 if (!isEditMode) enterEditMode();
               }}
             >
-              <Text style={styles.headerDateText}>
+              <Text style={[styles.headerDateText, { color: theme.colors.text.secondary }]}>
                 {entryDate ? new Date(entryDate).toLocaleTimeString(undefined, {
                   hour: 'numeric',
                   minute: '2-digit',
@@ -141,7 +144,7 @@ export function CaptureFormHeader({
                 if (!isEditMode) enterEditMode();
               }}
             >
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
                 <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
                 <Path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
@@ -173,7 +176,7 @@ export function CaptureFormHeader({
             style={styles.menuButton}
             onPress={onAttributesPress}
           >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="#6b7280" stroke="none">
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
               <Circle cx={12} cy={5} r={2} />
               <Circle cx={12} cy={12} r={2} />
               <Circle cx={12} cy={19} r={2} />

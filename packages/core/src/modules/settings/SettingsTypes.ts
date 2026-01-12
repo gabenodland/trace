@@ -91,6 +91,22 @@ export interface StreamSortPreference {
 }
 
 // ============================================================================
+// THEME SETTINGS
+// ============================================================================
+
+/**
+ * Theme setting - references a theme by ID
+ * Available themes are defined in apps/mobile/src/shared/theme/themes/
+ * To add new themes, create a file in that directory and register it.
+ */
+export type ThemeSetting = string;
+
+/**
+ * Default theme ID
+ */
+export const DEFAULT_THEME = 'light';
+
+// ============================================================================
 // USER SETTINGS
 // ============================================================================
 
@@ -102,6 +118,9 @@ export interface UserSettings {
   // Display preferences
   units: UnitSystem;
 
+  // Theme preference (theme ID, e.g., 'light', 'dark', 'sepia')
+  theme: ThemeSetting;
+
   // Location preferences
   captureGpsLocation: boolean;
 
@@ -110,11 +129,6 @@ export interface UserSettings {
 
   // Per-stream sort preferences (streamId -> preferences)
   streamSortPreferences: Record<string, StreamSortPreference>;
-
-  // Future settings can be added here:
-  // theme: 'light' | 'dark' | 'system';
-  // dateFormat: 'US' | 'EU' | 'ISO';
-  // notificationsEnabled: boolean;
 }
 
 /**
@@ -122,6 +136,7 @@ export interface UserSettings {
  */
 export const DEFAULT_SETTINGS: UserSettings = {
   units: 'metric',
+  theme: DEFAULT_THEME,
   captureGpsLocation: true,
   imageQuality: 'standard',
   streamSortPreferences: {},

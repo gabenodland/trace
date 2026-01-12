@@ -8,6 +8,7 @@ import { setSession } from "@trace/core";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
 import { NavigationProvider, BeforeBackHandler, useNavigation } from "./src/shared/contexts/NavigationContext";
 import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
+import { ThemeProvider, useTheme } from "./src/shared/contexts/ThemeContext";
 import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/DrawerContext";
 import { StreamDrawer } from "./src/components/drawer";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
@@ -202,6 +203,7 @@ interface AppContentProps {
 function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps) {
   const { navigate } = useNavigation();
   const { registerViewModeHandler, viewMode } = useDrawer();
+  const theme = useTheme();
 
   // Map viewMode to screen name
   const screenMap: Record<ViewMode, string> = {
@@ -259,23 +261,23 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
   };
 
   return (
-    <View style={styles.appContainer}>
+    <View style={[styles.appContainer, { backgroundColor: theme.colors.background.secondary }]}>
       {/* Main view screens - ALWAYS mounted as stacked layers */}
       {/* Using absolute positioning prevents layout glitches during transitions */}
       <View
-        style={[styles.screenLayer, activeTab !== "inbox" && styles.screenHidden]}
+        style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary }, activeTab !== "inbox" && styles.screenHidden]}
         pointerEvents={activeTab === "inbox" ? "auto" : "none"}
       >
         <EntryListScreen />
       </View>
       <View
-        style={[styles.screenLayer, activeTab !== "map" && styles.screenHidden]}
+        style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary }, activeTab !== "map" && styles.screenHidden]}
         pointerEvents={activeTab === "map" ? "auto" : "none"}
       >
         <MapScreen />
       </View>
       <View
-        style={[styles.screenLayer, activeTab !== "calendar" && styles.screenHidden]}
+        style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary }, activeTab !== "calendar" && styles.screenHidden]}
         pointerEvents={activeTab === "calendar" ? "auto" : "none"}
       >
         <CalendarScreen />
@@ -283,7 +285,7 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
 
       {/* Sub-screens - mount/unmount as needed, render on top */}
       {!isOnMainView && (
-        <View style={styles.screenLayer} pointerEvents="auto">
+        <View style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary }]} pointerEvents="auto">
           {renderSubScreen()}
         </View>
       )}
@@ -291,7 +293,7 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
       {/* Stream Drawer - renders as overlay */}
       <StreamDrawer />
 
-      <ExpoStatusBar style="dark" />
+      <ExpoStatusBar style={theme.isDark ? "light" : "dark"} />
     </View>
   );
 }
@@ -393,9 +395,11 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SettingsProvider>
-        <AuthProvider>
-          <AuthGate />
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <AuthGate />
+          </AuthProvider>
+        </ThemeProvider>
       </SettingsProvider>
     </QueryClientProvider>
   );

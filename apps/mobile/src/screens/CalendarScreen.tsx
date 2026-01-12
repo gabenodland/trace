@@ -29,7 +29,7 @@ import { EntryListHeader, StickyEntryListHeader } from "../modules/entries/compo
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
 import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
 import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
-import { theme } from "../shared/theme/theme";
+import { useTheme } from "../shared/contexts/ThemeContext";
 
 // Calendar date field type - which date to use for calendar display
 type CalendarDateField = 'entry_date' | 'updated_at' | 'due_date';
@@ -70,6 +70,7 @@ function formatDateKey(date: Date): string {
 type ZoomLevel = "day" | "month" | "year";
 
 export function CalendarScreen() {
+  const theme = useTheme();
   const { navigate } = useNavigation();
   const {
     registerStreamHandler,
@@ -519,22 +520,23 @@ export function CalendarScreen() {
         key={dateKey}
         style={[
           styles.dayCell,
-          isSelected && styles.dayCellSelected,
-          isToday && !isSelected && styles.dayCellToday,
+          isSelected && { backgroundColor: theme.colors.functional.accent },
+          isToday && !isSelected && { backgroundColor: theme.colors.functional.accentLight },
         ]}
         onPress={() => setSelectedDate(dateKey)}
       >
         <Text style={[
           styles.dayText,
-          !isCurrentMonth && styles.dayTextOtherMonth,
-          isSelected && styles.dayTextSelected,
-          isToday && !isSelected && styles.dayTextToday,
+          { color: theme.colors.text.primary },
+          !isCurrentMonth && { color: theme.colors.text.disabled },
+          isSelected && { color: "#ffffff", fontWeight: "600" },
+          isToday && !isSelected && { color: theme.colors.functional.accent, fontWeight: "600" },
         ]}>
           {day}
         </Text>
         {count > 0 && (
-          <View style={[styles.countBadge, isSelected && styles.countBadgeSelected]}>
-            <Text style={[styles.countText, isSelected && styles.countTextSelected]}>
+          <View style={[styles.countBadge, { backgroundColor: theme.colors.functional.accent }, isSelected && { backgroundColor: "#ffffff" }]}>
+            <Text style={[styles.countText, isSelected && { color: theme.colors.functional.accent }]}>
               {count}
             </Text>
           </View>
@@ -557,25 +559,25 @@ export function CalendarScreen() {
           contentContainerStyle={styles.scrollContent}
         >
           {/* Calendar Grid */}
-          <View style={styles.calendarContainer}>
+          <View style={[styles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
             <View style={styles.monthHeader}>
-              <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
-                <Text style={styles.navButtonText}>‹</Text>
+              <TouchableOpacity onPress={handlePrevMonth} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>‹</Text>
               </TouchableOpacity>
-              <Text style={styles.monthTitle}>{monthName}</Text>
-              <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-                <Text style={styles.navButtonText}>›</Text>
+              <Text style={[styles.monthTitle, { color: theme.colors.text.primary }]}>{monthName}</Text>
+              <TouchableOpacity onPress={handleNextMonth} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>›</Text>
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity onPress={handleToday} style={styles.todayButton}>
+            <TouchableOpacity onPress={handleToday} style={[styles.todayButton, { backgroundColor: theme.colors.functional.accent }]}>
               <Text style={styles.todayButtonText}>Today</Text>
             </TouchableOpacity>
 
             <View style={styles.weekRow}>
               {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
                 <View key={index} style={styles.dayHeaderCell}>
-                  <Text style={styles.dayHeaderText}>{day}</Text>
+                  <Text style={[styles.dayHeaderText, { color: theme.colors.text.secondary }]}>{day}</Text>
                 </View>
               ))}
             </View>
@@ -647,14 +649,14 @@ export function CalendarScreen() {
           contentContainerStyle={styles.scrollContent}
         >
           {/* Month Grid */}
-          <View style={styles.calendarContainer}>
+          <View style={[styles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
             <View style={styles.monthViewHeader}>
-              <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear - 1); setSelectedMonth(null); }} style={styles.navButton}>
-                <Text style={styles.navButtonText}>‹</Text>
+              <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear - 1); setSelectedMonth(null); }} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>‹</Text>
               </TouchableOpacity>
-              <Text style={styles.yearTitle}>{monthViewYear}</Text>
-              <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear + 1); setSelectedMonth(null); }} style={styles.navButton}>
-                <Text style={styles.navButtonText}>›</Text>
+              <Text style={[styles.yearTitle, { color: theme.colors.text.primary }]}>{monthViewYear}</Text>
+              <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear + 1); setSelectedMonth(null); }} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>›</Text>
               </TouchableOpacity>
             </View>
 
@@ -667,7 +669,7 @@ export function CalendarScreen() {
                 return (
                   <TouchableOpacity
                     key={monthIndex}
-                    style={[styles.monthCell, isSelected && styles.monthCellSelected]}
+                    style={[styles.monthCell, isSelected && { backgroundColor: theme.colors.functional.accent }]}
                     onPress={() => {
                       if (isSelected) {
                         setViewingMonth(monthIndex);
@@ -679,12 +681,12 @@ export function CalendarScreen() {
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.monthCellText, isSelected && styles.monthCellTextSelected]}>
+                    <Text style={[styles.monthCellText, { color: theme.colors.text.primary }, isSelected && { color: "#ffffff" }]}>
                       {name.substring(0, 3)}
                     </Text>
                     {count > 0 && (
-                      <View style={[styles.countBadge, isSelected && styles.countBadgeSelected]}>
-                        <Text style={[styles.countText, isSelected && styles.countTextSelected]}>
+                      <View style={[styles.countBadge, { backgroundColor: theme.colors.functional.accent }, isSelected && { backgroundColor: "#ffffff" }]}>
+                        <Text style={[styles.countText, isSelected && { color: theme.colors.functional.accent }]}>
                           {count}
                         </Text>
                       </View>
@@ -758,14 +760,14 @@ export function CalendarScreen() {
           contentContainerStyle={styles.scrollContent}
         >
           {/* Year Grid */}
-          <View style={styles.calendarContainer}>
+          <View style={[styles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
             <View style={styles.yearViewHeader}>
-              <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade - 10); setSelectedYear(null); }} style={styles.navButton}>
-                <Text style={styles.navButtonText}>‹</Text>
+              <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade - 10); setSelectedYear(null); }} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>‹</Text>
               </TouchableOpacity>
-              <Text style={styles.decadeTitle}>{decadeStart}-{decadeEnd}</Text>
-              <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade + 10); setSelectedYear(null); }} style={styles.navButton}>
-                <Text style={styles.navButtonText}>›</Text>
+              <Text style={[styles.decadeTitle, { color: theme.colors.text.primary }]}>{decadeStart}-{decadeEnd}</Text>
+              <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade + 10); setSelectedYear(null); }} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>›</Text>
               </TouchableOpacity>
             </View>
 
@@ -777,7 +779,7 @@ export function CalendarScreen() {
                 return (
                   <TouchableOpacity
                     key={year}
-                    style={[styles.yearCell, isSelected && styles.yearCellSelected]}
+                    style={[styles.yearCell, isSelected && { backgroundColor: theme.colors.functional.accent }]}
                     onPress={() => {
                       if (isSelected) {
                         setMonthViewYear(year);
@@ -789,12 +791,12 @@ export function CalendarScreen() {
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.yearCellText, isSelected && styles.yearCellTextSelected]}>
+                    <Text style={[styles.yearCellText, { color: theme.colors.text.primary }, isSelected && { color: "#ffffff" }]}>
                       {year}
                     </Text>
                     {count > 0 && (
-                      <View style={[styles.countBadge, isSelected && styles.countBadgeSelected]}>
-                        <Text style={[styles.countText, isSelected && styles.countTextSelected]}>
+                      <View style={[styles.countBadge, { backgroundColor: theme.colors.functional.accent }, isSelected && { backgroundColor: "#ffffff" }]}>
+                        <Text style={[styles.countText, isSelected && { color: theme.colors.functional.accent }]}>
                           {count}
                         </Text>
                       </View>
@@ -852,7 +854,7 @@ export function CalendarScreen() {
   };
 
   return (
-    <View style={styles.container} {...drawerPanResponder.panHandlers}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...drawerPanResponder.panHandlers}>
       <TopBar
         breadcrumbs={breadcrumbs}
         onBreadcrumbPress={openDrawer}
@@ -866,15 +868,15 @@ export function CalendarScreen() {
       />
 
       {/* SubBar with date field selector */}
-      <View style={styles.subBar}>
+      <View style={[styles.subBar, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
         <TouchableOpacity
           style={styles.dateFieldSelector}
           onPress={() => setShowDateFieldSelector(true)}
           activeOpacity={0.7}
         >
-          <Text style={styles.dateFieldLabel}>Show by:</Text>
-          <Text style={styles.dateFieldText}>{dateFieldLabel}</Text>
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Text style={[styles.dateFieldLabel, { color: theme.colors.text.tertiary }]}>Show by:</Text>
+          <Text style={[styles.dateFieldText, { color: theme.colors.text.primary }]}>{dateFieldLabel}</Text>
+          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
             <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </TouchableOpacity>
@@ -892,30 +894,38 @@ export function CalendarScreen() {
           activeOpacity={1}
           onPress={() => setShowDateFieldSelector(false)}
         >
-          <View style={styles.dateFieldModal}>
-            <View style={styles.dateFieldModalHeader}>
-              <Text style={styles.dateFieldModalTitle}>Show Entries By</Text>
+          <View style={[styles.dateFieldModal, { backgroundColor: theme.colors.background.primary }]}>
+            <View style={[styles.dateFieldModalHeader, { borderBottomColor: theme.colors.border.light }]}>
+              <Text style={[styles.dateFieldModalTitle, { color: theme.colors.text.primary }]}>Show Entries By</Text>
             </View>
             {CALENDAR_DATE_FIELDS.map((field) => {
               const isSelected = field.value === dateField;
               return (
                 <TouchableOpacity
                   key={field.value}
-                  style={[styles.dateFieldOption, isSelected && styles.dateFieldOptionSelected]}
+                  style={[
+                    styles.dateFieldOption,
+                    { borderBottomColor: theme.colors.border.light },
+                    isSelected && { backgroundColor: theme.colors.background.tertiary },
+                  ]}
                   onPress={() => {
                     setDateField(field.value);
                     setShowDateFieldSelector(false);
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.dateFieldOptionText, isSelected && styles.dateFieldOptionTextSelected]}>
+                  <Text style={[
+                    styles.dateFieldOptionText,
+                    { color: theme.colors.text.primary },
+                    isSelected && styles.dateFieldOptionTextSelected,
+                  ]}>
                     {field.label}
                   </Text>
                   {isSelected && (
                     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
                       <Path
                         d="M5 13l4 4L19 7"
-                        stroke={theme.colors.text.primary}
+                        stroke={theme.colors.functional.accent}
                         strokeWidth={2}
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -959,29 +969,29 @@ export function CalendarScreen() {
       />
 
       {/* Zoom Level Tabs */}
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
         <TouchableOpacity
-          style={[styles.tab, zoomLevel === "day" && styles.tabActive]}
+          style={[styles.tab, zoomLevel === "day" && { borderBottomColor: theme.colors.functional.accent }]}
           onPress={() => setZoomLevel("day")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, zoomLevel === "day" && styles.tabTextActive]}>Day</Text>
+          <Text style={[styles.tabText, { color: theme.colors.text.secondary }, zoomLevel === "day" && { color: theme.colors.functional.accent, fontWeight: "600" }]}>Day</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tab, zoomLevel === "month" && styles.tabActive]}
+          style={[styles.tab, zoomLevel === "month" && { borderBottomColor: theme.colors.functional.accent }]}
           onPress={() => setZoomLevel("month")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, zoomLevel === "month" && styles.tabTextActive]}>Month</Text>
+          <Text style={[styles.tabText, { color: theme.colors.text.secondary }, zoomLevel === "month" && { color: theme.colors.functional.accent, fontWeight: "600" }]}>Month</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tab, zoomLevel === "year" && styles.tabActive]}
+          style={[styles.tab, zoomLevel === "year" && { borderBottomColor: theme.colors.functional.accent }]}
           onPress={() => setZoomLevel("year")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, zoomLevel === "year" && styles.tabTextActive]}>Year</Text>
+          <Text style={[styles.tabText, { color: theme.colors.text.secondary }, zoomLevel === "year" && { color: theme.colors.functional.accent, fontWeight: "600" }]}>Year</Text>
         </TouchableOpacity>
       </View>
 
@@ -998,7 +1008,6 @@ export function CalendarScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
   },
   content: {
     flex: 1,
@@ -1009,7 +1018,6 @@ const styles = StyleSheet.create({
   },
   // Calendar container
   calendarContainer: {
-    backgroundColor: "#ffffff",
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
@@ -1023,7 +1031,6 @@ const styles = StyleSheet.create({
   monthTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#111827",
     flex: 1,
     textAlign: "center",
   },
@@ -1033,18 +1040,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#f3f4f6",
   },
   navButtonText: {
     fontSize: 28,
-    color: "#374151",
     fontWeight: "600",
   },
   todayButton: {
     alignSelf: "center",
     paddingHorizontal: 16,
     paddingVertical: 6,
-    backgroundColor: "#2563eb",
     borderRadius: 6,
     marginBottom: 16,
   },
@@ -1065,7 +1069,6 @@ const styles = StyleSheet.create({
   dayHeaderText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#6b7280",
   },
   calendarGrid: {
     marginTop: 8,
@@ -1080,32 +1083,13 @@ const styles = StyleSheet.create({
     maxHeight: 50,
     paddingTop: 4,
   },
-  dayCellToday: {
-    backgroundColor: "#dbeafe",
-  },
-  dayCellSelected: {
-    backgroundColor: "#2563eb",
-  },
   dayText: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#111827",
-  },
-  dayTextOtherMonth: {
-    color: "#d1d5db",
-  },
-  dayTextToday: {
-    color: "#2563eb",
-    fontWeight: "600",
-  },
-  dayTextSelected: {
-    color: "#ffffff",
-    fontWeight: "600",
   },
   countBadge: {
     position: "absolute",
     bottom: 2,
-    backgroundColor: "#2563eb",
     borderRadius: 8,
     minWidth: 16,
     height: 16,
@@ -1113,23 +1097,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 4,
   },
-  countBadgeSelected: {
-    backgroundColor: "#ffffff",
-  },
   countText: {
     fontSize: 10,
     fontWeight: "600",
     color: "#ffffff",
   },
-  countTextSelected: {
-    color: "#2563eb",
-  },
   // Tab styles
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
   },
   tab: {
     flex: 1,
@@ -1139,17 +1115,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
   },
-  tabActive: {
-    borderBottomColor: "#3b82f6",
-  },
   tabText: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#6b7280",
-  },
-  tabTextActive: {
-    color: "#3b82f6",
-    fontWeight: "600",
   },
   // Month view styles
   monthViewHeader: {
@@ -1161,7 +1129,6 @@ const styles = StyleSheet.create({
   yearTitle: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#111827",
     flex: 1,
     textAlign: "center",
   },
@@ -1183,16 +1150,9 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 8,
   },
-  monthCellSelected: {
-    backgroundColor: "#2563eb",
-  },
   monthCellText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#111827",
-  },
-  monthCellTextSelected: {
-    color: "#ffffff",
   },
   // Year view styles
   yearViewHeader: {
@@ -1204,7 +1164,6 @@ const styles = StyleSheet.create({
   decadeTitle: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#111827",
     flex: 1,
     textAlign: "center",
   },
@@ -1226,24 +1185,15 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 6,
   },
-  yearCellSelected: {
-    backgroundColor: "#2563eb",
-  },
   yearCellText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#111827",
-  },
-  yearCellTextSelected: {
-    color: "#ffffff",
   },
   // SubBar styles
   subBar: {
-    backgroundColor: theme.colors.background.primary,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border.light,
   },
   dateFieldSelector: {
     flexDirection: "row",
@@ -1253,12 +1203,10 @@ const styles = StyleSheet.create({
   dateFieldLabel: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#9ca3af",
   },
   dateFieldText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#374151",
   },
   // Modal styles
   modalOverlay: {
@@ -1269,7 +1217,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   dateFieldModal: {
-    backgroundColor: "#ffffff",
     borderRadius: 12,
     width: "100%",
     maxWidth: 320,
@@ -1284,12 +1231,10 @@ const styles = StyleSheet.create({
   dateFieldModalHeader: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
   },
   dateFieldModalTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#111827",
   },
   dateFieldOption: {
     flexDirection: "row",
@@ -1297,15 +1242,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-  },
-  dateFieldOptionSelected: {
-    backgroundColor: "#f3f4f6",
   },
   dateFieldOptionText: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#111827",
   },
   dateFieldOptionTextSelected: {
     fontWeight: "600",

@@ -37,7 +37,7 @@ import {
 } from "@trace/core";
 import { AvatarPicker, UsernameInput } from "../modules/profile/components";
 import type { AvatarImageData } from "../modules/profile/components/AvatarPicker";
-import { theme } from "../shared/theme/theme";
+import { useTheme } from "../shared/contexts/ThemeContext";
 
 const log = createScopedLogger("ProfileScreen");
 
@@ -45,6 +45,7 @@ export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { navigate } = useNavigation();
   const { sync } = useSync();
+  const theme = useTheme();
 
   // Profile data - pass user.id to ensure mutations work even before profile loads
   const { profile, isLoading, error, profileMutations } = useProfile(user?.id);
@@ -276,10 +277,10 @@ export function ProfileScreen() {
   // Loading state
   if (isLoading && !profile) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Profile" />
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading profile...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>Loading profile...</Text>
         </View>
       </View>
     );
@@ -288,18 +289,18 @@ export function ProfileScreen() {
   // Error state
   if (error && !profile) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Profile" />
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Failed to load profile</Text>
-          <Text style={styles.errorDetail}>{error.message}</Text>
+          <Text style={[styles.errorText, { color: theme.colors.functional.overdue }]}>Failed to load profile</Text>
+          <Text style={[styles.errorDetail, { color: theme.colors.text.secondary }]}>{error.message}</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       <SecondaryHeader title="Profile" />
 
       <KeyboardAvoidingView
@@ -309,19 +310,19 @@ export function ProfileScreen() {
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           {/* Profile Completion Banner */}
           {profile && !profile.profile_complete && (
-            <View style={styles.completionBanner}>
+            <View style={[styles.completionBanner, { backgroundColor: theme.colors.functional.accentLight }]}>
               <Svg
                 width={20}
                 height={20}
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#3b82f6"
+                stroke={theme.colors.functional.accent}
                 strokeWidth={2}
               >
                 <Circle cx={12} cy={12} r={10} />
                 <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
               </Svg>
-              <Text style={styles.completionText}>
+              <Text style={[styles.completionText, { color: theme.colors.functional.accent }]}>
                 Complete your profile to get started
               </Text>
             </View>
@@ -340,17 +341,17 @@ export function ProfileScreen() {
           </View>
 
           {/* Form Section */}
-          <View style={styles.formSection}>
+          <View style={[styles.formSection, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
             {/* Name Input */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Display Name</Text>
+              <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Display Name</Text>
               <TextInput
-                style={styles.textInput}
+                style={[styles.textInput, { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.light, color: theme.colors.text.primary }]}
                 value={name}
                 onChangeText={handleNameChange}
                 onBlur={handleNameBlur}
                 placeholder="Your name"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={theme.colors.text.tertiary}
                 autoComplete="name"
                 maxLength={50}
               />
@@ -367,16 +368,16 @@ export function ProfileScreen() {
 
             {/* Email (read-only) */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <View style={styles.readOnlyInput}>
-                <Text style={styles.readOnlyText}>{user?.email || "—"}</Text>
+              <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Email</Text>
+              <View style={[styles.readOnlyInput, { backgroundColor: theme.colors.background.tertiary, borderColor: theme.colors.border.light }]}>
+                <Text style={[styles.readOnlyText, { color: theme.colors.text.secondary }]}>{user?.email || "—"}</Text>
               </View>
             </View>
           </View>
 
           {/* Settings Link */}
           <TouchableOpacity
-            style={styles.settingsLink}
+            style={[styles.settingsLink, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}
             onPress={() => navigate("settings")}
             activeOpacity={0.7}
           >
@@ -386,7 +387,7 @@ export function ProfileScreen() {
                 height={20}
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#374151"
+                stroke={theme.colors.text.primary}
                 strokeWidth={2}
               >
                 <Circle cx={12} cy={12} r={3} strokeLinecap="round" strokeLinejoin="round" />
@@ -396,14 +397,14 @@ export function ProfileScreen() {
                   strokeLinejoin="round"
                 />
               </Svg>
-              <Text style={styles.settingsLinkText}>App Settings</Text>
+              <Text style={[styles.settingsLinkText, { color: theme.colors.text.primary }]}>App Settings</Text>
             </View>
             <Svg
               width={20}
               height={20}
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#9ca3af"
+              stroke={theme.colors.text.tertiary}
               strokeWidth={2}
             >
               <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -462,7 +463,6 @@ export function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
   },
   keyboardView: {
     flex: 1,
@@ -478,7 +478,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: "#6b7280",
   },
   errorContainer: {
     flex: 1,
@@ -489,18 +488,15 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#ef4444",
     marginBottom: 8,
   },
   errorDetail: {
     fontSize: 14,
-    color: "#6b7280",
     textAlign: "center",
   },
   completionBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#eff6ff",
     padding: 12,
     borderRadius: 8,
     marginBottom: 20,
@@ -509,67 +505,47 @@ const styles = StyleSheet.create({
   completionText: {
     flex: 1,
     fontSize: 14,
-    color: "#1e40af",
   },
   avatarSection: {
     alignItems: "center",
     marginBottom: 24,
   },
   formSection: {
-    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
   },
   inputGroup: {
-    marginBottom: theme.spacing.md,
+    marginBottom: 12,
   },
   label: {
     fontSize: 14,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.secondary,
-    marginBottom: theme.spacing.xs,
+    fontWeight: "500",
+    marginBottom: 4,
   },
   textInput: {
-    backgroundColor: theme.colors.background.secondary,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: theme.colors.border.light,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     fontSize: 16,
-    color: theme.colors.text.primary,
   },
   readOnlyInput: {
-    backgroundColor: "#f3f4f6",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: theme.colors.border.light,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
   },
   readOnlyText: {
     fontSize: 16,
-    color: "#6b7280",
   },
   settingsLink: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
   },
   settingsLinkContent: {
     flexDirection: "row",
@@ -579,7 +555,6 @@ const styles = StyleSheet.create({
   settingsLinkText: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#374151",
   },
   signOutButton: {
     flexDirection: "row",

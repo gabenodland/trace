@@ -10,6 +10,7 @@ import { useAttachments } from "../../attachments/mobileAttachmentHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { useDrawer } from "../../../shared/contexts/DrawerContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { StreamPicker } from "../../streams/components/StreamPicker";
 import { BottomBar } from "../../../components/layout/BottomBar";
@@ -42,6 +43,8 @@ interface CaptureFormProps {
 }
 
 export function CaptureForm({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, copiedEntryData }: CaptureFormProps = {}) {
+  const theme = useTheme();
+
   // Track when a new entry has been saved (for autosave transition from create to update)
   const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
 
@@ -1512,8 +1515,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // This blocks rendering until entry AND location are both loaded
   if ((isEditing || isCopiedEntry) && !isFormReady) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <Text style={styles.loadingText}>Loading...</Text>
+      <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
+        <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>Loading...</Text>
       </View>
     );
   }
@@ -1523,17 +1526,17 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // because we know it exists - React Query just hasn't cached it yet
   if (isEditing && !entry && !savedEntryId) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <Text style={styles.errorText}>Entry not found</Text>
-        <TouchableOpacity onPress={() => navigate("inbox")} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back to Uncategorized</Text>
+      <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
+        <Text style={[styles.errorText, { color: theme.colors.functional.overdue }]}>Entry not found</Text>
+        <TouchableOpacity onPress={() => navigate("inbox")} style={[styles.backButton, { backgroundColor: theme.colors.functional.accent }]}>
+          <Text style={[styles.backButtonText, { color: "#ffffff" }]}>Back to Uncategorized</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
       {/* Header Bar with Back/Date/Save buttons */}
       <CaptureFormHeader
         isEditMode={isEditMode}
@@ -1559,65 +1562,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         enterEditMode={enterEditMode}
         editorRef={editorRef}
       />
-
-      {/* Title Row - Full width below header (hidden in fullscreen - formData.title shows in header) */}
-      {!isFullScreen && (
-        <View style={styles.titleRow}>
-          {shouldCollapse ? (
-            <TouchableOpacity
-              style={styles.titleCollapsed}
-              onPress={() => {
-                if (isEditMode) {
-                  setIsTitleExpanded(true);
-                  setTimeout(() => titleInputRef.current?.focus(), 100);
-                } else {
-                  enterEditMode();
-                  setIsTitleExpanded(true);
-                  setTimeout(() => titleInputRef.current?.focus(), 100);
-                }
-              }}
-            >
-              <Text style={styles.titlePlaceholder}>
-                {isEditMode ? "Add Title" : "Untitled"}
-              </Text>
-            </TouchableOpacity>
-          ) : !isEditMode ? (
-            // View mode: use Text in TouchableOpacity (TextInput with editable=false doesn't capture taps)
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={handleTitlePress}
-              style={styles.titleTouchable}
-            >
-              <Text style={styles.titleText}>
-                {formData.title || "Title"}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            // Edit mode: direct TextInput for keyboard interaction
-            <TextInput
-              ref={titleInputRef}
-              value={formData.title}
-              onChangeText={(text) => updateField("title", text)}
-              placeholder={isTitleFocused ? "" : "Add Title"}
-              placeholderTextColor="#9ca3af"
-              style={styles.titleInputFullWidth}
-              editable={!isSubmitting}
-              returnKeyType="next"
-              blurOnSubmit={false}
-              onFocus={() => {
-                setIsTitleFocused(true);
-                setIsTitleExpanded(true);
-                // Clear any pending body focus - title is being focused instead
-                editorRef.current?.clearPendingFocus?.();
-                // Also blur the editor to ensure keyboard shows for title, not body
-                editorRef.current?.blur?.();
-              }}
-              onBlur={() => setIsTitleFocused(false)}
-              onPressIn={handleTitlePress}
-            />
-          )}
-        </View>
-      )}
 
       {/* Metadata Bar - Only shows SET values (hidden in full-screen mode) */}
       {!isFullScreen && (
@@ -1660,6 +1604,66 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
           onPhotosPress={() => setPhotosCollapsed(false)}
           editorRef={editorRef}
         />
+      )}
+
+      {/* Title Row - Full width below metadata (hidden in fullscreen - formData.title shows in header) */}
+      {!isFullScreen && (
+        <View style={styles.titleRow}>
+          {shouldCollapse ? (
+            <TouchableOpacity
+              style={styles.titleCollapsed}
+              onPress={() => {
+                if (isEditMode) {
+                  setIsTitleExpanded(true);
+                  setTimeout(() => titleInputRef.current?.focus(), 100);
+                } else {
+                  enterEditMode();
+                  setIsTitleExpanded(true);
+                  setTimeout(() => titleInputRef.current?.focus(), 100);
+                }
+              }}
+            >
+              <Text style={[styles.titlePlaceholder, { color: theme.colors.text.disabled }]}>
+                {isEditMode ? "Add Title" : "Untitled"}
+              </Text>
+            </TouchableOpacity>
+          ) : !isEditMode ? (
+            // View mode: use Text in TouchableOpacity (TextInput with editable=false doesn't capture taps)
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleTitlePress}
+              style={styles.titleTouchable}
+            >
+              <Text style={[styles.titleText, { color: theme.colors.text.primary }]}>
+                {formData.title || "Title"}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            // Edit mode: direct TextInput for keyboard interaction
+            <TextInput
+              ref={titleInputRef}
+              value={formData.title}
+              onChangeText={(text) => updateField("title", text.replace(/\n/g, ' '))}
+              placeholder={isTitleFocused ? "" : "Add Title"}
+              placeholderTextColor={theme.colors.text.disabled}
+              style={[styles.titleInputFullWidth, { color: theme.colors.text.primary }]}
+              editable={!isSubmitting}
+              multiline={true}
+              blurOnSubmit={true}
+              returnKeyType="done"
+              onFocus={() => {
+                setIsTitleFocused(true);
+                setIsTitleExpanded(true);
+                // Clear any pending body focus - title is being focused instead
+                editorRef.current?.clearPendingFocus?.();
+                // Also blur the editor to ensure keyboard shows for title, not body
+                editorRef.current?.blur?.();
+              }}
+              onBlur={() => setIsTitleFocused(false)}
+              onPressIn={handleTitlePress}
+            />
+          )}
+        </View>
       )}
 
       {/* Content Area */}

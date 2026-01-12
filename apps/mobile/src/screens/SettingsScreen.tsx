@@ -2,67 +2,100 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from "re
 import { useState } from "react";
 import Svg, { Path } from "react-native-svg";
 import { useSettings } from "../shared/contexts/SettingsContext";
+import { useTheme } from "../shared/contexts/ThemeContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { UnitSystemSelector } from "../components/settings/UnitSystemSelector";
 import { ImageQualitySelector } from "../components/settings/ImageQualitySelector";
+import { ThemeSelector } from "../components/settings/ThemeSelector";
 import { UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
+import { getThemeOptions } from "../shared/theme/themes";
 
 export function SettingsScreen() {
   const { settings, updateSettings } = useSettings();
+  const theme = useTheme();
 
   const [showUnitSelector, setShowUnitSelector] = useState(false);
   const [showImageQualitySelector, setShowImageQualitySelector] = useState(false);
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
 
   // Get labels for current settings
   const unitLabel = UNIT_OPTIONS.find(u => u.value === settings.units)?.label || 'Metric';
   const imageQualityLabel = IMAGE_QUALITY_OPTIONS.find(q => q.value === settings.imageQuality)?.label || 'Standard';
+  const themeLabel = getThemeOptions().find(t => t.id === settings.theme)?.name || 'Light';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       <SecondaryHeader title="Settings" />
 
       <ScrollView style={styles.content}>
         {/* Entry Settings */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Entry</Text>
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary }]}>Entry</Text>
 
-          <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+          <View style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}>
             <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Capture GPS Location</Text>
-              <Text style={styles.settingDescription}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary }]}>Capture GPS Location</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary }]}>
                 Automatically capture your GPS coordinates when creating new entries
               </Text>
             </View>
             <Switch
               value={settings.captureGpsLocation}
               onValueChange={(value) => updateSettings({ captureGpsLocation: value })}
-              trackColor={{ false: '#d1d5db', true: '#3b82f6' }}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
               thumbColor="#ffffff"
             />
           </View>
         </View>
 
         {/* Display Settings */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Display</Text>
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary }]}>Display</Text>
 
+          {/* Theme */}
           <TouchableOpacity
-            style={[styles.settingRow, { borderBottomWidth: 0 }]}
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+            onPress={() => setShowThemeSelector(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary }]}>Theme</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary }]}>
+                Choose your preferred color scheme
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Text style={[styles.settingValueText, { color: theme.colors.text.secondary }]}>{themeLabel}</Text>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M9 18l6-6-6-6"
+                  stroke={theme.colors.text.tertiary}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </TouchableOpacity>
+
+          {/* Distance Units */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
             onPress={() => setShowUnitSelector(true)}
             activeOpacity={0.7}
           >
             <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Distance Units</Text>
-              <Text style={styles.settingDescription}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary }]}>Distance Units</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary }]}>
                 Display distances in metric or imperial
               </Text>
             </View>
             <View style={styles.settingValue}>
-              <Text style={styles.settingValueText}>{unitLabel}</Text>
+              <Text style={[styles.settingValueText, { color: theme.colors.text.secondary }]}>{unitLabel}</Text>
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M9 18l6-6-6-6"
-                  stroke="#9ca3af"
+                  stroke={theme.colors.text.tertiary}
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -73,26 +106,26 @@ export function SettingsScreen() {
         </View>
 
         {/* Storage Settings */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Storage</Text>
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary }]}>Storage</Text>
 
           <TouchableOpacity
-            style={[styles.settingRow, { borderBottomWidth: 0 }]}
+            style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
             onPress={() => setShowImageQualitySelector(true)}
             activeOpacity={0.7}
           >
             <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Photo Quality</Text>
-              <Text style={styles.settingDescription}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary }]}>Photo Quality</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary }]}>
                 Compression level for photos. Higher quality uses more storage.
               </Text>
             </View>
             <View style={styles.settingValue}>
-              <Text style={styles.settingValueText}>{imageQualityLabel}</Text>
+              <Text style={[styles.settingValueText, { color: theme.colors.text.secondary }]}>{imageQualityLabel}</Text>
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M9 18l6-6-6-6"
-                  stroke="#9ca3af"
+                  stroke={theme.colors.text.tertiary}
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -118,6 +151,14 @@ export function SettingsScreen() {
         onSelect={(imageQuality) => updateSettings({ imageQuality })}
         onClose={() => setShowImageQualitySelector(false)}
       />
+
+      {/* Theme Selector */}
+      <ThemeSelector
+        visible={showThemeSelector}
+        selectedTheme={settings.theme}
+        onSelect={(theme) => updateSettings({ theme })}
+        onClose={() => setShowThemeSelector(false)}
+      />
     </View>
   );
 }
@@ -125,27 +166,19 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
   },
   content: {
     flex: 1,
     padding: 20,
   },
   card: {
-    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#1a1a1a",
     marginBottom: 16,
   },
   settingRow: {
@@ -154,7 +187,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
   },
   settingContent: {
     flex: 1,
@@ -163,12 +195,10 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#1f2937",
     marginBottom: 4,
   },
   settingDescription: {
     fontSize: 13,
-    color: "#6b7280",
     lineHeight: 18,
   },
   settingValue: {
@@ -178,6 +208,5 @@ const styles = StyleSheet.create({
   },
   settingValueText: {
     fontSize: 14,
-    color: "#6b7280",
   },
 });

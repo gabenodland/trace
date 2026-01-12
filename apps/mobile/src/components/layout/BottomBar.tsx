@@ -1,5 +1,6 @@
 import { View, StyleSheet } from "react-native";
-import { theme } from "../../shared/theme/theme";
+import { useTheme } from "../../shared/contexts/ThemeContext";
+import { themeBase } from "../../shared/theme/themeBase";
 
 interface BottomBarProps {
   children: React.ReactNode;
@@ -7,9 +8,11 @@ interface BottomBarProps {
 }
 
 export function BottomBar({ children, keyboardOffset = 0 }: BottomBarProps) {
+  const theme = useTheme();
+
   return (
     <View style={[styles.container, keyboardOffset > 0 && { bottom: keyboardOffset + 25 }]}>
-      <View style={styles.toolbar}>
+      <View style={[styles.toolbar, { backgroundColor: theme.colors.background.secondary, borderTopColor: theme.colors.border.light }]}>
         {children}
       </View>
     </View>
@@ -29,10 +32,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    backgroundColor: "#f9fafb",
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
   },
 });

@@ -5,6 +5,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { type UnitSystem, UNIT_OPTIONS } from '@trace/core';
+import { useTheme } from '../../shared/contexts/ThemeContext';
 
 interface UnitSystemSelectorProps {
   visible: boolean;
@@ -19,6 +20,8 @@ export function UnitSystemSelector({
   onSelect,
   onClose,
 }: UnitSystemSelectorProps) {
+  const theme = useTheme();
+
   const handleSelect = (unit: UnitSystem) => {
     onSelect(unit);
     onClose();
@@ -31,12 +34,12 @@ export function UnitSystemSelector({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Distance Units</Text>
+        <View style={[styles.header, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
+          <Text style={[styles.title, { color: theme.colors.text.primary }]}>Distance Units</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
               <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
@@ -49,7 +52,8 @@ export function UnitSystemSelector({
               key={option.value}
               style={[
                 styles.optionItem,
-                selectedUnit === option.value && styles.optionItemSelected,
+                { backgroundColor: theme.colors.background.primary },
+                selectedUnit === option.value && [styles.optionItemSelected, { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight }],
               ]}
               onPress={() => handleSelect(option.value)}
               activeOpacity={0.7}
@@ -57,14 +61,15 @@ export function UnitSystemSelector({
               <View style={styles.optionContent}>
                 <Text style={[
                   styles.optionLabel,
-                  selectedUnit === option.value && styles.optionLabelSelected,
+                  { color: theme.colors.text.primary },
+                  selectedUnit === option.value && { color: theme.colors.functional.accent },
                 ]}>
                   {option.label}
                 </Text>
-                <Text style={styles.optionDescription}>{option.description}</Text>
+                <Text style={[styles.optionDescription, { color: theme.colors.text.secondary }]}>{option.description}</Text>
               </View>
               {selectedUnit === option.value && (
-                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth={2}>
+                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.accent} strokeWidth={2}>
                   <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
               )}
