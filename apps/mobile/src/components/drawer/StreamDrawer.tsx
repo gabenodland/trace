@@ -7,11 +7,12 @@
  * Features:
  * - Animated slide-in from left
  * - Backdrop with fade
- * - Swipe-to-close gesture
+ * - Swipe-to-close gesture (on drawer itself)
+ * - Swipe-to-open gesture (from EntryListScreen via drawerControl)
  * - Tap backdrop to close
  */
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -21,13 +22,13 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
-import { useDrawer } from "../../shared/contexts/DrawerContext";
+import { useDrawer, type DrawerControl } from "../../shared/contexts/DrawerContext";
 import { StreamDrawerContent } from "./StreamDrawerContent";
 
 const DRAWER_WIDTH = 280;
 
 export function StreamDrawer() {
-  const { isOpen, closeDrawer } = useDrawer();
+  const { isOpen, openDrawer, closeDrawer, registerDrawerControl } = useDrawer();
 
   // Animation values
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
@@ -35,8 +36,77 @@ export function StreamDrawer() {
 
   // Track if drawer is currently visible (for pointer events)
   const isVisible = useRef(false);
+  // Track if being dragged externally (swipe-to-open from list)
+  const isDragging = useRef(false);
 
-  // Swipe-to-close gesture - only captures swipe movements, not taps
+  // Set drawer position directly (for external gesture control)
+  // Position is in terms of how far drawer has moved: 0 = fully closed, DRAWER_WIDTH = fully open
+  const setPosition = useCallback((position: number) => {
+    isDragging.current = true;
+    isVisible.current = true;
+    // translateX goes from -DRAWER_WIDTH (closed) to 0 (open)
+    // position goes from 0 (closed) to DRAWER_WIDTH (open)
+    const clampedPosition = Math.max(0, Math.min(position, DRAWER_WIDTH));
+    translateX.setValue(-DRAWER_WIDTH + clampedPosition);
+    // Backdrop opacity: 0 when closed, 0.5 when open
+    backdropOpacity.setValue((clampedPosition / DRAWER_WIDTH) * 0.5);
+  }, [translateX, backdropOpacity]);
+
+  // Animate drawer to open position
+  const animateOpen = useCallback(() => {
+    isDragging.current = false;
+    isVisible.current = true;
+    openDrawer(); // Update state
+    Animated.parallel([
+      Animated.timing(translateX, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0.5,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [translateX, backdropOpacity, openDrawer]);
+
+  // Animate drawer to closed position
+  const animateClose = useCallback(() => {
+    isDragging.current = false;
+    closeDrawer(); // Update state
+    Animated.parallel([
+      Animated.timing(translateX, {
+        toValue: -DRAWER_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      isVisible.current = false;
+    });
+  }, [translateX, backdropOpacity, closeDrawer]);
+
+  // Get drawer width
+  const getDrawerWidth = useCallback(() => DRAWER_WIDTH, []);
+
+  // Register control methods on mount
+  useEffect(() => {
+    const control: DrawerControl = {
+      setPosition,
+      animateOpen,
+      animateClose,
+      getDrawerWidth,
+    };
+    registerDrawerControl(control);
+    return () => registerDrawerControl(null);
+  }, [setPosition, animateOpen, animateClose, getDrawerWidth, registerDrawerControl]);
+
+  // Swipe-to-close gesture on drawer itself - only captures swipe movements, not taps
   const panResponder = useRef(
     PanResponder.create({
       // Don't capture initial touch - let children handle taps
@@ -49,26 +119,39 @@ export function StreamDrawer() {
         // Only allow swiping left (closing)
         if (gestureState.dx < 0) {
           translateX.setValue(gestureState.dx);
+          // Also update backdrop
+          const progress = Math.max(0, 1 + gestureState.dx / DRAWER_WIDTH);
+          backdropOpacity.setValue(progress * 0.5);
         }
       },
       onPanResponderRelease: (_, gestureState) => {
         // Close if swiped far enough or fast enough
         if (gestureState.dx < -80 || gestureState.vx < -0.5) {
-          closeDrawer();
+          animateClose();
         } else {
           // Snap back open
-          Animated.timing(translateX, {
-            toValue: 0,
-            duration: 150,
-            useNativeDriver: true,
-          }).start();
+          Animated.parallel([
+            Animated.timing(translateX, {
+              toValue: 0,
+              duration: 150,
+              useNativeDriver: true,
+            }),
+            Animated.timing(backdropOpacity, {
+              toValue: 0.5,
+              duration: 150,
+              useNativeDriver: true,
+            }),
+          ]).start();
         }
       },
     })
   ).current;
 
-  // Animate open/close - use timing instead of spring for faster, predictable animation
+  // Animate open/close based on state (for non-gesture triggers like button press)
   useEffect(() => {
+    // Skip if we're being dragged - let the gesture control position
+    if (isDragging.current) return;
+
     if (isOpen) {
       isVisible.current = true;
       Animated.parallel([
@@ -101,15 +184,15 @@ export function StreamDrawer() {
     }
   }, [isOpen, translateX, backdropOpacity]);
 
-  // Don't render anything if not visible
-  if (!isOpen && !isVisible.current) {
+  // Don't render anything if not visible and not being dragged
+  if (!isOpen && !isVisible.current && !isDragging.current) {
     return null;
   }
 
   return (
-    <View style={styles.container} pointerEvents={isOpen ? "auto" : "none"}>
+    <View style={styles.container} pointerEvents={isOpen || isDragging.current ? "auto" : "none"}>
       {/* Backdrop */}
-      <TouchableWithoutFeedback onPress={closeDrawer}>
+      <TouchableWithoutFeedback onPress={animateClose}>
         <Animated.View
           style={[
             styles.backdrop,

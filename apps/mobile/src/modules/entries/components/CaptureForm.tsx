@@ -808,35 +808,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     captureGps(false, false, true);
   }, [isEditing, settings.captureGpsLocation]);
 
-  // Auto-show stream picker for new entries without a stream
-  // This helps users categorize entries right away
-  const hasShownStreamPickerRef = useRef(false);
-  useEffect(() => {
-    // Only for new entries (not editing, not copied)
-    if (isEditing || isCopiedEntry) return;
-
-    // Only if streams are loaded
-    if (streams.length === 0) return;
-
-    // Only run once
-    if (hasShownStreamPickerRef.current) return;
-
-    // Check if entry was created from a stream view (has a valid stream ID)
-    // Valid stream IDs are UUIDs, not special values like "all", "events", "streams", "tags", "people"
-    const specialStreamValues = ["all", "events", "streams", "tags", "people", null, undefined];
-    const hasValidStreamFromView = initialStreamId && !specialStreamValues.includes(initialStreamId as any);
-
-    // If entry already has a stream from navigation, don't show picker
-    if (hasValidStreamFromView) return;
-
-    // Show stream picker automatically
-    hasShownStreamPickerRef.current = true;
-    // Blur editor first to prevent it from stealing focus when picker's search is used
-    editorRef.current?.blur();
-    Keyboard.dismiss();
-    setActivePicker('stream');
-  }, [isEditing, isCopiedEntry, streams.length, initialStreamId]);
-
   // Apply templates when form loads with an initial stream
   // This handles the case where user navigates from a stream view and clicks "new"
   const hasAppliedInitialTemplateRef = useRef(false);

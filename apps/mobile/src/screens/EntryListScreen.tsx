@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { View, StyleSheet, Alert } from "react-native";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { View, StyleSheet, Alert, PanResponder, Dimensions } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import * as Location from "expo-location";
 import type { EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
@@ -45,8 +45,72 @@ export function EntryListScreen() {
     selectedStreamName,
     setSelectedStreamId,
     setSelectedStreamName,
-    openDrawer
+    openDrawer,
+    drawerControl,
   } = useDrawer();
+
+  // Screen width for swipe threshold calculation (1/3 of screen)
+  const screenWidth = Dimensions.get("window").width;
+  const SWIPE_THRESHOLD = screenWidth / 3;
+
+  // Ref to hold current drawerControl - needed because PanResponder callbacks
+  // capture values at creation time, so we need a ref to access current value
+  const drawerControlRef = useRef(drawerControl);
+  useEffect(() => {
+    drawerControlRef.current = drawerControl;
+  }, [drawerControl]);
+
+  // Swipe-right gesture for opening drawer - uses capture phase to intercept before FlatList
+  const drawerPanResponder = useRef(
+    PanResponder.create({
+      // Don't capture initial touch - allows taps and scroll to start
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      // Capture horizontal right swipes before FlatList gets them
+      onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
+        // Only capture if clearly horizontal and moving right
+        // Require significant horizontal movement to avoid interfering with scroll
+        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
+        const isSwipingRight = gestureState.dx > 20;
+        // Don't capture from the very left edge (Android back gesture zone)
+        const notInBackZone = evt.nativeEvent.pageX > 25;
+        return isHorizontalSwipe && isSwipingRight && notInBackZone;
+      },
+      onMoveShouldSetPanResponder: () => false,
+      onPanResponderGrant: () => {
+        // Gesture captured
+      },
+      onPanResponderMove: (_, gestureState) => {
+        // Update drawer position as finger moves (use ref for current value)
+        const control = drawerControlRef.current;
+        if (control && gestureState.dx > 0) {
+          control.setPosition(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const control = drawerControlRef.current;
+        if (!control) return;
+
+        // Decide whether to open or close based on position and velocity
+        const shouldOpen =
+          gestureState.dx > SWIPE_THRESHOLD || // Past 1/3 of screen
+          gestureState.vx > 0.5; // Fast swipe right
+
+        if (shouldOpen) {
+          control.animateOpen();
+        } else {
+          control.animateClose();
+        }
+      },
+      onPanResponderTerminate: () => {
+        // Gesture was interrupted - close drawer
+        const control = drawerControlRef.current;
+        if (control) {
+          control.animateClose();
+        }
+      },
+    })
+  ).current;
   const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
   const [showSortModeSelector, setShowSortModeSelector] = useState(false);
   const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
@@ -396,7 +460,7 @@ export function EntryListScreen() {
   const entryToMoveStreamId = entryToMoveData?.stream_id || null;
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} {...drawerPanResponder.panHandlers}>
       <TopBar
         onLeftMenuPress={openDrawer}
         breadcrumbs={breadcrumbs}

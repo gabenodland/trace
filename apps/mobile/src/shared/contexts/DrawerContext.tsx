@@ -6,6 +6,8 @@
  *
  * Main view state (map region, calendar date) is preserved here so
  * navigating to sub-screens (entry, settings) and back preserves position.
+ *
+ * Supports gesture-driven drawer control via DrawerControl interface.
  */
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
@@ -19,6 +21,18 @@ type ViewModeChangeHandler = ((mode: ViewMode) => void) | null;
 
 /** Calendar zoom levels */
 export type CalendarZoom = "day" | "week" | "month" | "year";
+
+/** Interface for gesture-driven drawer control */
+export interface DrawerControl {
+  /** Set drawer position directly (0 = closed, DRAWER_WIDTH = open) */
+  setPosition: (translateX: number) => void;
+  /** Animate drawer to open position */
+  animateOpen: () => void;
+  /** Animate drawer to closed position */
+  animateClose: () => void;
+  /** Get current drawer width */
+  getDrawerWidth: () => number;
+}
 
 interface DrawerContextValue {
   /** Whether the drawer is currently open */
@@ -66,6 +80,11 @@ interface DrawerContextValue {
   calendarZoom: CalendarZoom;
   /** Update calendar zoom */
   setCalendarZoom: (zoom: CalendarZoom) => void;
+
+  /** Gesture-driven drawer control (registered by StreamDrawer) */
+  drawerControl: DrawerControl | null;
+  /** Register drawer control methods */
+  registerDrawerControl: (control: DrawerControl | null) => void;
 }
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
@@ -86,6 +105,13 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
   const [calendarDate, setCalendarDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [calendarZoom, setCalendarZoom] = useState<CalendarZoom>("month");
+
+  // Gesture-driven drawer control
+  const [drawerControl, setDrawerControl] = useState<DrawerControl | null>(null);
+
+  const registerDrawerControl = useCallback((control: DrawerControl | null) => {
+    setDrawerControl(control);
+  }, []);
 
   const openDrawer = useCallback(() => {
     setIsOpen(true);
@@ -130,6 +156,8 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
         setCalendarDate,
         calendarZoom,
         setCalendarZoom,
+        drawerControl,
+        registerDrawerControl,
       }}
     >
       {children}
