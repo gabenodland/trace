@@ -67,14 +67,9 @@ function formatDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-interface CalendarScreenProps {
-  returnDate?: string;
-  returnZoomLevel?: ZoomLevel;
-}
-
 type ZoomLevel = "day" | "month" | "year";
 
-export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenProps = {}) {
+export function CalendarScreen() {
   const { navigate } = useNavigation();
   const {
     registerStreamHandler,
@@ -82,14 +77,21 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
     selectedStreamName,
     setSelectedStreamId,
     setSelectedStreamName,
-    openDrawer
+    openDrawer,
+    calendarDate,
+    setCalendarDate,
+    calendarZoom,
+    setCalendarZoom,
   } = useDrawer();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
-  const [zoomLevel, setZoomLevel] = useState<ZoomLevel>("day");
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const today = new Date();
-    return formatDateKey(today);
-  });
+
+  // Use DrawerContext for state (persisted across navigations)
+  const zoomLevel = calendarZoom as ZoomLevel;
+  const selectedDate = calendarDate;
+
+  // Wrap setters to update context
+  const setZoomLevel = (level: ZoomLevel) => setCalendarZoom(level);
+  const setSelectedDate = (date: string) => setCalendarDate(date);
 
   // Date field selector state (persisted)
   const [dateField, setDateField] = usePersistedState<CalendarDateField>('@calendarDateField', 'entry_date');
@@ -137,20 +139,15 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
   const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Cards';
   const sortModeLabel = ENTRY_SORT_MODES.find(m => m.value === sortMode)?.label || 'Date';
 
-  // Return date handling
+  // Sync viewing month/year with selected date from context
   useEffect(() => {
-    if (returnDate) {
-      const date = new Date(returnDate);
-      const dateKey = formatDateKey(date);
-      setSelectedDate(dateKey);
+    if (selectedDate) {
+      const date = new Date(selectedDate);
       setViewingMonth(date.getMonth());
       setViewingYear(date.getFullYear());
       setMonthViewYear(date.getFullYear());
-      if (returnZoomLevel) {
-        setZoomLevel(returnZoomLevel);
-      }
     }
-  }, [returnDate, returnZoomLevel]);
+  }, []); // Only on mount - subsequent changes happen via user interaction
 
   // Register stream handler for drawer selection
   useEffect(() => {
@@ -362,18 +359,21 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
 
   // Navigation handlers
   const handleEntryPress = (entryId: string) => {
-    navigate("capture", {
-      entryId,
-      returnContext: { screen: "calendar", selectedDate, zoomLevel }
-    });
+    navigate("capture", { entryId });
   };
 
   const handleTagPress = (tag: string) => {
-    navigate("inbox", { returnStreamId: `tag:${tag}`, returnStreamName: `#${tag}` });
+    // Update stream selection in DrawerContext and switch to list view
+    setSelectedStreamId(`tag:${tag}`);
+    setSelectedStreamName(`#${tag}`);
+    navigate("inbox");
   };
 
   const handleMentionPress = (mention: string) => {
-    navigate("inbox", { returnStreamId: `mention:${mention}`, returnStreamName: `@${mention}` });
+    // Update stream selection in DrawerContext and switch to list view
+    setSelectedStreamId(`mention:${mention}`);
+    setSelectedStreamName(`@${mention}`);
+    navigate("inbox");
   };
 
   const handleAddEntry = () => {
@@ -386,10 +386,7 @@ export function CalendarScreen({ returnDate, returnZoomLevel }: CalendarScreenPr
       const firstDay = new Date(selectedYear, 0, 1);
       dateToUse = formatDateKey(firstDay);
     }
-    navigate("capture", {
-      initialDate: dateToUse,
-      returnContext: { screen: "calendar", selectedDate: dateToUse, zoomLevel }
-    });
+    navigate("capture", { initialDate: dateToUse });
   };
 
   // Calendar generation

@@ -86,7 +86,9 @@ export function MapScreen() {
     selectedStreamName,
     setSelectedStreamId,
     setSelectedStreamName,
-    openDrawer
+    openDrawer,
+    mapRegion: persistedRegion,
+    setMapRegion: persistRegion,
   } = useDrawer();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { streams } = useStreams();
@@ -145,17 +147,20 @@ export function MapScreen() {
     return nameMap;
   }, [locationsData]);
 
-  const [region, setRegion] = useState<Region>({
+  // Default region (Kansas City) - used if no persisted region
+  const defaultRegion: Region = {
     latitude: 39.0997,
     longitude: -94.5786,
     latitudeDelta: 0.5,
     longitudeDelta: 0.5,
-  });
+  };
+
+  const [region, setRegion] = useState<Region>(persistedRegion || defaultRegion);
   const [visibleEntries, setVisibleEntries] = useState<Entry[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const mapRef = useRef<MapView>(null);
   const listRef = useRef<FlatList<Entry>>(null);
-  const regionRef = useRef<Region>(region); // Track region without causing re-renders
+  const regionRef = useRef<Region>(persistedRegion || defaultRegion); // Track region without causing re-renders
   const [isMapReady, setIsMapReady] = useState(false);
   const previousStreamIdRef = useRef<string | null | undefined>(undefined); // Start undefined to detect first load
   const pendingFitRef = useRef(false); // Track if we need to fit when data settles
@@ -296,6 +301,8 @@ export function MapScreen() {
     if (latChanged || lngChanged || deltaChanged) {
       regionRef.current = newRegion;
       setRegion(newRegion);
+      // Persist to context so it survives navigation to sub-screens
+      persistRegion(newRegion);
     }
 
     // Filter entries within the visible region

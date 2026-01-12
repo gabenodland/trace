@@ -8,6 +8,7 @@ import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
 import { useAttachments } from "../../attachments/mobileAttachmentHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
+import { useDrawer } from "../../../shared/contexts/DrawerContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { StreamPicker } from "../../streams/components/StreamPicker";
@@ -26,23 +27,12 @@ import { MetadataBar } from "./MetadataBar";
 import { EditorToolbar } from "./EditorToolbar";
 import { CaptureFormHeader } from "./CaptureFormHeader";
 
-export interface ReturnContext {
-  screen: "inbox" | "calendar";
-  // For inbox
-  streamId?: string | null | "all" | "events" | "streams" | "tags" | "people";
-  streamName?: string;
-  // For calendar
-  selectedDate?: string;
-  zoomLevel?: "day" | "week" | "month" | "year";
-}
-
 interface CaptureFormProps {
   entryId?: string | null;
   initialStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people";
   initialStreamName?: string;
   initialContent?: string;
   initialDate?: string;
-  returnContext?: ReturnContext;
   /** Copied entry data - when provided, opens form with pre-filled data (not saved to DB yet) */
   copiedEntryData?: {
     entry: import('@trace/core').Entry;
@@ -51,7 +41,7 @@ interface CaptureFormProps {
   };
 }
 
-export function CaptureForm({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, returnContext, copiedEntryData }: CaptureFormProps = {}) {
+export function CaptureForm({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, copiedEntryData }: CaptureFormProps = {}) {
   // Track when a new entry has been saved (for autosave transition from create to update)
   const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
 
@@ -98,9 +88,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Pending GPS data - holds captured GPS before user confirms with Save button
   const [pendingGpsData, setPendingGpsData] = useState<GpsData | null>(null);
 
-  // Original stream for cancel navigation (for edited entries)
-  const [originalStreamId, setOriginalStreamId] = useState<string | null>(null);
-  const [originalStreamName, setOriginalStreamName] = useState<string | null>(null);
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const [isTitleFocused, setIsTitleFocused] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
@@ -541,45 +528,20 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Location picker mode: 'view' if already has named location, 'select' to pick/create
   const locationPickerMode: 'select' | 'view' = formData.locationData?.name ? 'view' : 'select';
 
-  // Helper to navigate back based on returnContext
-  const navigateBack = useCallback((options?: { useCurrentStream?: boolean }) => {
-    if (returnContext) {
-      if (returnContext.screen === "calendar") {
-        navigate("calendar", {
-          returnDate: returnContext.selectedDate || formData.entryDate,
-          returnZoomLevel: returnContext.zoomLevel
-        });
-        return;
-      } else if (returnContext.screen === "inbox") {
-        navigate("inbox", {
-          returnStreamId: returnContext.streamId || null,
-          returnStreamName: returnContext.streamName || "Uncategorized"
-        });
-        return;
-      }
-    }
+  // Get viewMode from DrawerContext for back navigation
+  const { viewMode } = useDrawer();
 
-    // Default: go to inbox
-    if (options?.useCurrentStream) {
-      // Use current form stream (after save)
-      let returnStreamId: string | null = formData.streamId || null;
-      let returnStreamName: string = formData.streamName || "Uncategorized";
-      // Edge case: If returning to a filter view, switch to Uncategorized
-      if (returnStreamId === "all" || returnStreamId === "events" ||
-          returnStreamId === "streams" ||
-          returnStreamId === "tags" || returnStreamId === "people" ||
-          (typeof returnStreamId === 'string' && (returnStreamId.startsWith("tag:") || returnStreamId.startsWith("mention:")))) {
-        returnStreamId = null;
-        returnStreamName = "Uncategorized";
-      }
-      navigate("inbox", { returnStreamId, returnStreamName });
-    } else {
-      // Use original stream (for cancel/back)
-      const returnStreamId = isEditing ? originalStreamId : (formData.streamId || null);
-      const returnStreamName = isEditing ? originalStreamName : (formData.streamName || "Uncategorized");
-      navigate("inbox", { returnStreamId, returnStreamName });
-    }
-  }, [returnContext, navigate, formData.entryDate, formData.streamId, formData.streamName, isEditing, originalStreamId, originalStreamName]);
+  // Helper to navigate back - uses viewMode from DrawerContext
+  // Main view state (stream selection, map region, calendar date) is already preserved in context
+  const navigateBack = useCallback(() => {
+    // Map viewMode to screen name
+    const screenMap: Record<string, string> = {
+      list: "inbox",
+      map: "map",
+      calendar: "calendar",
+    };
+    navigate(screenMap[viewMode] || "inbox");
+  }, [viewMode, navigate]);
 
   // Auto-collapse formData.title when user starts typing in body without a formData.title
   // Don't collapse while title is focused (prevents keyboard dismissal while typing)
@@ -607,10 +569,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     const streamName = entry.stream_id && streams.length > 0
       ? streams.find(s => s.stream_id === entry.stream_id)?.name || null
       : null;
-
-    // Store original stream for cancel navigation
-    setOriginalStreamId(entry.stream_id || null);
-    setOriginalStreamName(streamName);
 
     // Build GPS data
     const gpsData: GpsData | null = entry.entry_latitude && entry.entry_longitude
@@ -1183,7 +1141,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
                     });
 
                     showSnackbar('Saved as new entry');
-                    navigateBack({ useCurrentStream: true });
+                    navigateBack();
                   } catch (error) {
                     console.error('Failed to save as copy:', error);
                     Alert.alert('Error', `Failed to save copy: ${error instanceof Error ? error.message : 'Unknown error'}`);

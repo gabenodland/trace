@@ -34,12 +34,7 @@ import { SortModeSelector } from "../modules/entries/components/SortModeSelector
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { theme } from "../shared/theme/theme";
 
-interface EntryListScreenProps {
-  returnStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people"; // Also supports "tag:tagname" and "mention:mentionname"
-  returnStreamName?: string;
-}
-
-export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListScreenProps = {}) {
+export function EntryListScreen() {
   const { navigate } = useNavigation();
   const { streams } = useStreams();
   const { user } = useAuthState();
@@ -80,14 +75,6 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
   // Use hook for locations instead of direct localDB call
   const { data: locationsData } = useLocations();
   const locations = locationsData || [];
-
-  // Update stream when returning from entry screen
-  useEffect(() => {
-    if (returnStreamId !== undefined && returnStreamName !== undefined) {
-      setSelectedStreamId(returnStreamId);
-      setSelectedStreamName(returnStreamName);
-    }
-  }, [returnStreamId, returnStreamName, setSelectedStreamId, setSelectedStreamName]);
 
   // Register stream selection handler for drawer
   useEffect(() => {
@@ -259,14 +246,7 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
   const sortModeLabel = orderMode === 'desc' ? `${baseSortLabel} (desc)` : baseSortLabel;
 
   const handleEntryPress = (entryId: string) => {
-    navigate("capture", {
-      entryId,
-      returnContext: {
-        screen: "inbox",
-        streamId: selectedStreamId,
-        streamName: selectedStreamName
-      }
-    });
+    navigate("capture", { entryId });
   };
 
   const handleAddEntry = () => {
@@ -288,11 +268,6 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
       initialStreamId: selectedStreamId,
       initialStreamName: selectedStreamName,
       initialContent,
-      returnContext: {
-        screen: "inbox",
-        streamId: selectedStreamId,
-        streamName: selectedStreamName
-      }
     });
   };
 
@@ -409,14 +384,7 @@ export function EntryListScreen({ returnStreamId, returnStreamName }: EntryListS
 
       const copiedEntryData = await entryMutations.copyEntry(entryId, gpsCoords);
 
-      navigate("capture", {
-        copiedEntryData,
-        returnContext: {
-          screen: "inbox",
-          streamId: selectedStreamId,
-          streamName: selectedStreamName
-        }
-      });
+      navigate("capture", { copiedEntryData });
     } catch (error) {
       console.error("Failed to copy entry:", error);
       Alert.alert("Error", "Failed to copy entry");

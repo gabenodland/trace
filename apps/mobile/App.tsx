@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View, ActivityIndicator, Platform, StatusBar, BackHandler, Alert } from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert } from "react-native";
 import { useFonts, MavenPro_400Regular, MavenPro_500Medium, MavenPro_600SemiBold, MavenPro_700Bold } from "@expo-google-fonts/maven-pro";
 import * as Linking from "expo-linking";
 import { setSession } from "@trace/core";
@@ -38,24 +38,25 @@ const queryClient = new QueryClient({
 
 /**
  * AuthGate - Shows login/signup when not authenticated, main app when authenticated
+ *
+ * Navigation is simple:
+ * - Main views (list/map/calendar) are tracked via DrawerContext.viewMode
+ * - Sub-screens (entry, settings, profile) just track current screen
+ * - Back from any sub-screen returns to the main view
+ * - No history stack needed
  */
-interface NavigationHistoryItem {
-  tabId: string;
-  params: Record<string, any>;
-}
-
 function AuthGate() {
   const { isAuthenticated, isLoading } = useAuth();
   const [showSignUp, setShowSignUp] = useState(false);
   const [activeTab, setActiveTab] = useState("inbox");
   const [navParams, setNavParams] = useState<Record<string, any>>({});
   const [dbInitialized, setDbInitialized] = useState(false);
-  const [navigationHistory, setNavigationHistory] = useState<NavigationHistoryItem[]>([
-    { tabId: "inbox", params: {} }
-  ]);
 
   // Before back handler for screens to intercept back navigation
   const beforeBackHandlerRef = useRef<BeforeBackHandler | null>(null);
+
+  // Ref to store current main view screen (updated by AppContent based on viewMode)
+  const mainViewScreenRef = useRef<string>("inbox");
 
   const setBeforeBackHandler = useCallback((handler: BeforeBackHandler | null) => {
     beforeBackHandlerRef.current = handler;
@@ -66,6 +67,11 @@ function AuthGate() {
       return await beforeBackHandlerRef.current();
     }
     return true; // No handler, proceed with back
+  }, []);
+
+  // Callback for AppContent to update main view screen based on viewMode
+  const setMainViewScreen = useCallback((screen: string) => {
+    mainViewScreenRef.current = screen;
   }, []);
 
   // Initialize database and sync when authenticated
@@ -95,23 +101,27 @@ function AuthGate() {
     };
   }, [isAuthenticated, dbInitialized, queryClient]);
 
+  // Main view screens - back from these exits app
+  const mainViewScreens = ["inbox", "map", "calendar"];
+  const isOnMainView = mainViewScreens.includes(activeTab);
+
   // Handle Android back button and iOS swipe-back gesture
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Check if we can go back
-      if (navigationHistory.length <= 1) {
-        return false; // Allow default behavior (exit app)
+      // If on main view, allow default behavior (exit app)
+      if (isOnMainView) {
+        return false;
       }
 
-      // Always return true to prevent default, then handle async
+      // On sub-screen, go back to main view
       handleBackAsync();
       return true;
     });
 
     return () => backHandler.remove();
-  }, [isAuthenticated, navigationHistory]);
+  }, [isAuthenticated, isOnMainView]);
 
   // Show loading spinner while checking auth state
   if (isLoading) {
@@ -132,81 +142,25 @@ function AuthGate() {
     return <LoginScreen onSwitchToSignUp={() => setShowSignUp(true)} />;
   }
 
-  // Handle navigation
+  // Handle navigation - simple screen change, no history stack
   const handleNavigate = (tabId: string, params?: Record<string, any>) => {
     setActiveTab(tabId);
     setNavParams(params || {});
-
-    // Add to navigation history
-    setNavigationHistory(prev => [...prev, { tabId, params: params || {} }]);
   };
 
-  // Handle back navigation (async version that checks beforeBack handler)
+  // Handle back navigation - always returns to main view
   const handleBackAsync = async () => {
-    if (navigationHistory.length > 1) {
-      // Check if screen allows back navigation
-      const canGoBack = await checkBeforeBack();
-      if (!canGoBack) {
-        return; // Screen blocked back navigation
-      }
+    if (isOnMainView) return; // Already on main view
 
-      // Remove current screen
-      const newHistory = navigationHistory.slice(0, -1);
-      setNavigationHistory(newHistory);
-
-      // Navigate to previous screen
-      const previous = newHistory[newHistory.length - 1];
-      setActiveTab(previous.tabId);
-      setNavParams(previous.params);
+    // Check if screen allows back navigation
+    const canGoBack = await checkBeforeBack();
+    if (!canGoBack) {
+      return; // Screen blocked back navigation
     }
-  };
 
-  // Render the active screen
-  const renderScreen = () => {
-    switch (activeTab) {
-      case "capture":
-        return (
-          <EntryScreen
-            entryId={navParams.entryId}
-            initialStreamId={navParams.initialStreamId}
-            initialStreamName={navParams.initialStreamName}
-            initialContent={navParams.initialContent}
-            initialDate={navParams.initialDate}
-            returnContext={navParams.returnContext}
-            copiedEntryData={navParams.copiedEntryData}
-          />
-        );
-      case "inbox":
-        return (
-          <EntryListScreen
-            returnStreamId={navParams.returnStreamId}
-            returnStreamName={navParams.returnStreamName}
-          />
-        );
-      case "calendar":
-        return <CalendarScreen returnDate={navParams.returnDate} />;
-      case "profile":
-        return <ProfileScreen />;
-      case "settings":
-        return <SettingsScreen />;
-      case "debug":
-        return <DatabaseInfoScreen />;
-      case "locations":
-        return <LocationsScreen />;
-      case "map":
-        return <MapScreen />;
-      case "streams":
-        return <StreamsScreen />;
-      case "stream-properties":
-        return <StreamPropertiesScreen streamId={navParams.streamId} />;
-      default:
-        return (
-          <EntryListScreen
-            returnStreamId={navParams.returnStreamId}
-            returnStreamName={navParams.returnStreamName}
-          />
-        );
-    }
+    // Go back to main view using the current viewMode
+    setNavParams({});
+    setActiveTab(mainViewScreenRef.current);
   };
 
   // User is authenticated - show main app with new navigation
@@ -217,7 +171,11 @@ function AuthGate() {
         setBeforeBackHandler={setBeforeBackHandler}
         checkBeforeBack={checkBeforeBack}
       >
-        <AppContent renderScreen={renderScreen} />
+        <AppContent
+          activeTab={activeTab}
+          navParams={navParams}
+          setMainViewScreen={setMainViewScreen}
+        />
       </NavigationProvider>
     </DrawerProvider>
   );
@@ -226,28 +184,104 @@ function AuthGate() {
 /**
  * AppContent - Inner component that uses drawer context
  * Handles view mode changes and renders the app content
+ *
+ * Main view screens (inbox, map, calendar) stay mounted for instant back navigation.
+ * Sub-screens (capture, settings, etc.) mount/unmount as needed.
  */
-function AppContent({ renderScreen }: { renderScreen: () => React.ReactNode }) {
+interface AppContentProps {
+  activeTab: string;
+  navParams: Record<string, any>;
+  setMainViewScreen: (screen: string) => void;
+}
+
+function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps) {
   const { navigate } = useNavigation();
-  const { registerViewModeHandler } = useDrawer();
+  const { registerViewModeHandler, viewMode } = useDrawer();
+
+  // Map viewMode to screen name
+  const screenMap: Record<ViewMode, string> = {
+    list: "inbox",
+    map: "map",
+    calendar: "calendar",
+  };
+
+  // Main view screens that stay mounted
+  const mainViewScreens = ["inbox", "map", "calendar"];
+  const isOnMainView = mainViewScreens.includes(activeTab);
+
+  // Keep main view screen ref in sync with viewMode
+  useEffect(() => {
+    setMainViewScreen(screenMap[viewMode]);
+  }, [viewMode, setMainViewScreen]);
 
   // Register view mode handler to navigate when mode changes
   useEffect(() => {
     registerViewModeHandler((mode: ViewMode) => {
-      const screenMap: Record<ViewMode, string> = {
-        list: "inbox",
-        map: "map",
-        calendar: "calendar",
-      };
       navigate(screenMap[mode]);
     });
     return () => registerViewModeHandler(null);
   }, [registerViewModeHandler, navigate]);
 
+  // Render sub-screen if not on main view
+  const renderSubScreen = () => {
+    switch (activeTab) {
+      case "capture":
+        return (
+          <EntryScreen
+            entryId={navParams.entryId}
+            initialStreamId={navParams.initialStreamId}
+            initialStreamName={navParams.initialStreamName}
+            initialContent={navParams.initialContent}
+            initialDate={navParams.initialDate}
+            copiedEntryData={navParams.copiedEntryData}
+          />
+        );
+      case "profile":
+        return <ProfileScreen />;
+      case "settings":
+        return <SettingsScreen />;
+      case "debug":
+        return <DatabaseInfoScreen />;
+      case "locations":
+        return <LocationsScreen />;
+      case "streams":
+        return <StreamsScreen />;
+      case "stream-properties":
+        return <StreamPropertiesScreen streamId={navParams.streamId} />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <View style={styles.appContainer}>
-      {/* Active Screen */}
-      {renderScreen()}
+      {/* Main view screens - ALWAYS mounted as stacked layers */}
+      {/* Using absolute positioning prevents layout glitches during transitions */}
+      <View
+        style={[styles.screenLayer, activeTab !== "inbox" && styles.screenHidden]}
+        pointerEvents={activeTab === "inbox" ? "auto" : "none"}
+      >
+        <EntryListScreen />
+      </View>
+      <View
+        style={[styles.screenLayer, activeTab !== "map" && styles.screenHidden]}
+        pointerEvents={activeTab === "map" ? "auto" : "none"}
+      >
+        <MapScreen />
+      </View>
+      <View
+        style={[styles.screenLayer, activeTab !== "calendar" && styles.screenHidden]}
+        pointerEvents={activeTab === "calendar" ? "auto" : "none"}
+      >
+        <CalendarScreen />
+      </View>
+
+      {/* Sub-screens - mount/unmount as needed, render on top */}
+      {!isOnMainView && (
+        <View style={styles.screenLayer} pointerEvents="auto">
+          {renderSubScreen()}
+        </View>
+      )}
 
       {/* Stream Drawer - renders as overlay */}
       <StreamDrawer />
@@ -373,6 +407,17 @@ const styles = StyleSheet.create({
   appContainer: {
     flex: 1,
     backgroundColor: "#f9fafb",
+  },
+  screenLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#f9fafb",
+  },
+  screenHidden: {
+    opacity: 0,
   },
   loadingText: {
     marginTop: 16,
