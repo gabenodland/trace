@@ -58,6 +58,12 @@ const VIEW_MODES: ViewModeOption[] = [
 
 export function StreamDrawerContent() {
   const theme = useTheme();
+
+  // Drawer-specific text colors (with fallbacks to regular text colors)
+  const drawerTextPrimary = theme.colors.surface.drawerText || theme.colors.text.primary;
+  const drawerTextSecondary = theme.colors.surface.drawerTextSecondary || theme.colors.text.secondary;
+  const drawerTextTertiary = theme.colors.surface.drawerTextTertiary || theme.colors.text.tertiary;
+
   const {
     closeDrawer,
     onStreamSelect,
@@ -179,9 +185,9 @@ export function StreamDrawerContent() {
   return (
     <View style={styles.container}>
       {/* View Mode Section - Fixed with shadow */}
-      <View style={[styles.viewSectionWrapper, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
+      <View style={[styles.viewSectionWrapper, { backgroundColor: theme.colors.surface.overlay, borderBottomColor: theme.colors.border.light }]}>
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary }]}>VIEW</Text>
+          <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>VIEW</Text>
           <View style={styles.viewModeList}>
             {VIEW_MODES.map((option) => (
               <TouchableOpacity
@@ -197,13 +203,13 @@ export function StreamDrawerContent() {
               >
                 {option.icon(
                   viewMode === option.mode
-                    ? theme.colors.text.primary
-                    : theme.colors.text.tertiary
+                    ? drawerTextPrimary
+                    : drawerTextTertiary
                 )}
                 <Text style={[
                   styles.viewModeLabel,
-                  { color: theme.colors.text.tertiary },
-                  viewMode === option.mode && { fontWeight: "600", color: theme.colors.text.primary },
+                  { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.medium },
+                  viewMode === option.mode && { fontFamily: theme.typography.fontFamily.semibold, color: drawerTextPrimary },
                 ]}>
                   {option.label}
                 </Text>
@@ -231,13 +237,13 @@ export function StreamDrawerContent() {
             height={12}
             viewBox="0 0 24 24"
             fill="none"
-            stroke={theme.colors.text.tertiary}
+            stroke={drawerTextTertiary}
             strokeWidth={2}
             style={[styles.chevron, streamsExpanded && styles.chevronExpanded]}
           >
             <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary }]}>STREAMS</Text>
+          <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>STREAMS</Text>
         </TouchableOpacity>
 
         {/* Streams Content - Collapsible */}
@@ -250,12 +256,18 @@ export function StreamDrawerContent() {
                 count={allEntriesCount}
                 isSelected={selectedStreamId === "all"}
                 onPress={() => handleStreamSelect("all", "All Entries")}
+                textColor={drawerTextPrimary}
+                textColorSecondary={drawerTextSecondary}
+                textColorTertiary={drawerTextTertiary}
               />
               <QuickFilterItem
                 label="Unassigned"
                 count={noStreamCount}
                 isSelected={selectedStreamId === null}
                 onPress={() => handleStreamSelect(null, "Unassigned")}
+                textColor={drawerTextPrimary}
+                textColorSecondary={drawerTextSecondary}
+                textColorTertiary={drawerTextTertiary}
               />
             </View>
 
@@ -266,6 +278,9 @@ export function StreamDrawerContent() {
                 stream={stream}
                 isSelected={selectedStreamId === stream.stream_id}
                 onPress={() => handleStreamSelect(stream.stream_id, stream.name)}
+                textColor={drawerTextPrimary}
+                textColorSecondary={drawerTextSecondary}
+                textColorTertiary={drawerTextTertiary}
               />
             ))}
           </>
@@ -283,13 +298,13 @@ export function StreamDrawerContent() {
             height={12}
             viewBox="0 0 24 24"
             fill="none"
-            stroke={theme.colors.text.tertiary}
+            stroke={drawerTextTertiary}
             strokeWidth={2}
             style={[styles.chevron, locationsExpanded && styles.chevronExpanded]}
           >
             <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary }]}>LOCATIONS</Text>
+          <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>LOCATIONS</Text>
         </TouchableOpacity>
 
         {/* Locations Content - Collapsible */}
@@ -307,13 +322,13 @@ export function StreamDrawerContent() {
                     delayPressIn={0}
                   >
                     <Text
-                      style={[styles.locationName, { color: theme.colors.text.primary }, isSelected && { fontWeight: "600" }]}
+                      style={[styles.locationName, { color: drawerTextPrimary }, isSelected && { fontWeight: "600" }]}
                       numberOfLines={1}
                     >
                       {location.name}
                     </Text>
                     {location.entryCount > 0 && (
-                      <Text style={[styles.locationCount, { color: theme.colors.text.tertiary }, isSelected && { color: theme.colors.text.secondary }]}>
+                      <Text style={[styles.locationCount, { color: drawerTextTertiary }, isSelected && { color: drawerTextSecondary }]}>
                         {location.entryCount}
                       </Text>
                     )}
@@ -322,7 +337,7 @@ export function StreamDrawerContent() {
               })
             ) : (
               <View style={styles.emptyLocations}>
-                <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No locations yet</Text>
+                <Text style={[styles.emptyText, { color: drawerTextTertiary }]}>No locations yet</Text>
               </View>
             )}
           </>
@@ -340,13 +355,13 @@ export function StreamDrawerContent() {
             height={12}
             viewBox="0 0 24 24"
             fill="none"
-            stroke={theme.colors.text.tertiary}
+            stroke={drawerTextTertiary}
             strokeWidth={2}
             style={[styles.chevron, tagsExpanded && styles.chevronExpanded]}
           >
             <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary }]}>TAGS</Text>
+          <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>TAGS</Text>
         </TouchableOpacity>
 
         {/* Tags Content - Collapsible */}
@@ -364,13 +379,13 @@ export function StreamDrawerContent() {
                     delayPressIn={0}
                   >
                     <Text
-                      style={[styles.locationName, { color: theme.colors.text.primary }, isSelected && { fontWeight: "600" }]}
+                      style={[styles.locationName, { color: drawerTextPrimary }, isSelected && { fontWeight: "600" }]}
                       numberOfLines={1}
                     >
                       {item.label}
                     </Text>
                     {item.count > 0 && (
-                      <Text style={[styles.locationCount, { color: theme.colors.text.tertiary }, isSelected && { color: theme.colors.text.secondary }]}>
+                      <Text style={[styles.locationCount, { color: drawerTextTertiary }, isSelected && { color: drawerTextSecondary }]}>
                         {item.count}
                       </Text>
                     )}
@@ -379,7 +394,7 @@ export function StreamDrawerContent() {
               })
             ) : (
               <View style={styles.emptyLocations}>
-                <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No tags yet</Text>
+                <Text style={[styles.emptyText, { color: drawerTextTertiary }]}>No tags yet</Text>
               </View>
             )}
           </>
@@ -397,13 +412,13 @@ export function StreamDrawerContent() {
             height={12}
             viewBox="0 0 24 24"
             fill="none"
-            stroke={theme.colors.text.tertiary}
+            stroke={drawerTextTertiary}
             strokeWidth={2}
             style={[styles.chevron, mentionsExpanded && styles.chevronExpanded]}
           >
             <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary }]}>MENTIONS</Text>
+          <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>MENTIONS</Text>
         </TouchableOpacity>
 
         {/* Mentions Content - Collapsible */}
@@ -421,13 +436,13 @@ export function StreamDrawerContent() {
                     delayPressIn={0}
                   >
                     <Text
-                      style={[styles.locationName, { color: theme.colors.text.primary }, isSelected && { fontWeight: "600" }]}
+                      style={[styles.locationName, { color: drawerTextPrimary }, isSelected && { fontWeight: "600" }]}
                       numberOfLines={1}
                     >
                       {item.label}
                     </Text>
                     {item.count > 0 && (
-                      <Text style={[styles.locationCount, { color: theme.colors.text.tertiary }, isSelected && { color: theme.colors.text.secondary }]}>
+                      <Text style={[styles.locationCount, { color: drawerTextTertiary }, isSelected && { color: drawerTextSecondary }]}>
                         {item.count}
                       </Text>
                     )}
@@ -436,7 +451,7 @@ export function StreamDrawerContent() {
               })
             ) : (
               <View style={styles.emptyLocations}>
-                <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No mentions yet</Text>
+                <Text style={[styles.emptyText, { color: drawerTextTertiary }]}>No mentions yet</Text>
               </View>
             )}
           </>

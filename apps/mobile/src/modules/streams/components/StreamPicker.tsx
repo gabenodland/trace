@@ -3,7 +3,8 @@ import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Activi
 import { useStreams } from "../mobileStreamHooks";
 import { StreamList } from "./StreamList";
 import Svg, { Path, Line } from "react-native-svg";
-import { theme } from "../../../shared/theme/theme";
+import { themeBase } from "../../../shared/theme/themeBase";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 
 const ITEM_HEIGHT = 45; // Approximate height of each stream item (used for scroll positioning)
 
@@ -17,6 +18,7 @@ interface StreamPickerProps {
 }
 
 export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isNewEntry = false }: StreamPickerProps) {
+  const dynamicTheme = useTheme();
   const { streams, isLoading } = useStreams();
   const [searchQuery, setSearchQuery] = useState("");
   const scrollViewRef = useRef<ScrollView>(null);
@@ -57,9 +59,11 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
     <View style={styles.container}>
       {/* Header with title and close button */}
       <View style={styles.header}>
-        <Text style={styles.title}>{isNewEntry ? "Set Stream for New Entry" : "Set Stream"}</Text>
+        <Text style={[styles.title, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>
+          {isNewEntry ? "Set Stream for New Entry" : "Set Stream"}
+        </Text>
         <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
             <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
             <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
           </Svg>
@@ -67,22 +71,22 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
       </View>
 
       {/* Search Input */}
-      <View style={styles.searchContainer}>
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2} style={styles.searchIcon}>
+      <View style={[styles.searchContainer, { backgroundColor: dynamicTheme.colors.background.secondary, borderBottomColor: dynamicTheme.colors.border.light }]}>
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2} style={styles.searchIcon}>
           <Path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search streams..."
-          placeholderTextColor="#9ca3af"
-          style={styles.searchInput}
+          placeholderTextColor={dynamicTheme.colors.text.tertiary}
+          style={[styles.searchInput, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}
           autoCapitalize="none"
           autoCorrect={false}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearSearch}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
               <Path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
@@ -101,17 +105,22 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
         <TouchableOpacity
           style={[
             styles.streamItem,
-            selectedStreamId === null && styles.streamItemSelected,
+            { borderBottomColor: dynamicTheme.colors.border.light },
+            selectedStreamId === null && [styles.streamItemSelected, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }],
           ]}
           onPress={() => handleSelect(null)}
         >
           <View style={styles.streamContent}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedStreamId === null ? "#2563eb" : "#6b7280"} strokeWidth={1.5}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedStreamId === null ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} strokeWidth={1.5}>
               <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 2" />
               <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 2" />
               <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 2" />
             </Svg>
-            <Text style={[styles.streamName, selectedStreamId === null && styles.streamNameSelected]}>
+            <Text style={[
+              styles.streamName,
+              { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },
+              selectedStreamId === null && { color: dynamicTheme.colors.functional.accent, fontFamily: dynamicTheme.typography.fontFamily.semibold }
+            ]}>
               Unassigned
             </Text>
           </View>
@@ -130,15 +139,15 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
 
             {isLoading && (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#3b82f6" />
-                <Text style={styles.loadingText}>Loading streams...</Text>
+                <ActivityIndicator size="small" color={dynamicTheme.colors.functional.accent} />
+                <Text style={[styles.loadingText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]}>Loading streams...</Text>
               </View>
             )}
 
             {!isLoading && streams.length === 0 && (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No streams yet</Text>
-                <Text style={styles.emptySubtext}>Create a stream first</Text>
+                <Text style={[styles.emptyText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.tertiary }]}>No streams yet</Text>
+                <Text style={[styles.emptySubtext, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]}>Create a stream first</Text>
               </View>
             )}
           </>
@@ -147,8 +156,8 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
             {/* Filtered Streams when searching */}
             {filteredStreams.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No streams found</Text>
-                <Text style={styles.emptySubtext}>Try a different search</Text>
+                <Text style={[styles.emptyText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.tertiary }]}>No streams found</Text>
+                <Text style={[styles.emptySubtext, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]}>Try a different search</Text>
               </View>
             ) : (
               <StreamList
@@ -178,8 +187,6 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
   },
   closeButton: {
     padding: 4,
@@ -189,9 +196,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#f9fafb",
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
   },
   searchIcon: {
     marginRight: 8,
@@ -199,7 +204,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: "#111827",
     padding: 0,
   },
   clearSearch: {
@@ -218,10 +222,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
   },
   streamItemSelected: {
-    backgroundColor: "#dbeafe",
+    // background color applied inline
   },
   streamContent: {
     flexDirection: "row",
@@ -231,12 +234,6 @@ const styles = StyleSheet.create({
   },
   streamName: {
     fontSize: 16,
-    color: "#374151",
-    fontWeight: "500",
-  },
-  streamNameSelected: {
-    color: "#1e40af",
-    fontWeight: "600",
   },
   loadingContainer: {
     padding: 40,
@@ -247,7 +244,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: "#9ca3af",
   },
   emptyContainer: {
     padding: 40,
@@ -255,12 +251,9 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#9ca3af",
     marginBottom: 4,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#9ca3af",
   },
 });

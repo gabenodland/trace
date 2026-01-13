@@ -107,6 +107,21 @@ export type ThemeSetting = string;
 export const DEFAULT_THEME = 'light';
 
 // ============================================================================
+// FONT SETTINGS
+// ============================================================================
+
+/**
+ * Font setting - references a font by ID
+ * Available fonts are defined in apps/mobile/src/shared/theme/fonts/
+ */
+export type FontSetting = string;
+
+/**
+ * Default font ID
+ */
+export const DEFAULT_FONT = 'inter';
+
+// ============================================================================
 // USER SETTINGS
 // ============================================================================
 
@@ -120,6 +135,9 @@ export interface UserSettings {
 
   // Theme preference (theme ID, e.g., 'light', 'dark', 'sepia')
   theme: ThemeSetting;
+
+  // Font preference (font ID, e.g., 'inter', 'lora', 'jetbrains')
+  font: FontSetting;
 
   // Location preferences
   captureGpsLocation: boolean;
@@ -137,6 +155,7 @@ export interface UserSettings {
 export const DEFAULT_SETTINGS: UserSettings = {
   units: 'metric',
   theme: DEFAULT_THEME,
+  font: DEFAULT_FONT,
   captureGpsLocation: true,
   imageQuality: 'standard',
   streamSortPreferences: {},

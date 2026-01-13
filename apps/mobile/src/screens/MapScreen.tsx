@@ -64,7 +64,7 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
     >
       {cluster.count > 1 ? (
         <View style={[styles.clusterMarker, isSelected && styles.clusterMarkerSelected]}>
-          <Text style={styles.clusterText}>{cluster.count}</Text>
+          <Text style={[styles.clusterText, { fontFamily: "Inter_700Bold" }]}>{cluster.count}</Text>
         </View>
       ) : (
         <View style={styles.singleMarker}>
@@ -522,15 +522,15 @@ export function MapScreen() {
       >
         <View style={styles.entryContent}>
           {item.title ? (
-            <Text style={[styles.entryTitle, { color: theme.colors.text.primary }]} numberOfLines={1}>{item.title}</Text>
+            <Text style={[styles.entryTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]} numberOfLines={1}>{item.title}</Text>
           ) : (
-            <Text style={[styles.entryPreview, { color: theme.colors.text.secondary }]} numberOfLines={2}>
+            <Text style={[styles.entryPreview, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={2}>
               {item.content?.replace(/<[^>]*>/g, '') || "No content"}
             </Text>
           )}
           <View style={styles.entryMeta}>
-            <Text style={[styles.entryDate, { color: theme.colors.text.tertiary }]}>{dateStr}</Text>
-            <Text style={[styles.entryLocation, { color: theme.colors.text.tertiary }]} numberOfLines={1}>{locationName}</Text>
+            <Text style={[styles.entryDate, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>{dateStr}</Text>
+            <Text style={[styles.entryLocation, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1}>{locationName}</Text>
           </View>
         </View>
         <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#ef4444" : theme.colors.text.tertiary} strokeWidth={2}>
@@ -557,7 +557,7 @@ export function MapScreen() {
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.text.tertiary} />
-          <Text style={[styles.loadingText, { color: theme.colors.text.tertiary }]}>Loading entries...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>Loading entries...</Text>
         </View>
       </View>
     );
@@ -641,7 +641,7 @@ export function MapScreen() {
       <View style={styles.lowerSection} {...drawerPanResponder.panHandlers}>
         {/* Entry count bar */}
         <View style={[styles.countBar, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
-          <Text style={[styles.countBarText, { color: theme.colors.text.tertiary }]}>
+          <Text style={[styles.countBarText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>
             {visibleEntries.length} {visibleEntries.length === 1 ? "entry" : "entries"} in view
           </Text>
         </View>
@@ -653,8 +653,8 @@ export function MapScreen() {
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
               <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-            <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No entries with locations</Text>
-            <Text style={[styles.emptySubtext, { color: theme.colors.text.tertiary }]}>Add GPS coordinates to your entries to see them on the map</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.semibold }]}>No entries with locations</Text>
+            <Text style={[styles.emptySubtext, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>Add GPS coordinates to your entries to see them on the map</Text>
           </View>
         ) : (
           <FlatList
@@ -674,8 +674,8 @@ export function MapScreen() {
             }}
             ListEmptyComponent={
               <View style={styles.emptyListContainer}>
-                <Text style={[styles.emptyListText, { color: theme.colors.text.tertiary }]}>No entries in this area</Text>
-                <Text style={[styles.emptyListSubtext, { color: theme.colors.text.tertiary }]}>Pan or zoom the map to see entries</Text>
+                <Text style={[styles.emptyListText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>No entries in this area</Text>
+                <Text style={[styles.emptyListSubtext, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>Pan or zoom the map to see entries</Text>
               </View>
             }
           />
@@ -761,7 +761,7 @@ const styles = StyleSheet.create({
   clusterText: {
     color: "#fff",
     fontSize: 14,
-    fontWeight: "bold",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   singleMarker: {
     // Container for single marker pin
@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
   },
   countBarText: {
     fontSize: 13,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   entryList: {
     flex: 1,
@@ -799,7 +799,7 @@ const styles = StyleSheet.create({
   },
   entryTitle: {
     fontSize: 15,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 4,
   },
   entryPreview: {
@@ -827,7 +827,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginTop: 16,
     marginBottom: 8,
   },
@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
   },
   emptyListText: {
     fontSize: 16,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 4,
   },
   emptyListSubtext: {

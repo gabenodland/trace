@@ -11,7 +11,8 @@ import Svg, { Line } from "react-native-svg";
 import { starsToDecimal, decimalToStars } from "@trace/core";
 import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
 import { styles } from "../CaptureForm.styles";
-import { theme } from "../../../../shared/theme/theme";
+import { themeBase } from "../../../../shared/theme/themeBase";
+import { useTheme } from "../../../../shared/contexts/ThemeContext";
 
 interface RatingPickerProps {
   visible: boolean;
@@ -28,17 +29,19 @@ export function RatingPicker({
   onRatingChange,
   onSnackbar,
 }: RatingPickerProps) {
+  const dynamicTheme = useTheme();
+
   // Convert stored rating (0-10) to stars (1-5) for display
   const currentStars = decimalToStars(rating);
 
   return (
     <TopBarDropdownContainer visible={visible} onClose={onClose}>
-      <View style={styles.pickerContainer}>
+      <View style={[styles.pickerContainer, { backgroundColor: dynamicTheme.colors.background.primary }]}>
         {/* Header with title and close button */}
         <View style={localStyles.header}>
-          <Text style={styles.pickerTitle}>Set Rating</Text>
+          <Text style={[styles.pickerTitle, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>Set Rating</Text>
           <TouchableOpacity style={localStyles.closeButton} onPress={onClose}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
               <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
               <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
             </Svg>
@@ -62,7 +65,8 @@ export function RatingPicker({
               <Text
                 style={[
                   styles.starRatingIcon,
-                  currentStars >= starValue && styles.starRatingIconActive,
+                  { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary },
+                  currentStars >= starValue && { color: dynamicTheme.colors.status.blocked },
                 ]}
               >
                 ★
@@ -74,18 +78,18 @@ export function RatingPicker({
         {/* Clear Rating Button */}
         {rating > 0 && (
           <TouchableOpacity
-            style={localStyles.clearButton}
+            style={[localStyles.clearButton, { backgroundColor: `${dynamicTheme.colors.functional.overdue}15` }]}
             onPress={() => {
               onRatingChange(0);
               onSnackbar("Rating cleared");
               onClose();
             }}
           >
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={2}>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.overdue} strokeWidth={2}>
               <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
               <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
             </Svg>
-            <Text style={localStyles.clearButtonText}>Clear Rating</Text>
+            <Text style={[localStyles.clearButtonText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.functional.overdue }]}>Clear Rating</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -98,7 +102,7 @@ const localStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: theme.spacing.xs,
+    marginBottom: themeBase.spacing.xs,
   },
   closeButton: {
     padding: 4,
@@ -107,16 +111,13 @@ const localStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: "#fee2e2",
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.md,
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
+    gap: themeBase.spacing.sm,
+    marginTop: themeBase.spacing.md,
   },
   clearButtonText: {
     fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: "#dc2626",
   },
 });

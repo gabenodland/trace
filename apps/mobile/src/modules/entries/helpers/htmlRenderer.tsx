@@ -10,6 +10,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { extractAttachmentIds } from '@trace/core';
 import { getAttachmentUri } from '../../attachments/mobileAttachmentApi';
 import { PhotoViewer } from '../../photos/components/PhotoViewer';
+import { useTheme } from '../../../shared/contexts/ThemeContext';
 
 interface HtmlRendererProps {
   html: string;
@@ -18,10 +19,35 @@ interface HtmlRendererProps {
 }
 
 /**
+ * Remove inline color styles from HTML to ensure theme colors are used
+ * This handles pasted content that may have hardcoded colors like "color: rgb(0, 0, 0)"
+ */
+function sanitizeHtmlColors(html: string): string {
+  return html.replace(
+    /style="([^"]*)"/gi,
+    (match, styleContent) => {
+      // Remove color and background-color properties from the style
+      const cleanedStyle = styleContent
+        .replace(/\bcolor\s*:\s*[^;]+;?/gi, '')
+        .replace(/background-color\s*:\s*[^;]+;?/gi, '')
+        .replace(/background\s*:\s*[^;]+;?/gi, '')
+        .trim();
+
+      // If style is now empty, remove the attribute entirely
+      if (!cleanedStyle) {
+        return '';
+      }
+      return `style="${cleanedStyle}"`;
+    }
+  );
+}
+
+/**
  * Render HTML content using react-native-render-html
  */
 export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) {
   const { width } = useWindowDimensions();
+  const theme = useTheme();
   const [photoUris, setPhotoUris] = useState<Record<string, string>>({});
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
@@ -51,6 +77,9 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
 
     loadPhotos();
   }, [html]);
+
+  // Sanitize HTML to remove inline color styles that override theme
+  const sanitizedHtml = useMemo(() => sanitizeHtmlColors(html), [html]);
 
   // Memoize custom renderer for img tags with data-photo-id and task list items
   // This prevents RenderHtml from doing expensive tree rerenders
@@ -143,7 +172,8 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
     body: {
       fontSize: 15,
       lineHeight: 22,
-      color: '#111827',
+      color: theme.colors.text.primary,
+      fontFamily: theme.typography.fontFamily.regular,
       ...(strikethrough && {
         textDecorationLine: 'line-through' as const,
         opacity: 0.6,
@@ -152,6 +182,7 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
     p: {
       marginTop: 0,
       marginBottom: 8,
+      fontFamily: theme.typography.fontFamily.regular,
     },
     ul: {
       marginTop: 0,
@@ -165,12 +196,15 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
     },
     li: {
       marginBottom: 4,
+      fontFamily: theme.typography.fontFamily.regular,
     },
     strong: {
       fontWeight: '600' as const,
+      fontFamily: theme.typography.fontFamily.semibold,
     },
     b: {
       fontWeight: '600' as const,
+      fontFamily: theme.typography.fontFamily.semibold,
     },
     em: {
       fontStyle: 'italic' as const,
@@ -181,13 +215,17 @@ export function HtmlRenderer({ html, style, strikethrough }: HtmlRendererProps) 
     img: {
       marginVertical: 8,
     },
-  }), [strikethrough]);
+    a: {
+      color: theme.colors.functional.accent,
+      textDecorationLine: 'underline' as const,
+    },
+  }), [strikethrough, theme.colors.text.primary, theme.typography.fontFamily, theme.colors.functional.accent]);
 
   return (
     <>
       <RenderHtml
         contentWidth={width - 32} // Account for padding
-        source={{ html }}
+        source={{ html: sanitizedHtml }}
         tagsStyles={baseStyle}
         renderers={customRenderers}
       />

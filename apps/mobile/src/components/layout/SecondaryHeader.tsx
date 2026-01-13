@@ -54,7 +54,7 @@ export function SecondaryHeader({ title, rightAction, onBack, children }: Second
       {/* Center: Title or children */}
       <View style={styles.titleContainer}>
         {children || (
-          <Text style={[styles.title, { color: theme.colors.text.primary }]} numberOfLines={1}>
+          <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]} numberOfLines={1}>
             {title}
           </Text>
         )}
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: "700",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   rightSection: {
     flexDirection: "row",

@@ -33,8 +33,8 @@ export function SubBarSelector({ label, value, onPress }: SubBarSelectorProps) {
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <Text style={[styles.label, { color: theme.colors.text.tertiary }]}>{label}:</Text>
-      <Text style={[styles.value, { color: theme.colors.text.primary }]}>{value}</Text>
+      <Text style={[styles.label, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>{label}:</Text>
+      <Text style={[styles.value, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>{value}</Text>
       <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={styles.icon}>
         <Path
           d="M6 9l6 6 6-6"
@@ -63,11 +63,11 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: themeBase.typography.fontSize.sm,
-    fontWeight: themeBase.typography.fontWeight.medium,
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   value: {
     fontSize: themeBase.typography.fontSize.sm,
-    fontWeight: themeBase.typography.fontWeight.semibold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   icon: {
     marginLeft: 2,

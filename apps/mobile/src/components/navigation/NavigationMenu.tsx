@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { ReactNode } from "react";
 import Svg, { Path, Circle } from "react-native-svg";
 import { getDefaultAvatarUrl } from "@trace/core";
+import { useTheme } from "../../shared/contexts/ThemeContext";
 
 export interface NavigationMenuItem {
   label?: string;
@@ -23,6 +24,8 @@ interface NavigationMenuProps {
 }
 
 export function NavigationMenu({ visible, onClose, menuItems, userEmail, displayName, avatarUrl, onProfilePress }: NavigationMenuProps) {
+  const theme = useTheme();
+
   if (!visible) return null;
 
   // Get avatar URL - use actual avatar or generate default from display name
@@ -39,7 +42,7 @@ export function NavigationMenu({ visible, onClose, menuItems, userEmail, display
       />
 
       {/* Menu Dropdown */}
-      <View style={styles.menu}>
+      <View style={[styles.menu, { backgroundColor: theme.colors.surface.elevated }]}>
         {/* User Profile Section */}
         {(displayName || userEmail) && (
           <>
@@ -51,13 +54,13 @@ export function NavigationMenu({ visible, onClose, menuItems, userEmail, display
               }}
               activeOpacity={0.7}
             >
-              <Text style={styles.userName} numberOfLines={1}>{effectiveDisplayName}</Text>
+              <Text style={[styles.userName, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]} numberOfLines={1}>{effectiveDisplayName}</Text>
               <Image
                 source={{ uri: effectiveAvatarUrl }}
-                style={styles.avatarImage}
+                style={[styles.avatarImage, { backgroundColor: theme.colors.background.tertiary }]}
               />
             </TouchableOpacity>
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: theme.colors.border.light }]} />
           </>
         )}
 
@@ -65,7 +68,7 @@ export function NavigationMenu({ visible, onClose, menuItems, userEmail, display
         <View style={styles.menuItemsContainer}>
           {menuItems.map((item, index) => {
             if (item.isDivider) {
-              return <View key={index} style={styles.divider} />;
+              return <View key={index} style={[styles.divider, { backgroundColor: theme.colors.border.light }]} />;
             }
 
             return (
@@ -84,8 +87,9 @@ export function NavigationMenu({ visible, onClose, menuItems, userEmail, display
                 {item.icon}
                 <Text style={[
                   styles.menuItemText,
-                  item.isSignOut && styles.signOutText,
-                  item.destructive && styles.destructiveText,
+                  { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
+                  item.isSignOut && { color: theme.colors.functional.overdue },
+                  item.destructive && { color: theme.colors.functional.overdue },
                 ]}>
                   {item.label}
                 </Text>
@@ -111,7 +115,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 51,
     right: 0,
-    backgroundColor: "#ffffff",
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     minWidth: 240,
@@ -132,19 +135,16 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 16,
-    color: "#1f2937",
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     flex: 1,
   },
   avatarImage: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#e5e7eb",
   },
   divider: {
     height: 1,
-    backgroundColor: "#e5e7eb",
   },
   menuItemsContainer: {
     paddingVertical: 8,
@@ -158,17 +158,9 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     fontSize: 15,
-    color: "#1f2937",
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   signOutButton: {
     paddingVertical: 16,
-  },
-  signOutText: {
-    color: "#ef4444",
-    fontWeight: "600",
-  },
-  destructiveText: {
-    color: "#ef4444",
   },
 });

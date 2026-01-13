@@ -16,6 +16,30 @@ const log = (msg: string, data?: any) => {
   }
 };
 
+/**
+ * Remove inline color styles from HTML to ensure theme colors are used
+ * This handles pasted content that may have hardcoded colors like "color: rgb(0, 0, 0)"
+ */
+function sanitizeHtmlColors(html: string): string {
+  return html.replace(
+    /style="([^"]*)"/gi,
+    (match, styleContent) => {
+      // Remove color and background-color properties from the style
+      const cleanedStyle = styleContent
+        .replace(/\bcolor\s*:\s*[^;]+;?/gi, '')
+        .replace(/background-color\s*:\s*[^;]+;?/gi, '')
+        .replace(/background\s*:\s*[^;]+;?/gi, '')
+        .trim();
+
+      // If style is now empty, remove the attribute entirely
+      if (!cleanedStyle) {
+        return '';
+      }
+      return `style="${cleanedStyle}"`;
+    }
+  );
+}
+
 interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
@@ -48,14 +72,17 @@ export const RichTextEditor = forwardRef(({
   // Track pending content that needs to be set once editor is ready
   const pendingContent = useRef<string | null>(null);
 
-  // Dynamic CSS with theme colors
+  // Dynamic CSS with theme colors and fonts
   const customCSS = `
+    @import url('${theme.typography.webFontUrl}');
     * {
       line-height: 1.4 !important;
+      font-family: ${theme.typography.webFontFamily} !important;
     }
     body {
       background-color: ${theme.colors.background.primary} !important;
       color: ${theme.colors.text.primary} !important;
+      font-family: ${theme.typography.webFontFamily} !important;
     }
     p {
       margin: 0 !important;
@@ -151,10 +178,11 @@ export const RichTextEditor = forwardRef(({
   `;
 
   // Editor is always editable internally - we control interaction via overlay
+  // Sanitize initial content to remove inline color styles from pasted content
   const editor = useEditorBridge({
     autofocus: false,
     avoidIosKeyboard: true,
-    initialContent: value,
+    initialContent: sanitizeHtmlColors(value),
     editable: true, // Always editable internally
     bridgeExtensions: [
       ...TenTapStartKit,
@@ -315,27 +343,30 @@ export const RichTextEditor = forwardRef(({
   // Update editor when value changes externally (not from typing)
   // Uses retry logic to handle race condition when editor isn't ready yet
   useEffect(() => {
-    if (!isLocalChange.current && value && value !== lastContent.current) {
+    // Sanitize incoming value to remove inline color styles
+    const sanitizedValue = value ? sanitizeHtmlColors(value) : value;
+
+    if (!isLocalChange.current && sanitizedValue && sanitizedValue !== lastContent.current) {
       // DEBUG: Log when external content update is triggered
       console.log('📝 [RichTextEditor] EXTERNAL CONTENT UPDATE', {
         isLocalChange: isLocalChange.current,
-        valueLength: value?.length,
+        valueLength: sanitizedValue?.length,
         lastContentLength: lastContent.current?.length,
-        valueDifferent: value !== lastContent.current,
+        valueDifferent: sanitizedValue !== lastContent.current,
       });
 
       // Store the pending content (don't update lastContent until setContent succeeds)
-      pendingContent.current = value;
+      pendingContent.current = sanitizedValue;
 
       // Try to set content with retry logic
       const trySetContent = async (attempt: number) => {
-        if (pendingContent.current === null || pendingContent.current !== value) {
+        if (pendingContent.current === null || pendingContent.current !== sanitizedValue) {
           // Content changed while retrying, abort
           return;
         }
 
         try {
-          editor.setContent(value);
+          editor.setContent(sanitizedValue);
           // Read back what the editor actually has after normalization
           const actualContent = await editor.getHTML();
           lastContent.current = actualContent;
@@ -344,7 +375,7 @@ export const RichTextEditor = forwardRef(({
           if (editable) {
             editor.focus('start');
           }
-          log('setContent succeeded', { attempt, sentLength: value.length, actualLength: actualContent.length });
+          log('setContent succeeded', { attempt, sentLength: sanitizedValue.length, actualLength: actualContent.length });
         } catch (e) {
           // Editor not ready, retry after delay (up to 10 attempts over ~5 seconds)
           if (attempt < 10) {
@@ -441,6 +472,7 @@ export const RichTextEditor = forwardRef(({
         editor={editor}
         showsVerticalScrollIndicator={true}
         overScrollMode="never"
+        style={{ backgroundColor: theme.colors.background.primary }}
       />
     </View>
   );

@@ -149,7 +149,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             )}
             <Text style={[
               styles.titleOnlyText,
-              { color: theme.colors.text.primary },
+              { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold },
               isCompletedStatus(entry.status) && styles.strikethrough
             ]} numberOfLines={1}>
               {entry.title || getFirstLineOfText(entry.content)}
@@ -177,7 +177,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
           />
           {/* Metadata row for title-only mode */}
           <View style={styles.titleOnlyMetadata}>
-            <Text style={[styles.date, { color: theme.colors.text.tertiary }]}>
+            <Text style={[styles.date, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
               {formatEntryDateOnly(entry.entry_date || entry.updated_at)}
             </Text>
             {/* Location Badge - only show if stream supports location */}
@@ -331,7 +331,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             {/* Title or first line of content */}
             <Text style={[
               entry.title ? styles.title : styles.contentFirstLine,
-              { color: theme.colors.text.primary },
+              { color: theme.colors.text.primary, fontFamily: entry.title ? theme.typography.fontFamily.bold : theme.typography.fontFamily.semibold },
               isCompletedStatus(entry.status) && styles.strikethrough,
               styles.firstLineText
             ]} numberOfLines={entry.title ? undefined : 1}>
@@ -401,7 +401,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
                 formattedContent && (
                   <Text style={[
                     styles.preview,
-                    { color: theme.colors.text.secondary },
+                    { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular },
                     isCompletedStatus(entry.status) && styles.strikethrough
                   ]} numberOfLines={maxLines}>
                     {formattedContent}
@@ -446,7 +446,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               formattedContent && formattedContent.includes('\n') && (
                 <Text style={[
                   styles.content,
-                  { color: theme.colors.text.primary },
+                  { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular },
                   isCompletedStatus(entry.status) && styles.strikethrough
                 ]} numberOfLines={maxLines ? maxLines - 1 : undefined}>
                   {formattedContent.substring(formattedContent.indexOf('\n') + 1)}
@@ -457,7 +457,7 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
 
           {/* Metadata */}
           <View style={styles.metadata}>
-              <Text style={[styles.date, { color: theme.colors.text.tertiary }]}>Updated {updatedDateStr}</Text>
+              <Text style={[styles.date, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>Updated {updatedDateStr}</Text>
 
               {/* Photo Count Badge (when collapsed) */}
               {displayMode === 'flow' && photosCollapsed && photoCount > 0 && (
@@ -664,18 +664,18 @@ const styles = StyleSheet.create({
   },
   contentFirstLine: {
     fontSize: themeBase.typography.fontSize.base,
-    fontWeight: themeBase.typography.fontWeight.semibold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     lineHeight: themeBase.typography.fontSize.base * themeBase.typography.lineHeight.tight,
   },
   titleOnlyText: {
     flex: 1,
     fontSize: themeBase.typography.fontSize.base,
-    fontWeight: themeBase.typography.fontWeight.semibold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     lineHeight: themeBase.typography.fontSize.base * themeBase.typography.lineHeight.tight,
   },
   title: {
     fontSize: themeBase.typography.fontSize.lg,
-    fontWeight: themeBase.typography.fontWeight.bold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     lineHeight: themeBase.typography.fontSize.lg * themeBase.typography.lineHeight.tight,
   },
   dateSmall: {

@@ -91,7 +91,7 @@ export function CaptureFormHeader({
             onChangeText={onTitleChange}
             placeholder="Untitled"
             placeholderTextColor={theme.colors.text.disabled}
-            style={[styles.headerTitleInput, { color: theme.colors.text.primary }]}
+            style={[styles.headerTitleInput, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}
             editable={isEditMode && !isSubmitting}
             returnKeyType="done"
             blurOnSubmit={true}
@@ -110,7 +110,7 @@ export function CaptureFormHeader({
               }, 100);
             }}
           >
-            <Text style={[styles.headerDateText, { color: theme.colors.text.secondary }]}>
+            <Text style={[styles.headerDateText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>
               {entryDate ? new Date(entryDate).toLocaleDateString(undefined, {
                 month: 'short',
                 day: 'numeric',
@@ -128,7 +128,7 @@ export function CaptureFormHeader({
                 if (!isEditMode) enterEditMode();
               }}
             >
-              <Text style={[styles.headerDateText, { color: theme.colors.text.secondary }]}>
+              <Text style={[styles.headerDateText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>
                 {entryDate ? new Date(entryDate).toLocaleTimeString(undefined, {
                   hour: 'numeric',
                   minute: '2-digit',

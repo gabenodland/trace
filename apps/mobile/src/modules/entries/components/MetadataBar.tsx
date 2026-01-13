@@ -124,7 +124,7 @@ export function MetadataBar({
             <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
             <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-          <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary }]} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]} numberOfLines={1} ellipsizeMode="tail">
             {streamName || "No Stream"}
           </Text>
         </View>
@@ -146,7 +146,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
-                { color: theme.colors.text.primary },
+                { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
                 unsupportedType && styles.metadataTextUnsupported,
                 !unsupportedType && isLegacyType(type, availableTypes) && { color: "#f59e0b" }
               ]} numberOfLines={1} ellipsizeMode="tail">
@@ -169,7 +169,7 @@ export function MetadataBar({
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2.5}>
                 <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Type
               </Text>
             </View>
@@ -195,7 +195,7 @@ export function MetadataBar({
                 <Line x1={2} y1={12} x2={6} y2={12} strokeLinecap="round" />
                 <Line x1={18} y1={12} x2={22} y2={12} strokeLinecap="round" />
               </Svg>
-              <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary }]} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]} numberOfLines={1} ellipsizeMode="tail">
                 GPS
               </Text>
             </View>
@@ -220,7 +220,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
-                { color: theme.colors.text.primary },
+                { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
                 unsupportedLocation && styles.metadataTextUnsupported
               ]} numberOfLines={1} ellipsizeMode="tail">
                 {locationData.name}
@@ -243,7 +243,7 @@ export function MetadataBar({
                 <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
                 <Circle cx={12} cy={10} r={3} fill={theme.colors.text.disabled} />
               </Svg>
-              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Location
               </Text>
             </View>
@@ -264,7 +264,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
-                { color: theme.colors.text.primary },
+                { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
                 unsupportedStatus && styles.metadataTextUnsupported
               ]} numberOfLines={1} ellipsizeMode="tail">
                 {getStatusLabel(status)}
@@ -284,7 +284,7 @@ export function MetadataBar({
           >
             <View style={styles.metadataLinkContent}>
               <StatusIcon status="none" size={12} color={theme.colors.text.disabled} />
-              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Status
               </Text>
             </View>
@@ -310,7 +310,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
-                { color: theme.colors.text.primary },
+                { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
                 unsupportedDueDate && styles.metadataTextUnsupported
               ]} numberOfLines={1} ellipsizeMode="tail">
                 {new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
@@ -335,7 +335,7 @@ export function MetadataBar({
                 <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
                 <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Due Date
               </Text>
             </View>
@@ -358,7 +358,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
-                { color: theme.colors.text.primary },
+                { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
                 unsupportedRating && styles.metadataTextUnsupported
               ]} numberOfLines={1} ellipsizeMode="tail">
                 {formatRatingDisplay(rating, ratingType)}
@@ -380,7 +380,7 @@ export function MetadataBar({
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2}>
                 <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 {ratingType === 'stars' ? 'Rate ☆/5' : ratingType === 'decimal_whole' ? 'Rate ?/10' : 'Rate ?.?/10'}
               </Text>
             </View>
@@ -404,7 +404,7 @@ export function MetadataBar({
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
-                { color: theme.colors.text.primary },
+                { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
                 unsupportedPriority && styles.metadataTextUnsupported
               ]} numberOfLines={1} ellipsizeMode="tail">
                 P{priority}
@@ -427,7 +427,7 @@ export function MetadataBar({
                 <Path d="M5 3v18" strokeLinecap="round" />
                 <Path d="M5 3h13l-4 5 4 5H5z" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={[styles.metadataText, { color: theme.colors.text.disabled }]} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Priority
               </Text>
             </View>
@@ -448,7 +448,7 @@ export function MetadataBar({
                 <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
                 <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary }]} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]} numberOfLines={1} ellipsizeMode="tail">
                 {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
               </Text>
             </View>

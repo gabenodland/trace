@@ -3,7 +3,8 @@ import { useState } from "react";
 import type { Entry, Stream as FullStream, EntrySection, EntryDisplayMode } from "@trace/core";
 import { getStreamAttributeVisibility } from "@trace/core";
 import { EntryListItem } from "./EntryListItem";
-import { theme } from "../../../shared/theme/theme";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
+import { themeBase } from "../../../shared/theme/themeBase";
 
 interface Stream {
   stream_id: string;
@@ -36,6 +37,7 @@ interface EntryListProps {
 }
 
 export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, ListHeaderComponent, streams, locations, displayMode, fullStreams }: EntryListProps) {
+  const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
   // Create a lookup map for streams
@@ -91,9 +93,9 @@ export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPre
     }
     return (
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{section.title}</Text>
-        <View style={styles.sectionCount}>
-          <Text style={styles.sectionCountText}>{section.count}</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>{section.title}</Text>
+        <View style={[styles.sectionCount, { backgroundColor: theme.colors.background.tertiary }]}>
+          <Text style={[styles.sectionCountText, { color: theme.colors.text.secondary }]}>{section.count}</Text>
         </View>
       </View>
     );
@@ -102,7 +104,7 @@ export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPre
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={theme.colors.interactive.primary} />
       </View>
     );
   }
@@ -119,7 +121,7 @@ export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPre
         ListHeaderComponent={ListHeaderComponent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No entries</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>No entries</Text>
           </View>
         }
         stickySectionHeadersEnabled={false}
@@ -139,7 +141,7 @@ export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPre
         ListHeaderComponent={ListHeaderComponent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No entries for this date</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>No entries for this date</Text>
           </View>
         }
         removeClippedSubviews={false}
@@ -150,8 +152,8 @@ export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPre
   if (entries.length === 0) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.emptyTitle}>No entries yet</Text>
-        <Text style={styles.emptySubtitle}>
+        <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>No entries yet</Text>
+        <Text style={[styles.emptySubtitle, { color: theme.colors.text.tertiary }]}>
           Capture your first thought, idea, or task!
         </Text>
       </View>
@@ -183,12 +185,10 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    color: "#6b7280",
     fontWeight: "500",
   },
   emptySubtitle: {
     fontSize: 14,
-    color: "#9ca3af",
     marginTop: 8,
     textAlign: "center",
   },
@@ -198,26 +198,23 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xs,
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.xs,
-    gap: theme.spacing.sm,
+    paddingVertical: themeBase.spacing.sm,
+    paddingHorizontal: themeBase.spacing.xs,
+    marginTop: themeBase.spacing.md,
+    marginBottom: themeBase.spacing.xs,
+    gap: themeBase.spacing.sm,
   },
   sectionTitle: {
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
+    fontSize: themeBase.typography.fontSize.base,
+    fontWeight: themeBase.typography.fontWeight.semibold,
   },
   sectionCount: {
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: themeBase.spacing.sm,
     paddingVertical: 2,
-    borderRadius: theme.borderRadius.full,
+    borderRadius: themeBase.borderRadius.full,
   },
   sectionCountText: {
-    fontSize: theme.typography.fontSize.xs,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.secondary,
+    fontSize: themeBase.typography.fontSize.xs,
+    fontWeight: themeBase.typography.fontWeight.medium,
   },
 });

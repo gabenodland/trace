@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { Entry, Stream, EntrySection, EntryDisplayMode } from "@trace/core";
 import { getStreamAttributeVisibility } from "@trace/core";
 import { EntryListItem } from "./EntryListItem";
-import { theme } from "../../../shared/theme/theme";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 
 interface EntryListContentProps {
   entries: Entry[];
@@ -46,6 +46,7 @@ export function EntryListContent({
   onDelete,
   onPin,
 }: EntryListContentProps) {
+  const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
   const renderEntry = (entry: Entry) => {
@@ -79,8 +80,8 @@ export function EntryListContent({
   // Empty state
   if (entries.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>{emptyMessage}</Text>
+      <View style={[styles.emptyContainer, { backgroundColor: theme.colors.background.secondary }]}>
+        <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>{emptyMessage}</Text>
       </View>
     );
   }
@@ -94,8 +95,8 @@ export function EntryListContent({
             {/* Only show section header if title is not empty */}
             {section.title !== '' && (
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <Text style={styles.sectionCount}>({section.data.length})</Text>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>{section.title}</Text>
+                <Text style={[styles.sectionCount, { color: theme.colors.text.secondary }]}>({section.data.length})</Text>
               </View>
             )}
             {section.data.map(renderEntry)}
@@ -115,12 +116,10 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     padding: 24,
-    backgroundColor: "#ffffff",
     borderRadius: 8,
   },
   emptyText: {
     fontSize: 16,
-    color: "#6b7280",
   },
   sectionHeader: {
     flexDirection: "row",
@@ -134,11 +133,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#374151",
   },
   sectionCount: {
     fontSize: 13,
     fontWeight: "500",
-    color: "#6b7280",
   },
 });

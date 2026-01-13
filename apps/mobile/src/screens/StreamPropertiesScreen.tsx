@@ -23,6 +23,7 @@ import {
 } from "@trace/core";
 import { supabase } from "@trace/core/src/shared/supabase";
 import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useTheme } from "../shared/contexts/ThemeContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { StatusConfigModal } from "../modules/streams/components/StatusConfigModal";
 import { TypeConfigModal } from "../modules/streams/components/TypeConfigModal";
@@ -39,6 +40,7 @@ interface StreamPropertiesScreenProps {
 
 export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps) {
   const { navigate } = useNavigation();
+  const theme = useTheme();
   const { streams, streamMutations } = useStreams();
 
   const isCreateMode = streamId === null;
@@ -278,16 +280,16 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   // Show not found only for edit mode when stream doesn't exist
   if (!isCreateMode && !stream) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Not Found" onBack={() => navigate("streams")} />
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Stream not found</Text>
+          <Text style={[styles.emptyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Stream not found</Text>
           <TouchableOpacity
-            style={styles.backButtonContainer}
+            style={[styles.backButtonContainer, { backgroundColor: theme.colors.functional.accent }]}
             onPress={() => navigate("streams")}
             activeOpacity={0.7}
           >
-            <Text style={styles.backButtonText}>Back to Streams</Text>
+            <Text style={[styles.backButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Back to Streams</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -296,17 +298,17 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
 
   // Render Features Tab
   const renderFeaturesTab = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionDescription}>
+    <View style={[styles.section, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+      <Text style={[styles.sectionDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
         Enable or disable features for entries in this stream
       </Text>
 
-      <View style={styles.toggleRow}>
+      <View style={[styles.toggleRow, { borderBottomColor: theme.colors.border.light }]}>
         <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>Rating</Text>
-          <Text style={styles.toggleDescription}>Rate entries with stars or numbers</Text>
+          <Text style={[styles.toggleLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Rating</Text>
+          <Text style={[styles.toggleDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Rate entries with stars or numbers</Text>
           {useRating && (
-            <Text style={styles.statusList}>{getRatingTypeLabel(ratingType)}</Text>
+            <Text style={[styles.statusList, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>{getRatingTypeLabel(ratingType)}</Text>
           )}
         </View>
         {useRating && (
@@ -331,10 +333,10 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         />
       </View>
 
-      <View style={styles.toggleRow}>
+      <View style={[styles.toggleRow, { borderBottomColor: theme.colors.border.light }]}>
         <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>Priority</Text>
-          <Text style={styles.toggleDescription}>Priority levels (low, medium, high)</Text>
+          <Text style={[styles.toggleLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Priority</Text>
+          <Text style={[styles.toggleDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Priority levels (low, medium, high)</Text>
         </View>
         <Switch
           value={usePriority}
@@ -347,12 +349,12 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         />
       </View>
 
-      <View style={styles.toggleRow}>
+      <View style={[styles.toggleRow, { borderBottomColor: theme.colors.border.light }]}>
         <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>Status</Text>
-          <Text style={styles.toggleDescription}>Track completion status</Text>
+          <Text style={[styles.toggleLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Status</Text>
+          <Text style={[styles.toggleDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Track completion status</Text>
           {useStatus && (
-            <Text style={styles.statusList}>{formatStatusList()}</Text>
+            <Text style={[styles.statusList, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>{formatStatusList()}</Text>
           )}
         </View>
         {useStatus && (
@@ -377,12 +379,12 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         />
       </View>
 
-      <View style={styles.toggleRow}>
+      <View style={[styles.toggleRow, { borderBottomColor: theme.colors.border.light }]}>
         <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>Type</Text>
-          <Text style={styles.toggleDescription}>Categorize entries with custom types</Text>
+          <Text style={[styles.toggleLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Type</Text>
+          <Text style={[styles.toggleDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Categorize entries with custom types</Text>
           {useType && (
-            <Text style={styles.statusList}>{formatTypeList()}</Text>
+            <Text style={[styles.statusList, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>{formatTypeList()}</Text>
           )}
         </View>
         {useType && (
@@ -411,10 +413,10 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         />
       </View>
 
-      <View style={styles.toggleRow}>
+      <View style={[styles.toggleRow, { borderBottomColor: theme.colors.border.light }]}>
         <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>Due Dates</Text>
-          <Text style={styles.toggleDescription}>Assign due dates to entries</Text>
+          <Text style={[styles.toggleLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Due Dates</Text>
+          <Text style={[styles.toggleDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Assign due dates to entries</Text>
         </View>
         <Switch
           value={useDueDates}
@@ -427,10 +429,10 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         />
       </View>
 
-      <View style={styles.toggleRow}>
+      <View style={[styles.toggleRow, { borderBottomColor: theme.colors.border.light }]}>
         <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>Location</Text>
-          <Text style={styles.toggleDescription}>Attach location to entries</Text>
+          <Text style={[styles.toggleLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Location</Text>
+          <Text style={[styles.toggleDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Attach location to entries</Text>
         </View>
         <Switch
           value={useLocation}
@@ -445,8 +447,8 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
 
       <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}>
         <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>Photos</Text>
-          <Text style={styles.toggleDescription}>Attach photos to entries</Text>
+          <Text style={[styles.toggleLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Photos</Text>
+          <Text style={[styles.toggleDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Attach photos to entries</Text>
         </View>
         <Switch
           value={usePhotos}
@@ -463,15 +465,15 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
 
   // Render Template Tab
   const renderTemplateTab = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionDescription}>
+    <View style={[styles.section, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+      <Text style={[styles.sectionDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
         Templates auto-fill when creating new empty entries in this stream.
         Use variables like {"{date}"} and basic markdown formatting.
       </Text>
 
       <View style={styles.inputGroup}>
         <View style={styles.labelWithInfo}>
-          <Text style={styles.inputLabel}>Title Template</Text>
+          <Text style={[styles.inputLabel, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>Title Template</Text>
           <TouchableOpacity
             style={styles.infoButton}
             onPress={() => setShowTitleHelp(true)}
@@ -484,42 +486,42 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
           </TouchableOpacity>
         </View>
         <TextInput
-          style={styles.textInput}
+          style={[styles.textInput, { backgroundColor: theme.colors.background.tertiary, color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
           value={entryTitleTemplate}
           onChangeText={(text) => {
             setEntryTitleTemplate(text);
             markChanged();
           }}
           placeholder="e.g., Meeting Notes - {date}"
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={theme.colors.text.tertiary}
         />
       </View>
 
       <View style={styles.inputGroup}>
         <View style={styles.labelWithInfo}>
-          <Text style={styles.inputLabel}>Content Template</Text>
+          <Text style={[styles.inputLabel, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>Content Template</Text>
           <TouchableOpacity
             style={styles.infoButton}
             onPress={() => setShowContentHelp(true)}
             activeOpacity={0.7}
           >
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
               <Circle cx={12} cy={12} r={10} />
               <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
             </Svg>
           </TouchableOpacity>
         </View>
         <TouchableOpacity
-          style={[styles.textInput, styles.contentTemplatePreview]}
+          style={[styles.textInput, styles.contentTemplatePreview, { backgroundColor: theme.colors.background.tertiary }]}
           onPress={() => setShowContentTemplateEditor(true)}
           activeOpacity={0.7}
         >
           {entryContentTemplate ? (
-            <Text style={styles.contentTemplatePreviewText} numberOfLines={5}>
+            <Text style={[styles.contentTemplatePreviewText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={5}>
               {entryContentTemplate}
             </Text>
           ) : (
-            <Text style={styles.contentTemplatePreviewPlaceholder}>
+            <Text style={[styles.contentTemplatePreviewPlaceholder, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
               Tap to add content template...
             </Text>
           )}
@@ -537,29 +539,29 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   // Render General Tab (Name + Privacy & Sync combined)
   const renderGeneralTab = () => (
     <>
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Stream Name</Text>
+          <Text style={[styles.inputLabel, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>Stream Name</Text>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { backgroundColor: theme.colors.background.tertiary, color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
             value={name}
             onChangeText={(text) => {
               setName(text);
               markChanged();
             }}
             placeholder="Stream name"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={theme.colors.text.tertiary}
           />
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Privacy & Sync</Text>
+      <View style={[styles.section, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Privacy & Sync</Text>
 
-        <View style={styles.toggleRow}>
+        <View style={[styles.toggleRow, { borderBottomColor: theme.colors.border.light }]}>
           <View style={styles.toggleInfo}>
-            <Text style={styles.toggleLabel}>Private</Text>
-            <Text style={styles.toggleDescription}>Hide from shared views</Text>
+            <Text style={[styles.toggleLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Private</Text>
+            <Text style={[styles.toggleDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Hide from shared views</Text>
           </View>
           <Switch
             value={isPrivate}
@@ -574,8 +576,8 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
 
         <View style={[styles.toggleRow, { borderBottomWidth: 0 }]}>
           <View style={styles.toggleInfo}>
-            <Text style={styles.toggleLabel}>Local Only</Text>
-            <Text style={styles.toggleDescription}>
+            <Text style={[styles.toggleLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Local Only</Text>
+            <Text style={[styles.toggleDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
               Don't sync to cloud (entries stay on this device only)
             </Text>
           </View>
@@ -641,33 +643,33 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       <SecondaryHeader title={screenTitle} onBack={handleBack} />
 
       {/* Tabs */}
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === "general" && styles.tabActive]}
+          style={[styles.tab, activeTab === "general" && [styles.tabActive, { borderBottomColor: theme.colors.functional.accent }]]}
           onPress={() => setActiveTab("general")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, activeTab === "general" && styles.tabTextActive]}>General</Text>
+          <Text style={[styles.tabText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }, activeTab === "general" && { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>General</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tab, activeTab === "features" && styles.tabActive]}
+          style={[styles.tab, activeTab === "features" && [styles.tabActive, { borderBottomColor: theme.colors.functional.accent }]]}
           onPress={() => setActiveTab("features")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, activeTab === "features" && styles.tabTextActive]}>Features</Text>
+          <Text style={[styles.tabText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }, activeTab === "features" && { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>Features</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tab, activeTab === "template" && styles.tabActive]}
+          style={[styles.tab, activeTab === "template" && [styles.tabActive, { borderBottomColor: theme.colors.functional.accent }]]}
           onPress={() => setActiveTab("template")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, activeTab === "template" && styles.tabTextActive]}>Template</Text>
+          <Text style={[styles.tabText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }, activeTab === "template" && { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>Template</Text>
         </TouchableOpacity>
       </View>
 
@@ -679,13 +681,13 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
 
       {/* Save/Create Button */}
       {(isCreateMode || hasChanges) && (
-        <View style={styles.saveButtonContainer}>
+        <View style={[styles.saveButtonContainer, { backgroundColor: theme.colors.background.primary, borderTopColor: theme.colors.border.light }]}>
           <TouchableOpacity
-            style={styles.saveButton}
+            style={[styles.saveButton, { backgroundColor: theme.colors.functional.accent }]}
             onPress={handleSave}
             activeOpacity={0.7}
           >
-            <Text style={styles.saveButtonText}>{isCreateMode ? "Create" : "Save Changes"}</Text>
+            <Text style={[styles.saveButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>{isCreateMode ? "Create" : "Save Changes"}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -761,13 +763,10 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
   },
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
   },
   tab: {
     flex: 1,
@@ -778,16 +777,14 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   tabActive: {
-    borderBottomColor: "#3b82f6",
+    // borderBottomColor set inline with theme
   },
   tabText: {
     fontSize: 14,
-    fontWeight: "500",
-    color: "#6b7280",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   tabTextActive: {
-    color: "#3b82f6",
-    fontWeight: "600",
+    // Styles set inline with theme
   },
   content: {
     flex: 1,
@@ -797,25 +794,17 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   section: {
-    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#1f2937",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 12,
   },
   sectionDescription: {
     fontSize: 14,
-    color: "#6b7280",
     marginBottom: 16,
   },
   inputGroup: {
@@ -823,17 +812,14 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 8,
   },
   textInput: {
     height: 48,
-    backgroundColor: "#f3f4f6",
     borderRadius: 8,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: "#1f2937",
   },
   multilineInput: {
     height: 100,
@@ -848,14 +834,11 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   contentTemplatePreviewText: {
-    fontFamily: "monospace",
     fontSize: 13,
     lineHeight: 18,
-    color: "#374151",
   },
   contentTemplatePreviewPlaceholder: {
     fontSize: 14,
-    color: "#9ca3af",
     fontStyle: "italic",
   },
   editIndicator: {
@@ -910,7 +893,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
   },
   toggleInfo: {
     flex: 1,
@@ -918,13 +900,11 @@ const styles = StyleSheet.create({
   },
   toggleLabel: {
     fontSize: 16,
-    fontWeight: "500",
-    color: "#1f2937",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 2,
   },
   toggleDescription: {
     fontSize: 13,
-    color: "#6b7280",
   },
   gearButton: {
     padding: 8,
@@ -932,7 +912,6 @@ const styles = StyleSheet.create({
   },
   statusList: {
     fontSize: 12,
-    color: "#3b82f6",
     marginTop: 4,
   },
   emptyContainer: {
@@ -943,11 +922,9 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: "#6b7280",
     marginBottom: 16,
   },
   backButtonContainer: {
-    backgroundColor: "#3b82f6",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
@@ -955,7 +932,7 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: "#ffffff",
     fontSize: 16,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   saveButtonContainer: {
     position: "absolute",
@@ -963,12 +940,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 16,
-    backgroundColor: "#ffffff",
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
   },
   saveButton: {
-    backgroundColor: "#3b82f6",
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: "center",
@@ -976,7 +950,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "#ffffff",
     fontSize: 16,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   snackbar: {
     position: "absolute",

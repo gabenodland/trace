@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import type { Stream } from "@trace/core";
 import Svg, { Path } from "react-native-svg";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 
 interface StreamListProps {
   streams: Stream[];
@@ -9,11 +10,13 @@ interface StreamListProps {
 }
 
 export function StreamList({ streams, onStreamPress, selectedId }: StreamListProps) {
+  const dynamicTheme = useTheme();
+
   if (streams.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No streams yet</Text>
-        <Text style={styles.emptySubtext}>Create your first stream to get started</Text>
+        <Text style={[styles.emptyText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.tertiary }]}>No streams yet</Text>
+        <Text style={[styles.emptySubtext, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]}>Create your first stream to get started</Text>
       </View>
     );
   }
@@ -39,6 +42,8 @@ interface StreamItemProps {
 }
 
 function StreamItem({ stream, onPress, isSelected }: StreamItemProps) {
+  const dynamicTheme = useTheme();
+
   const handlePress = () => {
     onPress?.(stream.stream_id);
   };
@@ -47,22 +52,27 @@ function StreamItem({ stream, onPress, isSelected }: StreamItemProps) {
     <TouchableOpacity
       style={[
         styles.itemContainer,
-        isSelected && styles.itemContainerSelected,
+        { borderBottomColor: dynamicTheme.colors.border.light },
+        isSelected && [styles.itemContainerSelected, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }],
       ]}
       onPress={handlePress}
     >
       <View style={styles.itemContent}>
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#2563eb" : "#6b7280"} strokeWidth={2}>
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} strokeWidth={2}>
           <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
           <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
           <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
-        <Text style={[styles.itemName, isSelected && styles.itemNameSelected]}>
+        <Text style={[
+          styles.itemName,
+          { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },
+          isSelected && { color: dynamicTheme.colors.functional.accent, fontFamily: dynamicTheme.typography.fontFamily.semibold }
+        ]}>
           {stream.name}
         </Text>
         {stream.entry_count > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{stream.entry_count}</Text>
+          <View style={[styles.badge, { backgroundColor: dynamicTheme.colors.background.tertiary }]}>
+            <Text style={[styles.badgeText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>{stream.entry_count}</Text>
           </View>
         )}
       </View>
@@ -82,23 +92,20 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: "600",
-    color: "#9ca3af",
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#9ca3af",
     textAlign: "center",
   },
   itemContainer: {
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    // borderBottomColor applied inline
   },
   itemContainerSelected: {
-    backgroundColor: "#dbeafe",
+    // backgroundColor applied inline
   },
   itemContent: {
     flexDirection: "row",
@@ -107,23 +114,15 @@ const styles = StyleSheet.create({
   },
   itemName: {
     fontSize: 16,
-    color: "#111827",
-    fontWeight: "500",
     flex: 1,
   },
-  itemNameSelected: {
-    color: "#1e40af",
-    fontWeight: "600",
-  },
   badge: {
-    backgroundColor: "#e5e7eb",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
+    // backgroundColor applied inline
   },
   badgeText: {
     fontSize: 12,
-    color: "#6b7280",
-    fontWeight: "600",
   },
 });

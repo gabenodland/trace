@@ -1,15 +1,15 @@
 /**
  * Shared styles for LocationPicker and its sub-components
+ * Uses themeBase for layout-only values. Colors applied inline via dynamicTheme.
  */
 
 import { StyleSheet } from 'react-native';
-import { theme } from '../../../shared/theme/theme';
+import { themeBase } from '../../../shared/theme/themeBase';
 
 export const locationPickerStyles = StyleSheet.create({
   // Container styles
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
@@ -18,12 +18,9 @@ export const locationPickerStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
   },
   closeButton: {
     position: 'absolute',
@@ -49,7 +46,6 @@ export const locationPickerStyles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -75,8 +71,6 @@ export const locationPickerStyles = StyleSheet.create({
   },
   listTitle: {
     fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.text.tertiary,
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -86,7 +80,6 @@ export const locationPickerStyles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
     marginHorizontal: 16,
     marginTop: 12,
     marginBottom: 8,
@@ -100,7 +93,6 @@ export const locationPickerStyles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: theme.colors.text.primary,
   },
   searchClearButton: {
     padding: 6,
@@ -109,7 +101,6 @@ export const locationPickerStyles = StyleSheet.create({
   // Tabs - Segment Control Style
   listTabs: {
     flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
     borderRadius: 8,
     padding: 3,
     marginBottom: 16,
@@ -122,7 +113,6 @@ export const locationPickerStyles = StyleSheet.create({
     alignItems: 'center',
   },
   listTabActive: {
-    backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -131,12 +121,9 @@ export const locationPickerStyles = StyleSheet.create({
   },
   listTabText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.text.tertiary,
   },
   listTabTextActive: {
-    color: theme.colors.text.primary,
-    fontWeight: '600',
+    // color applied inline
   },
 
   // POI Items - Cleaner Layout
@@ -146,14 +133,10 @@ export const locationPickerStyles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     marginBottom: 8,
-    backgroundColor: '#fff',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#f3f4f6',
   },
   poiItemSelected: {
-    backgroundColor: '#fff',
-    borderColor: '#1f2937',
     borderWidth: 1.5,
   },
   savedLocationItem: {
@@ -161,8 +144,6 @@ export const locationPickerStyles = StyleSheet.create({
     // Yellow star icon provides visual distinction
   },
   mapLocationItem: {
-    backgroundColor: '#f0f9ff',
-    borderColor: '#93c5fd',
     marginBottom: 16,
   },
 
@@ -171,16 +152,15 @@ export const locationPickerStyles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   poiIconContainerSelected: {
-    backgroundColor: '#fee2e2',
+    // background color applied inline
   },
   poiIconContainerSaved: {
-    backgroundColor: '#fef3c7',
+    // background color applied inline
   },
 
   // Middle column: Info
@@ -190,18 +170,14 @@ export const locationPickerStyles = StyleSheet.create({
   },
   poiName: {
     fontSize: 15,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
     marginBottom: 2,
   },
   poiCategory: {
     fontSize: 13,
-    color: '#6b7280',
     marginBottom: 1,
   },
   poiAddress: {
     fontSize: 12,
-    color: '#9ca3af',
   },
 
   // Right column: Distance + Action
@@ -211,8 +187,6 @@ export const locationPickerStyles = StyleSheet.create({
   },
   poiDistance: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#6b7280',
   },
 
   // Legacy styles for compatibility
@@ -224,8 +198,6 @@ export const locationPickerStyles = StyleSheet.create({
   },
   poiDistanceSmall: {
     fontSize: 11,
-    fontWeight: '500',
-    color: '#6b7280',
     marginTop: 4,
   },
   poiCategoryContainer: {
@@ -240,29 +212,24 @@ export const locationPickerStyles = StyleSheet.create({
     gap: 4,
   },
   selectedPOI: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#3b82f6',
+    // colors applied inline
   },
 
   // Callout styles for map markers
   calloutContainer: {
-    backgroundColor: '#3b82f6',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     maxWidth: 200,
   },
   calloutContainerRed: {
-    backgroundColor: '#ef4444',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     maxWidth: 200,
   },
   calloutText: {
-    color: '#fff',
     fontSize: 13,
-    fontWeight: '600',
     textAlign: 'center',
   },
 
@@ -291,36 +258,27 @@ export const locationPickerStyles = StyleSheet.create({
   },
   formLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.text.tertiary,
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   formInput: {
     fontSize: 16,
-    color: theme.colors.text.primary,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    backgroundColor: '#fff',
   },
   formValue: {
     fontSize: 15,
-    color: theme.colors.text.primary,
     lineHeight: 22,
   },
   formValueLarge: {
     fontSize: 18,
-    fontWeight: '500',
-    color: theme.colors.text.primary,
     lineHeight: 24,
   },
   formDivider: {
     height: 1,
-    backgroundColor: '#f3f4f6',
     marginBottom: 24,
   },
   formActions: {
@@ -335,12 +293,9 @@ export const locationPickerStyles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: theme.colors.background.secondary,
   },
   actionButtonText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text.primary,
     marginLeft: 8,
   },
   actionButtonDanger: {
@@ -350,18 +305,14 @@ export const locationPickerStyles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#fee2e2',
   },
   actionButtonDangerText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#dc2626',
     marginLeft: 8,
   },
 
   // Primary button (full width, bottom) - consistent with GPS picker
   primaryButton: {
-    backgroundColor: '#3b82f6',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -369,26 +320,20 @@ export const locationPickerStyles = StyleSheet.create({
   },
   primaryButtonText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#fff',
   },
 
   // OK button (legacy - now using primaryButton)
   okButton: {
-    backgroundColor: '#3b82f6',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
   },
   okButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
   },
 
   // Select button - smaller, on list items
   selectButton: {
-    backgroundColor: '#3b82f6',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 6,
@@ -397,13 +342,10 @@ export const locationPickerStyles = StyleSheet.create({
   },
   selectButtonText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#fff',
   },
 
   // Use/Customize button for Currently Selected row
   useButton: {
-    backgroundColor: '#3b82f6',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -411,8 +353,6 @@ export const locationPickerStyles = StyleSheet.create({
   },
   useButtonText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#fff',
   },
 
   // Legacy link style (removed underline)
@@ -422,8 +362,6 @@ export const locationPickerStyles = StyleSheet.create({
   },
   selectLinkText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#3b82f6',
   },
 
   // Empty states
@@ -433,13 +371,10 @@ export const locationPickerStyles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#9ca3af',
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#9ca3af',
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -449,13 +384,10 @@ export const locationPickerStyles = StyleSheet.create({
   },
   emptyDetailsText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#9ca3af',
     marginBottom: 8,
   },
   emptyDetailsSubtext: {
     fontSize: 14,
-    color: '#9ca3af',
     textAlign: 'center',
   },
 
@@ -470,7 +402,6 @@ export const locationPickerStyles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 14,
-    color: '#6b7280',
   },
 });
 

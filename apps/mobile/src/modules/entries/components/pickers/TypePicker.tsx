@@ -7,7 +7,8 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import Svg, { Path, Line } from "react-native-svg";
 import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
-import { theme } from "../../../../shared/theme/theme";
+import { themeBase } from "../../../../shared/theme/themeBase";
+import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { isLegacyType, sortTypes } from "@trace/core";
 
 interface TypePickerProps {
@@ -28,6 +29,8 @@ export function TypePicker({
   onSnackbar,
   availableTypes,
 }: TypePickerProps) {
+  const dynamicTheme = useTheme();
+
   // Sort types alphabetically
   const sortedTypes = sortTypes(availableTypes);
 
@@ -50,22 +53,22 @@ export function TypePicker({
   if (sortedTypes.length === 0 && !isLegacy) {
     return (
       <TopBarDropdownContainer visible={visible} onClose={onClose}>
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: dynamicTheme.colors.background.primary }]}>
           <View style={styles.header}>
-            <Text style={styles.title}>Set Type</Text>
+            <Text style={[styles.title, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>Set Type</Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
                 <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
                 <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
               </Svg>
             </TouchableOpacity>
           </View>
           <View style={styles.emptyState}>
-            <Svg width={40} height={40} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={1.5}>
+            <Svg width={40} height={40} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={1.5}>
               <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-            <Text style={styles.emptyText}>No types configured</Text>
-            <Text style={styles.emptySubtext}>
+            <Text style={[styles.emptyText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }]}>No types configured</Text>
+            <Text style={[styles.emptySubtext, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]}>
               Configure types in stream settings to use this feature.
             </Text>
           </View>
@@ -76,12 +79,12 @@ export function TypePicker({
 
   return (
     <TopBarDropdownContainer visible={visible} onClose={onClose}>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: dynamicTheme.colors.background.primary }]}>
         {/* Header with title and close button */}
         <View style={styles.header}>
-          <Text style={styles.title}>Set Type</Text>
+          <Text style={[styles.title, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>Set Type</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
               <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
               <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
             </Svg>
@@ -90,16 +93,16 @@ export function TypePicker({
 
         {/* Legacy type warning */}
         {isLegacy && type && (
-          <View style={styles.legacyWarning}>
+          <View style={[styles.legacyWarning, { backgroundColor: dynamicTheme.colors.functional.accentLight }]}>
             <View style={styles.legacyTypeRow}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth={2}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.status.blocked} strokeWidth={2}>
                 <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={styles.legacyText}>
+              <Text style={[styles.legacyText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.status.blocked }]}>
                 Current: {type}
               </Text>
             </View>
-            <Text style={styles.legacyHint}>
+            <Text style={[styles.legacyHint, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>
               This type is no longer available. Select a new one or clear it.
             </Text>
           </View>
@@ -113,25 +116,27 @@ export function TypePicker({
                 key={typeOption}
                 style={[
                   styles.optionButton,
-                  type === typeOption && styles.optionButtonSelected,
+                  { backgroundColor: dynamicTheme.colors.background.secondary },
+                  type === typeOption && { backgroundColor: dynamicTheme.colors.background.tertiary },
                 ]}
                 onPress={() => handleSelect(typeOption)}
               >
                 <View style={styles.optionIcon}>
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
                     <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
                 </View>
                 <Text
                   style={[
                     styles.optionText,
-                    type === typeOption && styles.optionTextSelected,
+                    { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },
+                    type === typeOption && { color: dynamicTheme.colors.functional.accent, fontFamily: dynamicTheme.typography.fontFamily.semibold },
                   ]}
                 >
                   {typeOption}
                 </Text>
                 {type === typeOption && (
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2.5} style={styles.checkIcon}>
+                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.accent} strokeWidth={2.5} style={styles.checkIcon}>
                     <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
                 )}
@@ -143,14 +148,14 @@ export function TypePicker({
         {/* Clear Button - only show when type is set */}
         {type && (
           <TouchableOpacity
-            style={styles.clearButton}
+            style={[styles.clearButton, { backgroundColor: `${dynamicTheme.colors.functional.overdue}15` }]}
             onPress={handleClear}
           >
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={2}>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.overdue} strokeWidth={2}>
               <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
               <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
             </Svg>
-            <Text style={styles.clearButtonText}>Remove Type</Text>
+            <Text style={[styles.clearButtonText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.functional.overdue }]}>Remove Type</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -160,80 +165,66 @@ export function TypePicker({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    borderRadius: themeBase.borderRadius.lg,
+    padding: themeBase.spacing.lg,
+    gap: themeBase.spacing.md,
     maxHeight: 500,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: theme.spacing.xs,
+    marginBottom: themeBase.spacing.xs,
   },
   title: {
     fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
   },
   closeButton: {
     padding: 4,
   },
   emptyState: {
     alignItems: "center",
-    paddingVertical: theme.spacing.xl,
-    gap: theme.spacing.sm,
+    paddingVertical: themeBase.spacing.xl,
+    gap: themeBase.spacing.sm,
   },
   emptyText: {
     fontSize: 15,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.secondary,
-    marginTop: theme.spacing.sm,
+    marginTop: themeBase.spacing.sm,
   },
   emptySubtext: {
     fontSize: 13,
-    color: theme.colors.text.tertiary,
     textAlign: "center",
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: themeBase.spacing.lg,
   },
   legacyWarning: {
-    backgroundColor: "#fef3c7",
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    gap: theme.spacing.xs,
+    borderRadius: themeBase.borderRadius.md,
+    padding: themeBase.spacing.md,
+    gap: themeBase.spacing.xs,
   },
   legacyTypeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
   },
   legacyText: {
     fontSize: 14,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: "#f59e0b",
   },
   legacyHint: {
     fontSize: 12,
-    color: "#92400e",
   },
   scrollView: {
     maxHeight: 320,
   },
   optionsContainer: {
-    gap: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
   },
   optionButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.background.secondary,
-    gap: theme.spacing.md,
-  },
-  optionButtonSelected: {
-    backgroundColor: theme.colors.background.tertiary,
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
+    gap: themeBase.spacing.md,
   },
   optionIcon: {
     width: 24,
@@ -242,12 +233,6 @@ const styles = StyleSheet.create({
   optionText: {
     flex: 1,
     fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
-  },
-  optionTextSelected: {
-    color: "#3b82f6",
-    fontWeight: "600",
   },
   checkIcon: {
     marginLeft: "auto",
@@ -256,16 +241,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: "#fee2e2",
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.xs,
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.lg,
+    borderRadius: themeBase.borderRadius.md,
+    gap: themeBase.spacing.sm,
+    marginTop: themeBase.spacing.xs,
   },
   clearButtonText: {
     fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: "#dc2626",
   },
 });

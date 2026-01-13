@@ -48,6 +48,30 @@ export const darkTheme: Theme = {
       primaryHover: '#93C5FD', // Even lighter blue
       secondary: '#9CA3AF',    // Gray
     },
+
+    status: {
+      open: '#60A5FA',         // Light blue - new, todo
+      working: '#FBBF24',      // Light orange - in_progress, in_review
+      blocked: '#FCD34D',      // Light yellow - waiting, on_hold
+      complete: '#34D399',     // Light green - done, closed
+      cancelled: '#F87171',    // Light red - cancelled
+    },
+
+    surface: {
+      overlay: '#1F2937',      // Slightly lighter than bg
+      elevated: '#374151',     // Even lighter for menus
+    },
+  },
+
+  typography: {
+    fontFamily: {
+      regular: 'Inter_400Regular',
+      medium: 'Inter_500Medium',
+      semibold: 'Inter_600SemiBold',
+      bold: 'Inter_700Bold',
+    },
+    webFontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+    webFontUrl: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
   },
 
   shadows: {

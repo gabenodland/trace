@@ -15,25 +15,30 @@ export type EntryStatus =
   | "closed"      // Issue resolved/addressed
   | "cancelled";  // Won't be done
 
+// Status category for theme-aware coloring
+export type StatusCategory = 'none' | 'open' | 'working' | 'blocked' | 'complete' | 'cancelled';
+
 // Status metadata for UI rendering
 export interface StatusInfo {
   value: EntryStatus;
   label: string;
-  color: string;
+  color: string;           // Fallback color (used if no theme)
+  category: StatusCategory; // Maps to theme.colors.status[category]
 }
 
 // All statuses with their display info (none first, then workflow statuses)
+// Colors simplified: blue=open, orange=working, yellow=blocked, green=complete, red=cancelled
 export const ALL_STATUSES: StatusInfo[] = [
-  { value: "none", label: "None", color: "#9ca3af" },         // Gray - no status/optional
-  { value: "new", label: "New", color: "#3b82f6" },           // Blue
-  { value: "todo", label: "To Do", color: "#6b7280" },        // Gray
-  { value: "in_progress", label: "In Progress", color: "#f59e0b" }, // Amber
-  { value: "in_review", label: "In Review", color: "#6366f1" },     // Indigo
-  { value: "waiting", label: "Waiting", color: "#a855f7" },   // Purple
-  { value: "on_hold", label: "On Hold", color: "#64748b" },   // Slate
-  { value: "done", label: "Done", color: "#10b981" },         // Green
-  { value: "closed", label: "Closed", color: "#14b8a6" },     // Teal
-  { value: "cancelled", label: "Cancelled", color: "#ef4444" }, // Red
+  { value: "none", label: "None", color: "#9ca3af", category: "none" },
+  { value: "new", label: "New", color: "#3b82f6", category: "open" },
+  { value: "todo", label: "To Do", color: "#3b82f6", category: "open" },
+  { value: "in_progress", label: "In Progress", color: "#f59e0b", category: "working" },
+  { value: "in_review", label: "In Review", color: "#f59e0b", category: "working" },
+  { value: "waiting", label: "Waiting", color: "#eab308", category: "blocked" },
+  { value: "on_hold", label: "On Hold", color: "#eab308", category: "blocked" },
+  { value: "done", label: "Done", color: "#10b981", category: "complete" },
+  { value: "closed", label: "Closed", color: "#10b981", category: "complete" },
+  { value: "cancelled", label: "Cancelled", color: "#ef4444", category: "cancelled" },
 ];
 
 // Default statuses when status feature is enabled on a stream
@@ -52,9 +57,14 @@ export function getStatusLabel(status: EntryStatus): string {
   return getStatusInfo(status)?.label || status;
 }
 
-// Helper to get status color
+// Helper to get status color (fallback)
 export function getStatusColor(status: EntryStatus): string {
   return getStatusInfo(status)?.color || "#6b7280";
+}
+
+// Helper to get status category for theme-aware coloring
+export function getStatusCategory(status: EntryStatus): StatusCategory {
+  return getStatusInfo(status)?.category || "none";
 }
 
 export interface Entry {

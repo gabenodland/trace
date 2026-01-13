@@ -280,7 +280,7 @@ export function ProfileScreen() {
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Profile" />
         <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>Loading profile...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading profile...</Text>
         </View>
       </View>
     );
@@ -292,8 +292,8 @@ export function ProfileScreen() {
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Profile" />
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: theme.colors.functional.overdue }]}>Failed to load profile</Text>
-          <Text style={[styles.errorDetail, { color: theme.colors.text.secondary }]}>{error.message}</Text>
+          <Text style={[styles.errorText, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.semibold }]}>Failed to load profile</Text>
+          <Text style={[styles.errorDetail, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{error.message}</Text>
         </View>
       </View>
     );
@@ -322,7 +322,7 @@ export function ProfileScreen() {
                 <Circle cx={12} cy={12} r={10} />
                 <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
               </Svg>
-              <Text style={[styles.completionText, { color: theme.colors.functional.accent }]}>
+              <Text style={[styles.completionText, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.medium }]}>
                 Complete your profile to get started
               </Text>
             </View>
@@ -344,9 +344,9 @@ export function ProfileScreen() {
           <View style={[styles.formSection, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
             {/* Name Input */}
             <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Display Name</Text>
+              <Text style={[styles.label, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>Display Name</Text>
               <TextInput
-                style={[styles.textInput, { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.light, color: theme.colors.text.primary }]}
+                style={[styles.textInput, { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.light, color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
                 value={name}
                 onChangeText={handleNameChange}
                 onBlur={handleNameBlur}
@@ -368,9 +368,9 @@ export function ProfileScreen() {
 
             {/* Email (read-only) */}
             <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Email</Text>
+              <Text style={[styles.label, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>Email</Text>
               <View style={[styles.readOnlyInput, { backgroundColor: theme.colors.background.tertiary, borderColor: theme.colors.border.light }]}>
-                <Text style={[styles.readOnlyText, { color: theme.colors.text.secondary }]}>{user?.email || "—"}</Text>
+                <Text style={[styles.readOnlyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{user?.email || "—"}</Text>
               </View>
             </View>
           </View>
@@ -397,7 +397,7 @@ export function ProfileScreen() {
                   strokeLinejoin="round"
                 />
               </Svg>
-              <Text style={[styles.settingsLinkText, { color: theme.colors.text.primary }]}>App Settings</Text>
+              <Text style={[styles.settingsLinkText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>App Settings</Text>
             </View>
             <Svg
               width={20}
@@ -437,7 +437,7 @@ export function ProfileScreen() {
                 strokeLinejoin="round"
               />
             </Svg>
-            <Text style={styles.signOutText}>
+            <Text style={[styles.signOutText, { fontFamily: theme.typography.fontFamily.semibold }]}>
               {isSigningOut ? "Syncing & Signing Out..." : "Sign Out"}
             </Text>
           </TouchableOpacity>
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 18,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 8,
   },
   errorDetail: {
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 4,
   },
   textInput: {
@@ -554,7 +554,7 @@ const styles = StyleSheet.create({
   },
   settingsLinkText: {
     fontSize: 16,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   signOutButton: {
     flexDirection: "row",
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
   signOutText: {
     color: "#ffffff",
     fontSize: 16,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   snackbar: {
     position: "absolute",
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
   snackbarText: {
     color: "#fff",
     fontSize: 14,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     textAlign: "center",
   },
 });

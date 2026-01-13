@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 
 interface AddStreamModalProps {
   visible: boolean;
@@ -9,6 +10,7 @@ interface AddStreamModalProps {
 }
 
 export function AddStreamModal({ visible, onClose, onSubmit }: AddStreamModalProps) {
+  const theme = useTheme();
   const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -44,12 +46,12 @@ export function AddStreamModal({ visible, onClose, onSubmit }: AddStreamModalPro
       onRequestClose={handleClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
+        <View style={[styles.modalContainer, { backgroundColor: theme.colors.background.primary }]}>
           {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>New Stream</Text>
+          <View style={[styles.header, { borderBottomColor: theme.colors.border.light }]}>
+            <Text style={[styles.headerTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>New Stream</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
                 <Path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             </TouchableOpacity>
@@ -58,13 +60,13 @@ export function AddStreamModal({ visible, onClose, onSubmit }: AddStreamModalPro
           <ScrollView style={styles.content}>
             {/* Stream Name Input */}
             <View style={styles.field}>
-              <Text style={styles.label}>Stream Name *</Text>
+              <Text style={[styles.label, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.semibold }]}>Stream Name *</Text>
               <TextInput
                 value={name}
                 onChangeText={setName}
                 placeholder="e.g., Work, Personal, Ideas"
-                placeholderTextColor="#9ca3af"
-                style={styles.input}
+                placeholderTextColor={theme.colors.text.tertiary}
+                style={[styles.input, { borderColor: theme.colors.border.medium, color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
                 autoFocus
                 editable={!isSubmitting}
               />
@@ -72,20 +74,20 @@ export function AddStreamModal({ visible, onClose, onSubmit }: AddStreamModalPro
           </ScrollView>
 
           {/* Footer */}
-          <View style={styles.footer}>
+          <View style={[styles.footer, { borderTopColor: theme.colors.border.light }]}>
             <TouchableOpacity
               onPress={handleClose}
-              style={styles.cancelButton}
+              style={[styles.cancelButton, { borderColor: theme.colors.border.medium }]}
               disabled={isSubmitting}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={[styles.cancelButtonText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.semibold }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleSubmit}
-              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              style={[styles.submitButton, { backgroundColor: theme.colors.functional.accent }, isSubmitting && styles.submitButtonDisabled]}
               disabled={isSubmitting || !name.trim()}
             >
-              <Text style={styles.submitButtonText}>
+              <Text style={[styles.submitButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>
                 {isSubmitting ? "Creating..." : "Create"}
               </Text>
             </TouchableOpacity>
@@ -103,7 +105,6 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContainer: {
-    backgroundColor: "#ffffff",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "90%",
@@ -114,12 +115,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: "700",
-    color: "#111827",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   closeButton: {
     padding: 4,
@@ -132,44 +131,37 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#d1d5db",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    color: "#111827",
   },
   footer: {
     flexDirection: "row",
     gap: 12,
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: "#f3f4f6",
   },
   cancelButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#d1d5db",
     alignItems: "center",
   },
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#6b7280",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   submitButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: "#3b82f6",
     alignItems: "center",
   },
   submitButtonDisabled: {
@@ -177,7 +169,7 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontSize: 16,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     color: "#ffffff",
   },
 });

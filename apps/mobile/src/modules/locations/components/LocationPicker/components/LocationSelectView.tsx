@@ -14,6 +14,7 @@ import {
   formatDistanceWithUnits,
 } from '@trace/core';
 import { useSettings } from '../../../../../shared/contexts/SettingsContext';
+import { useTheme } from '../../../../../shared/contexts/ThemeContext';
 import { locationPickerStyles as styles } from '../../../styles/locationPickerStyles';
 import {
   type LocationSelection,
@@ -99,6 +100,7 @@ export function LocationSelectView({
   onClose,
 }: LocationSelectViewProps) {
   const { settings } = useSettings();
+  const dynamicTheme = useTheme();
 
   // Get subtitle text for "Currently Selected" row
   const getSubtitleText = () => {
@@ -279,7 +281,7 @@ export function LocationSelectView({
     if (item.type === 'saved') {
       if (isSelected) {
         return (
-          <View style={[styles.poiIconContainer, styles.poiIconContainerSaved]}>
+          <View style={[styles.poiIconContainer, styles.poiIconContainerSaved, { backgroundColor: '#fef3c720' }]}>
             <Svg width={18} height={18} viewBox="0 0 24 24" fill="#ef4444" stroke="#ef4444" strokeWidth={2}>
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
               <Circle cx={12} cy={10} r={3} fill="white" />
@@ -288,7 +290,7 @@ export function LocationSelectView({
         );
       }
       return (
-        <View style={[styles.poiIconContainer, styles.poiIconContainerSaved]}>
+        <View style={[styles.poiIconContainer, styles.poiIconContainerSaved, { backgroundColor: '#fef3c720' }]}>
           <Svg width={18} height={18} viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth={2}>
             <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
@@ -299,7 +301,7 @@ export function LocationSelectView({
     // Selected non-saved items show red pin (matches map marker)
     if (isSelected) {
       return (
-        <View style={[styles.poiIconContainer, styles.poiIconContainerSelected]}>
+        <View style={[styles.poiIconContainer, styles.poiIconContainerSelected, { backgroundColor: '#fee2e220' }]}>
           <Svg width={18} height={18} viewBox="0 0 24 24" fill="#ef4444" stroke="#ef4444" strokeWidth={2}>
             <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
             <Circle cx={12} cy={10} r={3} fill="white" />
@@ -310,10 +312,10 @@ export function LocationSelectView({
 
     // Default: gray pin
     return (
-      <View style={styles.poiIconContainer}>
-        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+      <View style={[styles.poiIconContainer, { backgroundColor: dynamicTheme.colors.background.secondary }]}>
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
           <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-          <Circle cx={12} cy={10} r={3} fill="#6b7280" />
+          <Circle cx={12} cy={10} r={3} fill={dynamicTheme.colors.text.tertiary} />
         </Svg>
       </View>
     );
@@ -322,17 +324,17 @@ export function LocationSelectView({
   return (
     <View style={styles.listContainer}>
       {/* Search Input with Icon */}
-      <View style={styles.searchContainer}>
+      <View style={[styles.searchContainer, { backgroundColor: dynamicTheme.colors.background.secondary }]}>
         <View style={styles.searchIcon}>
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
             <Circle cx={11} cy={11} r={8} />
             <Path d="M21 21l-4.35-4.35" strokeLinecap="round" />
           </Svg>
         </View>
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}
           placeholder="Search places..."
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={dynamicTheme.colors.text.tertiary}
           value={ui.searchQuery}
           onChangeText={(text) => setUI(prev => ({ ...prev, searchQuery: text }))}
         />
@@ -341,7 +343,7 @@ export function LocationSelectView({
             style={styles.searchClearButton}
             onPress={() => setUI(prev => ({ ...prev, searchQuery: '' }))}
           >
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
               <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
@@ -352,22 +354,22 @@ export function LocationSelectView({
       <ScrollView style={styles.poiList} contentContainerStyle={styles.poiListContent}>
         {/* Tabs or Search Results title */}
         {ui.searchQuery.length >= 2 ? (
-          <Text style={styles.listTitle}>Search Results</Text>
+          <Text style={[styles.listTitle, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>Search Results</Text>
         ) : (
-          <View style={styles.listTabs}>
+          <View style={[styles.listTabs, { backgroundColor: dynamicTheme.colors.background.secondary }]}>
             <TouchableOpacity
-              style={[styles.listTab, activeListTab === 'nearby' && styles.listTabActive]}
+              style={[styles.listTab, activeListTab === 'nearby' && [styles.listTabActive, { backgroundColor: dynamicTheme.colors.background.primary }]]}
               onPress={() => setActiveListTab('nearby')}
             >
-              <Text style={[styles.listTabText, activeListTab === 'nearby' && styles.listTabTextActive]}>
+              <Text style={[styles.listTabText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }, activeListTab === 'nearby' && { color: dynamicTheme.colors.text.primary }]}>
                 Nearby
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.listTab, activeListTab === 'saved' && styles.listTabActive]}
+              style={[styles.listTab, activeListTab === 'saved' && [styles.listTabActive, { backgroundColor: dynamicTheme.colors.background.primary }]]}
               onPress={() => setActiveListTab('saved')}
             >
-              <Text style={[styles.listTabText, activeListTab === 'saved' && styles.listTabTextActive]}>
+              <Text style={[styles.listTabText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }, activeListTab === 'saved' && { color: dynamicTheme.colors.text.primary }]}>
                 Saved
               </Text>
             </TouchableOpacity>
@@ -379,7 +381,7 @@ export function LocationSelectView({
         {/* Currently Selected Location - Card at top */}
         {(selection.location || mapState.markerPosition) && (
           <TouchableOpacity
-            style={[styles.poiItem, styles.mapLocationItem]}
+            style={[styles.poiItem, styles.mapLocationItem, { backgroundColor: dynamicTheme.colors.background.secondary, borderColor: dynamicTheme.colors.border.light }]}
             onPress={() => {
               // Click on row = refocus map on blue marker
               if (mapState.markerPosition && mapRef.current) {
@@ -395,17 +397,17 @@ export function LocationSelectView({
             }}
           >
             {/* Blue marker icon */}
-            <View style={[styles.poiIconContainer, { backgroundColor: '#dbeafe' }]}>
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="#3b82f6" stroke="#3b82f6" strokeWidth={2}>
+            <View style={[styles.poiIconContainer, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }]}>
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accent} stroke={dynamicTheme.colors.functional.accent} strokeWidth={2}>
                 <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
                 <Circle cx={12} cy={10} r={3} fill="white" />
               </Svg>
             </View>
             <View style={styles.poiInfo}>
-              <Text style={styles.poiName}>
+              <Text style={[styles.poiName, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>
                 {selection.location?.name || 'Selected Location'}
               </Text>
-              <Text style={styles.poiCategory} numberOfLines={1}>{getSubtitleText()}</Text>
+              <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>{getSubtitleText()}</Text>
             </View>
             {/* Use button - consistent with Select buttons */}
             <TouchableOpacity
@@ -418,9 +420,9 @@ export function LocationSelectView({
                 }));
                 setPreviewMarker(null);
               }}
-              style={styles.useButton}
+              style={[styles.useButton, { backgroundColor: dynamicTheme.colors.functional.accent }]}
             >
-              <Text style={styles.useButtonText}>New</Text>
+              <Text style={[styles.useButtonText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: '#ffffff' }]}>New</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         )}
@@ -436,8 +438,9 @@ export function LocationSelectView({
                   key={item.id}
                   style={[
                     styles.poiItem,
+                    { backgroundColor: dynamicTheme.colors.background.primary, borderColor: dynamicTheme.colors.border.light },
                     item.type === 'saved' && styles.savedLocationItem,
-                    isSelected && styles.poiItemSelected
+                    isSelected && [styles.poiItemSelected, { borderColor: dynamicTheme.colors.functional.accent }]
                   ]}
                   onPress={() => {
                     // Click on row = pan/zoom to location and show red preview marker
@@ -481,26 +484,26 @@ export function LocationSelectView({
 
                   {/* Info */}
                   <View style={styles.poiInfo}>
-                    <Text style={styles.poiName} numberOfLines={1}>
+                    <Text style={[styles.poiName, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]} numberOfLines={1}>
                       {item.name}
                     </Text>
                     {item.type === 'poi' && item.category && typeof item.category === 'string' && (
-                      <Text style={styles.poiCategory} numberOfLines={1}>{item.category}</Text>
+                      <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>{item.category}</Text>
                     )}
                     {item.type === 'google_poi' && (
-                      <Text style={styles.poiCategory}>From map</Text>
+                      <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>From map</Text>
                     )}
                     {item.type === 'saved' && item.city && (
-                      <Text style={styles.poiCategory} numberOfLines={1}>{item.city}</Text>
+                      <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>{item.city}</Text>
                     )}
                     {item.address && typeof item.address === 'string' && (
-                      <Text style={styles.poiAddress} numberOfLines={1}>{item.address}</Text>
+                      <Text style={[styles.poiAddress, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]} numberOfLines={1}>{item.address}</Text>
                     )}
                   </View>
 
                   {/* Right side: Distance + Select button (only when selected) */}
                   <View style={styles.poiRightColumn}>
-                    <Text style={styles.poiDistance}>
+                    <Text style={[styles.poiDistance, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>
                       {formatDistanceWithUnits(item.distance, settings.units)}
                     </Text>
                     {isSelected && (
@@ -509,9 +512,9 @@ export function LocationSelectView({
                           e.stopPropagation();
                           handleItemSelect(item);
                         }}
-                        style={styles.selectButton}
+                        style={[styles.selectButton, { backgroundColor: dynamicTheme.colors.functional.accent }]}
                       >
-                        <Text style={styles.selectButtonText}>Select</Text>
+                        <Text style={[styles.selectButtonText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: '#ffffff' }]}>Select</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -524,14 +527,14 @@ export function LocationSelectView({
         {/* Empty state */}
         {!isLoading && !hasItems && !selection.location && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>
+            <Text style={[styles.emptyStateText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>
               {ui.searchQuery.length >= 2
                 ? 'No results found'
                 : activeListTab === 'saved'
                   ? 'No saved locations'
                   : 'No nearby places found'}
             </Text>
-            <Text style={styles.emptyStateSubtext}>
+            <Text style={[styles.emptyStateSubtext, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]}>
               {ui.searchQuery.length >= 2
                 ? 'Try a different search term'
                 : activeListTab === 'saved'

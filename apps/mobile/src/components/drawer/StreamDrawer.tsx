@@ -208,7 +208,7 @@ export function StreamDrawer() {
       <Animated.View
         style={[
           styles.drawer,
-          { transform: [{ translateX }], backgroundColor: theme.colors.background.primary },
+          { transform: [{ translateX }], backgroundColor: theme.colors.surface.overlay },
         ]}
         {...panResponder.panHandlers}
       >

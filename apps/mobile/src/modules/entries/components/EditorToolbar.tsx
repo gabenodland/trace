@@ -38,10 +38,10 @@ export function EditorToolbar({
         </Svg>
       </TouchableOpacity>
       <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleHeading(1)}>
-        <Text style={[styles.headingButtonText, { color: iconColor }]}>H1</Text>
+        <Text style={[styles.headingButtonText, { color: iconColor, fontFamily: theme.typography.fontFamily.bold }]}>H1</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.toolbarButton} onPress={() => editorRef.current?.toggleHeading(2)}>
-        <Text style={[styles.headingButtonText, { color: iconColor }]}>H2</Text>
+        <Text style={[styles.headingButtonText, { color: iconColor, fontFamily: theme.typography.fontFamily.bold }]}>H2</Text>
       </TouchableOpacity>
 
       <View style={[styles.toolbarDivider, { backgroundColor: theme.colors.border.light }]} />

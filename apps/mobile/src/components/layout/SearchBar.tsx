@@ -1,7 +1,8 @@
 import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import Svg, { Line, Circle } from 'react-native-svg';
 import { useRef, useEffect } from 'react';
-import { theme } from '../../shared/theme/theme';
+import { useTheme } from '../../shared/contexts/ThemeContext';
+import { themeBase } from '../../shared/theme/themeBase';
 
 interface SearchBarProps {
   value: string;
@@ -18,6 +19,7 @@ export function SearchBar({
   placeholder = "Search entries...",
   autoFocus = true,
 }: SearchBarProps) {
+  const theme = useTheme();
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -39,10 +41,10 @@ export function SearchBar({
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.searchBox}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
+      <View style={[styles.searchBox, { backgroundColor: theme.colors.background.tertiary }]}>
         {/* Search Icon */}
-        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
           <Circle cx={11} cy={11} r={8} />
           <Line x1={21} y1={21} x2={16.65} y2={16.65} strokeLinecap="round" />
         </Svg>
@@ -50,11 +52,11 @@ export function SearchBar({
         {/* Input */}
         <TextInput
           ref={inputRef}
-          style={styles.input}
+          style={[styles.input, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={theme.colors.text.tertiary}
           returnKeyType="search"
           autoCapitalize="none"
           autoCorrect={false}
@@ -62,7 +64,7 @@ export function SearchBar({
 
         {/* X button - clears text if present, otherwise closes search */}
         <TouchableOpacity style={styles.closeButton} onPress={handleClearOrClose}>
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
             <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
             <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
           </Svg>
@@ -74,23 +76,20 @@ export function SearchBar({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: theme.colors.background.primary,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: themeBase.spacing.lg,
+    paddingVertical: themeBase.spacing.sm,
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.background.tertiary,
-    borderRadius: theme.borderRadius.lg,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    gap: theme.spacing.sm,
+    borderRadius: themeBase.borderRadius.lg,
+    paddingHorizontal: themeBase.spacing.md,
+    paddingVertical: themeBase.spacing.sm,
+    gap: themeBase.spacing.sm,
   },
   input: {
     flex: 1,
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.text.primary,
+    fontSize: themeBase.typography.fontSize.base,
     padding: 0,
   },
   closeButton: {

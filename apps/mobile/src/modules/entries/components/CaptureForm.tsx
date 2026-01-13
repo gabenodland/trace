@@ -1516,7 +1516,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   if ((isEditing || isCopiedEntry) && !isFormReady) {
     return (
       <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
-        <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>Loading...</Text>
+        <Text style={[styles.loadingText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading...</Text>
       </View>
     );
   }
@@ -1527,9 +1527,9 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   if (isEditing && !entry && !savedEntryId) {
     return (
       <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
-        <Text style={[styles.errorText, { color: theme.colors.functional.overdue }]}>Entry not found</Text>
+        <Text style={[styles.errorText, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.medium }]}>Entry not found</Text>
         <TouchableOpacity onPress={() => navigate("inbox")} style={[styles.backButton, { backgroundColor: theme.colors.functional.accent }]}>
-          <Text style={[styles.backButtonText, { color: "#ffffff" }]}>Back to Uncategorized</Text>
+          <Text style={[styles.backButtonText, { color: "#ffffff", fontFamily: theme.typography.fontFamily.semibold }]}>Back to Uncategorized</Text>
         </TouchableOpacity>
       </View>
     );
@@ -1623,7 +1623,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
                 }
               }}
             >
-              <Text style={[styles.titlePlaceholder, { color: theme.colors.text.disabled }]}>
+              <Text style={[styles.titlePlaceholder, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]}>
                 {isEditMode ? "Add Title" : "Untitled"}
               </Text>
             </TouchableOpacity>
@@ -1634,7 +1634,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               onPress={handleTitlePress}
               style={styles.titleTouchable}
             >
-              <Text style={[styles.titleText, { color: theme.colors.text.primary }]}>
+              <Text style={[styles.titleText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>
                 {formData.title || "Title"}
               </Text>
             </TouchableOpacity>
@@ -1646,7 +1646,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
               onChangeText={(text) => updateField("title", text.replace(/\n/g, ' '))}
               placeholder={isTitleFocused ? "" : "Add Title"}
               placeholderTextColor={theme.colors.text.disabled}
-              style={[styles.titleInputFullWidth, { color: theme.colors.text.primary }]}
+              style={[styles.titleInputFullWidth, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}
               editable={!isSubmitting}
               multiline={true}
               blurOnSubmit={true}
@@ -2097,7 +2097,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       {/* Snackbar */}
       {snackbarMessage && (
         <Animated.View style={[styles.snackbar, { opacity: snackbarOpacity }]}>
-          <Text style={styles.snackbarText}>{snackbarMessage}</Text>
+          <Text style={[styles.snackbarText, { fontFamily: theme.typography.fontFamily.medium }]}>{snackbarMessage}</Text>
         </Animated.View>
       )}
     </View>

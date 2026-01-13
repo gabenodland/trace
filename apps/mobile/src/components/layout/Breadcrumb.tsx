@@ -44,8 +44,8 @@ export function Breadcrumb({ segments, onSegmentPress, badge, theme }: Breadcrum
               {index === segments.length - 1 && segment.icon}
               <Text style={[
                 styles.segmentText,
-                { color: theme.colors.text.tertiary },
-                index === segments.length - 1 && [styles.segmentTextLast, { color: theme.colors.text.primary }]
+                { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium },
+                index === segments.length - 1 && [styles.segmentTextLast, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]
               ]}>
                 {segment.label}
               </Text>
@@ -53,7 +53,7 @@ export function Breadcrumb({ segments, onSegmentPress, badge, theme }: Breadcrum
               {/* Badge on last segment */}
               {index === segments.length - 1 && badge !== undefined && (
                 <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
-                  <Text style={[styles.badgeText, { color: theme.colors.text.secondary }]}>{badge}</Text>
+                  <Text style={[styles.badgeText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.semibold }]}>{badge}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -89,11 +89,11 @@ const styles = StyleSheet.create({
   },
   segmentText: {
     fontSize: themeBase.typography.fontSize.base,
-    fontWeight: themeBase.typography.fontWeight.medium,
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   segmentTextLast: {
     fontSize: 20,
-    fontWeight: themeBase.typography.fontWeight.bold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   badge: {
     borderRadius: themeBase.borderRadius.full,
@@ -105,6 +105,6 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: themeBase.typography.fontSize.sm,
-    fontWeight: themeBase.typography.fontWeight.semibold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
 });

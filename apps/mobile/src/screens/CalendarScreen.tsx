@@ -562,22 +562,22 @@ export function CalendarScreen() {
           <View style={[styles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
             <View style={styles.monthHeader}>
               <TouchableOpacity onPress={handlePrevMonth} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>‹</Text>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>‹</Text>
               </TouchableOpacity>
-              <Text style={[styles.monthTitle, { color: theme.colors.text.primary }]}>{monthName}</Text>
+              <Text style={[styles.monthTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{monthName}</Text>
               <TouchableOpacity onPress={handleNextMonth} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>›</Text>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>›</Text>
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity onPress={handleToday} style={[styles.todayButton, { backgroundColor: theme.colors.functional.accent }]}>
-              <Text style={styles.todayButtonText}>Today</Text>
+              <Text style={[styles.todayButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>Today</Text>
             </TouchableOpacity>
 
             <View style={styles.weekRow}>
               {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
                 <View key={index} style={styles.dayHeaderCell}>
-                  <Text style={[styles.dayHeaderText, { color: theme.colors.text.secondary }]}>{day}</Text>
+                  <Text style={[styles.dayHeaderText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.semibold }]}>{day}</Text>
                 </View>
               ))}
             </View>
@@ -652,11 +652,11 @@ export function CalendarScreen() {
           <View style={[styles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
             <View style={styles.monthViewHeader}>
               <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear - 1); setSelectedMonth(null); }} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>‹</Text>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>‹</Text>
               </TouchableOpacity>
-              <Text style={[styles.yearTitle, { color: theme.colors.text.primary }]}>{monthViewYear}</Text>
+              <Text style={[styles.yearTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{monthViewYear}</Text>
               <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear + 1); setSelectedMonth(null); }} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>›</Text>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>›</Text>
               </TouchableOpacity>
             </View>
 
@@ -681,7 +681,7 @@ export function CalendarScreen() {
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.monthCellText, { color: theme.colors.text.primary }, isSelected && { color: "#ffffff" }]}>
+                    <Text style={[styles.monthCellText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }, isSelected && { color: "#ffffff" }]}>
                       {name.substring(0, 3)}
                     </Text>
                     {count > 0 && (
@@ -763,11 +763,11 @@ export function CalendarScreen() {
           <View style={[styles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
             <View style={styles.yearViewHeader}>
               <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade - 10); setSelectedYear(null); }} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>‹</Text>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>‹</Text>
               </TouchableOpacity>
-              <Text style={[styles.decadeTitle, { color: theme.colors.text.primary }]}>{decadeStart}-{decadeEnd}</Text>
+              <Text style={[styles.decadeTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{decadeStart}-{decadeEnd}</Text>
               <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade + 10); setSelectedYear(null); }} style={[styles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}>›</Text>
+                <Text style={[styles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>›</Text>
               </TouchableOpacity>
             </View>
 
@@ -791,7 +791,7 @@ export function CalendarScreen() {
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.yearCellText, { color: theme.colors.text.primary }, isSelected && { color: "#ffffff" }]}>
+                    <Text style={[styles.yearCellText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }, isSelected && { color: "#ffffff" }]}>
                       {year}
                     </Text>
                     {count > 0 && (
@@ -874,8 +874,8 @@ export function CalendarScreen() {
           onPress={() => setShowDateFieldSelector(true)}
           activeOpacity={0.7}
         >
-          <Text style={[styles.dateFieldLabel, { color: theme.colors.text.tertiary }]}>Show by:</Text>
-          <Text style={[styles.dateFieldText, { color: theme.colors.text.primary }]}>{dateFieldLabel}</Text>
+          <Text style={[styles.dateFieldLabel, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>Show by:</Text>
+          <Text style={[styles.dateFieldText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>{dateFieldLabel}</Text>
           <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
             <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
@@ -896,7 +896,7 @@ export function CalendarScreen() {
         >
           <View style={[styles.dateFieldModal, { backgroundColor: theme.colors.background.primary }]}>
             <View style={[styles.dateFieldModalHeader, { borderBottomColor: theme.colors.border.light }]}>
-              <Text style={[styles.dateFieldModalTitle, { color: theme.colors.text.primary }]}>Show Entries By</Text>
+              <Text style={[styles.dateFieldModalTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Show Entries By</Text>
             </View>
             {CALENDAR_DATE_FIELDS.map((field) => {
               const isSelected = field.value === dateField;
@@ -916,8 +916,8 @@ export function CalendarScreen() {
                 >
                   <Text style={[
                     styles.dateFieldOptionText,
-                    { color: theme.colors.text.primary },
-                    isSelected && styles.dateFieldOptionTextSelected,
+                    { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
+                    isSelected && { fontFamily: theme.typography.fontFamily.semibold },
                   ]}>
                     {field.label}
                   </Text>
@@ -975,7 +975,7 @@ export function CalendarScreen() {
           onPress={() => setZoomLevel("day")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, { color: theme.colors.text.secondary }, zoomLevel === "day" && { color: theme.colors.functional.accent, fontWeight: "600" }]}>Day</Text>
+          <Text style={[styles.tabText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }, zoomLevel === "day" && { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>Day</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -983,7 +983,7 @@ export function CalendarScreen() {
           onPress={() => setZoomLevel("month")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, { color: theme.colors.text.secondary }, zoomLevel === "month" && { color: theme.colors.functional.accent, fontWeight: "600" }]}>Month</Text>
+          <Text style={[styles.tabText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }, zoomLevel === "month" && { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>Month</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -991,7 +991,7 @@ export function CalendarScreen() {
           onPress={() => setZoomLevel("year")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, { color: theme.colors.text.secondary }, zoomLevel === "year" && { color: theme.colors.functional.accent, fontWeight: "600" }]}>Year</Text>
+          <Text style={[styles.tabText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }, zoomLevel === "year" && { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>Year</Text>
         </TouchableOpacity>
       </View>
 
@@ -1030,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     fontSize: 20,
-    fontWeight: "700",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     flex: 1,
     textAlign: "center",
   },
@@ -1043,7 +1043,7 @@ const styles = StyleSheet.create({
   },
   navButtonText: {
     fontSize: 28,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   todayButton: {
     alignSelf: "center",
@@ -1054,7 +1054,7 @@ const styles = StyleSheet.create({
   },
   todayButtonText: {
     fontSize: 14,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     color: "#ffffff",
   },
   weekRow: {
@@ -1068,7 +1068,7 @@ const styles = StyleSheet.create({
   },
   dayHeaderText: {
     fontSize: 12,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   calendarGrid: {
     marginTop: 8,
@@ -1085,7 +1085,7 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontSize: 14,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   countBadge: {
     position: "absolute",
@@ -1099,7 +1099,7 @@ const styles = StyleSheet.create({
   },
   countText: {
     fontSize: 10,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     color: "#ffffff",
   },
   // Tab styles
@@ -1117,7 +1117,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 14,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   // Month view styles
   monthViewHeader: {
@@ -1128,7 +1128,7 @@ const styles = StyleSheet.create({
   },
   yearTitle: {
     fontSize: 24,
-    fontWeight: "700",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     flex: 1,
     textAlign: "center",
   },
@@ -1152,7 +1152,7 @@ const styles = StyleSheet.create({
   },
   monthCellText: {
     fontSize: 14,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   // Year view styles
   yearViewHeader: {
@@ -1163,7 +1163,7 @@ const styles = StyleSheet.create({
   },
   decadeTitle: {
     fontSize: 24,
-    fontWeight: "700",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
     flex: 1,
     textAlign: "center",
   },
@@ -1187,7 +1187,7 @@ const styles = StyleSheet.create({
   },
   yearCellText: {
     fontSize: 16,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   // SubBar styles
   subBar: {
@@ -1202,11 +1202,11 @@ const styles = StyleSheet.create({
   },
   dateFieldLabel: {
     fontSize: 14,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   dateFieldText: {
     fontSize: 14,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   // Modal styles
   modalOverlay: {
@@ -1234,7 +1234,7 @@ const styles = StyleSheet.create({
   },
   dateFieldModalTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   dateFieldOption: {
     flexDirection: "row",
@@ -1245,9 +1245,7 @@ const styles = StyleSheet.create({
   },
   dateFieldOptionText: {
     fontSize: 16,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
-  dateFieldOptionTextSelected: {
-    fontWeight: "600",
-  },
+  // Note: dateFieldOptionTextSelected removed - font weight now applied via inline fontFamily
 });

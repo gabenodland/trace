@@ -112,10 +112,10 @@ export function TopBar({
           disabled={!onTitlePress}
           activeOpacity={onTitlePress ? 0.7 : 1}
         >
-          <Text style={[styles.title, { color: theme.colors.text.primary }]}>{title}</Text>
+          <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{title}</Text>
           {badge !== undefined && (
             <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
-              <Text style={[styles.badgeText, { color: theme.colors.text.secondary }]}>{badge}</Text>
+              <Text style={[styles.badgeText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.semibold }]}>{badge}</Text>
             </View>
           )}
           {showDropdownArrow && (
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: themeBase.typography.fontWeight.bold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   badge: {
     borderRadius: themeBase.borderRadius.full,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: themeBase.typography.fontSize.sm,
-    fontWeight: themeBase.typography.fontWeight.semibold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   dropdownArrow: {
     marginLeft: 4,

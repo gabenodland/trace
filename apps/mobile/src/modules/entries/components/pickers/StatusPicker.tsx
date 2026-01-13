@@ -7,7 +7,8 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import Svg, { Path, Line } from "react-native-svg";
 import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
-import { theme } from "../../../../shared/theme/theme";
+import { themeBase } from "../../../../shared/theme/themeBase";
+import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { StatusIcon } from "../../../../shared/components/StatusIcon";
 import {
   type EntryStatus,
@@ -35,6 +36,8 @@ export function StatusPicker({
   onSnackbar,
   allowedStatuses,
 }: StatusPickerProps) {
+  const dynamicTheme = useTheme();
+
   // Use provided statuses or fall back to defaults
   const availableStatuses = allowedStatuses ?? DEFAULT_STREAM_STATUSES;
 
@@ -65,12 +68,12 @@ export function StatusPicker({
 
   return (
     <TopBarDropdownContainer visible={visible} onClose={onClose}>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: dynamicTheme.colors.background.primary }]}>
         {/* Header with title and close button */}
         <View style={styles.header}>
-          <Text style={styles.title}>Set Status</Text>
+          <Text style={[styles.title, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>Set Status</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
               <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
               <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
             </Svg>
@@ -79,14 +82,14 @@ export function StatusPicker({
 
         {/* Legacy status warning */}
         {isLegacyStatus && legacyStatusInfo && (
-          <View style={styles.legacyWarning}>
+          <View style={[styles.legacyWarning, { backgroundColor: dynamicTheme.colors.functional.accentLight }]}>
             <View style={styles.legacyStatusRow}>
               <StatusIcon status={status} size={16} color={legacyStatusInfo.color} />
-              <Text style={[styles.legacyText, { color: legacyStatusInfo.color }]}>
+              <Text style={[styles.legacyText, { color: legacyStatusInfo.color, fontFamily: dynamicTheme.typography.fontFamily.semibold }]}>
                 Current: {legacyStatusInfo.label}
               </Text>
             </View>
-            <Text style={styles.legacyHint}>
+            <Text style={[styles.legacyHint, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>
               This status is no longer available. Select a new one below.
             </Text>
           </View>
@@ -100,7 +103,8 @@ export function StatusPicker({
                 key={option.value}
                 style={[
                   styles.optionButton,
-                  status === option.value && styles.optionButtonSelected,
+                  { backgroundColor: dynamicTheme.colors.background.secondary },
+                  status === option.value && { backgroundColor: dynamicTheme.colors.background.tertiary },
                 ]}
                 onPress={() => handleSelect(option.value)}
               >
@@ -110,7 +114,8 @@ export function StatusPicker({
                 <Text
                   style={[
                     styles.optionText,
-                    status === option.value && { color: option.color, fontWeight: "600" },
+                    { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },
+                    status === option.value && { color: option.color, fontFamily: dynamicTheme.typography.fontFamily.semibold },
                   ]}
                 >
                   {option.label}
@@ -128,14 +133,14 @@ export function StatusPicker({
         {/* Clear Button - only show when status is set AND "none" is in allowed statuses */}
         {status !== "none" && canClearStatus && (
           <TouchableOpacity
-            style={styles.clearButton}
+            style={[styles.clearButton, { backgroundColor: `${dynamicTheme.colors.functional.overdue}15` }]}
             onPress={handleClear}
           >
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={2}>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.overdue} strokeWidth={2}>
               <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
               <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
             </Svg>
-            <Text style={styles.clearButtonText}>Remove Status</Text>
+            <Text style={[styles.clearButtonText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.functional.overdue }]}>Remove Status</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -145,62 +150,52 @@ export function StatusPicker({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    borderRadius: themeBase.borderRadius.lg,
+    padding: themeBase.spacing.lg,
+    gap: themeBase.spacing.md,
     maxHeight: 600,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: theme.spacing.xs,
+    marginBottom: themeBase.spacing.xs,
   },
   title: {
     fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
   },
   closeButton: {
     padding: 4,
   },
   legacyWarning: {
-    backgroundColor: "#fef3c7",
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    gap: theme.spacing.xs,
+    borderRadius: themeBase.borderRadius.md,
+    padding: themeBase.spacing.md,
+    gap: themeBase.spacing.xs,
   },
   legacyStatusRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
   },
   legacyText: {
     fontSize: 14,
-    fontWeight: theme.typography.fontWeight.semibold,
   },
   legacyHint: {
     fontSize: 12,
-    color: "#92400e",
   },
   scrollView: {
     maxHeight: 420,
   },
   optionsContainer: {
-    gap: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
   },
   optionButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.background.secondary,
-    gap: theme.spacing.md,
-  },
-  optionButtonSelected: {
-    backgroundColor: theme.colors.background.tertiary,
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
+    gap: themeBase.spacing.md,
   },
   optionIcon: {
     width: 24,
@@ -209,8 +204,6 @@ const styles = StyleSheet.create({
   optionText: {
     flex: 1,
     fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
   },
   checkIcon: {
     marginLeft: "auto",
@@ -219,16 +212,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: "#fee2e2",
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.xs,
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.lg,
+    borderRadius: themeBase.borderRadius.md,
+    gap: themeBase.spacing.sm,
+    marginTop: themeBase.spacing.xs,
   },
   clearButtonText: {
     fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: "#dc2626",
   },
 });

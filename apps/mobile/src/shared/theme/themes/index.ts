@@ -12,6 +12,11 @@ import type { Theme, ThemeOption } from '../ThemeTypes';
 import { lightTheme } from './light';
 import { darkTheme } from './dark';
 import { sepiaTheme } from './sepia';
+import { highContrastTheme } from './highContrast';
+import { modernTheme } from './modern';
+import { techGreenTheme } from './techGreen';
+import { synthwaveLightTheme } from './synthwaveLight';
+import { synthwaveDarkTheme } from './synthwaveDark';
 
 /**
  * All available themes
@@ -21,6 +26,11 @@ export const themes: Theme[] = [
   lightTheme,
   darkTheme,
   sepiaTheme,
+  highContrastTheme,
+  modernTheme,
+  techGreenTheme,
+  synthwaveLightTheme,
+  synthwaveDarkTheme,
 ];
 
 /**
@@ -70,3 +80,8 @@ export const DEFAULT_THEME_ID = 'light';
 export { lightTheme } from './light';
 export { darkTheme } from './dark';
 export { sepiaTheme } from './sepia';
+export { highContrastTheme } from './highContrast';
+export { modernTheme } from './modern';
+export { techGreenTheme } from './techGreen';
+export { synthwaveLightTheme } from './synthwaveLight';
+export { synthwaveDarkTheme } from './synthwaveDark';

@@ -14,14 +14,24 @@ interface StreamDrawerItemProps {
   stream: Stream;
   isSelected: boolean;
   onPress: () => void;
+  // Optional drawer-specific colors (falls back to theme defaults)
+  textColor?: string;
+  textColorSecondary?: string;
+  textColorTertiary?: string;
 }
 
 export const StreamDrawerItem = React.memo(function StreamDrawerItem({
   stream,
   isSelected,
   onPress,
+  textColor,
+  textColorSecondary,
+  textColorTertiary,
 }: StreamDrawerItemProps) {
   const theme = useTheme();
+  const primaryColor = textColor || theme.colors.text.primary;
+  const secondaryColor = textColorSecondary || theme.colors.text.secondary;
+  const tertiaryColor = textColorTertiary || theme.colors.text.tertiary;
 
   return (
     <TouchableOpacity
@@ -31,13 +41,17 @@ export const StreamDrawerItem = React.memo(function StreamDrawerItem({
       delayPressIn={0}
     >
       <Text
-        style={[styles.name, { color: theme.colors.text.primary }, isSelected && { fontWeight: "600" }]}
+        style={[
+          styles.name,
+          { color: primaryColor, fontFamily: theme.typography.fontFamily.regular },
+          isSelected && { fontFamily: theme.typography.fontFamily.semibold },
+        ]}
         numberOfLines={1}
       >
         {stream.name}
       </Text>
       {stream.entry_count > 0 && (
-        <Text style={[styles.count, { color: theme.colors.text.tertiary }, isSelected && { color: theme.colors.text.secondary }]}>
+        <Text style={[styles.count, { color: tertiaryColor, fontFamily: theme.typography.fontFamily.medium }, isSelected && { color: secondaryColor }]}>
           {stream.entry_count}
         </Text>
       )}
@@ -53,6 +67,10 @@ interface QuickFilterItemProps {
   count: number;
   isSelected: boolean;
   onPress: () => void;
+  // Optional drawer-specific colors (falls back to theme defaults)
+  textColor?: string;
+  textColorSecondary?: string;
+  textColorTertiary?: string;
 }
 
 export const QuickFilterItem = React.memo(function QuickFilterItem({
@@ -60,8 +78,14 @@ export const QuickFilterItem = React.memo(function QuickFilterItem({
   count,
   isSelected,
   onPress,
+  textColor,
+  textColorSecondary,
+  textColorTertiary,
 }: QuickFilterItemProps) {
   const theme = useTheme();
+  const primaryColor = textColor || theme.colors.text.primary;
+  const secondaryColor = textColorSecondary || theme.colors.text.secondary;
+  const tertiaryColor = textColorTertiary || theme.colors.text.tertiary;
 
   return (
     <TouchableOpacity
@@ -71,13 +95,17 @@ export const QuickFilterItem = React.memo(function QuickFilterItem({
       delayPressIn={0}
     >
       <Text
-        style={[styles.name, { color: theme.colors.text.primary }, isSelected && { fontWeight: "600" }]}
+        style={[
+          styles.name,
+          { color: primaryColor, fontFamily: theme.typography.fontFamily.regular },
+          isSelected && { fontFamily: theme.typography.fontFamily.semibold },
+        ]}
         numberOfLines={1}
       >
         {label}
       </Text>
       {count > 0 && (
-        <Text style={[styles.count, { color: theme.colors.text.tertiary }, isSelected && { color: theme.colors.text.secondary }]}>
+        <Text style={[styles.count, { color: tertiaryColor, fontFamily: theme.typography.fontFamily.medium }, isSelected && { color: secondaryColor }]}>
           {count}
         </Text>
       )}
@@ -98,12 +126,10 @@ const styles = StyleSheet.create({
   name: {
     flex: 1,
     fontSize: 16,
-    fontWeight: "400",
     letterSpacing: -0.2,
   },
   count: {
     fontSize: 14,
-    fontWeight: "500",
     marginLeft: 12,
   },
 });

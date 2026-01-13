@@ -9,6 +9,7 @@ import { WebView } from 'react-native-webview';
 import { extractAttachmentIds } from '@trace/core';
 import { getAttachmentUri } from '../../attachments/mobileAttachmentApi';
 import { PhotoViewer } from '../../photos/components/PhotoViewer';
+import { useTheme } from '../../../shared/contexts/ThemeContext';
 
 interface WebViewHtmlRendererProps {
   html: string;
@@ -17,10 +18,35 @@ interface WebViewHtmlRendererProps {
 }
 
 /**
+ * Remove inline color styles from HTML to ensure theme colors are used
+ * This handles pasted content that may have hardcoded colors like "color: rgb(0, 0, 0)"
+ */
+function sanitizeHtmlColors(html: string): string {
+  return html.replace(
+    /style="([^"]*)"/gi,
+    (match, styleContent) => {
+      // Remove color and background-color properties from the style
+      const cleanedStyle = styleContent
+        .replace(/\bcolor\s*:\s*[^;]+;?/gi, '')
+        .replace(/background-color\s*:\s*[^;]+;?/gi, '')
+        .replace(/background\s*:\s*[^;]+;?/gi, '')
+        .trim();
+
+      // If style is now empty, remove the attribute entirely
+      if (!cleanedStyle) {
+        return '';
+      }
+      return `style="${cleanedStyle}"`;
+    }
+  );
+}
+
+/**
  * Render HTML content using WebView for full browser support
  * Supports task lists with checkboxes, proper indentation, etc.
  */
 export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlRendererProps) {
+  const theme = useTheme();
   const [photoUris, setPhotoUris] = useState<Record<string, string>>({});
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
@@ -53,8 +79,9 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
   }, [html]);
 
   // Process HTML to replace photo placeholders with actual URIs
+  // Also sanitize inline color styles that override theme
   const processedHtml = useMemo(() => {
-    let result = html;
+    let result = sanitizeHtmlColors(html);
 
     // Replace photo placeholders with actual image URIs
     for (const [photoId, uri] of Object.entries(photoUris)) {
@@ -68,7 +95,13 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
   }, [html, photoUris]);
 
   // CSS for proper HTML rendering including task lists
+  // Use theme colors and fonts for text to ensure readability on all theme backgrounds
+  const textColor = theme.colors.text.primary;
+  const accentColor = theme.colors.functional.accent;
+  const webFontUrl = theme.typography.webFontUrl;
+  const webFontFamily = theme.typography.webFontFamily;
   const css = `
+    @import url('${webFontUrl}');
     * {
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
@@ -82,10 +115,10 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
       display: block;
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: ${webFontFamily};
       font-size: 15px;
       line-height: 1.5;
-      color: #111827;
+      color: ${textColor};
       margin: 0;
       padding: 0;
       ${strikethrough ? 'text-decoration: line-through; opacity: 0.6;' : ''}
@@ -158,7 +191,7 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
       height: 16px;
       margin: 2px 0 0 0;
       cursor: pointer;
-      accent-color: #111827;
+      accent-color: ${textColor};
     }
     ul[data-type="taskList"] li > label span {
       display: none;
@@ -187,6 +220,12 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
       height: auto;
       border-radius: 8px;
       margin: 8px 0;
+    }
+
+    /* Links */
+    a {
+      color: ${accentColor} !important;
+      text-decoration: underline;
     }
   `;
 

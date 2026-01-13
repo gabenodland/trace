@@ -1,6 +1,7 @@
 import { View, StyleSheet } from "react-native";
 import { CaptureForm } from "../modules/entries/components/CaptureForm";
 import type { CopiedEntryData } from "../modules/entries/mobileEntryHooks";
+import { useTheme } from "../shared/contexts/ThemeContext";
 
 interface EntryScreenProps {
   entryId?: string | null;
@@ -13,8 +14,10 @@ interface EntryScreenProps {
 }
 
 export function EntryScreen({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, copiedEntryData }: EntryScreenProps = {}) {
+  const theme = useTheme();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
       <CaptureForm
         entryId={entryId}
         initialStreamId={initialStreamId}
@@ -30,6 +33,5 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
   },
 });

@@ -123,7 +123,7 @@ export const styles = StyleSheet.create({
   },
   titleInputFullWidth: {
     fontSize: 22,
-    fontWeight: themeBase.typography.fontWeight.bold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead (e.g., Inter_700Bold)
     padding: 0,
     margin: 0,
     textAlign: "center",
@@ -133,7 +133,7 @@ export const styles = StyleSheet.create({
   },
   titleText: {
     fontSize: 22,
-    fontWeight: themeBase.typography.fontWeight.bold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead (e.g., Inter_700Bold)
     textAlign: "center",
   },
   titleBarContent: {
@@ -250,12 +250,12 @@ export const styles = StyleSheet.create({
   },
   titlePlaceholder: {
     fontSize: 22,
-    fontWeight: themeBase.typography.fontWeight.bold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead (e.g., Inter_700Bold)
     textAlign: "center",
   },
   titleInput: {
     fontSize: 22,
-    fontWeight: themeBase.typography.fontWeight.bold,
+    // Note: fontWeight removed - use fontFamily with weight variant instead (e.g., Inter_700Bold)
     padding: 0,
     margin: 0,
   },

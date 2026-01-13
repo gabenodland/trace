@@ -106,7 +106,7 @@ export function StreamsScreen() {
 
           {/* Stream name */}
           <View style={styles.streamInfo}>
-            <Text style={[styles.streamName, { color: theme.colors.text.primary }]}>{stream.name}</Text>
+            <Text style={[styles.streamName, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>{stream.name}</Text>
           </View>
         </TouchableOpacity>
 
@@ -147,7 +147,7 @@ export function StreamsScreen() {
             <Path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
           <TextInput
-            style={[styles.searchInput, { color: theme.colors.text.primary }]}
+            style={[styles.searchInput, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
             placeholder="Search streams..."
             placeholderTextColor={theme.colors.text.tertiary}
             value={searchText}
@@ -166,11 +166,11 @@ export function StreamsScreen() {
       {/* Stream list */}
       {isLoading ? (
         <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>Loading streams...</Text>
+          <Text style={[styles.emptyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading streams...</Text>
         </View>
       ) : sortedStreams.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+          <Text style={[styles.emptyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
             {searchText ? "No streams match your search" : "No streams yet"}
           </Text>
           {!searchText && (
@@ -179,7 +179,7 @@ export function StreamsScreen() {
               onPress={handleCreateStream}
               activeOpacity={0.7}
             >
-              <Text style={styles.emptyButtonText}>Create your first stream</Text>
+              <Text style={[styles.emptyButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Create your first stream</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   },
   streamName: {
     fontSize: 16,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   actionButton: {
     width: 36,
@@ -290,6 +290,6 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: "#ffffff",
     fontSize: 16,
-    fontWeight: "500",
+    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
 });

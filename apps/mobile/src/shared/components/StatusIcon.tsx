@@ -1,25 +1,48 @@
 /**
  * StatusIcon - Shared status icon component
  * Renders the appropriate icon for each entry status
+ * Uses theme-aware colors based on status category
  */
 
 import React from "react";
 import Svg, { Path, Circle, Line, Rect } from "react-native-svg";
-import { getStatusColor, type EntryStatus } from "@trace/core";
+import { getStatusCategory, type EntryStatus, type StatusCategory } from "@trace/core";
+import { useTheme } from "../contexts/ThemeContext";
 
 interface StatusIconProps {
   status: EntryStatus;
   size?: number;
-  /** Override the default color from status */
+  /** Override the theme color */
   color?: string;
 }
 
 /**
+ * Get color from theme based on status category
+ */
+function getThemeStatusColor(
+  category: StatusCategory,
+  statusColors: { open: string; working: string; blocked: string; complete: string; cancelled: string },
+  textDisabled: string
+): string {
+  switch (category) {
+    case 'open': return statusColors.open;
+    case 'working': return statusColors.working;
+    case 'blocked': return statusColors.blocked;
+    case 'complete': return statusColors.complete;
+    case 'cancelled': return statusColors.cancelled;
+    case 'none':
+    default: return textDisabled;
+  }
+}
+
+/**
  * Renders the appropriate icon for a given entry status
- * Uses consistent icons across the app
+ * Uses theme-aware colors based on status category
  */
 export function StatusIcon({ status, size = 20, color }: StatusIconProps): React.ReactElement {
-  const iconColor = color ?? getStatusColor(status);
+  const theme = useTheme();
+  const category = getStatusCategory(status);
+  const iconColor = color ?? getThemeStatusColor(category, theme.colors.status, theme.colors.text.disabled);
   const strokeWidth = 2;
 
   switch (status) {
@@ -32,10 +55,12 @@ export function StatusIcon({ status, size = 20, color }: StatusIconProps): React
         </Svg>
       );
     case "new":
-      // Sparkle/star icon
+      // Plus in circle (new item added)
       return (
         <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={strokeWidth}>
-          <Path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z" strokeLinecap="round" strokeLinejoin="round" />
+          <Circle cx={12} cy={12} r={10} />
+          <Line x1={12} y1={8} x2={12} y2={16} strokeLinecap="round" />
+          <Line x1={8} y1={12} x2={16} y2={12} strokeLinecap="round" />
         </Svg>
       );
     case "todo":

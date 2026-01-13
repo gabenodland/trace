@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { View, TouchableOpacity, StyleSheet, Dimensions, Keyboard, Platform } from "react-native";
+import { useTheme } from "../../shared/contexts/ThemeContext";
 
 interface TopBarDropdownContainerProps {
   visible: boolean;
@@ -10,6 +11,7 @@ interface TopBarDropdownContainerProps {
 }
 
 export function TopBarDropdownContainer({ visible, onClose, children, fullHeight = false }: TopBarDropdownContainerProps) {
+  const dynamicTheme = useTheme();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -59,6 +61,7 @@ export function TopBarDropdownContainer({ visible, onClose, children, fullHeight
       {/* Dropdown Content */}
       <View style={[
         styles.dropdown,
+        { backgroundColor: dynamicTheme.colors.background.primary },
         fullHeight ? { height: dropdownHeight } : { maxHeight: maxDropdownHeight },
         fullHeight && styles.dropdownFullHeight,
       ]}>
@@ -84,16 +87,16 @@ const styles = StyleSheet.create({
     top: 110,
     left: 16,
     right: 16,
-    backgroundColor: "#ffffff",
+    // backgroundColor applied inline via dynamicTheme
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 1000, // Ensure dropdown renders above backdrop and toolbar
+    elevation: 1000,
     zIndex: 1000,
-    overflow: "hidden", // Prevent content from overflowing rounded corners
+    overflow: "hidden",
   },
   dropdownFullHeight: {
     // When full height, remove bottom radius since it touches keyboard/screen edge

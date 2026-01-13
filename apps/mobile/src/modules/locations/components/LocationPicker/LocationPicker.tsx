@@ -14,7 +14,7 @@ import { View, Text, TouchableOpacity, Modal, SafeAreaView, Platform } from 'rea
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { type Location as LocationType } from '@trace/core';
-import { theme } from '../../../../shared/theme/theme';
+import { useTheme } from '../../../../shared/contexts/ThemeContext';
 import { locationPickerStyles as styles } from '../../styles/locationPickerStyles';
 import { type LocationPickerMode, createSelectionFromMapTap } from '../../types/LocationPickerTypes';
 import { useLocationPicker } from './hooks/useLocationPicker';
@@ -39,6 +39,8 @@ export function LocationPicker({
   mode,
   readOnly = false,
 }: LocationPickerProps) {
+  const dynamicTheme = useTheme();
+
   // Support legacy readOnly prop - convert to mode
   const propMode: LocationPickerMode = mode ?? (readOnly ? 'view' : 'select');
 
@@ -136,12 +138,12 @@ export function LocationPicker({
       presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: dynamicTheme.colors.background.primary }]}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{getHeaderTitle()}</Text>
+        <View style={[styles.header, { borderBottomColor: dynamicTheme.colors.border.light }]}>
+          <Text style={[styles.headerTitle, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>{getHeaderTitle()}</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.primary} strokeWidth={2}>
               <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
@@ -159,7 +161,7 @@ export function LocationPicker({
                 onPress={picker.effectiveMode === 'select' ? picker.handleMapPress : undefined}
                 onRegionChangeComplete={picker.effectiveMode === 'select' ? picker.handleRegionChangeComplete : undefined}
                 mapType="standard"
-                userInterfaceStyle="light"
+                userInterfaceStyle={dynamicTheme.isDark ? "dark" : "light"}
                 showsUserLocation={false}
                 showsMyLocationButton={false}
                 showsCompass={false}
@@ -182,8 +184,8 @@ export function LocationPicker({
                   >
                     {picker.effectiveMode !== 'view' && (
                       <Callout tooltip>
-                        <View style={styles.calloutContainer}>
-                          <Text style={styles.calloutText} numberOfLines={2}>
+                        <View style={[styles.calloutContainer, { backgroundColor: dynamicTheme.colors.functional.accent }]}>
+                          <Text style={[styles.calloutText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: '#ffffff' }]} numberOfLines={2}>
                             {picker.selection.location?.name || "Selected Location"}
                           </Text>
                         </View>
@@ -207,10 +209,10 @@ export function LocationPicker({
 
               {/* My Location Button */}
               <TouchableOpacity
-                style={styles.mapLocationButton}
+                style={[styles.mapLocationButton, { backgroundColor: dynamicTheme.colors.background.primary }]}
                 onPress={picker.handleCenterOnMyLocation}
               >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth={2}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.primary} strokeWidth={2}>
                   <Circle cx="12" cy="12" r="10" />
                   <Path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
                 </Svg>

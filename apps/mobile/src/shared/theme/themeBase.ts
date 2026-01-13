@@ -1,8 +1,8 @@
 /**
  * Theme Base - Shared values across all themes
  *
- * These values don't change between themes (spacing, typography, border radius).
- * Only colors and shadows change per theme.
+ * These values don't change between themes (spacing, font sizes, border radius).
+ * Colors, shadows, and fontFamily change per theme.
  */
 
 /**
@@ -19,10 +19,12 @@ export const spacing = {
 } as const;
 
 /**
- * Typography
+ * Typography - font sizes, weights, line heights (shared across themes)
+ * Note: fontFamily is now defined per-theme in each theme file
  */
 export const typography = {
-  // Font family
+  // LEGACY: fontFamily kept for type compatibility but NOT used
+  // Each theme defines its own fontFamily in its typography section
   fontFamily: {
     regular: 'MavenPro_400Regular',
     medium: 'MavenPro_500Medium',

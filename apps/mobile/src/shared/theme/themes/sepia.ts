@@ -39,15 +39,39 @@ export const sepiaTheme: Theme = {
       complete: '#5D8A66',     // Muted green
       incomplete: '#8B7D6B',   // Brown-gray
       overdue: '#B85450',      // Muted red
-      accent: '#8B6914',       // Amber/gold
-      accentLight: '#FEF3C7',  // Light amber bg
+      accent: '#C06C52',       // Terracotta/coral
+      accentLight: '#FDF0EC',  // Light terracotta bg
     },
 
     interactive: {
-      primary: '#8B6914',      // Amber/gold
-      primaryHover: '#A47E1A', // Lighter amber
+      primary: '#C06C52',      // Terracotta/coral
+      primaryHover: '#A85A42', // Darker terracotta
       secondary: '#5C5046',    // Brown
     },
+
+    status: {
+      open: '#7B9EBF',         // Dusty blue - new, todo
+      working: '#C4784A',      // Burnt sienna - in_progress, in_review
+      blocked: '#C9A227',      // Mustard - waiting, on_hold
+      complete: '#6B8E6B',     // Sage green - done, closed
+      cancelled: '#B85450',    // Muted brick red - cancelled
+    },
+
+    surface: {
+      overlay: '#EDE4D9',      // Warm tan for drawers
+      elevated: '#F7F0E8',     // Light tan for menus
+    },
+  },
+
+  typography: {
+    fontFamily: {
+      regular: 'Lora_400Regular',
+      medium: 'Lora_500Medium',
+      semibold: 'Lora_600SemiBold',
+      bold: 'Lora_700Bold',
+    },
+    webFontFamily: "'Lora', Georgia, 'Times New Roman', serif",
+    webFontUrl: 'https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap',
   },
 
   shadows: {

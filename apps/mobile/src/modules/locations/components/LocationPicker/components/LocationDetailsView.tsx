@@ -8,7 +8,7 @@
 
 import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { theme } from '../../../../../shared/theme/theme';
+import { useTheme } from '../../../../../shared/contexts/ThemeContext';
 import { locationPickerStyles as styles } from '../../../styles/locationPickerStyles';
 import {
   type LocationSelection,
@@ -42,6 +42,7 @@ export function LocationDetailsView({
   handleSwitchToSelectMode,
   handleRemoveLocation,
 }: LocationDetailsViewProps) {
+  const dynamicTheme = useTheme();
   // Build formatted address lines
   const getAddressLines = (): string[] => {
     if (!selection.location) return [];
@@ -77,8 +78,8 @@ export function LocationDetailsView({
     <View style={styles.createLocationContainer}>
       {selection.isLoadingDetails && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator />
-          <Text style={styles.loadingText}>Loading location details...</Text>
+          <ActivityIndicator color={dynamicTheme.colors.functional.accent} />
+          <Text style={[styles.loadingText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>Loading location details...</Text>
         </View>
       )}
 
@@ -86,16 +87,16 @@ export function LocationDetailsView({
         <ScrollView style={styles.createLocationScroll} contentContainerStyle={styles.createLocationContent}>
           {/* Name Section */}
           <View style={styles.formSection}>
-            <Text style={styles.formLabel}>Name</Text>
+            <Text style={[styles.formLabel, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>Name</Text>
             {isViewMode ? (
-              <Text style={styles.formValueLarge}>{ui.editableNameInput || 'Unnamed Location'}</Text>
+              <Text style={[styles.formValueLarge, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>{ui.editableNameInput || 'Unnamed Location'}</Text>
             ) : (
               <TextInput
-                style={styles.formInput}
+                style={[styles.formInput, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary, backgroundColor: dynamicTheme.colors.background.secondary, borderColor: dynamicTheme.colors.border.light }]}
                 value={ui.editableNameInput}
                 onChangeText={(text) => setUI(prev => ({ ...prev, editableNameInput: text }))}
                 placeholder="Enter location name..."
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={dynamicTheme.colors.text.tertiary}
                 autoFocus={!ui.editableNameInput}
               />
             )}
@@ -105,13 +106,13 @@ export function LocationDetailsView({
           <View style={styles.formSection}>
             {addressLines.length > 0 ? (
               <>
-                <Text style={styles.formLabel}>Address</Text>
-                <Text style={styles.formValue}>{addressLines.join('\n')}</Text>
+                <Text style={[styles.formLabel, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>Address</Text>
+                <Text style={[styles.formValue, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>{addressLines.join('\n')}</Text>
               </>
             ) : (
               <>
-                <Text style={styles.formLabel}>Coordinates</Text>
-                <Text style={styles.formValue}>
+                <Text style={[styles.formLabel, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>Coordinates</Text>
+                <Text style={[styles.formValue, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
                   {selection.location.latitude.toFixed(6)}, {selection.location.longitude.toFixed(6)}
                 </Text>
               </>
@@ -119,54 +120,54 @@ export function LocationDetailsView({
           </View>
 
           {/* Divider */}
-          <View style={styles.formDivider} />
+          <View style={[styles.formDivider, { backgroundColor: dynamicTheme.colors.border.light }]} />
 
           {/* Action Buttons */}
           <View style={styles.formActions}>
             {/* Primary action - Save (create mode) or hidden (view mode) */}
             {!isViewMode && (
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={[styles.primaryButton, { backgroundColor: dynamicTheme.colors.functional.accent }]}
                 onPress={handleOKPress}
               >
-                <Text style={styles.primaryButtonText}>Save Location</Text>
+                <Text style={[styles.primaryButtonText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: '#ffffff' }]}>Save Location</Text>
               </TouchableOpacity>
             )}
 
             {/* Change Location Button */}
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[styles.actionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={handleSwitchToSelectMode}
             >
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.primary} strokeWidth={2}>
                 <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                <Circle cx={12} cy={10} r={3} fill={theme.colors.text.primary} />
+                <Circle cx={12} cy={10} r={3} fill={dynamicTheme.colors.text.primary} />
               </Svg>
-              <Text style={styles.actionButtonText}>Change Location</Text>
+              <Text style={[styles.actionButtonText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>Change Location</Text>
             </TouchableOpacity>
 
             {/* Remove Location Button - same outline style, red text */}
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[styles.actionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={handleRemoveLocation}
             >
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={2}>
                 <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={[styles.actionButtonText, { color: '#dc2626' }]}>Remove Location</Text>
+              <Text style={[styles.actionButtonText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: '#dc2626' }]}>Remove Location</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       ) : (
         <View style={styles.emptyDetailsState}>
-          <View style={[styles.poiIconContainer, { width: 48, height: 48, borderRadius: 24, marginBottom: 16 }]}>
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
+          <View style={[styles.poiIconContainer, { width: 48, height: 48, borderRadius: 24, marginBottom: 16, backgroundColor: dynamicTheme.colors.background.secondary }]}>
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-              <Circle cx={12} cy={10} r={3} fill="#9ca3af" />
+              <Circle cx={12} cy={10} r={3} fill={dynamicTheme.colors.text.tertiary} />
             </Svg>
           </View>
-          <Text style={styles.emptyDetailsText}>No location selected</Text>
-          <Text style={styles.emptyDetailsSubtext}>
+          <Text style={[styles.emptyDetailsText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>No location selected</Text>
+          <Text style={[styles.emptyDetailsSubtext, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]}>
             Tap the map or search for a place to get started
           </Text>
         </View>

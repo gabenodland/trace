@@ -8,7 +8,8 @@ import { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Line } from "react-native-svg";
 import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
-import { theme } from "../../../../shared/theme/theme";
+import { themeBase } from "../../../../shared/theme/themeBase";
+import { useTheme } from "../../../../shared/contexts/ThemeContext";
 
 interface EntryDatePickerProps {
   visible: boolean;
@@ -25,6 +26,7 @@ export function EntryDatePicker({
   onEntryDateChange,
   onSnackbar,
 }: EntryDatePickerProps) {
+  const dynamicTheme = useTheme();
   const today = new Date();
   const currentDate = new Date(entryDate);
 
@@ -122,14 +124,15 @@ export function EntryDatePicker({
         key={day}
         style={[
           styles.dayCell,
-          isSelected && styles.dayCellSelected,
+          isSelected && [styles.dayCellSelected, { backgroundColor: dynamicTheme.colors.text.primary }],
         ]}
         onPress={() => handleDayPress(day)}
       >
         <Text style={[
           styles.dayText,
-          isSelected && styles.dayTextSelected,
-          isToday && !isSelected && styles.dayTextToday,
+          { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary },
+          isSelected && { color: dynamicTheme.colors.background.primary, fontFamily: dynamicTheme.typography.fontFamily.semibold },
+          isToday && !isSelected && { color: dynamicTheme.colors.functional.accent, fontFamily: dynamicTheme.typography.fontFamily.bold },
         ]}>
           {day}
         </Text>
@@ -139,12 +142,12 @@ export function EntryDatePicker({
 
   return (
     <TopBarDropdownContainer visible={visible} onClose={onClose}>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: dynamicTheme.colors.background.primary }]}>
         {/* Header with title and close button */}
         <View style={styles.titleHeader}>
-          <Text style={styles.title}>Set Date</Text>
+          <Text style={[styles.title, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>Set Date</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
               <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
               <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
             </Svg>
@@ -155,23 +158,23 @@ export function EntryDatePicker({
         <View style={styles.navHeader}>
           <View style={styles.navButtons}>
             <TouchableOpacity onPress={handlePrevYear} style={styles.navButton}>
-              <Text style={styles.navText}>«</Text>
+              <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>«</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
-              <Text style={styles.navText}>‹</Text>
+              <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>‹</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.monthYear}>
+          <Text style={[styles.monthYear, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>
             {monthNames[displayMonth]} {displayYear}
           </Text>
 
           <View style={styles.navButtons}>
             <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-              <Text style={styles.navText}>›</Text>
+              <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleNextYear} style={styles.navButton}>
-              <Text style={styles.navText}>»</Text>
+              <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>»</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -180,7 +183,7 @@ export function EntryDatePicker({
         <View style={styles.weekDays}>
           {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
             <View key={i} style={styles.weekDayCell}>
-              <Text style={styles.weekDayText}>{day}</Text>
+              <Text style={[styles.weekDayText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.tertiary }]}>{day}</Text>
             </View>
           ))}
         </View>
@@ -193,10 +196,10 @@ export function EntryDatePicker({
         {/* Actions - Today only (no clear since entry date is required) */}
         <View style={styles.actions}>
           <TouchableOpacity
-            style={styles.actionButton}
+            style={[styles.actionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
             onPress={handleTodayPress}
           >
-            <Text style={styles.todayText}>Today</Text>
+            <Text style={[styles.todayText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>Today</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -206,20 +209,17 @@ export function EntryDatePicker({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
+    borderRadius: themeBase.borderRadius.lg,
+    padding: themeBase.spacing.lg,
   },
   titleHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: theme.spacing.md,
+    marginBottom: themeBase.spacing.md,
   },
   title: {
     fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
   },
   closeButton: {
     padding: 4,
@@ -228,38 +228,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: theme.spacing.md,
+    marginBottom: themeBase.spacing.md,
   },
   navButtons: {
     flexDirection: "row",
     alignItems: "center",
   },
   navButton: {
-    padding: theme.spacing.sm,
+    padding: themeBase.spacing.sm,
   },
   navText: {
     fontSize: 24,
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeight.normal,
   },
   monthYear: {
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
+    fontSize: themeBase.typography.fontSize.base,
   },
   weekDays: {
     flexDirection: "row",
-    marginBottom: theme.spacing.sm,
+    marginBottom: themeBase.spacing.sm,
   },
   weekDayCell: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: theme.spacing.xs,
+    paddingVertical: themeBase.spacing.xs,
   },
   weekDayText: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.xs,
   },
   daysGrid: {
     flexDirection: "row",
@@ -272,37 +266,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dayCellSelected: {
-    backgroundColor: theme.colors.text.primary,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: themeBase.borderRadius.md,
   },
   dayText: {
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeight.normal,
-  },
-  dayTextSelected: {
-    color: theme.colors.background.primary,
-    fontWeight: theme.typography.fontWeight.semibold,
-  },
-  dayTextToday: {
-    color: "#3b82f6",
-    fontWeight: theme.typography.fontWeight.bold,
+    fontSize: themeBase.typography.fontSize.base,
   },
   actions: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: theme.spacing.lg,
-    gap: theme.spacing.md,
+    marginTop: themeBase.spacing.lg,
+    gap: themeBase.spacing.md,
   },
   actionButton: {
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xl,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.background.secondary,
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.xl,
+    borderRadius: themeBase.borderRadius.md,
   },
   todayText: {
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontSize: themeBase.typography.fontSize.base,
   },
 });
