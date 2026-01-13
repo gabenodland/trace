@@ -42,6 +42,9 @@ interface CaptureFormProps {
 }
 
 export function CaptureForm({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, copiedEntryData }: CaptureFormProps = {}) {
+  // Profiling: Log when component mounts
+  console.log(`⏱️ CaptureForm: render (entryId=${entryId})`);
+
   const theme = useTheme();
 
   // Track when a new entry has been saved (for autosave transition from create to update)
@@ -60,7 +63,18 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Get user settings for default GPS capture behavior
   const { settings } = useSettings();
 
+  // IMPORTANT: Fetch entry and streams BEFORE useCaptureFormState
+  // This allows the form state to initialize directly from cached entry data
+  // avoiding the Loading flash when navigating from entry list
+  const { streams } = useStreams();
+  const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(
+    effectiveEntryId || null
+  );
+  // Profiling: Log when entry data is available
+  console.log(`⏱️ CaptureForm: useEntry returned (entry=${!!entry}, isLoading=${isLoadingEntry})`);
+
   // Single form data state hook (consolidates form field state + pending photos)
+  // When editing and entry is cached, form initializes directly from entry
   const { formData, updateField, updateMultipleFields, addPendingPhoto, removePendingPhoto, isDirty, setBaseline, markClean } = useCaptureFormState({
     isEditing,
     initialStreamId,
@@ -68,6 +82,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     initialContent,
     initialDate,
     captureGpsSetting: settings.captureGpsLocation,
+    entry: isEditing ? entry : null,
+    streams,
   });
 
   // UI State (NOT form data - keep as individual useState)
@@ -83,8 +99,18 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // GPS loading state (for capturing/reloading GPS)
   const [isGpsLoading, setIsGpsLoading] = useState(false);
   // Tracks when form data is fully loaded and ready for baseline
-  // New entries are ready immediately, editing/copying need to wait for data
-  const [isFormReady, setIsFormReady] = useState(!isEditing && !isCopiedEntry);
+  // Ready immediately when:
+  // - New entry (not editing, not copied)
+  // - Editing AND entry cached AND no location_id (form initialized from entry, no async fetch needed)
+  // Not ready when:
+  // - Editing but entry not cached yet
+  // - Editing with location_id (need to fetch location data)
+  // - Copied entry (needs processing)
+  const [isFormReady, setIsFormReady] = useState(() => {
+    if (!isEditing && !isCopiedEntry) return true; // New entry
+    if (isEditing && entry && !entry.location_id) return true; // Cached entry, no location fetch
+    return false; // Need to wait for entry or location
+  });
   // Track if we're capturing GPS from a cleared state (shows Save button instead of Remove)
   const [isNewGpsCapture, setIsNewGpsCapture] = useState(false);
   // Pending GPS data - holds captured GPS before user confirms with Save button
@@ -107,14 +133,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const [tempEntryId] = useState(() => copiedEntryData?.entry.entry_id || entryId || Crypto.randomUUID());
 
   const { entryMutations } = useEntries();
-  // When editing, refresh from server first to get latest version
-  // Use effectiveEntryId to handle autosaved new entries that transition to editing mode
-  const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(
-    effectiveEntryId || null,
-    { refreshFirst: !!entryId } // Only refresh if opened with an existing entryId
-  );
   const { user } = useAuthState();
-  const { streams } = useStreams();
   // Use React Query for photos to detect external sync changes
   const { attachments: queryAttachments } = useAttachments(effectiveEntryId || null);
   const { navigate, setBeforeBackHandler } = useNavigation();
@@ -563,6 +582,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     // Guard: Don't reload form if already loaded - version change handler deals with updates
     if (isFormReady) return;
 
+    console.time('⏱️ CaptureForm: entry data processing');
+
     // Build base form data synchronously
     const entryDate = entry.entry_date || entry.created_at || formData.entryDate;
     const includeTime = entryDate ? new Date(entryDate).getMilliseconds() !== 100 : formData.includeTime;
@@ -606,13 +627,17 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       updateMultipleFields(newFormData);
       // Mark load complete
       isInitialLoad.current = false;
+      console.timeEnd('⏱️ CaptureForm: entry data processing');
+      console.log('⏱️ CaptureForm: setIsFormReady(true)');
       setIsFormReady(true);
     };
 
     // Load location if needed, then finalize
     if (entry.location_id) {
+      console.time('⏱️ CaptureForm: location fetch');
       getLocationById(entry.location_id)
         .then(locationEntity => {
+          console.timeEnd('⏱️ CaptureForm: location fetch');
           if (locationEntity) {
             const location: LocationType = {
               location_id: locationEntity.location_id,
@@ -1513,12 +1538,15 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Show loading when editing/copying and form is not fully ready
   // This blocks rendering until entry AND location are both loaded
   if ((isEditing || isCopiedEntry) && !isFormReady) {
+    console.log(`⏱️ CaptureForm: showing Loading... (isEditing=${isEditing}, isCopiedEntry=${isCopiedEntry}, isFormReady=${isFormReady})`);
     return (
       <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
         <Text style={[styles.loadingText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading...</Text>
       </View>
     );
   }
+
+  console.log('⏱️ CaptureForm: rendering full form UI');
 
   // Show error if editing an EXISTING entry (opened via entryId) and entry not found
   // Don't show error if we just created the entry via autosave (savedEntryId is set)

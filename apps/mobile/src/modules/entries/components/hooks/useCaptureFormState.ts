@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useRef, useMemo } from "react";
-import type { Location as LocationType, EntryStatus } from "@trace/core";
+import type { Location as LocationType, EntryStatus, Entry, Stream } from "@trace/core";
 
 export interface PendingPhoto {
   photoId: string;
@@ -55,6 +55,10 @@ interface UseCaptureFormStateOptions {
   initialDate?: string;
   /** Whether to auto-capture GPS on new entries */
   captureGpsSetting: boolean;
+  /** Cached entry data for instant initialization (editing mode) */
+  entry?: Entry | null;
+  /** Streams list for looking up stream name */
+  streams?: Stream[];
 }
 
 /**
@@ -126,41 +130,88 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
     initialContent,
     initialDate,
     captureGpsSetting,
+    entry,
+    streams,
   } = options;
 
-  // Calculate initial values
+  // Calculate initial values for new entries
   const initialStrId = getInitialStreamId(isEditing, initialStreamId);
   const initialEntryDate = getInitialEntryDate(initialDate);
 
+  // Build initial form data based on whether we have cached entry
+  // This is computed once and used for both formData and baseline
+  const buildInitialFormData = (): CaptureFormData => {
+    // If editing and entry is already available (from React Query cache)
+    if (isEditing && entry) {
+      const entryDate = entry.entry_date || entry.created_at || initialEntryDate;
+      const includeTime = entryDate ? new Date(entryDate).getMilliseconds() !== 100 : true;
+      const streamName = entry.stream_id && streams?.length
+        ? streams.find(s => s.stream_id === entry.stream_id)?.name || null
+        : null;
+
+      return {
+        title: entry.title || "",
+        content: entry.content || "",
+        streamId: entry.stream_id || null,
+        streamName,
+        status: (entry.status as EntryStatus) || "none",
+        type: entry.type || null,
+        dueDate: entry.due_date || null,
+        rating: entry.rating ?? 0,
+        priority: entry.priority ?? 0,
+        entryDate,
+        includeTime,
+        gpsData: entry.entry_latitude != null && entry.entry_longitude != null
+          ? { latitude: entry.entry_latitude, longitude: entry.entry_longitude, accuracy: entry.location_accuracy ?? null }
+          : null,
+        locationData: null, // Location still needs async fetch if entry.location_id exists
+        pendingPhotos: [],
+      };
+    }
+
+    // Default initialization for new entries
+    return {
+      title: "",
+      content: initialContent || "",
+      streamId: initialStrId,
+      streamName:
+        !isEditing && initialStreamName && initialStrId !== null
+          ? initialStreamName
+          : null,
+      status: "none",
+      type: null,
+      dueDate: null,
+      rating: 0,
+      priority: 0,
+      entryDate: initialEntryDate,
+      includeTime: !initialDate, // If initialDate provided, hide time initially
+      gpsData: null, // GPS will be captured by CaptureForm if setting enabled
+      locationData: null, // Location is never auto-set
+      pendingPhotos: [],
+    };
+  };
+
   // SINGLE STATE OBJECT - per CLAUDE.md pattern
-  // GPS: auto-captured on new entries if setting enabled (will be populated by CaptureForm)
-  // Location: never auto-set, user must explicitly add
-  const [formData, setFormData] = useState<CaptureFormData>({
-    title: "",
-    content: initialContent || "",
-    streamId: initialStrId,
-    streamName:
-      !isEditing && initialStreamName && initialStrId !== null
-        ? initialStreamName
-        : null,
-    status: "none",
-    type: null,
-    dueDate: null,
-    rating: 0,
-    priority: 0,
-    entryDate: initialEntryDate,
-    includeTime: !initialDate, // If initialDate provided, hide time initially
-    gpsData: null, // GPS will be captured by CaptureForm if setting enabled
-    locationData: null, // Location is never auto-set
-    pendingPhotos: [],
-  });
+  // When editing and entry is available (from cache), initialize directly from entry
+  // This avoids the Loading flash by making formData ready on first render
+  const [formData, setFormData] = useState<CaptureFormData>(buildInitialFormData);
 
   // Baseline for dirty tracking - stores the "clean" state after load or save
   // We use a ref to avoid re-renders when setting baseline
-  const baselineRef = useRef<CaptureFormData | null>(null);
+  // When initialized from cached entry, set baseline immediately via useMemo
+  const initialBaseline = useMemo(() => {
+    if (isEditing && entry) {
+      // Deep clone the initial data for baseline
+      return JSON.parse(JSON.stringify(buildInitialFormData()));
+    }
+    return null;
+    // Only compute once on mount - entry availability at mount is what matters
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const baselineRef = useRef<CaptureFormData | null>(initialBaseline);
   // Counter to force isDirty to re-compute when baseline changes
   // (refs don't trigger re-renders, so we need this for useMemo dependency)
-  const [baselineVersion, setBaselineVersion] = useState(0);
+  const [baselineVersion, setBaselineVersion] = useState(() => isEditing && entry ? 1 : 0);
 
   // Generic update field helper - per CLAUDE.md pattern
   const updateField = useCallback(

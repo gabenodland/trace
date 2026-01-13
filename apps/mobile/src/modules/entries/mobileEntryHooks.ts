@@ -43,15 +43,29 @@ function useEntriesQuery(filter?: MobileEntryFilter) {
  * @param options.refreshFirst - If true, refresh from server before returning (use when editing)
  */
 function useEntryQuery(id: string | null, options?: { refreshFirst?: boolean }) {
+  const queryClient = useQueryClient();
+
   return useQuery({
     // Use same query key for both local and refresh - this ensures cache consistency
     queryKey: ['entry', id],
     queryFn: () => (id ? getEntry(id, { refreshFirst: options?.refreshFirst }) : Promise.resolve(null)),
     enabled: !!id,
-    // Override global staleTime to ensure entry always shows fresh data
+    // Show cached entry from list immediately while fetching fresh data
+    // This eliminates the loading spinner when navigating from entry list
+    placeholderData: () => {
+      if (!id) return undefined;
+      // Look for this entry in any cached entries list
+      const entriesQueries = queryClient.getQueriesData<Entry[]>({ queryKey: ['entries'] });
+      for (const [, entries] of entriesQueries) {
+        if (entries) {
+          const found = entries.find(e => e.entry_id === id);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    },
+    // staleTime: 0 means always refetch in background, but placeholderData shows instantly
     staleTime: 0,
-    // When refreshFirst is true, always refetch on mount to get latest from server
-    refetchOnMount: options?.refreshFirst ? 'always' : false,
   });
 }
 
