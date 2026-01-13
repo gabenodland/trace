@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert } from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated } from "react-native";
 import { useFonts } from "expo-font";
 // Theme fonts - all loaded upfront, user selects independently of theme
 import { MavenPro_400Regular, MavenPro_500Medium, MavenPro_600SemiBold, MavenPro_700Bold } from "@expo-google-fonts/maven-pro";
@@ -28,6 +28,7 @@ import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
 import { ThemeProvider, useTheme } from "./src/shared/contexts/ThemeContext";
 import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/DrawerContext";
 import { StreamDrawer } from "./src/components/drawer";
+import { useSwipeBackGesture } from "./src/shared/hooks/useSwipeBackGesture";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { EntryScreen } from "./src/screens/EntryScreen";
@@ -210,6 +211,9 @@ function AuthGate() {
  *
  * Main view screens (inbox, map, calendar) stay mounted for instant back navigation.
  * Sub-screens (capture, settings, etc.) mount/unmount as needed.
+ *
+ * Swipe-back gesture: When on a sub-screen, swiping right from anywhere brings
+ * the main view sliding in from the left (iOS-style back navigation).
  */
 interface AppContentProps {
   activeTab: string;
@@ -218,7 +222,7 @@ interface AppContentProps {
 }
 
 function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps) {
-  const { navigate } = useNavigation();
+  const { navigate, checkBeforeBack } = useNavigation();
   const { registerViewModeHandler, viewMode } = useDrawer();
   const theme = useTheme();
 
@@ -233,6 +237,16 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
   const mainViewScreens = ["inbox", "map", "calendar"];
   const isOnMainView = mainViewScreens.includes(activeTab);
 
+  // Target main view for swipe-back (the screen we came from)
+  const targetMainView = screenMap[viewMode];
+
+  // Swipe-back gesture - extracted to hook for cleaner code
+  const { panHandlers, mainViewTranslateX, isSwipingBack } = useSwipeBackGesture({
+    isEnabled: !isOnMainView,
+    onBack: () => navigate(targetMainView),
+    checkBeforeBack,
+  });
+
   // Keep main view screen ref in sync with viewMode
   useEffect(() => {
     setMainViewScreen(screenMap[viewMode]);
@@ -245,6 +259,17 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
     });
     return () => registerViewModeHandler(null);
   }, [registerViewModeHandler, navigate]);
+
+  // Helper: should a main view be visible?
+  const shouldShowMainView = (viewName: string) => {
+    if (isOnMainView) {
+      // On main view - show only the active one
+      return activeTab === viewName;
+    } else {
+      // On sub-screen - show only the target during swipe
+      return isSwipingBack && targetMainView === viewName;
+    }
+  };
 
   // Render sub-screen if not on main view
   const renderSubScreen = () => {
@@ -278,34 +303,67 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
   };
 
   return (
-    <View style={[styles.appContainer, { backgroundColor: theme.colors.background.secondary }]}>
-      {/* Main view screens - ALWAYS mounted as stacked layers */}
-      {/* Using absolute positioning prevents layout glitches during transitions */}
-      <View
-        style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary }, activeTab !== "inbox" && styles.screenHidden]}
-        pointerEvents={activeTab === "inbox" ? "auto" : "none"}
-      >
-        <EntryListScreen />
-      </View>
-      <View
-        style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary }, activeTab !== "map" && styles.screenHidden]}
-        pointerEvents={activeTab === "map" ? "auto" : "none"}
-      >
-        <MapScreen />
-      </View>
-      <View
-        style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary }, activeTab !== "calendar" && styles.screenHidden]}
-        pointerEvents={activeTab === "calendar" ? "auto" : "none"}
-      >
-        <CalendarScreen />
-      </View>
-
-      {/* Sub-screens - mount/unmount as needed, render on top */}
+    <View
+      style={[styles.appContainer, { backgroundColor: theme.colors.background.secondary }]}
+      {...panHandlers}
+    >
+      {/* Sub-screen layer - rendered FIRST when on sub-screen (bottom layer) */}
       {!isOnMainView && (
-        <View style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary }]} pointerEvents="auto">
+        <View style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary }]} pointerEvents={isSwipingBack ? "none" : "auto"}>
           {renderSubScreen()}
         </View>
       )}
+
+      {/* Main views layer - slides in from left during swipe-back */}
+      {/* When on main view: translateX = 0 (visible) */}
+      {/* When on sub-screen: translateX = -screenWidth (off-screen), slides to 0 during swipe */}
+      <Animated.View
+        style={[
+          styles.screenLayer,
+          {
+            backgroundColor: theme.colors.background.secondary,
+            transform: [{ translateX: isOnMainView ? 0 : mainViewTranslateX }],
+            // Shadow on right edge when sliding in
+            shadowColor: "#000",
+            shadowOffset: { width: 4, height: 0 },
+            shadowOpacity: isSwipingBack ? 0.15 : 0,
+            shadowRadius: 8,
+            elevation: isSwipingBack ? 16 : 0,
+          },
+        ]}
+        pointerEvents={isOnMainView ? "auto" : (isSwipingBack ? "auto" : "none")}
+      >
+        <View
+          style={[
+            styles.screenLayer,
+            { backgroundColor: theme.colors.background.secondary },
+            !shouldShowMainView("inbox") && styles.screenHidden,
+          ]}
+          pointerEvents={activeTab === "inbox" ? "auto" : "none"}
+        >
+          <EntryListScreen />
+        </View>
+        <View
+          style={[
+            styles.screenLayer,
+            { backgroundColor: theme.colors.background.secondary },
+            !shouldShowMainView("map") && styles.screenHidden,
+          ]}
+          pointerEvents={activeTab === "map" ? "auto" : "none"}
+        >
+          <MapScreen />
+        </View>
+        <View
+          style={[
+            styles.screenLayer,
+            { backgroundColor: theme.colors.background.secondary },
+            !shouldShowMainView("calendar") && styles.screenHidden,
+          ]}
+          pointerEvents={activeTab === "calendar" ? "auto" : "none"}
+        >
+          <CalendarScreen />
+        </View>
+      </Animated.View>
 
       {/* Stream Drawer - renders as overlay */}
       <StreamDrawer />
