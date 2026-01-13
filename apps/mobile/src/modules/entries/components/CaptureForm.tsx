@@ -14,7 +14,6 @@ import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { StreamPicker } from "../../streams/components/StreamPicker";
 import { BottomBar } from "../../../components/layout/BottomBar";
-import { TopBarDropdownContainer } from "../../../components/layout/TopBarDropdownContainer";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { LocationPicker } from "../../locations/components/LocationPicker";
@@ -1723,73 +1722,67 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
       {/* Stream Picker Dropdown - only render when active to avoid unnecessary hook calls */}
       {activePicker === 'stream' && (
-        <TopBarDropdownContainer
+        <StreamPicker
           visible={true}
           onClose={() => setActivePicker(null)}
-          fullHeight={true}
-        >
-          <StreamPicker
-            visible={true}
-            onClose={() => setActivePicker(null)}
-            isNewEntry={!isEditing}
-            onSelect={(id, name) => {
-              const hadStream = !!formData.streamId;
-              const isRemoving = !id;
-              updateField("streamId", id);
-              updateField("streamName", name);
+          isNewEntry={!isEditing}
+          onSelect={(id, name) => {
+            const hadStream = !!formData.streamId;
+            const isRemoving = !id;
+            updateField("streamId", id);
+            updateField("streamName", name);
 
-              // Apply templates when stream is selected (not removed)
-              if (id) {
-                const selectedStream = streams.find(s => s.stream_id === id);
+            // Apply templates when stream is selected (not removed)
+            if (id) {
+              const selectedStream = streams.find(s => s.stream_id === id);
 
-                if (selectedStream) {
-                  const templateDate = new Date();
-                  const titleIsBlank = !formData.title.trim();
-                  const contentIsBlank = !formData.content.trim();
+              if (selectedStream) {
+                const templateDate = new Date();
+                const titleIsBlank = !formData.title.trim();
+                const contentIsBlank = !formData.content.trim();
 
-                  // Apply title template if title is blank (independent of content)
-                  if (titleIsBlank && selectedStream.entry_title_template) {
-                    const newTitle = applyTitleTemplate(selectedStream.entry_title_template, {
-                      date: templateDate,
-                      streamName: selectedStream.name,
-                    });
-                    if (newTitle) {
-                      updateField("title", newTitle);
-                    }
-                  }
-
-                  // Apply content template if content is blank (independent of title)
-                  if (contentIsBlank && selectedStream.entry_content_template) {
-                    const newContent = applyContentTemplate(selectedStream.entry_content_template, {
-                      date: templateDate,
-                      streamName: selectedStream.name,
-                    });
-                    if (newContent) {
-                      updateField("content", newContent);
-                    }
-                  }
-
-                  // Apply default status if current status is "none"
-                  if (formData.status === "none" && selectedStream.entry_use_status && selectedStream.entry_default_status) {
-                    updateField("status", selectedStream.entry_default_status);
+                // Apply title template if title is blank (independent of content)
+                if (titleIsBlank && selectedStream.entry_title_template) {
+                  const newTitle = applyTitleTemplate(selectedStream.entry_title_template, {
+                    date: templateDate,
+                    streamName: selectedStream.name,
+                  });
+                  if (newTitle) {
+                    updateField("title", newTitle);
                   }
                 }
-              }
 
-              if (isRemoving && hadStream) {
-                showSnackbar('You removed the stream');
-              } else if (hadStream) {
-                showSnackbar('Success! You updated the stream.');
-              } else {
-                showSnackbar('Success! You added the stream.');
+                // Apply content template if content is blank (independent of title)
+                if (contentIsBlank && selectedStream.entry_content_template) {
+                  const newContent = applyContentTemplate(selectedStream.entry_content_template, {
+                    date: templateDate,
+                    streamName: selectedStream.name,
+                  });
+                  if (newContent) {
+                    updateField("content", newContent);
+                  }
+                }
+
+                // Apply default status if current status is "none"
+                if (formData.status === "none" && selectedStream.entry_use_status && selectedStream.entry_default_status) {
+                  updateField("status", selectedStream.entry_default_status);
+                }
               }
-              if (!isEditMode) {
-                enterEditMode();
-              }
-            }}
-            selectedStreamId={formData.streamId}
-          />
-        </TopBarDropdownContainer>
+            }
+
+            if (isRemoving && hadStream) {
+              showSnackbar('You removed the stream');
+            } else if (hadStream) {
+              showSnackbar('Success! You updated the stream.');
+            } else {
+              showSnackbar('Success! You added the stream.');
+            }
+            if (!isEditMode) {
+              enterEditMode();
+            }
+          }}
+          selectedStreamId={formData.streamId}
+        />
       )}
 
       {/* GPS Picker - Read-only display with remove/reload options */}

@@ -5,7 +5,8 @@
 
 import { useRef, useEffect, useCallback } from "react";
 import { View, Text, ScrollView, StyleSheet, NativeSyntheticEvent, NativeScrollEvent } from "react-native";
-import { theme } from "../../shared/theme/theme";
+import { useTheme } from "../../shared/contexts/ThemeContext";
+import { themeBase } from "../../shared/theme/themeBase";
 
 const ITEM_HEIGHT = 44;
 const VISIBLE_ITEMS = 3;
@@ -18,6 +19,7 @@ interface WheelPickerProps {
 }
 
 export function WheelPicker({ items, selectedValue, onValueChange, width = 80 }: WheelPickerProps) {
+  const dynamicTheme = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
   const isScrolling = useRef(false);
 
@@ -54,7 +56,7 @@ export function WheelPicker({ items, selectedValue, onValueChange, width = 80 }:
   return (
     <View style={[styles.container, { width }]}>
       {/* Selection highlight */}
-      <View style={styles.selectionHighlight} pointerEvents="none" />
+      <View style={[styles.selectionHighlight, { backgroundColor: dynamicTheme.colors.background.secondary }]} pointerEvents="none" />
 
       {/* Gradient overlays for fade effect */}
       <View style={styles.topGradient} pointerEvents="none" />
@@ -85,7 +87,8 @@ export function WheelPicker({ items, selectedValue, onValueChange, width = 80 }:
             <View key={item.key !== undefined ? item.key : item.value} style={styles.item}>
               <Text style={[
                 styles.itemText,
-                isSelected && styles.itemTextSelected,
+                { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary },
+                isSelected && { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary },
               ]}>
                 {item.label}
               </Text>
@@ -119,12 +122,6 @@ const styles = StyleSheet.create({
   },
   itemText: {
     fontSize: 20,
-    color: theme.colors.text.tertiary,
-    fontWeight: theme.typography.fontWeight.normal,
-  },
-  itemTextSelected: {
-    color: theme.colors.text.primary,
-    fontWeight: theme.typography.fontWeight.semibold,
   },
   selectionHighlight: {
     position: "absolute",
@@ -132,8 +129,7 @@ const styles = StyleSheet.create({
     left: 4,
     right: 4,
     height: ITEM_HEIGHT,
-    backgroundColor: theme.colors.background.secondary,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: themeBase.borderRadius.md,
     zIndex: -1,
   },
   topGradient: {

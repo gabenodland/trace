@@ -1,8 +1,14 @@
+/**
+ * StreamPicker - Stream selection picker component
+ * Uses PickerBottomSheet for consistent bottom sheet presentation
+ */
+
 import { useState, useRef, useEffect } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { useStreams } from "../mobileStreamHooks";
 import { StreamList } from "./StreamList";
-import Svg, { Path, Line } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
+import { PickerBottomSheet } from "../../../components/sheets";
 import { themeBase } from "../../../shared/theme/themeBase";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 
@@ -22,6 +28,13 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
   const { streams, isLoading } = useStreams();
   const [searchQuery, setSearchQuery] = useState("");
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Clear search when picker closes
+  useEffect(() => {
+    if (!visible) {
+      setSearchQuery("");
+    }
+  }, [visible]);
 
   // Scroll to selected item when picker becomes visible
   useEffect(() => {
@@ -56,23 +69,15 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header with title and close button */}
-      <View style={styles.header}>
-        <Text style={[styles.title, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>
-          {isNewEntry ? "Set Stream for New Entry" : "Set Stream"}
-        </Text>
-        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
-            <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-            <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-          </Svg>
-        </TouchableOpacity>
-      </View>
-
+    <PickerBottomSheet
+      visible={visible}
+      onClose={handleClose}
+      title={isNewEntry ? "Set Stream for New Entry" : "Set Stream"}
+      height={0.8}
+    >
       {/* Search Input */}
-      <View style={[styles.searchContainer, { backgroundColor: dynamicTheme.colors.background.secondary, borderBottomColor: dynamicTheme.colors.border.light }]}>
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2} style={styles.searchIcon}>
+      <View style={[styles.searchContainer, { backgroundColor: dynamicTheme.colors.background.secondary, borderColor: dynamicTheme.colors.border.light }]}>
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2} style={styles.searchIcon}>
           <Path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
         <TextInput
@@ -86,7 +91,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearSearch}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
               <Path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
@@ -105,8 +110,8 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
         <TouchableOpacity
           style={[
             styles.streamItem,
-            { borderBottomColor: dynamicTheme.colors.border.light },
-            selectedStreamId === null && [styles.streamItemSelected, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }],
+            { backgroundColor: dynamicTheme.colors.background.secondary },
+            selectedStreamId === null && { backgroundColor: dynamicTheme.colors.background.tertiary },
           ]}
           onPress={() => handleSelect(null)}
         >
@@ -123,6 +128,11 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
             ]}>
               Unassigned
             </Text>
+            {selectedStreamId === null && (
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.accent} strokeWidth={2.5} style={styles.checkIcon}>
+                <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            )}
           </View>
         </TouchableOpacity>
 
@@ -169,84 +179,73 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
           </>
         )}
       </ScrollView>
-    </View>
+    </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  title: {
-    fontSize: 18,
-  },
-  closeButton: {
-    padding: 4,
-  },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingHorizontal: themeBase.spacing.md,
+    paddingVertical: themeBase.spacing.sm,
+    borderRadius: themeBase.borderRadius.md,
+    borderWidth: 1,
+    marginBottom: themeBase.spacing.md,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: themeBase.spacing.sm,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     padding: 0,
   },
   clearSearch: {
     padding: 4,
   },
   content: {
-    flex: 1, // Fill remaining space in container
+    flex: 1,
+    marginHorizontal: -themeBase.spacing.lg, // Extend to edges
   },
   scrollContent: {
-    paddingBottom: 20, // Ensure last item is visible above keyboard
+    paddingBottom: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.lg,
+    gap: themeBase.spacing.sm,
   },
   streamItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-  },
-  streamItemSelected: {
-    // background color applied inline
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
   },
   streamContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: themeBase.spacing.sm,
     flex: 1,
   },
   streamName: {
     fontSize: 16,
+    flex: 1,
+  },
+  checkIcon: {
+    marginLeft: "auto",
   },
   loadingContainer: {
-    padding: 40,
+    padding: themeBase.spacing.xl,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
-    gap: 12,
+    gap: themeBase.spacing.md,
   },
   loadingText: {
     fontSize: 14,
   },
   emptyContainer: {
-    padding: 40,
+    padding: themeBase.spacing.xl,
     alignItems: "center",
   },
   emptyText: {

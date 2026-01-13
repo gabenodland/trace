@@ -1,5 +1,6 @@
 /**
  * GpsPicker - GPS coordinates display and management
+ * Uses PickerBottomSheet for consistent bottom sheet presentation
  *
  * Features:
  * - Display GPS coordinates with accuracy circle on map
@@ -14,10 +15,9 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 import MapView, { Marker, Circle as MapCircle, MapPressEvent } from "react-native-maps";
-import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
+import { PickerBottomSheet, RemoveIcon } from "../../../../components/sheets";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
-import { styles } from "../CaptureForm.styles";
 import type { GpsData } from "../hooks/useCaptureFormState";
 import type { UnitSystem } from "@trace/core";
 
@@ -100,33 +100,11 @@ function locationsEqual(a: GpsData | null, b: GpsData | null): boolean {
 // Icon Components
 // ============================================================================
 
-function GpsIcon({ color }: { color: string }) {
-  return (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
-      <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx={12} cy={12} r={3} fill={color} stroke="none" />
-      <Line x1={12} y1={2} x2={12} y2={6} strokeLinecap="round" />
-      <Line x1={12} y1={18} x2={12} y2={22} strokeLinecap="round" />
-      <Line x1={2} y1={12} x2={6} y2={12} strokeLinecap="round" />
-      <Line x1={18} y1={12} x2={22} y2={12} strokeLinecap="round" />
-    </Svg>
-  );
-}
-
 function MapPinIcon({ color, size = 24 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
       <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
       <Circle cx={12} cy={10} r={3} fill="none" />
-    </Svg>
-  );
-}
-
-function CloseIcon({ color }: { color: string }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
-      <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-      <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -256,170 +234,140 @@ export function GpsPicker({
   }, [onRemove, onSnackbar, onClose]);
 
   return (
-    <TopBarDropdownContainer visible={visible} onClose={onClose}>
-      <View style={[styles.pickerContainer, { backgroundColor: dynamicTheme.colors.background.primary }]}>
-        {/* Header */}
-        <View style={gpsPickerStyles.header}>
-          <Text style={[gpsPickerStyles.title, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>
-            {isManuallySelected ? "Selected Location" : "GPS Location"}
-          </Text>
-          <TouchableOpacity style={gpsPickerStyles.closeButton} onPress={onClose}>
-            <CloseIcon color={dynamicTheme.colors.text.secondary} />
+    <PickerBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title={isManuallySelected ? "Selected Location" : "GPS Location"}
+      height="large"
+      secondaryAction={{
+        label: "Remove",
+        variant: "danger",
+        icon: <RemoveIcon color={dynamicTheme.colors.functional.overdue} />,
+        onPress: handleRemove,
+      }}
+      primaryAction={hasChanges ? {
+        label: isManuallySelected ? "Save Location" : "Save GPS",
+        onPress: handleSave,
+      } : undefined}
+    >
+      {/* Content */}
+      {isLoading ? (
+        <View style={gpsPickerStyles.loadingContainer}>
+          <ActivityIndicator size="large" color={dynamicTheme.colors.text.primary} />
+          <Text style={[gpsPickerStyles.loadingText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>Getting GPS coordinates...</Text>
+        </View>
+      ) : gpsData ? (
+        <>
+          {/* Map */}
+          <View style={gpsPickerStyles.mapContainer}>
+            <MapView
+              ref={mapRef}
+              style={gpsPickerStyles.map}
+              initialRegion={{
+                latitude: gpsData.latitude,
+                longitude: gpsData.longitude,
+                latitudeDelta: calculateMapDelta(gpsData.accuracy),
+                longitudeDelta: calculateMapDelta(gpsData.accuracy),
+              }}
+              scrollEnabled={true}
+              zoomEnabled={true}
+              pitchEnabled={false}
+              rotateEnabled={false}
+              showsUserLocation={false}
+              showsMyLocationButton={false}
+              showsCompass={false}
+              showsScale={false}
+              toolbarEnabled={false}
+              onPress={handleMapPress}
+              userInterfaceStyle={dynamicTheme.isDark ? "dark" : "light"}
+            >
+              {/* Accuracy circle (only for GPS, not manual selection) */}
+              {!isManuallySelected && gpsData.accuracy && gpsData.accuracy > 0 && (
+                <MapCircle
+                  center={{ latitude: gpsData.latitude, longitude: gpsData.longitude }}
+                  radius={gpsData.accuracy}
+                  fillColor={`${dynamicTheme.colors.functional.accent}25`}
+                  strokeColor={`${dynamicTheme.colors.functional.accent}80`}
+                  strokeWidth={1}
+                />
+              )}
+              {/* Location marker */}
+              <Marker coordinate={{ latitude: displayLocation!.latitude, longitude: displayLocation!.longitude }}>
+                <View style={gpsPickerStyles.markerContainer}>
+                  <MarkerIcon
+                    isManuallySelected={isManuallySelected}
+                    accentColor={dynamicTheme.colors.functional.accent}
+                    overdueColor={dynamicTheme.colors.functional.overdue}
+                  />
+                </View>
+              </Marker>
+            </MapView>
+
+            {/* Accuracy overlay */}
+            <View style={gpsPickerStyles.accuracyOverlay}>
+              <Text style={[gpsPickerStyles.accuracyOverlayText, { fontFamily: dynamicTheme.typography.fontFamily.medium }]}>
+                {isManuallySelected ? "Exact" : formatAccuracy(gpsData.accuracy, units)}
+              </Text>
+            </View>
+
+            {/* Map buttons */}
+            <TouchableOpacity style={[gpsPickerStyles.reloadButton, { backgroundColor: dynamicTheme.colors.background.primary }]} onPress={onReload}>
+              <RefreshIcon color={dynamicTheme.colors.text.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[gpsPickerStyles.recenterButton, { backgroundColor: dynamicTheme.colors.background.primary }]} onPress={handleRecenter}>
+              <RecenterIcon color={dynamicTheme.colors.text.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Coordinates display */}
+          <View style={[gpsPickerStyles.coordsContainer, { backgroundColor: dynamicTheme.colors.background.secondary }]}>
+            <View style={gpsPickerStyles.coordsRow}>
+              <View style={gpsPickerStyles.coordColumn}>
+                <Text style={[gpsPickerStyles.coordLabel, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }]}>Latitude</Text>
+                <Text style={[gpsPickerStyles.coordValue, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>
+                  {formatCoordinate(displayLocation!.latitude, true)}
+                </Text>
+                <Text style={[gpsPickerStyles.coordDecimal, { color: dynamicTheme.colors.text.tertiary }]}>
+                  {displayLocation!.latitude.toFixed(6)}
+                </Text>
+              </View>
+              <View style={gpsPickerStyles.coordColumn}>
+                <Text style={[gpsPickerStyles.coordLabel, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }]}>Longitude</Text>
+                <Text style={[gpsPickerStyles.coordValue, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>
+                  {formatCoordinate(displayLocation!.longitude, false)}
+                </Text>
+                <Text style={[gpsPickerStyles.coordDecimal, { color: dynamicTheme.colors.text.tertiary }]}>
+                  {displayLocation!.longitude.toFixed(6)}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Use Location button */}
+          <TouchableOpacity
+            style={[gpsPickerStyles.useLocationButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
+            onPress={handleUseLocation}
+          >
+            <MapPinIcon color={dynamicTheme.colors.text.primary} size={16} />
+            <Text style={[gpsPickerStyles.useLocationText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>
+              Use Location Instead
+            </Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View style={gpsPickerStyles.noDataContainer}>
+          <Text style={[gpsPickerStyles.noDataText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>No GPS coordinates captured</Text>
+          <TouchableOpacity
+            style={[gpsPickerStyles.captureButton, { backgroundColor: dynamicTheme.colors.text.primary }]}
+            onPress={onReload}
+          >
+            <Text style={[gpsPickerStyles.captureButtonText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.background.primary }]}>
+              Capture GPS Location
+            </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Content */}
-        {isLoading ? (
-          <View style={gpsPickerStyles.loadingContainer}>
-            <ActivityIndicator size="large" color={dynamicTheme.colors.text.primary} />
-            <Text style={[gpsPickerStyles.loadingText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>Getting GPS coordinates...</Text>
-          </View>
-        ) : gpsData ? (
-          <>
-            {/* Map */}
-            <View style={gpsPickerStyles.mapContainer}>
-              <MapView
-                ref={mapRef}
-                style={gpsPickerStyles.map}
-                initialRegion={{
-                  latitude: gpsData.latitude,
-                  longitude: gpsData.longitude,
-                  latitudeDelta: calculateMapDelta(gpsData.accuracy),
-                  longitudeDelta: calculateMapDelta(gpsData.accuracy),
-                }}
-                scrollEnabled={true}
-                zoomEnabled={true}
-                pitchEnabled={false}
-                rotateEnabled={false}
-                showsUserLocation={false}
-                showsMyLocationButton={false}
-                showsCompass={false}
-                showsScale={false}
-                toolbarEnabled={false}
-                onPress={handleMapPress}
-                userInterfaceStyle={dynamicTheme.isDark ? "dark" : "light"}
-              >
-                {/* Accuracy circle (only for GPS, not manual selection) */}
-                {!isManuallySelected && gpsData.accuracy && gpsData.accuracy > 0 && (
-                  <MapCircle
-                    center={{ latitude: gpsData.latitude, longitude: gpsData.longitude }}
-                    radius={gpsData.accuracy}
-                    fillColor={`${dynamicTheme.colors.functional.accent}25`}
-                    strokeColor={`${dynamicTheme.colors.functional.accent}80`}
-                    strokeWidth={1}
-                  />
-                )}
-                {/* Location marker */}
-                <Marker coordinate={{ latitude: displayLocation!.latitude, longitude: displayLocation!.longitude }}>
-                  <View style={gpsPickerStyles.markerContainer}>
-                    <MarkerIcon
-                      isManuallySelected={isManuallySelected}
-                      accentColor={dynamicTheme.colors.functional.accent}
-                      overdueColor={dynamicTheme.colors.functional.overdue}
-                    />
-                  </View>
-                </Marker>
-              </MapView>
-
-              {/* Accuracy overlay */}
-              <View style={gpsPickerStyles.accuracyOverlay}>
-                <Text style={[gpsPickerStyles.accuracyOverlayText, { fontFamily: dynamicTheme.typography.fontFamily.medium }]}>
-                  {isManuallySelected ? "Exact" : formatAccuracy(gpsData.accuracy, units)}
-                </Text>
-              </View>
-
-              {/* Map buttons */}
-              <TouchableOpacity style={[gpsPickerStyles.reloadButton, { backgroundColor: dynamicTheme.colors.background.primary }]} onPress={onReload}>
-                <RefreshIcon color={dynamicTheme.colors.text.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={[gpsPickerStyles.recenterButton, { backgroundColor: dynamicTheme.colors.background.primary }]} onPress={handleRecenter}>
-                <RecenterIcon color={dynamicTheme.colors.text.primary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Coordinates display */}
-            <View style={[gpsPickerStyles.coordsContainer, { backgroundColor: dynamicTheme.colors.background.secondary }]}>
-              <View style={gpsPickerStyles.coordsRow}>
-                <View style={gpsPickerStyles.coordColumn}>
-                  <Text style={[gpsPickerStyles.coordLabel, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }]}>Latitude</Text>
-                  <Text style={[gpsPickerStyles.coordValue, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>
-                    {formatCoordinate(displayLocation!.latitude, true)}
-                  </Text>
-                  <Text style={[gpsPickerStyles.coordDecimal, { color: dynamicTheme.colors.text.tertiary }]}>
-                    {displayLocation!.latitude.toFixed(6)}
-                  </Text>
-                </View>
-                <View style={gpsPickerStyles.coordColumn}>
-                  <Text style={[gpsPickerStyles.coordLabel, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }]}>Longitude</Text>
-                  <Text style={[gpsPickerStyles.coordValue, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>
-                    {formatCoordinate(displayLocation!.longitude, false)}
-                  </Text>
-                  <Text style={[gpsPickerStyles.coordDecimal, { color: dynamicTheme.colors.text.tertiary }]}>
-                    {displayLocation!.longitude.toFixed(6)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Action Buttons */}
-            {hasChanges && (
-              <TouchableOpacity
-                style={[styles.pickerButton, styles.pickerButtonPrimary, { backgroundColor: dynamicTheme.colors.text.primary }]}
-                onPress={handleSave}
-              >
-                <Text style={[styles.pickerButtonText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.background.primary }]}>
-                  {isManuallySelected ? "Save Selected Location" : "Save GPS"}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[
-                styles.pickerButton,
-                hasChanges
-                  ? [styles.pickerButtonSecondary, { backgroundColor: dynamicTheme.colors.background.secondary }]
-                  : [styles.pickerButtonPrimary, { backgroundColor: dynamicTheme.colors.text.primary }]
-              ]}
-              onPress={handleUseLocation}
-            >
-              <View style={gpsPickerStyles.useLocationButton}>
-                <MapPinIcon color={hasChanges ? dynamicTheme.colors.text.primary : dynamicTheme.colors.background.primary} size={16} />
-                <Text style={[
-                  styles.pickerButtonText,
-                  { fontFamily: dynamicTheme.typography.fontFamily.medium },
-                  hasChanges
-                    ? { color: dynamicTheme.colors.text.primary }
-                    : { color: dynamicTheme.colors.background.primary }
-                ]}>
-                  Use Location Instead
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.pickerButton, styles.pickerButtonDanger, { backgroundColor: `${dynamicTheme.colors.functional.overdue}15` }]}
-              onPress={handleRemove}
-            >
-              <Text style={[styles.pickerButtonText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.functional.overdue }]}>
-                Remove GPS from Entry
-              </Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <View style={gpsPickerStyles.noDataContainer}>
-            <Text style={[gpsPickerStyles.noDataText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>No GPS coordinates captured</Text>
-            <TouchableOpacity
-              style={[styles.pickerButton, styles.pickerButtonPrimary, { backgroundColor: dynamicTheme.colors.text.primary }]}
-              onPress={onReload}
-            >
-              <Text style={[styles.pickerButtonText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.background.primary }]}>
-                Capture GPS Location
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </TopBarDropdownContainer>
+      )}
+    </PickerBottomSheet>
   );
 }
 
@@ -443,18 +391,6 @@ const mapButtonBase = {
 };
 
 const gpsPickerStyles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: themeBase.spacing.md,
-  },
-  title: {
-    fontSize: 18,
-  },
-  closeButton: {
-    padding: 4,
-  },
   mapContainer: {
     aspectRatio: 1,
     width: "100%",
@@ -536,6 +472,20 @@ const gpsPickerStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    paddingVertical: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
+    gap: themeBase.spacing.sm,
+  },
+  useLocationText: {
+    fontSize: 16,
+  },
+  captureButton: {
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.xl,
+    borderRadius: themeBase.borderRadius.md,
+    alignItems: "center",
+  },
+  captureButtonText: {
+    fontSize: 16,
   },
 });

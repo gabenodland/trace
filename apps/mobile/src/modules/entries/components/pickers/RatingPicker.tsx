@@ -1,18 +1,16 @@
 /**
  * RatingPicker - Star rating picker component
- * Extracted from CaptureForm for maintainability
+ * Uses PickerBottomSheet for consistent bottom sheet presentation
  *
  * Note: Ratings are stored internally as 0-10 scale
  * Stars map to: 1★=2, 2★=4, 3★=6, 4★=8, 5★=10
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import Svg, { Line } from "react-native-svg";
 import { starsToDecimal, decimalToStars } from "@trace/core";
-import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
-import { styles } from "../CaptureForm.styles";
-import { themeBase } from "../../../../shared/theme/themeBase";
+import { PickerBottomSheet, RemoveIcon } from "../../../../components/sheets";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
+import { themeBase } from "../../../../shared/theme/themeBase";
 
 interface RatingPickerProps {
   visible: boolean;
@@ -34,90 +32,96 @@ export function RatingPicker({
   // Convert stored rating (0-10) to stars (1-5) for display
   const currentStars = decimalToStars(rating);
 
+  const handleStarPress = (starValue: number) => {
+    // Convert stars to 0-10 scale for storage
+    const decimalValue = starsToDecimal(starValue);
+    onRatingChange(decimalValue);
+    onSnackbar(`Rating set to ${starValue}/5`);
+    onClose();
+  };
+
+  const handleRemove = () => {
+    onRatingChange(0);
+    onSnackbar("Rating removed");
+    onClose();
+  };
+
   return (
-    <TopBarDropdownContainer visible={visible} onClose={onClose}>
-      <View style={[styles.pickerContainer, { backgroundColor: dynamicTheme.colors.background.primary }]}>
-        {/* Header with title and close button */}
-        <View style={localStyles.header}>
-          <Text style={[styles.pickerTitle, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>Set Rating</Text>
-          <TouchableOpacity style={localStyles.closeButton} onPress={onClose}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
-              <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-              <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-            </Svg>
-          </TouchableOpacity>
-        </View>
-
-        {/* Star Rating Buttons - 1 to 5 stars */}
-        <View style={styles.starRatingRow}>
-          {[1, 2, 3, 4, 5].map((starValue) => (
-            <TouchableOpacity
-              key={starValue}
-              style={styles.starRatingButton}
-              onPress={() => {
-                // Convert stars to 0-10 scale for storage
-                const decimalValue = starsToDecimal(starValue);
-                onRatingChange(decimalValue);
-                onSnackbar(`Rating set to ${starValue}/5`);
-                onClose();
-              }}
-            >
-              <Text
-                style={[
-                  styles.starRatingIcon,
-                  { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary },
-                  currentStars >= starValue && { color: dynamicTheme.colors.status.blocked },
-                ]}
-              >
-                ★
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Clear Rating Button */}
-        {rating > 0 && (
+    <PickerBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Set Rating"
+      secondaryAction={
+        rating > 0
+          ? {
+              label: "Remove",
+              variant: "danger",
+              icon: <RemoveIcon color={dynamicTheme.colors.functional.overdue} />,
+              onPress: handleRemove,
+            }
+          : undefined
+      }
+    >
+      {/* Star Rating Buttons - 1 to 5 stars */}
+      <View style={styles.starRow}>
+        {[1, 2, 3, 4, 5].map((starValue) => (
           <TouchableOpacity
-            style={[localStyles.clearButton, { backgroundColor: `${dynamicTheme.colors.functional.overdue}15` }]}
-            onPress={() => {
-              onRatingChange(0);
-              onSnackbar("Rating cleared");
-              onClose();
-            }}
+            key={starValue}
+            style={styles.starButton}
+            onPress={() => handleStarPress(starValue)}
           >
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.overdue} strokeWidth={2}>
-              <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-              <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-            </Svg>
-            <Text style={[localStyles.clearButtonText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.functional.overdue }]}>Clear Rating</Text>
+            <Text
+              style={[
+                styles.starIcon,
+                {
+                  fontFamily: dynamicTheme.typography.fontFamily.regular,
+                  color: dynamicTheme.colors.border.medium,
+                },
+                currentStars >= starValue && {
+                  color: dynamicTheme.colors.status.blocked,
+                },
+              ]}
+            >
+              ★
+            </Text>
           </TouchableOpacity>
-        )}
+        ))}
       </View>
-    </TopBarDropdownContainer>
+
+      {/* Current rating label */}
+      {rating > 0 && (
+        <Text
+          style={[
+            styles.ratingLabel,
+            {
+              fontFamily: dynamicTheme.typography.fontFamily.medium,
+              color: dynamicTheme.colors.text.secondary,
+            },
+          ]}
+        >
+          {currentStars} of 5 stars
+        </Text>
+      )}
+    </PickerBottomSheet>
   );
 }
 
-const localStyles = StyleSheet.create({
-  header: {
+const styles = StyleSheet.create({
+  starRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: themeBase.spacing.xs,
-  },
-  closeButton: {
-    padding: 4,
-  },
-  clearButton: {
-    flexDirection: "row",
-    alignItems: "center",
     justifyContent: "center",
-    paddingVertical: themeBase.spacing.md,
-    paddingHorizontal: themeBase.spacing.md,
-    borderRadius: themeBase.borderRadius.md,
+    alignItems: "center",
+    paddingVertical: themeBase.spacing.xl,
     gap: themeBase.spacing.sm,
-    marginTop: themeBase.spacing.md,
   },
-  clearButtonText: {
-    fontSize: 16,
+  starButton: {
+    padding: themeBase.spacing.sm,
+  },
+  starIcon: {
+    fontSize: 40,
+  },
+  ratingLabel: {
+    textAlign: "center",
+    fontSize: 14,
   },
 });

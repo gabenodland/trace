@@ -2,17 +2,18 @@
  * Avatar Picker Component
  *
  * Allows users to capture or select a profile avatar
- * Similar UI to PhotoCapture but with 1:1 cropping for profile pictures
+ * Uses PickerBottomSheet for consistent bottom sheet presentation
  */
 
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator } from 'react-native';
-import Svg, { Path, Circle, Line } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { TopBarDropdownContainer } from '../../../components/layout/TopBarDropdownContainer';
-import { theme } from '../../../shared/theme/theme';
-import { getDefaultAvatarUrl, AVATAR_MAX_SIZE_BYTES } from '@trace/core';
+import { PickerBottomSheet } from '../../../components/sheets';
+import { useTheme } from '../../../shared/contexts/ThemeContext';
+import { themeBase } from '../../../shared/theme/themeBase';
+import { getDefaultAvatarUrl } from '@trace/core';
 import { createScopedLogger } from '../../../shared/utils/logger';
 
 const log = createScopedLogger('AvatarPicker');
@@ -102,6 +103,7 @@ export function AvatarPicker({
   isUploading = false,
   size = 100,
 }: AvatarPickerProps) {
+  const dynamicTheme = useTheme();
   const [showMenu, setShowMenu] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -214,7 +216,7 @@ export function AvatarPicker({
         disabled={disabled || isLoading}
         activeOpacity={0.7}
       >
-        <View style={[styles.avatarContainer, { width: size, height: size, borderRadius: size / 2 }]}>
+        <View style={[styles.avatarContainer, { width: size, height: size, borderRadius: size / 2, backgroundColor: dynamicTheme.colors.background.tertiary }]}>
           <Image
             source={{ uri: displayUrl }}
             style={[styles.avatarImage, { width: size, height: size, borderRadius: size / 2 }]}
@@ -230,7 +232,7 @@ export function AvatarPicker({
 
         {/* Edit badge - outside the clipped container */}
         {!isLoading && (
-          <View style={[styles.editBadge, { bottom: 0, right: 0 }]}>
+          <View style={[styles.editBadge, { bottom: 0, right: 0, backgroundColor: dynamicTheme.colors.functional.accent }]}>
             <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
               <Path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" strokeLinecap="round" strokeLinejoin="round" />
               <Path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" />
@@ -245,79 +247,66 @@ export function AvatarPicker({
         disabled={disabled || isLoading}
         activeOpacity={0.7}
       >
-        <Text style={styles.changePhotoText}>
+        <Text style={[styles.changePhotoText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.functional.accent }]}>
           {isUploading ? 'Uploading...' : isProcessing ? 'Processing...' : 'Change Photo'}
         </Text>
       </TouchableOpacity>
 
-      {/* Photo Source Selection Menu */}
-      <TopBarDropdownContainer
+      {/* Photo Source Selection Bottom Sheet */}
+      <PickerBottomSheet
         visible={showMenu}
         onClose={() => setShowMenu(false)}
+        title="Profile Photo"
       >
-        <View style={styles.menuContainer}>
-          {/* Header with title and close button */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Profile Photo</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setShowMenu(false)}>
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-                <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
+        <View style={styles.optionsContainer}>
+          {/* Take Photo */}
+          <TouchableOpacity
+            style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
+            onPress={handleCameraPress}
+            activeOpacity={0.7}
+          >
+            <View style={styles.optionIcon}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
+                <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" strokeLinecap="round" strokeLinejoin="round" />
+                <Circle cx={12} cy={13} r={3} strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-            </TouchableOpacity>
-          </View>
+            </View>
+            <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>Take Photo</Text>
+          </TouchableOpacity>
 
-          {/* Options */}
-          <View style={styles.optionsContainer}>
-            {/* Take Photo */}
+          {/* Choose from Gallery */}
+          <TouchableOpacity
+            style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
+            onPress={handleGalleryPress}
+            activeOpacity={0.7}
+          >
+            <View style={styles.optionIcon}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
+                <Path d="M4 16l4.586-4.586a2 2 0 0 1 2.828 0L16 16m-2-2l1.586-1.586a2 2 0 0 1 2.828 0L20 14" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6z" strokeLinecap="round" strokeLinejoin="round" />
+                <Circle cx={8.5} cy={8.5} r={1.5} fill={dynamicTheme.colors.text.secondary} stroke="none" />
+              </Svg>
+            </View>
+            <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>Choose from Gallery</Text>
+          </TouchableOpacity>
+
+          {/* Remove Photo (only if custom avatar exists) */}
+          {hasCustomAvatar && onAvatarRemoved && (
             <TouchableOpacity
-              style={styles.optionButton}
-              onPress={handleCameraPress}
+              style={[styles.optionButton, styles.removeOption, { backgroundColor: dynamicTheme.colors.background.secondary }]}
+              onPress={handleRemovePress}
               activeOpacity={0.7}
             >
               <View style={styles.optionIcon}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={12} cy={13} r={3} strokeLinecap="round" strokeLinejoin="round" />
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.overdue} strokeWidth={2}>
+                  <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
               </View>
-              <Text style={styles.optionText}>Take Photo</Text>
+              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.functional.overdue }]}>Remove Photo</Text>
             </TouchableOpacity>
-
-            {/* Choose from Gallery */}
-            <TouchableOpacity
-              style={styles.optionButton}
-              onPress={handleGalleryPress}
-              activeOpacity={0.7}
-            >
-              <View style={styles.optionIcon}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Path d="M4 16l4.586-4.586a2 2 0 0 1 2.828 0L16 16m-2-2l1.586-1.586a2 2 0 0 1 2.828 0L20 14" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={8.5} cy={8.5} r={1.5} fill="#6b7280" stroke="none" />
-                </Svg>
-              </View>
-              <Text style={styles.optionText}>Choose from Gallery</Text>
-            </TouchableOpacity>
-
-            {/* Remove Photo (only if custom avatar exists) */}
-            {hasCustomAvatar && onAvatarRemoved && (
-              <TouchableOpacity
-                style={[styles.optionButton, styles.removeOption]}
-                onPress={handleRemovePress}
-                activeOpacity={0.7}
-              >
-                <View style={styles.optionIcon}>
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}>
-                    <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
-                </View>
-                <Text style={[styles.optionText, styles.removeText]}>Remove Photo</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          )}
         </View>
-      </TopBarDropdownContainer>
+      </PickerBottomSheet>
     </>
   );
 }
@@ -329,7 +318,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarContainer: {
-    backgroundColor: '#e5e7eb',
     overflow: 'hidden',
   },
   avatarImage: {
@@ -343,54 +331,28 @@ const styles = StyleSheet.create({
   },
   editBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#3b82f6',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#ffffff',
   },
   changePhotoText: {
-    marginTop: 8,
+    marginTop: themeBase.spacing.sm,
     fontSize: 14,
-    fontWeight: '500',
-    color: '#3b82f6',
-  },
-  menuContainer: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: theme.spacing.xs,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
-  },
-  closeButton: {
-    padding: 4,
   },
   optionsContainer: {
-    gap: theme.spacing.sm,
+    gap: themeBase.spacing.sm,
   },
   optionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.background.secondary,
-    gap: theme.spacing.md,
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
+    gap: themeBase.spacing.md,
   },
   optionIcon: {
     width: 24,
@@ -399,13 +361,8 @@ const styles = StyleSheet.create({
   optionText: {
     flex: 1,
     fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
   },
   removeOption: {
-    marginTop: theme.spacing.sm,
-  },
-  removeText: {
-    color: '#ef4444',
+    marginTop: themeBase.spacing.sm,
   },
 });

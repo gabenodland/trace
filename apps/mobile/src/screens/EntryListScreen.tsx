@@ -24,7 +24,6 @@ import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { TopBar } from "../components/layout/TopBar";
 import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
-import { TopBarDropdownContainer } from "../components/layout/TopBarDropdownContainer";
 import { SubBar, SubBarSelector } from "../components/layout/SubBar";
 import { SearchBar } from "../components/layout/SearchBar";
 import { EntryList } from "../modules/entries/components/EntryList";
@@ -541,23 +540,15 @@ export function EntryListScreen() {
       />
 
       {/* Move Stream Picker */}
-      <TopBarDropdownContainer
+      <StreamPicker
         visible={showMoveStreamPicker}
         onClose={() => {
           setShowMoveStreamPicker(false);
           setEntryToMove(null);
         }}
-      >
-        <StreamPicker
-          visible={showMoveStreamPicker}
-          onClose={() => {
-            setShowMoveStreamPicker(false);
-            setEntryToMove(null);
-          }}
-          onSelect={handleMoveStreamSelect}
-          selectedStreamId={entryToMoveStreamId}
-        />
-      </TopBarDropdownContainer>
+        onSelect={handleMoveStreamSelect}
+        selectedStreamId={entryToMoveStreamId}
+      />
 
       <FloatingActionButton onPress={handleAddEntry} />
     </View>

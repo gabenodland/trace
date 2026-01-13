@@ -1,12 +1,11 @@
 /**
  * DueDatePicker - Due date calendar picker component
- * Follows the same pattern as RatingPicker and PriorityPicker
+ * Uses PickerBottomSheet for consistent bottom sheet presentation
  */
 
 import { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import Svg, { Line } from "react-native-svg";
-import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
+import { PickerBottomSheet, RemoveIcon } from "../../../../components/sheets";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 
@@ -33,8 +32,6 @@ export function DueDatePicker({
   const [displayYear, setDisplayYear] = useState(initialDate.getFullYear());
   const [displayMonth, setDisplayMonth] = useState(initialDate.getMonth());
 
-  // Reset display to initial date when picker becomes visible
-  // This ensures the picker shows the correct month when opened
   const selectedDate = dueDate ? new Date(dueDate) : null;
 
   // Days in month
@@ -74,7 +71,6 @@ export function DueDatePicker({
   };
 
   const handleTodayPress = () => {
-    // Just navigate to today's month, don't select the date
     setDisplayYear(today.getFullYear());
     setDisplayMonth(today.getMonth());
   };
@@ -88,9 +84,9 @@ export function DueDatePicker({
     onClose();
   };
 
-  const handleClear = () => {
+  const handleRemove = () => {
     onDueDateChange(null);
-    onSnackbar("Due date cleared");
+    onSnackbar("Due date removed");
     onClose();
   };
 
@@ -136,102 +132,67 @@ export function DueDatePicker({
   }
 
   return (
-    <TopBarDropdownContainer visible={visible} onClose={onClose}>
-      <View style={[styles.container, { backgroundColor: dynamicTheme.colors.background.primary }]}>
-        {/* Header with title and close button */}
-        <View style={styles.titleHeader}>
-          <Text style={[styles.title, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>Set Due Date</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
-              <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-              <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-            </Svg>
+    <PickerBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Set Due Date"
+      height="medium"
+      secondaryAction={
+        dueDate
+          ? {
+              label: "Remove",
+              variant: "danger",
+              icon: <RemoveIcon color={dynamicTheme.colors.functional.overdue} />,
+              onPress: handleRemove,
+            }
+          : undefined
+      }
+    >
+      {/* Month/Year navigation */}
+      <View style={styles.navHeader}>
+        <View style={styles.navButtons}>
+          <TouchableOpacity onPress={handlePrevYear} style={styles.navButton}>
+            <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>«</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
+            <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>‹</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Month/Year navigation */}
-        <View style={styles.navHeader}>
-          <View style={styles.navButtons}>
-            <TouchableOpacity onPress={handlePrevYear} style={styles.navButton}>
-              <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>«</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
-              <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>‹</Text>
-            </TouchableOpacity>
-          </View>
-
+        <TouchableOpacity onPress={handleTodayPress}>
           <Text style={[styles.monthYear, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>
             {monthNames[displayMonth]} {displayYear}
           </Text>
+        </TouchableOpacity>
 
-          <View style={styles.navButtons}>
-            <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-              <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>›</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleNextYear} style={styles.navButton}>
-              <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>»</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Day labels */}
-        <View style={styles.weekDays}>
-          {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
-            <View key={i} style={styles.weekDayCell}>
-              <Text style={[styles.weekDayText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.tertiary }]}>{day}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Calendar grid */}
-        <View style={styles.daysGrid}>
-          {days}
-        </View>
-
-        {/* Actions - Today and Clear */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-            onPress={handleTodayPress}
-          >
-            <Text style={[styles.todayText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>Today</Text>
+        <View style={styles.navButtons}>
+          <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
+            <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>›</Text>
           </TouchableOpacity>
-
-          {dueDate && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.clearButton, { backgroundColor: `${dynamicTheme.colors.functional.overdue}15` }]}
-              onPress={handleClear}
-            >
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.overdue} strokeWidth={2}>
-                <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-                <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-              </Svg>
-              <Text style={[styles.clearText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.functional.overdue }]}>Clear</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity onPress={handleNextYear} style={styles.navButton}>
+            <Text style={[styles.navText, { color: dynamicTheme.colors.text.primary }]}>»</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </TopBarDropdownContainer>
+
+      {/* Day labels */}
+      <View style={styles.weekDays}>
+        {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
+          <View key={i} style={styles.weekDayCell}>
+            <Text style={[styles.weekDayText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.tertiary }]}>{day}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Calendar grid */}
+      <View style={styles.daysGrid}>
+        {days}
+      </View>
+    </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    borderRadius: themeBase.borderRadius.lg,
-    padding: themeBase.spacing.lg,
-  },
-  titleHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: themeBase.spacing.md,
-  },
-  title: {
-    fontSize: 18,
-  },
-  closeButton: {
-    padding: 4,
-  },
   navHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -277,27 +238,6 @@ const styles = StyleSheet.create({
     borderRadius: themeBase.borderRadius.md,
   },
   dayText: {
-    fontSize: themeBase.typography.fontSize.base,
-  },
-  actions: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: themeBase.spacing.lg,
-    gap: themeBase.spacing.md,
-  },
-  actionButton: {
-    paddingVertical: themeBase.spacing.md,
-    paddingHorizontal: themeBase.spacing.xl,
-    borderRadius: themeBase.borderRadius.md,
-  },
-  todayText: {
-    fontSize: themeBase.typography.fontSize.base,
-  },
-  clearButton: {
-    flexDirection: "row",
-    gap: themeBase.spacing.sm,
-  },
-  clearText: {
     fontSize: themeBase.typography.fontSize.base,
   },
 });

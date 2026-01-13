@@ -11,6 +11,8 @@ import Svg, { Path } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getAttachmentUri, ensureAttachmentDownloaded, getAttachmentsForEntry } from '../../attachments/mobileAttachmentApi';
 import { PhotoViewer } from './PhotoViewer';
+import { useTheme } from '../../../shared/contexts/ThemeContext';
+import { themeBase } from '../../../shared/theme/themeBase';
 import type { Attachment } from '@trace/core';
 
 interface PendingPhoto {
@@ -37,6 +39,7 @@ interface PhotoGalleryProps {
 }
 
 export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoDelete, pendingPhotos, collapsible, isCollapsed, onCollapsedChange, onAddPhoto }: PhotoGalleryProps) {
+  const dynamicTheme = useTheme();
   const [photos, setPhotos] = useState<Attachment[]>([]);
   const [photoUris, setPhotoUris] = useState<Record<string, string>>({});
   const [photoDownloadStatus, setPhotoDownloadStatus] = useState<Record<string, boolean>>({}); // true = downloaded locally
@@ -215,7 +218,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#6b7280" />
+        <ActivityIndicator size="small" color={dynamicTheme.colors.text.tertiary} />
       </View>
     );
   }
@@ -240,7 +243,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
             return (
               <TouchableOpacity
                 key={photo.photoId}
-                style={styles.photoContainer}
+                style={[styles.photoContainer, { backgroundColor: dynamicTheme.colors.background.tertiary }]}
                 onPress={() => handlePhotoPress(index)}
                 activeOpacity={0.8}
               >
@@ -252,7 +255,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
                   />
                 ) : (
                   <View style={styles.photoPlaceholder}>
-                    <ActivityIndicator size="small" color="#6b7280" />
+                    <ActivityIndicator size="small" color={dynamicTheme.colors.text.tertiary} />
                   </View>
                 )}
               </TouchableOpacity>
@@ -262,14 +265,14 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
           {/* Add Photo button - inline as last thumbnail */}
           {onAddPhoto && (
             <TouchableOpacity
-              style={styles.addPhotoButton}
+              style={[styles.addPhotoButton, { borderColor: dynamicTheme.colors.border.medium, backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={onAddPhoto}
               activeOpacity={0.7}
             >
               <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M12 5v14M5 12h14"
-                  stroke="#9ca3af"
+                  stroke={dynamicTheme.colors.text.tertiary}
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -289,7 +292,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
             <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
               <Path
                 d="M18 15l-6-6-6 6"
-                stroke="#9ca3af"
+                stroke={dynamicTheme.colors.text.tertiary}
                 strokeWidth={2.5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -337,29 +340,28 @@ const styles = StyleSheet.create({
   galleryWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: themeBase.spacing.sm,
   },
   container: {
-    marginBottom: 8,
+    marginBottom: themeBase.spacing.sm,
     maxHeight: 88,
     flex: 1,
   },
   contentContainer: {
-    paddingLeft: 16,
-    paddingRight: 8,
-    gap: 8,
+    paddingLeft: themeBase.spacing.lg,
+    paddingRight: themeBase.spacing.sm,
+    gap: themeBase.spacing.sm,
     alignItems: 'center',
   },
   loadingContainer: {
-    padding: 8,
+    padding: themeBase.spacing.sm,
     alignItems: 'center',
   },
   photoContainer: {
     width: 80,
     height: 80,
-    borderRadius: 10,
+    borderRadius: themeBase.borderRadius.md,
     overflow: 'hidden',
-    backgroundColor: '#f3f4f6',
   },
   photo: {
     width: '100%',
@@ -374,17 +376,15 @@ const styles = StyleSheet.create({
   addPhotoButton: {
     width: 80,
     height: 80,
-    borderRadius: 10,
+    borderRadius: themeBase.borderRadius.md,
     borderWidth: 1.5,
-    borderColor: '#d1d5db',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fafafa',
   },
   collapseButton: {
-    paddingHorizontal: 8,
+    paddingHorizontal: themeBase.spacing.sm,
     paddingVertical: 4,
-    marginRight: 8,
+    marginRight: themeBase.spacing.sm,
   },
 });
