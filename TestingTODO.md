@@ -2,10 +2,20 @@
 
 ## Current State
 
-**Tests: ZERO**
-**Coverage: 0%**
+**Core Package Tests: 132 PASSING ✅**
+**Mobile Hook Tests: BLOCKED ⚠️** (Expo SDK 54 runtime issue)
+**E2E Tests: NOT STARTED**
 
-The project has test scripts defined in `packages/core/package.json` (`npm run test` → vitest) but no actual tests exist and vitest is not installed.
+### What's Working
+- `@trace/core` has full testing infrastructure with vitest
+- 132 unit tests covering entry helpers (89) and template helpers (43)
+- All tests pass: `npm run test:run -w @trace/core`
+- Coverage reports available: `npm run test:coverage -w @trace/core`
+- GitHub Actions CI runs tests on every push/PR to master/main
+
+### Known Issues
+- **Expo SDK 54 Winter Runtime**: Mobile hook tests are blocked by an incompatibility between `jest-expo` and the new Expo winter runtime. Error: `ReferenceError: You are trying to import a file outside of the scope of the test code`. This is a known issue with Expo SDK 54+.
+- **React 19 peer deps**: Required `--legacy-peer-deps` flag for installing test dependencies in mobile package.
 
 ---
 
@@ -903,17 +913,18 @@ appId: com.trace.mobile
 ## Implementation Checklist
 
 ### Phase 0: Infrastructure
-- [ ] Install vitest in core package
-- [ ] Install jest + RNTL in mobile package
-- [ ] Create vitest.config.ts
-- [ ] Create jest.config.js
-- [ ] Add npm scripts
-- [ ] Create GitHub Actions workflow
-- [ ] Verify `npm test` works in both packages
+- [x] Install vitest in core package
+- [x] Install jest + RNTL in mobile package (with --legacy-peer-deps)
+- [x] Create vitest.config.ts
+- [x] Create jest.config.js
+- [x] Add npm scripts
+- [x] Create GitHub Actions workflow (`.github/workflows/test.yml`)
+- [x] Verify `npm test` works in core package
+- [ ] ⚠️ Mobile tests blocked by Expo SDK 54 winter runtime issue
 
 ### Phase 1: Unit Tests - Core
-- [ ] `entryHelpers.test.ts` (~25 tests)
-- [ ] `templateHelpers.test.ts` (~15 tests)
+- [x] `entryHelpers.test.ts` (89 tests) ✅
+- [x] `templateHelpers.test.ts` (43 tests) ✅
 - [ ] `entryDisplayHelpers.test.ts` (~10 tests)
 - [ ] `entrySortHelpers.test.ts` (~8 tests)
 - [ ] `ratingHelpers.test.ts` (~5 tests)
@@ -926,11 +937,13 @@ appId: com.trace.mobile
 - [ ] Achieve 80% coverage on helpers
 
 ### Phase 2: Hook Tests - Mobile
-- [ ] `useAutosave.test.ts` (~8 tests)
-- [ ] `useVersionConflict.test.ts` (~8 tests)
-- [ ] `usePhotoTracking.test.ts` (~6 tests)
+- [ ] ⚠️ `useAutosave.test.ts` - BLOCKED (Expo runtime issue)
+- [ ] ⚠️ `useVersionConflict.test.ts` - BLOCKED (Expo runtime issue)
+- [ ] ⚠️ `usePhotoTracking.test.ts` - BLOCKED (Expo runtime issue)
 - [ ] `useGpsCapture.test.ts` (~6 tests)
 - [ ] `useCaptureFormState.test.ts` (~8 tests)
+
+**Note:** Test files exist in `apps/mobile/src/modules/entries/components/hooks/__tests__/` but cannot run due to Expo SDK 54 winter runtime incompatibility with Jest. Waiting for Expo/Jest ecosystem to catch up.
 
 ### Phase 3: E2E Tests
 - [ ] Install Maestro

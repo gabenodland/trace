@@ -9,6 +9,8 @@
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
     "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui"
   },
   "dependencies": {
@@ -16,10 +18,12 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.9.2"
+    "@vitest/coverage-v8": "^4.0.17",
+    "typescript": "^5.9.2",
+    "vitest": "^4.0.17"
   },
   "peerDependencies": {
-    "react": "*",
-    "@tanstack/react-query": "*"
+    "@tanstack/react-query": "*",
+    "react": "*"
   }
 }

@@ -1,0 +1,58 @@
+name: Tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  core-tests:
+    name: Core Package Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build core package
+        run: npm run build -w @trace/core
+
+      - name: Run core tests
+        run: npm run test:run -w @trace/core
+
+      - name: Run core tests with coverage
+        run: npm run test:coverage -w @trace/core
+        continue-on-error: true
+
+  type-check:
+    name: TypeScript Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build core package
+        run: npm run build -w @trace/core
+
+      - name: Type check mobile app
+        run: npm run type-check -w @trace/mobile
