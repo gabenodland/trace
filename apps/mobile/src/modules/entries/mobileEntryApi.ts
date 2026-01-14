@@ -267,7 +267,7 @@ export async function deleteEntry(id: string): Promise<void> {
 
 /**
  * Result of copying an entry - returns unsaved entry data and copied photos
- * Entry is NOT saved to database until user clicks save in CaptureForm
+ * Entry is NOT saved to database until user clicks save in EntryScreen
  */
 export interface CopiedEntryData {
   entry: Entry;
@@ -278,7 +278,7 @@ export interface CopiedEntryData {
 /**
  * Copy an entry (in-memory only - not saved until user confirms)
  * Creates a new entry object with copied attributes, current date/time, fresh GPS, and duplicated photos
- * Does NOT save to database - returns data for CaptureForm to display and save later
+ * Does NOT save to database - returns data for EntryScreen to display and save later
  */
 export async function copyEntry(
   id: string,
@@ -374,7 +374,7 @@ export async function copyEntry(
     photoCount: pendingPhotos.length,
   });
 
-  // DO NOT save to database - return unsaved data for CaptureForm
+  // DO NOT save to database - return unsaved data for EntryScreen
   return {
     entry,
     pendingPhotos,

@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
-import * as Location from "expo-location";
 import { extractTagsAndMentions, useAuthState, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate } from "@trace/core";
-import { getDeviceName } from "../mobileEntryApi";
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
@@ -12,22 +10,23 @@ import { useDrawer } from "../../../shared/contexts/DrawerContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
-import { StreamPicker } from "../../streams/components/StreamPicker";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
-import { LocationPicker } from "../../locations/components/LocationPicker";
 import { compressAttachment, saveAttachmentToLocalStorage, deleteAttachment, createAttachment, getAttachmentsForEntry } from "../../attachments/mobileAttachmentApi";
 import * as Crypto from "expo-crypto";
-import { useCaptureFormState } from "./hooks/useCaptureFormState";
-import { styles } from "./CaptureForm.styles";
-import { RatingPicker, WholeNumberRatingPicker, DecimalRatingPicker, PriorityPicker, TimePicker, AttributesPicker, GpsPicker, StatusPicker, DueDatePicker, EntryDatePicker, TypePicker, UnsupportedAttributePicker } from "./pickers";
-import type { GpsData } from "./hooks/useCaptureFormState";
+import { useCaptureFormState, type GpsData } from "./hooks/useCaptureFormState";
+import { useAutosave } from "./hooks/useAutosave";
+import { useGpsCapture } from "./hooks/useGpsCapture";
+import { usePhotoTracking } from "./hooks/usePhotoTracking";
+import { useVersionConflict } from "./hooks/useVersionConflict";
+import { styles } from "./EntryScreen.styles";
 import { MetadataBar } from "./MetadataBar";
 import { EditorToolbar } from "./EditorToolbar";
-import { CaptureFormHeader } from "./CaptureFormHeader";
+import { EntryHeader } from "./EntryHeader";
+import { EntryPickers, type ActivePicker } from "./EntryPickers";
 
-interface CaptureFormProps {
+interface EntryScreenProps {
   entryId?: string | null;
   initialStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people";
   initialStreamName?: string;
@@ -41,9 +40,9 @@ interface CaptureFormProps {
   };
 }
 
-export function CaptureForm({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, copiedEntryData }: CaptureFormProps = {}) {
+export function EntryScreen({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, copiedEntryData }: EntryScreenProps = {}) {
   // Profiling: Log when component mounts
-  console.log(`⏱️ CaptureForm: render (entryId=${entryId})`);
+  console.log(`⏱️ EntryScreen: render (entryId=${entryId})`);
 
   const theme = useTheme();
 
@@ -71,7 +70,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     effectiveEntryId || null
   );
   // Profiling: Log when entry data is available
-  console.log(`⏱️ CaptureForm: useEntry returned (entry=${!!entry}, isLoading=${isLoadingEntry})`);
+  console.log(`⏱️ EntryScreen: useEntry returned (entry=${!!entry}, isLoading=${isLoadingEntry})`);
 
   // Single form data state hook (consolidates form field state + pending photos)
   // When editing and entry is cached, form initializes directly from entry
@@ -93,11 +92,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Consolidated picker visibility state - only one picker can be open at a time
-  type ActivePicker = 'stream' | 'gps' | 'location' | 'dueDate' | 'rating' | 'priority' | 'status' | 'type' | 'attributes' | 'entryDate' | 'time' | 'unsupportedStatus' | 'unsupportedType' | 'unsupportedDueDate' | 'unsupportedRating' | 'unsupportedPriority' | 'unsupportedLocation' | null;
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
 
-  // GPS loading state (for capturing/reloading GPS)
-  const [isGpsLoading, setIsGpsLoading] = useState(false);
   // Tracks when form data is fully loaded and ready for baseline
   // Ready immediately when:
   // - New entry (not editing, not copied)
@@ -111,10 +107,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     if (isEditing && entry && !entry.location_id) return true; // Cached entry, no location fetch
     return false; // Need to wait for entry or location
   });
-  // Track if we're capturing GPS from a cleared state (shows Save button instead of Remove)
-  const [isNewGpsCapture, setIsNewGpsCapture] = useState(false);
-  // Pending GPS data - holds captured GPS before user confirms with Save button
-  const [pendingGpsData, setPendingGpsData] = useState<GpsData | null>(null);
 
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const [isTitleFocused, setIsTitleFocused] = useState(false);
@@ -124,10 +116,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const titleInputRef = useRef<TextInput>(null);
   const photoCaptureRef = useRef<PhotoCaptureRef>(null);
   const isInitialLoad = useRef(true); // Track if this is first load
-  const [photoCount, setPhotoCount] = useState(0); // Track photo position for ordering
   const [baselinePhotoCount, setBaselinePhotoCount] = useState<number | null>(null); // Baseline for dirty tracking (null = not yet initialized)
   const [photosCollapsed, setPhotosCollapsed] = useState(false); // Start expanded
-  const [externalRefreshKey, setExternalRefreshKey] = useState(0); // Increment on external updates to force PhotoGallery reload
   // For copied entries, use the pre-generated entry_id from copiedEntryData
   // For new entries, generate a temp ID. For editing, use the existing entryId.
   const [tempEntryId] = useState(() => copiedEntryData?.entry.entry_id || entryId || Crypto.randomUUID());
@@ -136,6 +126,16 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const { user } = useAuthState();
   // Use React Query for photos to detect external sync changes
   const { attachments: queryAttachments } = useAttachments(effectiveEntryId || null);
+
+  // Photo tracking hook - handles external detection and photo count for ordering
+  const { photoCount, setPhotoCount, externalRefreshKey, syncPhotoCount } = usePhotoTracking({
+    entryId: effectiveEntryId || null,
+    isEditing,
+    isFormReady,
+    baselinePhotoCount,
+    queryPhotoCount: queryAttachments.length,
+  });
+
   const { navigate, setBeforeBackHandler } = useNavigation();
 
   // Get current stream for visibility controls
@@ -161,17 +161,15 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   const unsupportedPriority = !showPriority && formData.priority > 0;
   const unsupportedLocation = !showLocation && !!formData.locationData;
 
-  // Track known version to detect external updates from the entry object
-  // This allows us to detect when another device has updated the entry via global sync
-  const knownVersionRef = useRef<number | null>(null);
-
-  // Track known photo count from React Query to detect external photo additions
-  // Photo syncs don't change entry.version, so we need separate detection
-  const knownPhotoCountRef = useRef<number | null>(null);
-
-  // Autosave timer ref - only for editing existing entries
-  const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const AUTOSAVE_DELAY_MS = 2000;
+  // Version conflict detection hook
+  const {
+    getKnownVersion,
+    initializeVersion,
+    updateKnownVersion,
+    incrementKnownVersion,
+    checkForConflict,
+    isExternalUpdate,
+  } = useVersionConflict({ isEditing });
 
   // Edit mode: new entries start in edit mode, existing entries start in read-only
   const [isEditMode, setIsEditMode] = useState(!isEditing);
@@ -205,67 +203,29 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     }
   }, []);
 
-  // AUTOSAVE: Debounced save for ALL entries (new and existing)
+  // Memoized check for actual content (for autosave: don't save empty new entries)
+  const hasContent = useMemo(() =>
+    formData.title.trim() !== '' ||
+    formData.content.replace(/<[^>]*>/g, '').trim() !== '' ||
+    formData.pendingPhotos.length > 0,
+    [formData.title, formData.content, formData.pendingPhotos.length]
+  );
+
+  // Autosave callback ref - updated on each render but doesn't cause re-renders
+  const handleAutosaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
+
+  // AUTOSAVE: Uses extracted hook for debounced saving
   // Triggers 2s after last change, only when dirty and in edit mode
-  // For new entries: creates the entry and transitions to "editing" mode
-  // For existing entries: updates the entry
-  useEffect(() => {
-    // For new entries, only autosave if there's actual content (not just auto-captured GPS)
-    const hasContent = formData.title.trim() !== '' ||
-                       formData.content.replace(/<[^>]*>/g, '').trim() !== '' ||
-                       formData.pendingPhotos.length > 0;
-
-    // Debug: Log autosave state on every evaluation
-    console.log('🔍 [Autosave] Evaluating:', {
-      isEditMode,
-      isEditing,
-      isFormDirty,
-      isFormReady,
-      isSubmitting,
-      hasContent,
-      streamId: formData.streamId,
-      willTrigger: isFormDirty && isEditMode && isFormReady && !isSubmitting && (isEditing || hasContent),
-    });
-
-    // Autosave conditions:
-    // 1. Form is dirty
-    // 2. In edit mode
-    // 3. Form is fully loaded (prevents autosave during sync reload)
-    // 4. Not currently submitting or saving (prevents re-entry during save)
-    // 5. Either editing existing entry OR new entry with actual content
-    const shouldAutosave = isFormDirty && isEditMode && isFormReady && !isSubmitting && !isSaving && (isEditing || hasContent);
-
-    if (!shouldAutosave) {
-      // Clear any pending autosave if conditions no longer met
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-        console.log('🔍 [Autosave] Timer cleared - conditions not met');
-      }
-      return;
-    }
-
-    // Clear previous timer
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-      console.log('🔍 [Autosave] Previous timer cleared, resetting debounce');
-    }
-
-    // Set new timer
-    console.log('🔍 [Autosave] Starting 2s debounce timer...');
-    autosaveTimerRef.current = setTimeout(() => {
-      console.log('🔄 [Autosave] Triggering autosave after 2s debounce');
-      handleSave(true); // Pass isAutosave=true for seamless background save
-    }, AUTOSAVE_DELAY_MS);
-
-    // Cleanup on unmount or when dependencies change
-    return () => {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-    };
-  }, [isEditing, isFormDirty, isEditMode, isFormReady, isSubmitting, isSaving, formData, photoCount]);
+  useAutosave({
+    isEditMode,
+    isEditing,
+    isFormDirty,
+    isFormReady,
+    isSubmitting,
+    isSaving,
+    hasContent,
+    onSave: async () => handleAutosaveRef.current(),
+  });
 
   // Register beforeBack handler for gesture/hardware back interception
   // Always saves if dirty, no prompts
@@ -374,9 +334,28 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
   // Enter edit mode - RichTextEditor handles focus automatically
   // when editor receives focus while in read-only UI mode
-  const enterEditMode = () => {
+  const enterEditMode = useCallback(() => {
     setIsEditMode(true);
-  };
+  }, []);
+
+  // GPS capture hook - handles loading, pending state, and auto-capture
+  const {
+    isGpsLoading,
+    isNewGpsCapture,
+    setIsNewGpsCapture,
+    pendingGpsData,
+    captureGps,
+    clearPendingGps,
+    savePendingGps,
+  } = useGpsCapture({
+    isEditing,
+    captureGpsSetting: settings.captureGpsLocation,
+    currentGpsData: formData.gpsData,
+    onGpsChange: (gps) => updateField("gpsData", gps),
+    onBaselineUpdate: (gpsData) => setBaseline({ ...formData, gpsData }),
+    isEditMode,
+    enterEditMode,
+  });
 
   // Show snackbar notification
   const showSnackbar = (message: string) => {
@@ -402,36 +381,37 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     if (!entry || !isEditing) return;
 
     const entryVersion = entry.version || 1;
-    const thisDevice = getDeviceName();
-    const editingDevice = entry.last_edited_device || '';
+    const knownVersion = getKnownVersion();
+    const externalCheck = isExternalUpdate(entry);
 
     // First load - just record the version
-    if (knownVersionRef.current === null) {
-      knownVersionRef.current = entryVersion;
+    if (knownVersion === null) {
+      initializeVersion(entryVersion);
       return;
     }
 
     // Version didn't change - nothing to do
-    if (entryVersion <= knownVersionRef.current) return;
+    if (entryVersion <= knownVersion) return;
 
     // Version increased - check if it's from another device
-    const isExternalUpdate = editingDevice !== thisDevice;
+    const isExternal = externalCheck?.isExternal ?? false;
+    const editingDevice = externalCheck?.device || '';
 
-    console.log('🔄 [CaptureForm] Version change detected', {
-      thisDevice,
+    console.log('🔄 [EntryScreen] Version change detected', {
+      thisDevice: externalCheck?.thisDevice,
       editingDevice,
-      isExternalUpdate,
-      previousVersion: knownVersionRef.current,
+      isExternal,
+      previousVersion: knownVersion,
       newVersion: entryVersion,
-      willUpdateForm: isExternalUpdate && !isFormDirty,
+      willUpdateForm: isExternal && !isFormDirty,
     });
 
     // Update known version
-    knownVersionRef.current = entryVersion;
+    updateKnownVersion(entryVersion);
 
     // If change is from THIS device (our own save), don't update form
-    if (!isExternalUpdate) {
-      console.log('🔄 [CaptureForm] Skipping form update - change from this device');
+    if (!isExternal) {
+      console.log('🔄 [EntryScreen] Skipping form update - change from this device');
       return;
     }
 
@@ -476,58 +456,11 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     // Then update form to same data
     updateMultipleFields(newFormData);
 
-    // Increment externalRefreshKey to force PhotoGallery to reload
-    // This ensures external photo additions are displayed
-    setExternalRefreshKey(prev => prev + 1);
+    // Note: PhotoGallery refresh is handled by usePhotoTracking hook
+    // which detects external photo changes via queryAttachments
 
     showSnackbar(`Entry updated by ${editingDevice}`);
-  }, [entry, isEditing, isFormDirty, streams, updateMultipleFields, setBaseline, photoCount, formData.entryDate, formData.includeTime, formData.locationData, formData.pendingPhotos]);
-
-  // Detect external photo additions via React Query
-  // Photo syncs don't change entry.version, so we need separate detection using usePhotos hook
-  // IMPORTANT: Only detect external changes AFTER:
-  // 1. Form is ready (baseline set)
-  // 2. baselinePhotoCount has been established (ensures we're past initial load)
-  // Otherwise we treat initial data load as "external" and mark form dirty
-  useEffect(() => {
-    // Gate: Must be editing, form ready, AND baseline photo count established
-    if (!isEditing || !entryId || !isFormReady || baselinePhotoCount === null) return;
-
-    const queryPhotoCount = queryAttachments.length;
-
-    // First time this effect runs after all gates pass - initialize known count
-    if (knownPhotoCountRef.current === null) {
-      knownPhotoCountRef.current = queryPhotoCount;
-      console.log('📸 [CaptureForm] Photo tracking initialized (form + baseline ready):', queryPhotoCount);
-      return;
-    }
-
-    // Photo count increased - external photo addition detected
-    if (queryPhotoCount > knownPhotoCountRef.current) {
-      console.log('📸 [CaptureForm] External photo addition detected', {
-        previous: knownPhotoCountRef.current,
-        current: queryPhotoCount,
-      });
-
-      // Update known count
-      knownPhotoCountRef.current = queryPhotoCount;
-
-      // Increment externalRefreshKey to force PhotoGallery to reload
-      setExternalRefreshKey(prev => prev + 1);
-
-      // Update photoCount state so it's in sync
-      setPhotoCount(queryPhotoCount);
-    } else if (queryPhotoCount < knownPhotoCountRef.current) {
-      // Photo was deleted externally - also update
-      console.log('📸 [CaptureForm] External photo deletion detected', {
-        previous: knownPhotoCountRef.current,
-        current: queryPhotoCount,
-      });
-      knownPhotoCountRef.current = queryPhotoCount;
-      setExternalRefreshKey(prev => prev + 1);
-      setPhotoCount(queryPhotoCount);
-    }
-  }, [queryAttachments.length, isEditing, entryId, isFormReady, baselinePhotoCount]);
+  }, [entry, isEditing, isFormDirty, streams, updateMultipleFields, setBaseline, photoCount, formData.entryDate, formData.includeTime, formData.locationData, formData.pendingPhotos, getKnownVersion, initializeVersion, updateKnownVersion, isExternalUpdate]);
 
   // Handle tap on title to enter edit mode
   const handleTitlePress = () => {
@@ -582,7 +515,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     // Guard: Don't reload form if already loaded - version change handler deals with updates
     if (isFormReady) return;
 
-    console.time('⏱️ CaptureForm: entry data processing');
+    console.time('⏱️ EntryScreen: entry data processing');
 
     // Build base form data synchronously
     const entryDate = entry.entry_date || entry.created_at || formData.entryDate;
@@ -627,17 +560,17 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       updateMultipleFields(newFormData);
       // Mark load complete
       isInitialLoad.current = false;
-      console.timeEnd('⏱️ CaptureForm: entry data processing');
-      console.log('⏱️ CaptureForm: setIsFormReady(true)');
+      console.timeEnd('⏱️ EntryScreen: entry data processing');
+      console.log('⏱️ EntryScreen: setIsFormReady(true)');
       setIsFormReady(true);
     };
 
     // Load location if needed, then finalize
     if (entry.location_id) {
-      console.time('⏱️ CaptureForm: location fetch');
+      console.time('⏱️ EntryScreen: location fetch');
       getLocationById(entry.location_id)
         .then(locationEntity => {
-          console.timeEnd('⏱️ CaptureForm: location fetch');
+          console.timeEnd('⏱️ EntryScreen: location fetch');
           if (locationEntity) {
             const location: LocationType = {
               location_id: locationEntity.location_id,
@@ -693,14 +626,14 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   useEffect(() => {
     if (isEditing && isFormReady && baselinePhotoCount === null) {
       const actualPhotoCount = queryAttachments.length;
-      console.log('📸 [CaptureForm] Setting baseline photo count:', actualPhotoCount);
+      console.log('📸 [EntryScreen] Setting baseline photo count:', actualPhotoCount);
       setBaselinePhotoCount(actualPhotoCount);
-      // Also sync photoCount if it differs
+      // Also sync photoCount via hook if it differs
       if (photoCount !== actualPhotoCount) {
-        setPhotoCount(actualPhotoCount);
+        syncPhotoCount(actualPhotoCount);
       }
     }
-  }, [isEditing, isFormReady, baselinePhotoCount, queryAttachments.length, photoCount]);
+  }, [isEditing, isFormReady, baselinePhotoCount, queryAttachments.length, photoCount, syncPhotoCount]);
 
   // Load copied entry data (for copy workflow - entry is NOT saved to DB yet)
   // Pattern: Build complete form data object, set baseline AND form atomically, then mark ready
@@ -813,28 +746,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     }
   }, [isEditing, isCopiedEntry, formData.streamId, formData.status, streams, updateField]);
 
-  // Capture GPS coordinates for new entries when setting is enabled
-  // GPS is separate from named Location - GPS captures where entry was created
-  useEffect(() => {
-    // Only auto-capture GPS for new entries (not editing)
-    if (isEditing) {
-      return;
-    }
-
-    // Skip if GPS capture setting is disabled
-    if (!settings.captureGpsLocation) {
-      return;
-    }
-
-    // Skip if we already have GPS data
-    if (formData.gpsData) {
-      return;
-    }
-
-    // Capture GPS - pass isInitialCapture=true so baseline is updated
-    captureGps(false, false, true);
-  }, [isEditing, settings.captureGpsLocation]);
-
   // Apply templates when form loads with an initial stream
   // This handles the case where user navigates from a stream view and clicks "new"
   const hasAppliedInitialTemplateRef = useRef(false);
@@ -892,93 +803,6 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     }
   }, [isEditing, isCopiedEntry, streams, initialStreamId, formData.title, formData.content, updateField]);
 
-  // Helper function to capture GPS coordinates (used for initial capture and reload)
-  // forceRefresh: if true, skip cache and get fresh GPS reading with high accuracy
-  // toPending: if true, store in pendingGpsData instead of formData (for new capture flow)
-  // isInitialCapture: if true, this is the initial auto-capture for new entries - update baseline to avoid dirty state
-  const captureGps = async (forceRefresh = false, toPending = false, isInitialCapture = false) => {
-    setIsGpsLoading(true);
-
-    let timeoutId: NodeJS.Timeout;
-    let hasGps = false;
-
-    try {
-      const { status: permissionStatus } = await Location.requestForegroundPermissionsAsync();
-      if (permissionStatus !== "granted") {
-        Alert.alert(
-          "Permission Denied",
-          "GPS permission is required to capture location.",
-          [{ text: "OK" }]
-        );
-        setIsGpsLoading(false);
-        return;
-      }
-
-      // Set timeout to give up after 15 seconds
-      timeoutId = setTimeout(() => {
-        if (!hasGps) {
-          setIsGpsLoading(false);
-          Alert.alert(
-            "GPS Unavailable",
-            "Could not get your location. Please check that GPS is enabled.",
-            [{ text: "OK" }]
-          );
-        }
-      }, 15000);
-
-      let location: Location.LocationObject | null = null;
-
-      if (forceRefresh) {
-        // Force fresh GPS reading with high accuracy (for reload button)
-        location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-      } else {
-        // For initial capture, try cached first for speed, then fall back to fresh
-        location = await Location.getLastKnownPositionAsync();
-
-        if (!location) {
-          location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-        }
-      }
-
-      if (location) {
-        hasGps = true;
-        clearTimeout(timeoutId);
-        const gpsData: GpsData = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          accuracy: location.coords.accuracy,
-        };
-        if (toPending) {
-          // Store in pending state - user must click Save to commit
-          setPendingGpsData(gpsData);
-        } else {
-          // Store directly in form data (for auto-capture on new entry)
-          updateField("gpsData", gpsData);
-
-          // For initial auto-capture, also update baseline so form doesn't show as dirty
-          if (isInitialCapture) {
-            // Get current formData and update baseline with new GPS
-            setBaseline({ ...formData, gpsData });
-          }
-        }
-        setIsGpsLoading(false);
-        if (!isEditMode) enterEditMode();
-      }
-    } catch (geoError) {
-      clearTimeout(timeoutId!);
-      setIsGpsLoading(false);
-      Alert.alert(
-        "GPS Error",
-        "Could not access your location. Please check that GPS is enabled and permissions are granted.",
-        [{ text: "OK" }]
-      );
-    }
-  };
-
   // Keyboard listeners
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -1029,19 +853,15 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
 
     // CONFLICT DETECTION (Option 5 from ENTRY_EDITING_DATAFLOW.md)
     // Check if another device updated this entry while we were editing
-    if (isEditing && entry && knownVersionRef.current !== null) {
-      const currentVersion = entry.version || 1;
-      const baseVersion = knownVersionRef.current;
+    const conflictResult = checkForConflict(entry);
+    if (entry && conflictResult?.hasConflict) {
+      const { currentVersion, conflictDevice: lastDevice } = conflictResult;
 
-      if (currentVersion > baseVersion) {
-        // Conflict detected - another device updated this entry
-        const lastDevice = entry.last_edited_device || 'another device';
+      setIsSubmitting(false);
+      setIsSaving(false);
 
-        setIsSubmitting(false);
-        setIsSaving(false);
-
-        // Show conflict resolution dialog
-        return new Promise<void>((resolve) => {
+      // Show conflict resolution dialog
+      return new Promise<void>((resolve) => {
           Alert.alert(
             'Entry Modified',
             `This entry was updated by ${lastDevice} while you were editing. How would you like to proceed?`,
@@ -1073,7 +893,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
                     } : null,
                   });
                   // Update known version to current
-                  knownVersionRef.current = currentVersion;
+                  updateKnownVersion(currentVersion);
                   markClean();
                   setBaselinePhotoCount(photoCount);
                   showSnackbar('Discarded your changes, loaded latest version');
@@ -1153,7 +973,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
                 onPress: async () => {
                   // Proceed with save - this will overwrite the remote version
                   // Update known version so we don't detect conflict again
-                  knownVersionRef.current = currentVersion;
+                  updateKnownVersion(currentVersion);
                   setIsSubmitting(true);
                   await performSave();
                   resolve();
@@ -1162,11 +982,13 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
             ]
           );
         });
-      }
     }
 
     await performSave(isAutosave);
   };
+
+  // Update autosave ref so the useAutosave hook can call handleSave(true)
+  handleAutosaveRef.current = () => handleSave(true);
 
   // Actual save logic extracted for reuse in conflict resolution
   // isAutosave: when true, skip setting isSubmitting and don't show empty entry alert
@@ -1324,7 +1146,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         // Transition to "editing" mode - subsequent saves will update instead of create
         setSavedEntryId(newEntry.entry_id);
         // Initialize the known version for the new entry
-        knownVersionRef.current = 1;
+        initializeVersion(1);
       }
 
       // Note: Sync is triggered automatically in mobileEntryApi after save
@@ -1334,8 +1156,8 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
       setBaselinePhotoCount(photoCount); // Update photo baseline
       // Update known version - we just created a new version with this save
       // This prevents false conflict detection on subsequent saves
-      if (knownVersionRef.current !== null && isEditing) {
-        knownVersionRef.current = (knownVersionRef.current || 1) + 1;
+      if (isEditing) {
+        incrementKnownVersion();
       }
     } catch (error) {
       console.error(`Failed to ${isEditing ? 'update' : 'create'} entry:`, error);
@@ -1538,7 +1360,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   // Show loading when editing/copying and form is not fully ready
   // This blocks rendering until entry AND location are both loaded
   if ((isEditing || isCopiedEntry) && !isFormReady) {
-    console.log(`⏱️ CaptureForm: showing Loading... (isEditing=${isEditing}, isCopiedEntry=${isCopiedEntry}, isFormReady=${isFormReady})`);
+    console.log(`⏱️ EntryScreen: showing Loading... (isEditing=${isEditing}, isCopiedEntry=${isCopiedEntry}, isFormReady=${isFormReady})`);
     return (
       <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
         <Text style={[styles.loadingText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading...</Text>
@@ -1546,7 +1368,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
     );
   }
 
-  console.log('⏱️ CaptureForm: rendering full form UI');
+  console.log('⏱️ EntryScreen: rendering full form UI');
 
   // Show error if editing an EXISTING entry (opened via entryId) and entry not found
   // Don't show error if we just created the entry via autosave (savedEntryId is set)
@@ -1565,7 +1387,7 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
       {/* Header Bar with Back/Date/Save buttons */}
-      <CaptureFormHeader
+      <EntryHeader
         isEditMode={isEditMode}
         isFullScreen={isFullScreen}
         isSubmitting={isSubmitting}
@@ -1748,333 +1570,24 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         </BottomBar>
       )}
 
-      {/* Stream Picker Dropdown - only render when active to avoid unnecessary hook calls */}
-      {activePicker === 'stream' && (
-        <StreamPicker
-          visible={true}
-          onClose={() => setActivePicker(null)}
-          isNewEntry={!isEditing}
-          onSelect={(id, name) => {
-            const hadStream = !!formData.streamId;
-            const isRemoving = !id;
-            updateField("streamId", id);
-            updateField("streamName", name);
-
-            // Apply templates when stream is selected (not removed)
-            if (id) {
-              const selectedStream = streams.find(s => s.stream_id === id);
-
-              if (selectedStream) {
-                const templateDate = new Date();
-                const titleIsBlank = !formData.title.trim();
-                const contentIsBlank = !formData.content.trim();
-
-                // Apply title template if title is blank (independent of content)
-                if (titleIsBlank && selectedStream.entry_title_template) {
-                  const newTitle = applyTitleTemplate(selectedStream.entry_title_template, {
-                    date: templateDate,
-                    streamName: selectedStream.name,
-                  });
-                  if (newTitle) {
-                    updateField("title", newTitle);
-                  }
-                }
-
-                // Apply content template if content is blank (independent of title)
-                if (contentIsBlank && selectedStream.entry_content_template) {
-                  const newContent = applyContentTemplate(selectedStream.entry_content_template, {
-                    date: templateDate,
-                    streamName: selectedStream.name,
-                  });
-                  if (newContent) {
-                    updateField("content", newContent);
-                  }
-                }
-
-                // Apply default status if current status is "none"
-                if (formData.status === "none" && selectedStream.entry_use_status && selectedStream.entry_default_status) {
-                  updateField("status", selectedStream.entry_default_status);
-                }
-              }
-            }
-
-            if (isRemoving && hadStream) {
-              showSnackbar('You removed the stream');
-            } else if (hadStream) {
-              showSnackbar('Success! You updated the stream.');
-            } else {
-              showSnackbar('Success! You added the stream.');
-            }
-            if (!isEditMode) {
-              enterEditMode();
-            }
-          }}
-          selectedStreamId={formData.streamId}
-        />
-      )}
-
-      {/* GPS Picker - Read-only display with remove/reload options */}
-      <GpsPicker
-        visible={activePicker === 'gps'}
-        onClose={() => {
-          setActivePicker(null);
-          setIsNewGpsCapture(false);
-          setPendingGpsData(null); // Clear pending GPS when closing without saving
-        }}
-        gpsData={isNewGpsCapture ? pendingGpsData : formData.gpsData}
-        onRemove={() => {
-          updateField("gpsData", null);
-          setActivePicker(null);
-          setIsNewGpsCapture(false);
-          setPendingGpsData(null);
-          if (!isEditMode) enterEditMode();
-        }}
-        onReload={() => {
-          // Don't close the picker - reload in place with high accuracy
-          // When in new capture mode, reload to pending; otherwise reload to formData
-          captureGps(true, isNewGpsCapture);
-        }}
-        onUseLocation={() => {
-          // Switch to Location picker - GPS will be cleared when location is selected
-          // If in new capture mode with pending GPS, commit it first so location picker can use it
-          if (isNewGpsCapture && pendingGpsData) {
-            updateField("gpsData", pendingGpsData);
-          }
-          setIsNewGpsCapture(false);
-          setPendingGpsData(null);
-          setTimeout(() => setActivePicker('location'), 100);
-        }}
-        onSave={(location) => {
-          // Save the GPS location (either from map tap or GPS reload)
-          updateField("gpsData", location);
-          setPendingGpsData(null);
-          setIsNewGpsCapture(false);
-          if (!isEditMode) enterEditMode();
-        }}
-        isLoading={isGpsLoading}
-        units={settings.units}
-        onSnackbar={showSnackbar}
-      />
-
-      {/* Location Picker (fullscreen modal) - only render when active to avoid unnecessary hook calls */}
-      {activePicker === 'location' && (
-        <LocationPicker
-          visible={true}
-          onClose={() => setActivePicker(null)}
-          mode={locationPickerMode}
-          onSelect={(location: LocationType | null) => {
-            // If location is null (user selected "None"), clear location data
-            if (location === null) {
-              updateField("locationData", null);
-              setActivePicker(null);
-              showSnackbar('You removed the location');
-              if (!isEditMode) {
-                enterEditMode();
-              }
-              return;
-            }
-
-            // Show snackbar based on whether we're adding or updating
-            const isUpdating = !!formData.locationData?.name;
-
-            // When a Location is selected:
-            // 1. Set the location data
-            // 2. Clear GPS data (Location supersedes GPS in the UI)
-            // Note: entry_latitude/longitude will be set from locationData on save
-            updateField("locationData", location);
-            updateField("gpsData", null); // Location replaces GPS
-
-            setActivePicker(null);
-            showSnackbar(isUpdating ? 'Success! You updated the location.' : 'Success! You added the location.');
-            if (!isEditMode) {
-              enterEditMode();
-            }
-          }}
-          initialLocation={formData.locationData ? {
-            latitude: formData.locationData.latitude,
-            longitude: formData.locationData.longitude,
-            name: formData.locationData.name,
-            source: 'user_custom',
-          } : formData.gpsData ? {
-            latitude: formData.gpsData.latitude,
-            longitude: formData.gpsData.longitude,
-            name: null,
-            source: 'user_custom',
-          } : null}
-        />
-      )}
-
-      {/* Due Date Picker Modal */}
-      <DueDatePicker
-        visible={activePicker === 'dueDate'}
-        onClose={() => setActivePicker(null)}
-        dueDate={formData.dueDate}
-        onDueDateChange={(date) => updateField("dueDate", date)}
-        onSnackbar={showSnackbar}
-      />
-
-      {/* Entry Date Picker */}
-      <EntryDatePicker
-        visible={activePicker === 'entryDate'}
-        onClose={() => setActivePicker(null)}
-        entryDate={formData.entryDate}
-        onEntryDateChange={(date) => updateField("entryDate", date)}
-        onSnackbar={showSnackbar}
-      />
-
-      {/* Time Picker Modal */}
-      <TimePicker
-        visible={activePicker === 'time'}
-        onClose={() => setActivePicker(null)}
-        entryDate={formData.entryDate}
-        onEntryDateChange={(date) => updateField("entryDate", date)}
-        onIncludeTimeChange={(include) => updateField("includeTime", include)}
-        onSnackbar={showSnackbar}
-        includeTime={formData.includeTime}
-      />
-
-      {/* Rating Picker Modal - switch between stars, decimal_whole, and decimal based on stream config */}
-      {currentStream?.entry_rating_type === 'decimal' ? (
-        <DecimalRatingPicker
-          visible={activePicker === 'rating'}
-          onClose={() => setActivePicker(null)}
-          rating={formData.rating}
-          onRatingChange={(value) => updateField("rating", value)}
-          onSnackbar={showSnackbar}
-        />
-      ) : currentStream?.entry_rating_type === 'decimal_whole' ? (
-        <WholeNumberRatingPicker
-          visible={activePicker === 'rating'}
-          onClose={() => setActivePicker(null)}
-          rating={formData.rating}
-          onRatingChange={(value) => updateField("rating", value)}
-          onSnackbar={showSnackbar}
-        />
-      ) : (
-        <RatingPicker
-          visible={activePicker === 'rating'}
-          onClose={() => setActivePicker(null)}
-          rating={formData.rating}
-          onRatingChange={(value) => updateField("rating", value)}
-          onSnackbar={showSnackbar}
-        />
-      )}
-
-      {/* Priority Picker Modal */}
-      <PriorityPicker
-        visible={activePicker === 'priority'}
-        onClose={() => setActivePicker(null)}
-        priority={formData.priority}
-        onPriorityChange={(value) => updateField("priority", value)}
-        onSnackbar={showSnackbar}
-      />
-
-      {/* Status Picker Modal */}
-      <StatusPicker
-        visible={activePicker === 'status'}
-        onClose={() => setActivePicker(null)}
-        status={formData.status}
-        onStatusChange={(value) => {
-          updateField("status", value);
-          if (!isEditMode) enterEditMode();
-        }}
-        onSnackbar={showSnackbar}
-        allowedStatuses={currentStream?.entry_statuses}
-      />
-
-      {/* Type Picker Modal */}
-      <TypePicker
-        visible={activePicker === 'type'}
-        onClose={() => setActivePicker(null)}
-        type={formData.type}
-        onTypeChange={(value) => {
-          updateField("type", value);
-          if (!isEditMode) enterEditMode();
-        }}
-        onSnackbar={showSnackbar}
-        availableTypes={currentStream?.entry_types ?? []}
-      />
-
-      {/* Unsupported Attribute Pickers - show when attribute has value but stream doesn't support it */}
-      <UnsupportedAttributePicker
-        visible={activePicker === 'unsupportedStatus'}
-        onClose={() => setActivePicker(null)}
-        attributeName="Status"
-        currentValue={formData.status === 'none' ? 'None' : formData.status.charAt(0).toUpperCase() + formData.status.slice(1)}
-        onRemove={() => {
-          updateField("status", "none");
-          if (!isEditMode) enterEditMode();
-        }}
-        onSnackbar={showSnackbar}
-      />
-
-      <UnsupportedAttributePicker
-        visible={activePicker === 'unsupportedType'}
-        onClose={() => setActivePicker(null)}
-        attributeName="Type"
-        currentValue={formData.type || ''}
-        onRemove={() => {
-          updateField("type", null);
-          if (!isEditMode) enterEditMode();
-        }}
-        onSnackbar={showSnackbar}
-      />
-
-      <UnsupportedAttributePicker
-        visible={activePicker === 'unsupportedDueDate'}
-        onClose={() => setActivePicker(null)}
-        attributeName="Due Date"
-        currentValue={formData.dueDate ? new Date(formData.dueDate).toLocaleDateString() : ''}
-        onRemove={() => {
-          updateField("dueDate", null);
-          if (!isEditMode) enterEditMode();
-        }}
-        onSnackbar={showSnackbar}
-      />
-
-      <UnsupportedAttributePicker
-        visible={activePicker === 'unsupportedRating'}
-        onClose={() => setActivePicker(null)}
-        attributeName="Rating"
-        currentValue={`${formData.rating} star${formData.rating !== 1 ? 's' : ''}`}
-        onRemove={() => {
-          updateField("rating", 0);
-          if (!isEditMode) enterEditMode();
-        }}
-        onSnackbar={showSnackbar}
-      />
-
-      <UnsupportedAttributePicker
-        visible={activePicker === 'unsupportedPriority'}
-        onClose={() => setActivePicker(null)}
-        attributeName="Priority"
-        currentValue={formData.priority === 1 ? 'Low' : formData.priority === 2 ? 'Medium' : 'High'}
-        onRemove={() => {
-          updateField("priority", 0);
-          if (!isEditMode) enterEditMode();
-        }}
-        onSnackbar={showSnackbar}
-      />
-
-      <UnsupportedAttributePicker
-        visible={activePicker === 'unsupportedLocation'}
-        onClose={() => setActivePicker(null)}
-        attributeName="Location"
-        currentValue={formData.locationData?.name || 'Unknown Location'}
-        onRemove={() => {
-          updateField("locationData", null);
-          if (!isEditMode) enterEditMode();
-        }}
-        onSnackbar={showSnackbar}
-      />
-
-      {/* Entry Menu */}
-      <AttributesPicker
-        visible={activePicker === 'attributes'}
-        onClose={() => setActivePicker(null)}
+      {/* All Pickers - extracted to separate component for maintainability */}
+      <EntryPickers
+        activePicker={activePicker}
+        setActivePicker={setActivePicker}
+        formData={formData}
+        updateField={updateField}
         isEditing={isEditing}
         isEditMode={isEditMode}
         enterEditMode={enterEditMode}
+        isGpsLoading={isGpsLoading}
+        isNewGpsCapture={isNewGpsCapture}
+        setIsNewGpsCapture={setIsNewGpsCapture}
+        pendingGpsData={pendingGpsData}
+        captureGps={captureGps}
+        clearPendingGps={clearPendingGps}
+        streams={streams}
+        currentStream={currentStream ?? null}
+        units={settings.units}
         showLocation={showLocation}
         showStatus={showStatus}
         showType={showType}
@@ -2082,28 +1595,11 @@ export function CaptureForm({ entryId, initialStreamId, initialStreamName, initi
         showRating={showRating}
         showPriority={showPriority}
         showPhotos={showPhotos}
-        hasGpsData={!!formData.gpsData}
-        hasLocationData={!!formData.locationData?.name}
-        status={formData.status}
-        type={formData.type}
-        dueDate={formData.dueDate}
-        rating={formData.rating}
-        priority={formData.priority}
         photoCount={photoCount}
-        onAddGps={() => {
-          setIsNewGpsCapture(true);
-          setActivePicker('gps');
-          captureGps(false, true); // Capture to pending state
-        }}
-        onShowLocationPicker={() => setActivePicker('location')}
-        onShowStatusPicker={() => setActivePicker('status')}
-        onShowTypePicker={() => setActivePicker('type')}
-        onShowDatePicker={() => setActivePicker('dueDate')}
-        onShowRatingPicker={() => setActivePicker('rating')}
-        onShowPriorityPicker={() => setActivePicker('priority')}
+        locationPickerMode={locationPickerMode}
+        showSnackbar={showSnackbar}
+        handleDelete={handleDelete}
         onAddPhoto={() => photoCaptureRef.current?.openMenu()}
-        onDelete={handleDelete}
-        onSnackbar={showSnackbar}
       />
 
       {/* Photo Capture (hidden, triggered via ref) */}

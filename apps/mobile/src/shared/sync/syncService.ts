@@ -2150,7 +2150,7 @@ class SyncService {
       this.queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
 
       // Also invalidate specific entry and attachment queries if IDs provided
-      // This ensures CaptureForm updates when editing the same entry on another device
+      // This ensures EntryScreen updates when editing the same entry on another device
       // Note: Entry query keys are ['entry', id, 'local'] or ['entry', id, 'refresh']
       // Attachment query keys are ['attachments', 'entry', entryId]
       // so we use predicate matching to invalidate both variants

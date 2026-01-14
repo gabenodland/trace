@@ -1,12 +1,12 @@
 /**
  * MetadataBar - Displays and allows editing of entry metadata
- * Extracted from CaptureForm for maintainability
+ * Extracted from EntryScreen for maintainability
  */
 
 import { View, Text, TouchableOpacity, Keyboard } from "react-native";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
-import { styles } from "./CaptureForm.styles";
+import { styles } from "./EntryScreen.styles";
 import { StatusIcon } from "../../../shared/components/StatusIcon";
 import { getStatusLabel, isLegacyType, formatRatingDisplay, decimalToStars, type Location as LocationType, type EntryStatus, type RatingType } from "@trace/core";
 import type { GpsData } from "./hooks/useCaptureFormState";

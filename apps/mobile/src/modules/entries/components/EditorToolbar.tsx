@@ -1,12 +1,12 @@
 /**
  * EditorToolbar - Bottom toolbar for rich text editing
- * Extracted from CaptureForm for maintainability
+ * Extracted from EntryScreen for maintainability
  */
 
 import { View, Text, TouchableOpacity } from "react-native";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
-import { styles } from "./CaptureForm.styles";
+import { styles } from "./EntryScreen.styles";
 
 interface EditorToolbarProps {
   editorRef: React.RefObject<any>;

@@ -161,7 +161,7 @@ function useDeleteEntryMutation() {
 
 /**
  * Internal: Mutation hook for copying an entry
- * Note: copyEntry no longer saves to DB - it returns in-memory data for CaptureForm
+ * Note: copyEntry no longer saves to DB - it returns in-memory data for EntryScreen
  * No query invalidation needed since nothing is persisted yet
  */
 function useCopyEntryMutation() {
@@ -169,7 +169,7 @@ function useCopyEntryMutation() {
     mutationFn: ({ id, gpsCoords }: { id: string; gpsCoords?: { latitude: number; longitude: number; accuracy?: number } }) =>
       copyEntry(id, gpsCoords),
     // No onSuccess - entry is not saved to DB yet, so no queries to invalidate
-    // The actual save happens in CaptureForm when user clicks save
+    // The actual save happens in EntryScreen when user clicks save
   });
 }
 

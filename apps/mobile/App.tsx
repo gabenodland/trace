@@ -31,7 +31,7 @@ import { StreamDrawer } from "./src/components/drawer";
 import { useSwipeBackGesture } from "./src/shared/hooks/useSwipeBackGesture";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
-import { EntryScreen } from "./src/screens/EntryScreen";
+import { EntryScreen } from "./src/modules/entries/components/EntryScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";

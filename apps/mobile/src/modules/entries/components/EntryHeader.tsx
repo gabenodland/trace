@@ -1,15 +1,15 @@
 /**
- * CaptureFormHeader - Header bar with Cancel/Date/Save buttons
- * Extracted from CaptureForm for maintainability
+ * EntryHeader - Header bar with Cancel/Date/Save buttons
+ * Extracted from EntryScreen for maintainability
  */
 
 import { useState, useEffect, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, Keyboard } from "react-native";
 import Svg, { Path, Circle, Polyline } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
-import { styles } from "./CaptureForm.styles";
+import { styles } from "./EntryScreen.styles";
 
-interface CaptureFormHeaderProps {
+interface EntryHeaderProps {
   // Mode flags
   isEditMode: boolean;
   isFullScreen: boolean;
@@ -33,7 +33,7 @@ interface CaptureFormHeaderProps {
   editorRef: React.RefObject<any>;
 }
 
-export function CaptureFormHeader({
+export function EntryHeader({
   isEditMode,
   isFullScreen,
   isSubmitting,
@@ -51,7 +51,7 @@ export function CaptureFormHeader({
   onAttributesPress,
   enterEditMode,
   editorRef,
-}: CaptureFormHeaderProps) {
+}: EntryHeaderProps) {
   const theme = useTheme();
 
   // Track "just saved" state to show green checkmark briefly

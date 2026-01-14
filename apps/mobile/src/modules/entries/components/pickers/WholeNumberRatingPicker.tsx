@@ -8,7 +8,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, NativeSyntheticEv
 import Svg, { Line } from "react-native-svg";
 import { clampRating } from "@trace/core";
 import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
-import { styles as formStyles } from "../CaptureForm.styles";
+import { styles as formStyles } from "../EntryScreen.styles";
 import { theme } from "../../../../shared/theme/theme";
 
 interface WholeNumberRatingPickerProps {
