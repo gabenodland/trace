@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Clipboard, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { supabase, reverseGeocode, parseMapboxHierarchy } from '@trace/core';
+import { supabase, reverseGeocode, parseMapboxHierarchy, findNearbyLocation, geocodeResponseToEntryFields } from '@trace/core';
 import { useNavigation } from '../shared/contexts/NavigationContext';
 import { SecondaryHeader } from '../components/layout/SecondaryHeader';
 import { localDB } from '../shared/db/localDB';
@@ -199,7 +199,7 @@ export function DatabaseInfoScreen() {
           onPress: async () => {
             try {
               await sync();
-              Alert.alert('Success', 'Manual sync triggered');
+              Alert.alert('Success', 'Sync completed successfully');
               setRefreshKey(prev => prev + 1);
             } catch (error) {
               Alert.alert('Error', `Sync failed: ${error}`);
@@ -537,6 +537,168 @@ export function DatabaseInfoScreen() {
       );
     } catch (error) {
       Alert.alert('Error', `Failed to find locations needing enrichment: ${error}`);
+    }
+  };
+
+  const handleSnapAllEntries = async () => {
+    try {
+      // Find entries with GPS coordinates but no geocode_status (never processed)
+      // or with geocode_status = 'error' (failed, can retry)
+      const entriesToProcess = await localDB.runCustomQuery(`
+        SELECT entry_id, title, entry_latitude, entry_longitude
+        FROM entries
+        WHERE deleted_at IS NULL
+          AND entry_latitude IS NOT NULL
+          AND entry_longitude IS NOT NULL
+          AND (geocode_status IS NULL OR geocode_status = 'error')
+      `);
+
+      if (entriesToProcess.length === 0) {
+        Alert.alert('All Good', 'All entries with GPS coordinates have already been processed.');
+        return;
+      }
+
+      Alert.alert(
+        'Snap All Entries',
+        `Found ${entriesToProcess.length} entr${entriesToProcess.length === 1 ? 'y' : 'ies'} with GPS coordinates that haven't been geocoded.\n\nThis will:\n1. Try to snap each entry to a saved location (within 100ft)\n2. If no match, call Mapbox to get city/region/country\n\nThis may take a while.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Process All',
+            onPress: async () => {
+              try {
+                let snappedCount = 0;
+                let geocodedCount = 0;
+                let noDataCount = 0;
+                let errorCount = 0;
+
+                // Threshold for snapping: 100 feet ≈ 30 meters
+                const SNAP_THRESHOLD_METERS = 30;
+
+                for (const entry of entriesToProcess) {
+                  try {
+                    // STEP 1: Try to snap to a saved location
+                    const snapResult = findNearbyLocation(
+                      { latitude: entry.entry_latitude, longitude: entry.entry_longitude },
+                      locations,
+                      SNAP_THRESHOLD_METERS
+                    );
+
+                    if (snapResult.location) {
+                      // Snapped to a saved location
+                      await localDB.runCustomQuery(
+                        `UPDATE entries SET
+                          location_id = ?,
+                          place_name = ?,
+                          address = ?,
+                          neighborhood = ?,
+                          postal_code = ?,
+                          city = ?,
+                          subdivision = ?,
+                          region = ?,
+                          country = ?,
+                          geocode_status = 'snapped',
+                          synced = 0,
+                          sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END,
+                          updated_at = ?
+                        WHERE entry_id = ?`,
+                        [
+                          snapResult.location.location_id,
+                          snapResult.location.name,
+                          snapResult.location.address,
+                          snapResult.location.neighborhood,
+                          snapResult.location.postal_code,
+                          snapResult.location.city,
+                          snapResult.location.subdivision,
+                          snapResult.location.region,
+                          snapResult.location.country,
+                          new Date().toISOString(),
+                          entry.entry_id
+                        ]
+                      );
+                      snappedCount++;
+                      continue;
+                    }
+
+                    // STEP 2: No snap match - call geocode API
+                    const response = await reverseGeocode({
+                      latitude: entry.entry_latitude,
+                      longitude: entry.entry_longitude,
+                    });
+
+                    const fields = geocodeResponseToEntryFields(response);
+
+                    // Update entry with geocoded data
+                    await localDB.runCustomQuery(
+                      `UPDATE entries SET
+                        address = ?,
+                        neighborhood = ?,
+                        postal_code = ?,
+                        city = ?,
+                        subdivision = ?,
+                        region = ?,
+                        country = ?,
+                        geocode_status = ?,
+                        synced = 0,
+                        sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END,
+                        updated_at = ?
+                      WHERE entry_id = ?`,
+                      [
+                        fields.address,
+                        fields.neighborhood,
+                        fields.postal_code,
+                        fields.city,
+                        fields.subdivision,
+                        fields.region,
+                        fields.country,
+                        fields.geocode_status,
+                        new Date().toISOString(),
+                        entry.entry_id
+                      ]
+                    );
+
+                    if (fields.geocode_status === 'success') {
+                      geocodedCount++;
+                    } else {
+                      noDataCount++;
+                    }
+
+                    // Small delay to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                  } catch (err) {
+                    console.error(`Failed to process entry ${entry.title || entry.entry_id}:`, err);
+                    errorCount++;
+                  }
+                }
+
+                setRefreshKey(prev => prev + 1);
+
+                // Sync changes to cloud
+                try {
+                  await sync();
+                } catch (syncError) {
+                  console.error('[SnapAll] Sync failed after processing:', syncError);
+                }
+
+                const results = [];
+                if (snappedCount > 0) results.push(`${snappedCount} snapped to saved locations`);
+                if (geocodedCount > 0) results.push(`${geocodedCount} geocoded via API`);
+                if (noDataCount > 0) results.push(`${noDataCount} with no address data`);
+                if (errorCount > 0) results.push(`${errorCount} failed`);
+
+                Alert.alert(
+                  errorCount > 0 ? 'Partial Success' : 'Success',
+                  `Processed ${entriesToProcess.length} entries:\n\n${results.join('\n')}\n\nChanges synced to cloud.`
+                );
+              } catch (error) {
+                Alert.alert('Error', `Failed to process entries: ${error}`);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', `Failed to find entries: ${error}`);
     }
   };
 
@@ -1269,7 +1431,13 @@ export function DatabaseInfoScreen() {
 
             {/* Actions */}
             <View style={styles.section}>
-              <TouchableOpacity style={styles.cleanupButton} onPress={handleEnrichLocationHierarchy}>
+              <TouchableOpacity style={styles.button} onPress={handleSnapAllEntries}>
+                <Text style={styles.buttonText}>📍 Snap All Entries</Text>
+              </TouchableOpacity>
+              <Text style={styles.helperText}>
+                Process old entries: snap to saved locations or geocode via API
+              </Text>
+              <TouchableOpacity style={[styles.cleanupButton, { marginTop: 12 }]} onPress={handleEnrichLocationHierarchy}>
                 <Text style={styles.cleanupButtonText}>🌍 Enrich Location Hierarchy</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.dangerButton, { marginTop: 8 }]} onPress={handleMergeDuplicateLocations}>

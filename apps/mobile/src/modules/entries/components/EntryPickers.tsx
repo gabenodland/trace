@@ -14,19 +14,17 @@ import {
   PriorityPicker,
   TimePicker,
   AttributesPicker,
-  GpsPicker,
   StatusPicker,
   DueDatePicker,
   EntryDatePicker,
   TypePicker,
   UnsupportedAttributePicker,
 } from "./pickers";
-import type { GpsData, CaptureFormData } from "./hooks/useCaptureFormState";
+import type { CaptureFormData } from "./hooks/useCaptureFormState";
 
-// Picker types
+// Picker types - GPS picker removed, unified into location
 export type ActivePicker =
   | "stream"
-  | "gps"
   | "location"
   | "dueDate"
   | "rating"
@@ -58,20 +56,9 @@ export interface EntryPickersProps {
   isEditMode: boolean;
   enterEditMode: () => void;
 
-  // GPS state from useGpsCapture
-  isGpsLoading: boolean;
-  isNewGpsCapture: boolean;
-  setIsNewGpsCapture: (value: boolean) => void;
-  pendingGpsData: GpsData | null;
-  captureGps: (forceRefresh?: boolean, toPending?: boolean) => Promise<void>;
-  clearPendingGps: () => void;
-
   // Stream data
   streams: Stream[];
   currentStream: Stream | null;
-
-  // Settings
-  units: "imperial" | "metric";
 
   // Feature visibility flags
   showLocation: boolean;
@@ -102,15 +89,8 @@ export function EntryPickers({
   isEditing,
   isEditMode,
   enterEditMode,
-  isGpsLoading,
-  isNewGpsCapture,
-  setIsNewGpsCapture,
-  pendingGpsData,
-  captureGps,
-  clearPendingGps,
   streams,
   currentStream,
-  units,
   showLocation,
   showStatus,
   showType,
@@ -201,41 +181,7 @@ export function EntryPickers({
         />
       )}
 
-      {/* GPS Picker - Read-only display with remove/reload options */}
-      <GpsPicker
-        visible={activePicker === "gps"}
-        onClose={() => {
-          setActivePicker(null);
-          clearPendingGps();
-        }}
-        gpsData={isNewGpsCapture ? pendingGpsData : formData.gpsData}
-        onRemove={() => {
-          updateField("gpsData", null);
-          setActivePicker(null);
-          clearPendingGps();
-          if (!isEditMode) enterEditMode();
-        }}
-        onReload={() => {
-          captureGps(true, isNewGpsCapture);
-        }}
-        onUseLocation={() => {
-          if (isNewGpsCapture && pendingGpsData) {
-            updateField("gpsData", pendingGpsData);
-          }
-          clearPendingGps();
-          setTimeout(() => setActivePicker("location"), 100);
-        }}
-        onSave={(location) => {
-          updateField("gpsData", location);
-          clearPendingGps();
-          if (!isEditMode) enterEditMode();
-        }}
-        isLoading={isGpsLoading}
-        units={units}
-        onSnackbar={showSnackbar}
-      />
-
-      {/* Location Picker (fullscreen modal) - only render when active */}
+      {/* Location Picker (fullscreen modal) - handles all location states */}
       {activePicker === "location" && (
         <LocationPicker
           visible={true}
@@ -478,19 +424,13 @@ export function EntryPickers({
         showRating={showRating}
         showPriority={showPriority}
         showPhotos={showPhotos}
-        hasGpsData={!!formData.gpsData}
-        hasLocationData={!!formData.locationData?.name}
+        hasLocationData={!!(formData.gpsData || formData.locationData?.latitude || formData.locationData?.name)}
         status={formData.status}
         type={formData.type}
         dueDate={formData.dueDate}
         rating={formData.rating}
         priority={formData.priority}
         photoCount={photoCount}
-        onAddGps={() => {
-          setIsNewGpsCapture(true);
-          setActivePicker("gps");
-          captureGps(false, true);
-        }}
         onShowLocationPicker={() => setActivePicker("location")}
         onShowStatusPicker={() => setActivePicker("status")}
         onShowTypePicker={() => setActivePicker("type")}

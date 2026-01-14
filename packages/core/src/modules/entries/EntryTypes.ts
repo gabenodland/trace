@@ -83,8 +83,26 @@ export interface Entry {
   entry_latitude: number | null;
   entry_longitude: number | null;
   location_accuracy: number | null; // GPS accuracy in meters
-  // Location reference (points to locations table)
+  // Location reference (optional - points to anchor in locations table)
   location_id: string | null;
+  // Location hierarchy (owned by entry - copied from anchor or reverse geocode)
+  place_name: string | null; // Named place (e.g., "Starbucks", "Home")
+  address: string | null; // Street address
+  neighborhood: string | null; // Neighborhood name
+  postal_code: string | null; // Postal/ZIP code
+  city: string | null; // City name
+  subdivision: string | null; // County/district
+  region: string | null; // State/province
+  country: string | null; // Country name
+  // Geocode status - tracks how location hierarchy data was obtained
+  // null = never attempted
+  // 'pending' = geocoding in progress
+  // 'success' = got data from Mapbox reverse geocode API
+  // 'snapped' = matched to a saved location (no API call needed)
+  // 'no_data' = API returned no address data (ocean/wilderness)
+  // 'error' = API call failed
+  // 'manual' = user manually entered location data
+  geocode_status?: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
   status: EntryStatus;
   type: string | null; // User-defined type from stream's entry_types
   due_date: string | null;
@@ -119,6 +137,16 @@ export interface CreateEntryInput {
   entry_longitude?: number | null;
   location_accuracy?: number | null;
   location_id?: string | null;
+  // Location hierarchy (copied from anchor or reverse geocode)
+  place_name?: string | null;
+  address?: string | null;
+  neighborhood?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  subdivision?: string | null;
+  region?: string | null;
+  country?: string | null;
+  geocode_status?: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
   status?: EntryStatus;
   type?: string | null; // User-defined type from stream's entry_types
   due_date?: string | null;
@@ -138,6 +166,16 @@ export interface UpdateEntryInput {
   entry_longitude?: number | null;
   location_accuracy?: number | null;
   location_id?: string | null;
+  // Location hierarchy (copied from anchor or reverse geocode)
+  place_name?: string | null;
+  address?: string | null;
+  neighborhood?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  subdivision?: string | null;
+  region?: string | null;
+  country?: string | null;
+  geocode_status?: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
   status?: EntryStatus;
   type?: string | null; // User-defined type from stream's entry_types
   due_date?: string | null;

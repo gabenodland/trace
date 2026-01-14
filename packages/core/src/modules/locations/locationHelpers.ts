@@ -394,3 +394,149 @@ export function formatFullAddress(locationData: LocationData): string {
 
   return parts.join(', ');
 }
+
+// ============================================================================
+// ENTRY GEOCODING HELPERS
+// ============================================================================
+
+/**
+ * Entry location fields extracted from geocode response or location snap
+ * Maps location hierarchy to entry fields
+ */
+export interface EntryLocationFields {
+  address: string | null;
+  neighborhood: string | null;
+  postal_code: string | null;
+  city: string | null;
+  subdivision: string | null;
+  region: string | null;
+  country: string | null;
+  geocode_status: 'success' | 'snapped' | 'no_data';
+}
+
+/**
+ * Result of location snap attempt
+ */
+export interface LocationSnapResult {
+  /** The matched location, or null if no match within threshold */
+  location: {
+    location_id: string;
+    name: string;
+    address: string | null;
+    neighborhood: string | null;
+    postal_code: string | null;
+    city: string | null;
+    subdivision: string | null;
+    region: string | null;
+    country: string | null;
+  } | null;
+  /** Distance to matched location in meters */
+  distanceMeters: number | null;
+}
+
+/**
+ * Find the nearest saved location within a threshold distance
+ *
+ * Used for location snapping - match GPS to nearby saved locations before
+ * calling the geocode API. 100 feet ≈ 30 meters.
+ *
+ * @param coords - GPS coordinates to match
+ * @param locations - List of saved locations to search
+ * @param thresholdMeters - Maximum distance to consider a match (default: 30m = ~100ft)
+ * @returns The nearest matching location or null if none within threshold
+ */
+export function findNearbyLocation<T extends {
+  location_id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  address: string | null;
+  neighborhood: string | null;
+  postal_code: string | null;
+  city: string | null;
+  subdivision: string | null;
+  region: string | null;
+  country: string | null;
+}>(
+  coords: Coordinates,
+  locations: T[],
+  thresholdMeters: number = 30
+): LocationSnapResult {
+  if (!locations || locations.length === 0) {
+    return { location: null, distanceMeters: null };
+  }
+
+  let nearestLocation: T | null = null;
+  let nearestDistance = Infinity;
+
+  for (const loc of locations) {
+    const distance = calculateDistance(coords, {
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+    });
+
+    if (distance.meters < nearestDistance && distance.meters <= thresholdMeters) {
+      nearestLocation = loc;
+      nearestDistance = distance.meters;
+    }
+  }
+
+  if (nearestLocation) {
+    return {
+      location: {
+        location_id: nearestLocation.location_id,
+        name: nearestLocation.name,
+        address: nearestLocation.address,
+        neighborhood: nearestLocation.neighborhood,
+        postal_code: nearestLocation.postal_code,
+        city: nearestLocation.city,
+        subdivision: nearestLocation.subdivision,
+        region: nearestLocation.region,
+        country: nearestLocation.country,
+      },
+      distanceMeters: nearestDistance,
+    };
+  }
+
+  return { location: null, distanceMeters: null };
+}
+
+/**
+ * Convert Mapbox geocode response to entry location fields
+ *
+ * This is used for auto-geocoding GPS coordinates when an entry is created.
+ * Returns the location hierarchy that can be directly applied to the entry.
+ *
+ * @param response - Mapbox reverse geocode response
+ * @returns Entry location fields ready to be merged into the entry
+ */
+export function geocodeResponseToEntryFields(
+  response: MapboxReverseGeocodeResponse
+): EntryLocationFields {
+  const hierarchy = parseMapboxHierarchy(response);
+
+  // Get street address from the main feature
+  let streetAddress: string | null = null;
+  if (response.features.length > 0) {
+    const feature = response.features[0];
+    // Extract the street address from place_name (first part before comma)
+    if (feature.place_name) {
+      streetAddress = feature.place_name.split(',')[0];
+    }
+  }
+
+  // Determine if we got any useful data
+  // Consider it "no_data" if we have no city, region, or country
+  const hasData = !!(hierarchy.place || hierarchy.region || hierarchy.country);
+
+  return {
+    address: streetAddress,
+    neighborhood: hierarchy.neighborhood || null,
+    postal_code: hierarchy.postcode || null,
+    city: hierarchy.place || null,
+    subdivision: hierarchy.district || null,
+    region: hierarchy.region || null,
+    country: hierarchy.country || null,
+    geocode_status: hasData ? 'success' : 'no_data',
+  };
+}

@@ -18,5 +18,6 @@ export { calculateDistance, formatDistance } from './locationHelpers';
 // API Configuration
 export { configureLocationAPI, reverseGeocode } from './locationApi';
 
-// Helpers for parsing geocode responses
-export { parseMapboxHierarchy } from './locationHelpers';
+// Helpers for parsing geocode responses and location snapping
+export { parseMapboxHierarchy, geocodeResponseToEntryFields, findNearbyLocation } from './locationHelpers';
+export type { EntryLocationFields, LocationSnapResult } from './locationHelpers';

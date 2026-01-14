@@ -322,6 +322,16 @@ async function syncEntry(
       entry_longitude: entry.entry_longitude,
       location_accuracy: entry.location_accuracy,
       location_id: entry.location_id,
+      // Location hierarchy (owned by entry)
+      place_name: entry.place_name || null,
+      address: entry.address || null,
+      neighborhood: entry.neighborhood || null,
+      postal_code: entry.postal_code || null,
+      city: entry.city || null,
+      subdivision: entry.subdivision || null,
+      region: entry.region || null,
+      country: entry.country || null,
+      geocode_status: entry.geocode_status || null,
       status: sanitizedStatus,
       type: entry.type || null,
       due_date: entry.due_date && (typeof entry.due_date === 'number'

@@ -178,6 +178,16 @@ class SyncService {
         entry_longitude: serverEntry.entry_longitude || null,
         location_accuracy: serverEntry.location_accuracy || null,
         location_id: serverEntry.location_id || null,
+        // Location hierarchy (owned by entry)
+        place_name: serverEntry.place_name || null,
+        address: serverEntry.address || null,
+        neighborhood: serverEntry.neighborhood || null,
+        postal_code: serverEntry.postal_code || null,
+        city: serverEntry.city || null,
+        subdivision: serverEntry.subdivision || null,
+        region: serverEntry.region || null,
+        country: serverEntry.country || null,
+        geocode_status: (serverEntry as any).geocode_status || null,
         status: (serverEntry.status as Entry['status']) || 'none',
         type: serverEntry.type || null,
         due_date: serverEntry.due_date,
@@ -339,7 +349,7 @@ class SyncService {
       await this.logSyncResult(trigger, result);
 
       const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.attachments;
-      log.debug(`SYNC COMPLETE in ${(result.duration / 1000).toFixed(1)}s | pushed: ${totalPushed} | pulled: ${totalPulled}`);
+      log.debug(`SYNC FINISHED in ${(result.duration / 1000).toFixed(1)}s | pushed: ${totalPushed} | pulled: ${totalPulled}`);
 
     } catch (error) {
       result.duration = Date.now() - startTime;
@@ -580,6 +590,16 @@ class SyncService {
       entry_longitude: payloadData.entry_longitude || null,
       location_accuracy: payloadData.location_accuracy || null,
       location_id: payloadData.location_id || null,
+      // Location hierarchy (owned by entry)
+      place_name: payloadData.place_name || null,
+      address: payloadData.address || null,
+      neighborhood: payloadData.neighborhood || null,
+      postal_code: payloadData.postal_code || null,
+      city: payloadData.city || null,
+      subdivision: payloadData.subdivision || null,
+      region: payloadData.region || null,
+      country: payloadData.country || null,
+      geocode_status: payloadData.geocode_status || null,
       status: (payloadData.status as Entry['status']) || 'none',
       type: payloadData.type || null,
       due_date: payloadData.due_date,

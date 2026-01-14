@@ -72,12 +72,15 @@ export type Database = {
       }
       entries: {
         Row: {
+          address: string | null
           attachments: Json | null
           base_version: number | null
+          city: string | null
           completed_at: string | null
           conflict_backup: Json | null
           conflict_status: string | null
           content: string
+          country: string | null
           created_at: string
           deleted_at: string | null
           due_date: string | null
@@ -91,10 +94,15 @@ export type Database = {
           location_accuracy: number | null
           location_id: string | null
           mentions: string[] | null
+          neighborhood: string | null
+          place_name: string | null
+          postal_code: string | null
           priority: number
           rating: number
+          region: string | null
           status: string
           stream_id: string | null
+          subdivision: string | null
           tags: string[] | null
           title: string | null
           type: string | null
@@ -103,12 +111,15 @@ export type Database = {
           version: number | null
         }
         Insert: {
+          address?: string | null
           attachments?: Json | null
           base_version?: number | null
+          city?: string | null
           completed_at?: string | null
           conflict_backup?: Json | null
           conflict_status?: string | null
           content: string
+          country?: string | null
           created_at?: string
           deleted_at?: string | null
           due_date?: string | null
@@ -122,10 +133,15 @@ export type Database = {
           location_accuracy?: number | null
           location_id?: string | null
           mentions?: string[] | null
+          neighborhood?: string | null
+          place_name?: string | null
+          postal_code?: string | null
           priority?: number
           rating?: number
+          region?: string | null
           status?: string
           stream_id?: string | null
+          subdivision?: string | null
           tags?: string[] | null
           title?: string | null
           type?: string | null
@@ -134,12 +150,15 @@ export type Database = {
           version?: number | null
         }
         Update: {
+          address?: string | null
           attachments?: Json | null
           base_version?: number | null
+          city?: string | null
           completed_at?: string | null
           conflict_backup?: Json | null
           conflict_status?: string | null
           content?: string
+          country?: string | null
           created_at?: string
           deleted_at?: string | null
           due_date?: string | null
@@ -153,10 +172,15 @@ export type Database = {
           location_accuracy?: number | null
           location_id?: string | null
           mentions?: string[] | null
+          neighborhood?: string | null
+          place_name?: string | null
+          postal_code?: string | null
           priority?: number
           rating?: number
+          region?: string | null
           status?: string
           stream_id?: string | null
+          subdivision?: string | null
           tags?: string[] | null
           title?: string | null
           type?: string | null

@@ -28,6 +28,12 @@ export interface GpsData {
   accuracy: number | null;
 }
 
+/** Geocode status for tracking how location hierarchy data was obtained */
+export type GeocodeStatus = 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
+
+/** Location data alias for easier imports */
+export type LocationData = LocationType | null;
+
 export interface CaptureFormData {
   title: string;
   content: string;
@@ -44,6 +50,8 @@ export interface CaptureFormData {
   gpsData: GpsData | null;
   /** Named location - where the entry "lives" in the world */
   locationData: LocationType | null;
+  /** Geocode status - tracks reverse geocode attempts for GPS data */
+  geocodeStatus: GeocodeStatus;
   pendingPhotos: PendingPhoto[];
 }
 
@@ -149,6 +157,22 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
         ? streams.find(s => s.stream_id === entry.stream_id)?.name || null
         : null;
 
+      // Build locationData from entry's location hierarchy fields
+      const hasLocationData = entry.place_name || entry.city || entry.region || entry.country;
+      const locationData: LocationType | null = hasLocationData ? {
+        latitude: entry.entry_latitude ?? 0,
+        longitude: entry.entry_longitude ?? 0,
+        name: entry.place_name,
+        source: 'user_custom',
+        address: entry.address,
+        neighborhood: entry.neighborhood,
+        postalCode: entry.postal_code,
+        city: entry.city,
+        subdivision: entry.subdivision,
+        region: entry.region,
+        country: entry.country,
+      } : null;
+
       return {
         title: entry.title || "",
         content: entry.content || "",
@@ -164,7 +188,8 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
         gpsData: entry.entry_latitude != null && entry.entry_longitude != null
           ? { latitude: entry.entry_latitude, longitude: entry.entry_longitude, accuracy: entry.location_accuracy ?? null }
           : null,
-        locationData: null, // Location still needs async fetch if entry.location_id exists
+        locationData,
+        geocodeStatus: (entry.geocode_status as GeocodeStatus) ?? null,
         pendingPhotos: [],
       };
     }
@@ -187,6 +212,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
       includeTime: !initialDate, // If initialDate provided, hide time initially
       gpsData: null, // GPS will be captured by CaptureForm if setting enabled
       locationData: null, // Location is never auto-set
+      geocodeStatus: null, // Will be set when GPS is geocoded
       pendingPhotos: [],
     };
   };
@@ -267,6 +293,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
       includeTime: !initialDate,
       gpsData: null, // GPS will be re-captured by CaptureForm if setting enabled
       locationData: null,
+      geocodeStatus: null, // Will be set when GPS is geocoded
       pendingPhotos: [],
     });
     baselineRef.current = null;

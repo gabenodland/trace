@@ -158,8 +158,18 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     entry_latitude: data.entry_latitude || null,
     entry_longitude: data.entry_longitude || null,
     location_accuracy: data.location_accuracy || null,
-    // Location reference (points to locations table)
+    // Location reference (optional - points to anchor in locations table)
     location_id: data.location_id || null,
+    // Location hierarchy (owned by entry - copied from anchor or reverse geocode)
+    place_name: data.place_name || null,
+    address: data.address || null,
+    neighborhood: data.neighborhood || null,
+    postal_code: data.postal_code || null,
+    city: data.city || null,
+    subdivision: data.subdivision || null,
+    region: data.region || null,
+    country: data.country || null,
+    geocode_status: data.geocode_status || null,
     status: data.status || 'none',
     type: data.type || null,
     due_date: data.due_date || null,
@@ -338,6 +348,16 @@ export async function copyEntry(
     location_accuracy: gpsCoords?.accuracy || null,
     // Keep the same location reference if set
     location_id: originalEntry.location_id,
+    // Copy location hierarchy from original entry
+    place_name: originalEntry.place_name || null,
+    address: originalEntry.address || null,
+    neighborhood: originalEntry.neighborhood || null,
+    postal_code: originalEntry.postal_code || null,
+    city: originalEntry.city || null,
+    subdivision: originalEntry.subdivision || null,
+    region: originalEntry.region || null,
+    country: originalEntry.country || null,
+    geocode_status: originalEntry.geocode_status || null,
     // Copy status, type, and task-related fields
     status: originalEntry.status || 'none',
     type: originalEntry.type || null,

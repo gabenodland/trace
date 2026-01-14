@@ -24,8 +24,7 @@ interface AttributesPickerProps {
   showRating: boolean;
   showPriority: boolean;
   showPhotos: boolean;
-  // Current values
-  hasGpsData: boolean;
+  // Current values - unified location (includes GPS, geocoded, and named)
   hasLocationData: boolean;
   status: EntryStatus;
   type: string | null;
@@ -34,7 +33,6 @@ interface AttributesPickerProps {
   priority: number;
   photoCount: number;
   // Callbacks
-  onAddGps: () => void;
   onShowLocationPicker: () => void;
   onShowStatusPicker: () => void;
   onShowTypePicker: () => void;
@@ -59,7 +57,6 @@ export function AttributesPicker({
   showRating,
   showPriority,
   showPhotos,
-  hasGpsData,
   hasLocationData,
   status,
   type,
@@ -67,7 +64,6 @@ export function AttributesPicker({
   rating,
   priority,
   photoCount,
-  onAddGps,
   onShowLocationPicker,
   onShowStatusPicker,
   onShowTypePicker,
@@ -80,7 +76,6 @@ export function AttributesPicker({
 }: AttributesPickerProps) {
   const dynamicTheme = useTheme();
   const hasUnsetAttributes =
-    !hasGpsData ||
     (showLocation && !hasLocationData) ||
     (showStatus && status === "none") ||
     (showType && !type) ||
@@ -98,32 +93,7 @@ export function AttributesPicker({
       {/* Attributes Section - only show if there are unset attributes */}
       {hasUnsetAttributes && (
         <View style={styles.optionsContainer}>
-          {/* GPS */}
-          {!hasGpsData && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={() => {
-                onClose();
-                onAddGps();
-                if (!isEditMode) enterEditMode();
-              }}
-            >
-              <View style={styles.optionIcon}>
-                {/* GPS Crosshair Icon */}
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
-                  <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={12} cy={12} r={3} fill={dynamicTheme.colors.text.secondary} stroke="none" />
-                  <Line x1={12} y1={2} x2={12} y2={6} strokeLinecap="round" />
-                  <Line x1={12} y1={18} x2={12} y2={22} strokeLinecap="round" />
-                  <Line x1={2} y1={12} x2={6} y2={12} strokeLinecap="round" />
-                  <Line x1={18} y1={12} x2={22} y2={12} strokeLinecap="round" />
-                </Svg>
-              </View>
-              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>GPS</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Location (named place) */}
+          {/* Location (unified - handles GPS, geocoded, and named locations) */}
           {showLocation && !hasLocationData && (
             <TouchableOpacity
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}

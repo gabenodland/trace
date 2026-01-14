@@ -411,6 +411,54 @@ class LocalDatabase {
       console.error('Migration error (streams entry_rating_type):', error);
     }
 
+    // Migration: Add location hierarchy fields to entries table
+    try {
+      const placeNameCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('entries') WHERE name = 'place_name'`
+      );
+
+      if (!placeNameCheck) {
+        console.log('📦 Running migration: Adding location hierarchy fields to entries table...');
+        await this.db.execAsync(`
+          ALTER TABLE entries ADD COLUMN place_name TEXT;
+          ALTER TABLE entries ADD COLUMN address TEXT;
+          ALTER TABLE entries ADD COLUMN neighborhood TEXT;
+          ALTER TABLE entries ADD COLUMN postal_code TEXT;
+          ALTER TABLE entries ADD COLUMN city TEXT;
+          ALTER TABLE entries ADD COLUMN subdivision TEXT;
+          ALTER TABLE entries ADD COLUMN region TEXT;
+          ALTER TABLE entries ADD COLUMN country TEXT;
+        `);
+        // Create indexes for location queries
+        await this.db.execAsync(`
+          CREATE INDEX IF NOT EXISTS idx_entries_place_name ON entries(place_name);
+          CREATE INDEX IF NOT EXISTS idx_entries_city ON entries(city);
+          CREATE INDEX IF NOT EXISTS idx_entries_region ON entries(region);
+          CREATE INDEX IF NOT EXISTS idx_entries_country ON entries(country);
+        `);
+        console.log('✅ Migration complete: location hierarchy fields added to entries');
+
+        // Backfill from locations table
+        console.log('📦 Backfilling entry location data from locations table...');
+        await this.db.execAsync(`
+          UPDATE entries
+          SET
+            place_name = (SELECT name FROM locations WHERE locations.location_id = entries.location_id),
+            address = (SELECT address FROM locations WHERE locations.location_id = entries.location_id),
+            neighborhood = (SELECT neighborhood FROM locations WHERE locations.location_id = entries.location_id),
+            postal_code = (SELECT postal_code FROM locations WHERE locations.location_id = entries.location_id),
+            city = (SELECT city FROM locations WHERE locations.location_id = entries.location_id),
+            subdivision = (SELECT subdivision FROM locations WHERE locations.location_id = entries.location_id),
+            region = (SELECT region FROM locations WHERE locations.location_id = entries.location_id),
+            country = (SELECT country FROM locations WHERE locations.location_id = entries.location_id)
+          WHERE location_id IS NOT NULL AND place_name IS NULL
+        `);
+        console.log('✅ Backfill complete: entry location data populated from locations');
+      }
+    } catch (error) {
+      console.error('Migration error (entries location hierarchy):', error);
+    }
+
     // Migration: Add missing columns to attachments table FIRST (before data copy)
     try {
       const attachmentsExists = await this.db.getFirstAsync<{ name: string }>(
@@ -514,6 +562,29 @@ class LocalDatabase {
     } catch (error) {
       console.error('Migration error (photos to attachments):', error);
     }
+
+    // Migration: Add geocode_status field to entries table
+    try {
+      const geocodeStatusCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('entries') WHERE name = 'geocode_status'`
+      );
+
+      if (!geocodeStatusCheck) {
+        console.log('📦 Running migration: Adding geocode_status to entries table...');
+        await this.db.execAsync(`
+          ALTER TABLE entries ADD COLUMN geocode_status TEXT;
+        `);
+        // Create index for finding entries that need geocoding
+        await this.db.execAsync(`
+          CREATE INDEX IF NOT EXISTS idx_entries_geocode_pending
+          ON entries(user_id)
+          WHERE geocode_status IS NULL AND entry_latitude IS NOT NULL;
+        `);
+        console.log('✅ Migration complete: geocode_status added to entries');
+      }
+    } catch (error) {
+      console.error('Migration error (entries geocode_status):', error);
+    }
   }
 
   private async createTables(): Promise<void> {
@@ -562,8 +633,19 @@ class LocalDatabase {
         entry_longitude REAL,
         location_accuracy REAL,
 
-        -- Location reference (FK to locations table)
+        -- Location reference (optional FK to locations table for anchors)
         location_id TEXT,
+
+        -- Location hierarchy (owned by entry, copied from anchor or reverse geocode)
+        place_name TEXT,              -- Named place (e.g., "Starbucks", "Home")
+        address TEXT,                 -- Street address
+        neighborhood TEXT,            -- Neighborhood name
+        postal_code TEXT,             -- Postal/ZIP code
+        city TEXT,                    -- City name
+        subdivision TEXT,             -- County/district
+        region TEXT,                  -- State/province
+        country TEXT,                 -- Country name
+        geocode_status TEXT,          -- Reverse geocode status: null, 'pending', 'success', 'no_data', 'error'
 
         status TEXT CHECK (status IN ('none', 'new', 'todo', 'in_progress', 'in_review', 'waiting', 'on_hold', 'done', 'closed', 'cancelled')) DEFAULT 'none',
         type TEXT,                    -- User-defined type from stream's entry_types
@@ -752,6 +834,8 @@ class LocalDatabase {
         stream_id, entry_date,
         entry_latitude, entry_longitude, location_accuracy,
         location_id,
+        place_name, address, neighborhood, postal_code, city, subdivision, region, country,
+        geocode_status,
         status, type, due_date, completed_at, created_at, updated_at,
         deleted_at,
         priority, rating, is_pinned,
@@ -759,7 +843,7 @@ class LocalDatabase {
         version, base_version,
         conflict_status, conflict_backup,
         last_edited_by, last_edited_device
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -773,6 +857,15 @@ class LocalDatabase {
         entry.entry_longitude || null,
         entry.location_accuracy || null,
         entry.location_id || null,
+        entry.place_name || null,
+        entry.address || null,
+        entry.neighborhood || null,
+        entry.postal_code || null,
+        entry.city || null,
+        entry.subdivision || null,
+        entry.region || null,
+        entry.country || null,
+        entry.geocode_status || null,
         entry.status || 'none',
         entry.type || null,
         entry.due_date ? Date.parse(entry.due_date) : null,
@@ -925,6 +1018,9 @@ class LocalDatabase {
         stream_id = ?, entry_date = ?,
         entry_latitude = ?, entry_longitude = ?, location_accuracy = ?,
         location_id = ?,
+        place_name = ?, address = ?, neighborhood = ?, postal_code = ?,
+        city = ?, subdivision = ?, region = ?, country = ?,
+        geocode_status = ?,
         status = ?, type = ?, due_date = ?, completed_at = ?,
         priority = ?, rating = ?, is_pinned = ?,
         updated_at = ?, deleted_at = ?,
@@ -944,6 +1040,15 @@ class LocalDatabase {
         updated.entry_longitude || null,
         updated.location_accuracy || null,
         updated.location_id || null,
+        updated.place_name || null,
+        updated.address || null,
+        updated.neighborhood || null,
+        updated.postal_code || null,
+        updated.city || null,
+        updated.subdivision || null,
+        updated.region || null,
+        updated.country || null,
+        updated.geocode_status || null,
         updated.status || 'none',
         updated.type || null,
         updated.due_date ? Date.parse(updated.due_date) : null,
@@ -1128,6 +1233,16 @@ class LocalDatabase {
       entry_longitude: row.entry_longitude,
       location_accuracy: row.location_accuracy,
       location_id: row.location_id,
+      // Location hierarchy fields
+      place_name: row.place_name || null,
+      address: row.address || null,
+      neighborhood: row.neighborhood || null,
+      postal_code: row.postal_code || null,
+      city: row.city || null,
+      subdivision: row.subdivision || null,
+      region: row.region || null,
+      country: row.country || null,
+      geocode_status: row.geocode_status || null,
       status: row.status || 'none',
       type: row.type || null,
       due_date: row.due_date ? new Date(row.due_date).toISOString() : null,

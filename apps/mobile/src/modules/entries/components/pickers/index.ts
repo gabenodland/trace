@@ -4,7 +4,6 @@ export { DecimalRatingPicker } from "./DecimalRatingPicker";
 export { PriorityPicker } from "./PriorityPicker";
 export { TimePicker } from "./TimePicker";
 export { AttributesPicker } from "./AttributesPicker";
-export { GpsPicker } from "./GpsPicker";
 export { StatusPicker } from "./StatusPicker";
 export { TypePicker } from "./TypePicker";
 export { DueDatePicker } from "./DueDatePicker";

@@ -4,6 +4,7 @@ import { extractTagsAndMentions, useAuthState, generateAttachmentPath, type Loca
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
+import { useLocations } from "../../locations/mobileLocationHooks";
 import { useAttachments } from "../../attachments/mobileAttachmentHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { useDrawer } from "../../../shared/contexts/DrawerContext";
@@ -15,11 +16,12 @@ import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/Phot
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { compressAttachment, saveAttachmentToLocalStorage, deleteAttachment, createAttachment, getAttachmentsForEntry } from "../../attachments/mobileAttachmentApi";
 import * as Crypto from "expo-crypto";
-import { useCaptureFormState, type GpsData } from "./hooks/useCaptureFormState";
+import { useCaptureFormState, type GpsData, type GeocodeStatus } from "./hooks/useCaptureFormState";
 import { useAutosave } from "./hooks/useAutosave";
 import { useGpsCapture } from "./hooks/useGpsCapture";
 import { usePhotoTracking } from "./hooks/usePhotoTracking";
 import { useVersionConflict } from "./hooks/useVersionConflict";
+import { useAutoGeocode } from "./hooks/useAutoGeocode";
 import { styles } from "./EntryScreen.styles";
 import { MetadataBar } from "./MetadataBar";
 import { EditorToolbar } from "./EditorToolbar";
@@ -66,6 +68,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   // This allows the form state to initialize directly from cached entry data
   // avoiding the Loading flash when navigating from entry list
   const { streams } = useStreams();
+  const { data: savedLocations = [] } = useLocations(); // For location snapping
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(
     effectiveEntryId || null
   );
@@ -214,6 +217,11 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   // Autosave callback ref - updated on each render but doesn't cause re-renders
   const handleAutosaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
+  // Stable callback for autosave - wraps the ref so it doesn't trigger effect re-runs
+  const stableOnSave = useCallback(async () => {
+    await handleAutosaveRef.current();
+  }, []); // Empty deps - ref access is stable
+
   // AUTOSAVE: Uses extracted hook for debounced saving
   // Triggers 2s after last change, only when dirty and in edit mode
   useAutosave({
@@ -224,7 +232,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     isSubmitting,
     isSaving,
     hasContent,
-    onSave: async () => handleAutosaveRef.current(),
+    onSave: stableOnSave,
   });
 
   // Register beforeBack handler for gesture/hardware back interception
@@ -357,6 +365,78 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     enterEditMode,
   });
 
+  // Auto-geocode GPS coordinates when captured (async, non-blocking)
+  // First tries to snap to a saved location within 100ft, then falls back to geocode API
+  // Only runs if location is enabled for the current stream
+  useAutoGeocode({
+    gpsData: formData.gpsData,
+    locationData: formData.locationData,
+    geocodeStatus: formData.geocodeStatus,
+    savedLocations: savedLocations,
+    locationEnabled: showLocation,
+    onLocationFieldsChange: (fields) => {
+      // Update locationData with geocoded fields from Mapbox or snapped location
+      const updatedLocationData: LocationType | null = formData.locationData
+        ? { ...formData.locationData, ...fields }
+        : formData.gpsData
+          ? {
+              latitude: formData.gpsData.latitude,
+              longitude: formData.gpsData.longitude,
+              name: null,
+              source: 'mapbox_poi', // Default source, may be overridden by snapped location
+              city: fields.city ?? null,
+              region: fields.region ?? null,
+              country: fields.country ?? null,
+              address: fields.address ?? null,
+              neighborhood: fields.neighborhood ?? null,
+              postalCode: fields.postal_code ?? null,
+              subdivision: fields.subdivision ?? null,
+            }
+          : null;
+      updateField("locationData", updatedLocationData);
+    },
+    onGeocodeStatusChange: (status) => updateField("geocodeStatus", status),
+    onLocationIdChange: (locationId, locationName) => {
+      // When snapping to a saved location, set the location_id and update the name
+      if (locationId && formData.gpsData) {
+        const snappedLocationData: LocationType = {
+          ...formData.locationData,
+          latitude: formData.gpsData.latitude,
+          longitude: formData.gpsData.longitude,
+          location_id: locationId,
+          name: locationName,
+          source: 'user_custom', // Snapped to user's saved location
+        };
+        updateField("locationData", snappedLocationData);
+      }
+    },
+    isInitialCapture: !isEditing,
+    onBaselineLocationFieldsUpdate: !isEditing
+      ? (fields) => {
+          const updatedLocationData: LocationType | null = formData.gpsData
+            ? {
+                latitude: formData.gpsData.latitude,
+                longitude: formData.gpsData.longitude,
+                name: null,
+                source: 'mapbox_poi',
+                city: fields.city ?? null,
+                region: fields.region ?? null,
+                country: fields.country ?? null,
+                address: fields.address ?? null,
+                neighborhood: fields.neighborhood ?? null,
+                postalCode: fields.postal_code ?? null,
+                subdivision: fields.subdivision ?? null,
+              }
+            : null;
+          setBaseline({
+            ...formData,
+            locationData: updatedLocationData,
+            geocodeStatus: (fields.geocode_status as GeocodeStatus) ?? null,
+          });
+        }
+      : undefined,
+  });
+
   // Show snackbar notification
   const showSnackbar = (message: string) => {
     setSnackbarMessage(message);
@@ -445,6 +525,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       } : null,
       // Keep current locationData - location_id changes are rare and would need async fetch
       locationData: formData.locationData,
+      geocodeStatus: formData.geocodeStatus,
       pendingPhotos: formData.pendingPhotos,
     };
 
@@ -551,6 +632,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         includeTime,
         gpsData,
         locationData,
+        geocodeStatus: (entry.geocode_status as GeocodeStatus) ?? null,
         pendingPhotos: [], // Existing entries don't use pendingPhotos
       };
 
@@ -672,6 +754,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         includeTime: hasTime,
         gpsData,
         locationData,
+        geocodeStatus: (copiedEntry.geocode_status as GeocodeStatus) ?? null,
         pendingPhotos, // Copied entries use pendingPhotos
       };
 
@@ -1073,6 +1156,30 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         }
       }
 
+      // Build location hierarchy fields from locationData
+      // These are copied directly to the entry (entry-owned data model)
+      const locationHierarchyFields = formData.locationData ? {
+        place_name: formData.locationData.name || null,
+        address: formData.locationData.address || null,
+        neighborhood: formData.locationData.neighborhood || null,
+        postal_code: formData.locationData.postalCode || null,
+        city: formData.locationData.city || null,
+        subdivision: formData.locationData.subdivision || null,
+        region: formData.locationData.region || null,
+        country: formData.locationData.country || null,
+        geocode_status: formData.geocodeStatus,
+      } : {
+        place_name: null,
+        address: null,
+        neighborhood: null,
+        postal_code: null,
+        city: null,
+        subdivision: null,
+        region: null,
+        country: null,
+        geocode_status: formData.geocodeStatus,
+      };
+
       if (isEditing) {
         // Update existing entry
         await singleEntryMutations.updateEntry({
@@ -1089,6 +1196,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
           priority: formData.priority || 0,
           location_id,
           ...gpsFields,
+          ...locationHierarchyFields,
         });
       } else {
         // Create new entry
@@ -1106,6 +1214,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
           priority: formData.priority || 0,
           location_id,
           ...gpsFields,
+          ...locationHierarchyFields,
         });
 
         // CRITICAL: Save all pending photos to DB with the real entry_id
@@ -1443,7 +1552,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
           isEditMode={isEditMode}
           enterEditMode={enterEditMode}
           onStreamPress={() => setActivePicker(activePicker === 'stream' ? null : 'stream')}
-          onGpsPress={() => setActivePicker(activePicker === 'gps' ? null : 'gps')}
           onLocationPress={() => unsupportedLocation ? setActivePicker('unsupportedLocation') : setActivePicker(activePicker === 'location' ? null : 'location')}
           onStatusPress={() => unsupportedStatus ? setActivePicker('unsupportedStatus') : setActivePicker(activePicker === 'status' ? null : 'status')}
           onTypePress={() => unsupportedType ? setActivePicker('unsupportedType') : setActivePicker(activePicker === 'type' ? null : 'type')}
@@ -1579,15 +1687,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         isEditing={isEditing}
         isEditMode={isEditMode}
         enterEditMode={enterEditMode}
-        isGpsLoading={isGpsLoading}
-        isNewGpsCapture={isNewGpsCapture}
-        setIsNewGpsCapture={setIsNewGpsCapture}
-        pendingGpsData={pendingGpsData}
-        captureGps={captureGps}
-        clearPendingGps={clearPendingGps}
         streams={streams}
         currentStream={currentStream ?? null}
-        units={settings.units}
         showLocation={showLocation}
         showStatus={showStatus}
         showType={showType}
