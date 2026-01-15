@@ -9,7 +9,7 @@ import { supabase, reverseGeocode, parseMapboxHierarchy, findNearbyLocation, geo
 import { useNavigation } from '../shared/contexts/NavigationContext';
 import { SecondaryHeader } from '../components/layout/SecondaryHeader';
 import { localDB } from '../shared/db/localDB';
-import { useSync, getSyncStatus } from '../shared/sync';
+import { useSync, getSyncStatus, triggerPushSync } from '../shared/sync';
 import { deleteAttachmentFromLocalStorage } from '../modules/attachments/mobileAttachmentApi';
 import Svg, { Path } from 'react-native-svg';
 
@@ -416,9 +416,13 @@ export function DatabaseInfoScreen() {
                 }
 
                 setRefreshKey(prev => prev + 1);
+
+                // Trigger immediate sync to push changes to cloud
+                triggerPushSync();
+
                 Alert.alert(
                   'Success',
-                  `Merged ${losers.length} duplicate location(s). ${totalEntriesToMove} entries moved to "${winner.name}".`
+                  `Merged ${losers.length} duplicate location(s). ${totalEntriesToMove} entries moved to "${winner.name}". Syncing changes...`
                 );
               } catch (error) {
                 Alert.alert('Error', `Failed to merge locations: ${error}`);

@@ -29,7 +29,7 @@ import {
   type LocationEntity,
   type MapboxReverseGeocodeResponse,
 } from '@trace/core';
-import { useLocations } from '../../../mobileLocationHooks';
+import { useLocationsWithCounts, useUpdateLocationName } from '../../../mobileLocationHooks';
 import {
   type LocationSelection,
   type LocationPickerUI,
@@ -106,8 +106,11 @@ export function useLocationPicker({
   const [modeOverride, setModeOverride] = useState<LocationPickerMode | null>(null);
   const effectiveMode: LocationPickerMode = modeOverride ?? propMode;
 
-  // Fetch all saved locations via React Query hook (SQLite)
-  const { data: allSavedLocations = [] } = useLocations();
+  // Fetch all saved locations with entry counts via React Query hook (SQLite)
+  const { data: allSavedLocations = [] } = useLocationsWithCounts();
+
+  // Mutation for updating location name
+  const updateLocationNameMutation = useUpdateLocationName();
 
   // UNIFIED STATE ARCHITECTURE
   // 1. Selection state - SINGLE SOURCE OF TRUTH for what user has chosen
@@ -139,8 +142,8 @@ export function useLocationPicker({
 
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
-  // State for saved locations from SQLite (My Places)
-  const [savedLocations, setSavedLocations] = useState<Array<LocationEntity & { distance: number }>>([]);
+  // State for saved locations from SQLite (My Places) - includes entry counts
+  const [savedLocations, setSavedLocations] = useState<Array<LocationEntity & { distance: number; entry_count: number }>>([]);
   const [isLoadingSavedLocations, setIsLoadingSavedLocations] = useState(false);
 
   // State for triggering reverse geocoding
@@ -175,7 +178,21 @@ export function useLocationPicker({
               initialLocation.originalLongitude || initialLocation.longitude
             )
           : createSelectionFromLocation(initialLocation);
-        setSelection(newSelection);
+
+        // Look up entry count if this is a saved location
+        let entryCount: number | undefined;
+        if (initialLocation.location_id && allSavedLocations.length > 0) {
+          const savedLoc = allSavedLocations.find(
+            loc => loc.location_id === initialLocation.location_id
+          );
+          entryCount = savedLoc?.entry_count;
+        }
+
+        setSelection({
+          ...newSelection,
+          locationId: initialLocation.location_id,
+          entryCount,
+        });
 
         setUI(prev => ({
           ...prev,
@@ -219,6 +236,18 @@ export function useLocationPicker({
       }
     }
   }, [visible]);
+
+  // Update entry count when allSavedLocations loads (may not be ready on first render)
+  useEffect(() => {
+    if (selection.locationId && allSavedLocations.length > 0 && selection.entryCount === undefined) {
+      const savedLoc = allSavedLocations.find(
+        loc => loc.location_id === selection.locationId
+      );
+      if (savedLoc) {
+        setSelection(prev => ({ ...prev, entryCount: savedLoc.entry_count }));
+      }
+    }
+  }, [selection.locationId, allSavedLocations, selection.entryCount]);
 
   // Sync editable name input with selection location name
   useEffect(() => {
@@ -284,15 +313,15 @@ export function useLocationPicker({
 
     const nearbyRadius = 16093; // 10 miles in meters
     const locationsWithDistance = allSavedLocations
-      .map((loc: LocationEntity) => {
+      .map((loc: LocationEntity & { entry_count: number }) => {
         const distance = calculateDistance(
           { latitude: mapState.markerPosition!.latitude, longitude: mapState.markerPosition!.longitude },
           { latitude: loc.latitude, longitude: loc.longitude }
         );
         return { ...loc, distance: distance.meters };
       })
-      .filter((loc: LocationEntity & { distance: number }) => loc.distance <= nearbyRadius)
-      .sort((a: LocationEntity & { distance: number }, b: LocationEntity & { distance: number }) => a.distance - b.distance);
+      .filter((loc: LocationEntity & { distance: number; entry_count: number }) => loc.distance <= nearbyRadius)
+      .sort((a: LocationEntity & { distance: number; entry_count: number }, b: LocationEntity & { distance: number; entry_count: number }) => a.distance - b.distance);
 
     setSavedLocations(locationsWithDistance);
     setIsLoadingSavedLocations(false);
@@ -710,6 +739,55 @@ export function useLocationPicker({
     onClose();
   }, [onSelect, onClose]);
 
+  // Handler: Edit location name (updates location and all entries using it)
+  const handleEditLocation = useCallback(async (newName: string) => {
+    if (!selection.locationId || !newName.trim()) return;
+
+    try {
+      await updateLocationNameMutation.mutateAsync({
+        locationId: selection.locationId,
+        newName: newName.trim(),
+      });
+
+      // Update local selection with new name
+      const updatedLocation = selection.location ? { ...selection.location, name: newName.trim() } : null;
+
+      setSelection(prev => ({
+        ...prev,
+        location: updatedLocation,
+      }));
+
+      // Update the editable name input
+      setUI(prev => ({ ...prev, editableNameInput: newName.trim() }));
+
+      // Propagate update to parent form - this ensures the current entry's form state is updated
+      // without closing the picker (user can continue viewing/editing)
+      if (updatedLocation) {
+        const finalLocation: LocationType = {
+          location_id: selection.locationId,
+          latitude: updatedLocation.latitude,
+          longitude: updatedLocation.longitude,
+          originalLatitude: updatedLocation.originalLatitude ?? updatedLocation.latitude,
+          originalLongitude: updatedLocation.originalLongitude ?? updatedLocation.longitude,
+          name: newName.trim(),
+          source: updatedLocation.source,
+          address: updatedLocation.address,
+          postalCode: updatedLocation.postalCode,
+          neighborhood: updatedLocation.neighborhood,
+          city: updatedLocation.city,
+          subdivision: updatedLocation.subdivision,
+          region: updatedLocation.region,
+          country: updatedLocation.country,
+          category: updatedLocation.category,
+          distance: updatedLocation.distance,
+        };
+        onSelect(finalLocation);
+      }
+    } catch (error) {
+      console.error('Failed to update location name:', error);
+    }
+  }, [selection.locationId, selection.location, updateLocationNameMutation, setSelection, setUI, onSelect]);
+
   // Displayed POIs
   const displayedPOIs = ui.searchQuery.length >= 2 ? searchResults : nearbyPOIs;
   const displayedLoading = ui.searchQuery.length >= 2 ? searchLoading : nearbyLoading;
@@ -770,6 +848,7 @@ export function useLocationPicker({
     handleCenterOnMyLocation,
     handleSwitchToSelectMode,
     handleRemoveLocation,
+    handleEditLocation,
 
     // Helpers
     calculateSearchRadius,

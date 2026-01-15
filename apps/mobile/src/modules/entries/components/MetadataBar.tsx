@@ -3,7 +3,7 @@
  * Extracted from EntryScreen for maintainability
  */
 
-import { View, Text, TouchableOpacity, Keyboard } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import Svg, { Path, Circle, Line } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { styles } from "./EntryScreen.styles";
@@ -120,7 +120,7 @@ export function MetadataBar({
 
   const handlePress = (callback: () => void, needsEditMode = false) => {
     editorRef.current?.blur();
-    Keyboard.dismiss();
+    // Note: We don't dismiss keyboard - pickers appear over it
     setTimeout(() => {
       callback();
       if (needsEditMode && !isEditMode) enterEditMode();

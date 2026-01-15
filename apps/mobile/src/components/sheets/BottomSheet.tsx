@@ -15,6 +15,7 @@ import {
   PanResponder,
   Keyboard,
   Platform,
+  Modal,
 } from "react-native";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
@@ -42,6 +43,8 @@ interface BottomSheetProps {
   showGrabber?: boolean;
   /** Allow swipe down to dismiss */
   swipeToDismiss?: boolean;
+  /** Dismiss keyboard when opening (default: true). Set to false to allow sheet to appear over keyboard */
+  dismissKeyboard?: boolean;
 }
 
 export function BottomSheet({
@@ -51,6 +54,7 @@ export function BottomSheet({
   height = "auto",
   showGrabber = true,
   swipeToDismiss = true,
+  dismissKeyboard = true,
 }: BottomSheetProps) {
   const dynamicTheme = useTheme();
 
@@ -98,7 +102,9 @@ export function BottomSheet({
   ).current;
 
   const openSheet = useCallback(() => {
-    Keyboard.dismiss();
+    if (dismissKeyboard) {
+      Keyboard.dismiss();
+    }
     Animated.parallel([
       Animated.spring(translateY, {
         toValue: 0,
@@ -112,7 +118,7 @@ export function BottomSheet({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [translateY, backdropOpacity]);
+  }, [translateY, backdropOpacity, dismissKeyboard]);
 
   const closeSheet = useCallback(() => {
     Animated.parallel([
@@ -140,64 +146,66 @@ export function BottomSheet({
   if (!visible) return null;
 
   return (
-    <View style={styles.container}>
-      {/* Backdrop */}
-      <Animated.View
-        style={[
-          styles.backdrop,
-          { opacity: backdropOpacity },
-        ]}
-      >
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={closeSheet}
-        />
-      </Animated.View>
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="none"
+      statusBarTranslucent={true}
+      onRequestClose={closeSheet}
+    >
+      <View style={styles.container}>
+        {/* Backdrop */}
+        <Animated.View
+          style={[
+            styles.backdrop,
+            { opacity: backdropOpacity },
+          ]}
+        >
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={closeSheet}
+          />
+        </Animated.View>
 
-      {/* Sheet */}
-      <Animated.View
-        style={[
-          styles.sheet,
-          {
-            backgroundColor: dynamicTheme.colors.background.primary,
-            height: sheetHeight,
-            maxHeight: SCREEN_HEIGHT * 0.95,
-            transform: [{ translateY }],
-          },
-        ]}
-        {...(swipeToDismiss ? panResponder.panHandlers : {})}
-      >
-        {/* Grabber bar */}
-        {showGrabber && (
-          <View style={styles.grabberContainer}>
-            <View
-              style={[
-                styles.grabber,
-                { backgroundColor: dynamicTheme.colors.border.medium },
-              ]}
-            />
+        {/* Sheet */}
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: dynamicTheme.colors.background.primary,
+              height: sheetHeight,
+              maxHeight: SCREEN_HEIGHT * 0.95,
+              transform: [{ translateY }],
+            },
+          ]}
+          {...(swipeToDismiss ? panResponder.panHandlers : {})}
+        >
+          {/* Grabber bar */}
+          {showGrabber && (
+            <View style={styles.grabberContainer}>
+              <View
+                style={[
+                  styles.grabber,
+                  { backgroundColor: dynamicTheme.colors.border.medium },
+                ]}
+              />
+            </View>
+          )}
+
+          {/* Content */}
+          <View style={styles.content}>
+            {children}
           </View>
-        )}
-
-        {/* Content */}
-        <View style={styles.content}>
-          {children}
-        </View>
-      </Animated.View>
-    </View>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-    elevation: 1000,
+    flex: 1,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

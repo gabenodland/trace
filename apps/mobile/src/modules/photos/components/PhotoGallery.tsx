@@ -269,7 +269,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
               onPress={onAddPhoto}
               activeOpacity={0.7}
             >
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M12 5v14M5 12h14"
                   stroke={dynamicTheme.colors.text.tertiary}
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   },
   container: {
     marginBottom: themeBase.spacing.sm,
-    maxHeight: 88,
+    maxHeight: 108,
     flex: 1,
   },
   contentContainer: {
@@ -358,8 +358,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   photoContainer: {
-    width: 80,
-    height: 80,
+    width: 100,
+    height: 100,
     borderRadius: themeBase.borderRadius.md,
     overflow: 'hidden',
   },
@@ -374,8 +374,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addPhotoButton: {
-    width: 80,
-    height: 80,
+    width: 100,
+    height: 100,
     borderRadius: themeBase.borderRadius.md,
     borderWidth: 1.5,
     borderStyle: 'dashed',

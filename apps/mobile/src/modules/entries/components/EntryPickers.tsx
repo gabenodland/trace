@@ -3,8 +3,10 @@
  * Extracted from EntryScreen for maintainability
  */
 
+import { useEffect } from "react";
 import type { Stream, Location as LocationType, EntryStatus } from "@trace/core";
 import { applyTitleTemplate, applyContentTemplate } from "@trace/core";
+import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { StreamPicker } from "../../streams/components/StreamPicker";
 import { LocationPicker } from "../../locations/components/LocationPicker";
 import {
@@ -104,6 +106,16 @@ export function EntryPickers({
   handleDelete,
   onAddPhoto,
 }: EntryPickersProps) {
+  const { setIsModalOpen } = useNavigation();
+
+  // Track fullscreen modals (disables swipe-back gesture)
+  // Note: We don't dismiss keyboard - pickers should appear over it to avoid disrupting typing flow
+  useEffect(() => {
+    const isFullscreenModal = activePicker === "location" || activePicker === "stream";
+    setIsModalOpen(isFullscreenModal);
+    return () => setIsModalOpen(false);
+  }, [activePicker, setIsModalOpen]);
+
   return (
     <>
       {/* Stream Picker Dropdown - only render when active to avoid unnecessary hook calls */}
@@ -215,10 +227,15 @@ export function EntryPickers({
           initialLocation={
             formData.locationData
               ? {
+                  location_id: formData.locationData.location_id, // Pass location_id if linked to saved location
                   latitude: formData.locationData.latitude,
                   longitude: formData.locationData.longitude,
                   name: formData.locationData.name,
                   source: "user_custom",
+                  address: formData.locationData.address,
+                  city: formData.locationData.city,
+                  region: formData.locationData.region,
+                  country: formData.locationData.country,
                 }
               : formData.gpsData
               ? {

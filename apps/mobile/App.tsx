@@ -74,6 +74,9 @@ function AuthGate() {
   // Before back handler for screens to intercept back navigation
   const beforeBackHandlerRef = useRef<BeforeBackHandler | null>(null);
 
+  // Track if a fullscreen modal is open (disables swipe-back gesture)
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   // Ref to store current main view screen (updated by AppContent based on viewMode)
   const mainViewScreenRef = useRef<string>("inbox");
 
@@ -194,6 +197,8 @@ function AuthGate() {
         navigate={handleNavigate}
         setBeforeBackHandler={setBeforeBackHandler}
         checkBeforeBack={checkBeforeBack}
+        isModalOpen={isModalOpen}
+        setIsModalOpen={setIsModalOpen}
       >
         <AppContent
           activeTab={activeTab}
@@ -222,7 +227,7 @@ interface AppContentProps {
 }
 
 function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps) {
-  const { navigate, checkBeforeBack } = useNavigation();
+  const { navigate, checkBeforeBack, isModalOpen } = useNavigation();
   const { registerViewModeHandler, viewMode } = useDrawer();
   const theme = useTheme();
 
@@ -241,10 +246,12 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
   const targetMainView = screenMap[viewMode];
 
   // Swipe-back gesture - extracted to hook for cleaner code
+  // Disabled when a fullscreen modal (like LocationPicker) is open
   const { panHandlers, mainViewTranslateX, isSwipingBack } = useSwipeBackGesture({
     isEnabled: !isOnMainView,
     onBack: () => navigate(targetMainView),
     checkBeforeBack,
+    isModalOpen,
   });
 
   // Keep main view screen ref in sync with viewMode

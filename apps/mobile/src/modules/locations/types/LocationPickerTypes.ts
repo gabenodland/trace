@@ -31,6 +31,9 @@ export interface LocationSelection {
 
   // Optional: reuse existing location_id when selecting from saved locations
   locationId?: string;
+
+  // Entry count (how many entries use this location - for edit warnings)
+  entryCount?: number;
 }
 
 /**

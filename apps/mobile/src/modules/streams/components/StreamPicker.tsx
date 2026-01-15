@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Keyboard, Platform } from "react-native";
 import { useStreams } from "../mobileStreamHooks";
 import { StreamList } from "./StreamList";
 import Svg, { Path } from "react-native-svg";
@@ -27,7 +27,26 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
   const dynamicTheme = useTheme();
   const { streams, isLoading } = useStreams();
   const [searchQuery, setSearchQuery] = useState("");
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Track keyboard height for proper content positioning
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showListener = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
 
   // Clear search when picker closes
   useEffect(() => {
@@ -73,7 +92,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
       visible={visible}
       onClose={handleClose}
       title={isNewEntry ? "Set Stream for New Entry" : "Set Stream"}
-      height={0.8}
+      height={0.85}
     >
       {/* Search Input */}
       <View style={[styles.searchContainer, { backgroundColor: dynamicTheme.colors.background.secondary, borderColor: dynamicTheme.colors.border.light }]}>
@@ -102,7 +121,10 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
       <ScrollView
         ref={scrollViewRef}
         style={styles.content}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          keyboardHeight > 0 && { paddingBottom: keyboardHeight + 40 }
+        ]}
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
       >

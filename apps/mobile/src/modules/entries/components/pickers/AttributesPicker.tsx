@@ -98,8 +98,8 @@ export function AttributesPicker({
             <TouchableOpacity
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
-                onClose();
-                setTimeout(() => onShowLocationPicker(), 100);
+                // Direct transition - changes activePicker without going through null
+                onShowLocationPicker();
               }}
             >
               <View style={styles.optionIcon}>
@@ -117,9 +117,9 @@ export function AttributesPicker({
             <TouchableOpacity
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
-                onClose();
-                setTimeout(() => onShowStatusPicker(), 100);
+                // Direct transition - changes activePicker without going through null
                 if (!isEditMode) enterEditMode();
+                onShowStatusPicker();
               }}
             >
               <View style={styles.optionIcon}>
@@ -136,9 +136,9 @@ export function AttributesPicker({
             <TouchableOpacity
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
-                onClose();
-                setTimeout(() => onShowTypePicker(), 100);
+                // Direct transition - changes activePicker without going through null
                 if (!isEditMode) enterEditMode();
+                onShowTypePicker();
               }}
             >
               <View style={styles.optionIcon}>
@@ -155,9 +155,9 @@ export function AttributesPicker({
             <TouchableOpacity
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
-                onClose();
-                setTimeout(() => onShowDatePicker(), 100);
+                // Direct transition - changes activePicker without going through null
                 if (!isEditMode) enterEditMode();
+                onShowDatePicker();
               }}
             >
               <View style={styles.optionIcon}>
@@ -177,9 +177,9 @@ export function AttributesPicker({
             <TouchableOpacity
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
-                onClose();
-                setTimeout(() => onShowRatingPicker(), 100);
+                // Direct transition - changes activePicker without going through null
                 if (!isEditMode) enterEditMode();
+                onShowRatingPicker();
               }}
             >
               <View style={styles.optionIcon}>
@@ -196,9 +196,9 @@ export function AttributesPicker({
             <TouchableOpacity
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
-                onClose();
-                setTimeout(() => onShowPriorityPicker(), 100);
+                // Direct transition - changes activePicker without going through null
                 if (!isEditMode) enterEditMode();
+                onShowPriorityPicker();
               }}
             >
               <View style={styles.optionIcon}>
@@ -216,6 +216,7 @@ export function AttributesPicker({
             <TouchableOpacity
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
+                // Photos need close + delay for camera (no direct transition)
                 onClose();
                 if (!isEditMode) enterEditMode();
                 setTimeout(() => onAddPhoto(), 100);

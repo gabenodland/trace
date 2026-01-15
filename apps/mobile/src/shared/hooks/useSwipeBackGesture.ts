@@ -34,6 +34,8 @@ interface UseSwipeBackGestureOptions {
   onBack: () => void;
   /** Optional async check before back (e.g., autosave). Returns true to proceed, false to cancel. */
   checkBeforeBack?: () => Promise<boolean>;
+  /** Whether a fullscreen modal is open (disables gesture entirely) */
+  isModalOpen?: boolean;
 }
 
 interface UseSwipeBackGestureResult {
@@ -51,6 +53,7 @@ export function useSwipeBackGesture({
   isEnabled,
   onBack,
   checkBeforeBack,
+  isModalOpen = false,
 }: UseSwipeBackGestureOptions): UseSwipeBackGestureResult {
   // Animation value: -SCREEN_WIDTH (off-screen) to 0 (visible)
   const mainViewTranslateX = useRef(new Animated.Value(0)).current;
@@ -59,6 +62,10 @@ export function useSwipeBackGesture({
   // Refs for pan responder (avoid stale closures)
   const isEnabledRef = useRef(isEnabled);
   isEnabledRef.current = isEnabled;
+
+  // Track modal state via ref for pan responder
+  const isModalOpenRef = useRef(isModalOpen);
+  isModalOpenRef.current = isModalOpen;
 
   // Reset animation when enabled state changes
   useEffect(() => {
@@ -77,8 +84,8 @@ export function useSwipeBackGesture({
       // Don't capture initial touch - let children handle taps
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) => {
-        // Only capture right swipes when enabled
-        if (!isEnabledRef.current) return false;
+        // Don't capture when disabled or modal is open
+        if (!isEnabledRef.current || isModalOpenRef.current) return false;
         // Require clear horizontal swipe to the right
         return gs.dx > 15 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5;
       },

@@ -11,6 +11,9 @@ interface NavigationContextValue {
   navigate: (tabId: string, params?: Record<string, any>) => void;
   setBeforeBackHandler: (handler: BeforeBackHandler | null) => void;
   checkBeforeBack: () => Promise<boolean>;
+  /** Track if a fullscreen modal is open (disables swipe-back gesture) */
+  isModalOpen: boolean;
+  setIsModalOpen: (open: boolean) => void;
 }
 
 const NavigationContext = createContext<NavigationContextValue | undefined>(undefined);
@@ -20,16 +23,20 @@ interface NavigationProviderProps {
   navigate: (tabId: string, params?: Record<string, any>) => void;
   setBeforeBackHandler: (handler: BeforeBackHandler | null) => void;
   checkBeforeBack: () => Promise<boolean>;
+  isModalOpen: boolean;
+  setIsModalOpen: (open: boolean) => void;
 }
 
 export function NavigationProvider({
   children,
   navigate,
   setBeforeBackHandler,
-  checkBeforeBack
+  checkBeforeBack,
+  isModalOpen,
+  setIsModalOpen,
 }: NavigationProviderProps) {
   return (
-    <NavigationContext.Provider value={{ navigate, setBeforeBackHandler, checkBeforeBack }}>
+    <NavigationContext.Provider value={{ navigate, setBeforeBackHandler, checkBeforeBack, isModalOpen, setIsModalOpen }}>
       {children}
     </NavigationContext.Provider>
   );

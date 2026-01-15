@@ -32,6 +32,8 @@ interface PickerBottomSheetProps {
   primaryAction?: PickerAction;
   /** Secondary action button (left side, e.g., "Remove", "Clear") */
   secondaryAction?: PickerAction;
+  /** Dismiss keyboard when opening (default: false for pickers). Set to true to dismiss keyboard */
+  dismissKeyboard?: boolean;
 }
 
 export function PickerBottomSheet({
@@ -42,6 +44,7 @@ export function PickerBottomSheet({
   height = "auto",
   primaryAction,
   secondaryAction,
+  dismissKeyboard = false,
 }: PickerBottomSheetProps) {
   const dynamicTheme = useTheme();
 
@@ -54,6 +57,7 @@ export function PickerBottomSheet({
       height={height}
       showGrabber={true}
       swipeToDismiss={true}
+      dismissKeyboard={dismissKeyboard}
     >
       <View style={styles.container}>
         {/* Header */}

@@ -99,3 +99,23 @@ export function useDeleteLocation() {
     },
   });
 }
+
+/**
+ * Hook for updating a location's name and all entries using it
+ * This is used when editing a saved location - updates propagate to all entries
+ */
+export function useUpdateLocationName() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ locationId, newName }: { locationId: string; newName: string }) =>
+      locationApi.updateLocationName(locationId, newName),
+    onSuccess: (_, variables) => {
+      // Invalidate location queries to refetch
+      queryClient.invalidateQueries({ queryKey: mobileLocationKeys.all });
+      queryClient.invalidateQueries({ queryKey: mobileLocationKeys.detail(variables.locationId) });
+      // Also invalidate entries since we updated their place_name
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+    },
+  });
+}

@@ -10,7 +10,9 @@
  * Uses useLocationPicker hook for all state and logic.
  */
 
-import { View, Text, TouchableOpacity, Modal, SafeAreaView, Platform } from 'react-native';
+import { useRef, useCallback, useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, Modal, SafeAreaView, Platform, Animated, PanResponder, Dimensions, Keyboard } from 'react-native';
+import Svg2, { Line } from 'react-native-svg';
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { type Location as LocationType } from '@trace/core';
@@ -31,6 +33,10 @@ interface LocationPickerProps {
   readOnly?: boolean;
 }
 
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const MAP_HEIGHT_NORMAL = 280;
+const MAP_HEIGHT_KEYBOARD = 140; // Shrink map when keyboard is visible
+
 export function LocationPicker({
   visible,
   onClose,
@@ -43,6 +49,126 @@ export function LocationPicker({
 
   // Support legacy readOnly prop - convert to mode
   const propMode: LocationPickerMode = mode ?? (readOnly ? 'view' : 'select');
+
+  // Animation values - start off-screen
+  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  // Keyboard-aware map height
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const mapHeight = useRef(new Animated.Value(MAP_HEIGHT_NORMAL)).current;
+
+  // Track keyboard for responsive layout
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showListener = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      // Animate map to smaller height
+      Animated.timing(mapHeight, {
+        toValue: MAP_HEIGHT_KEYBOARD,
+        duration: Platform.OS === 'ios' ? 250 : 150,
+        useNativeDriver: false, // height can't use native driver
+      }).start();
+    });
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      // Animate map back to normal height
+      Animated.timing(mapHeight, {
+        toValue: MAP_HEIGHT_NORMAL,
+        duration: Platform.OS === 'ios' ? 250 : 150,
+        useNativeDriver: false,
+      }).start();
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, [mapHeight]);
+
+  // Ref to hold latest onClose to avoid stale closure in pan responder
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Open sheet with animation
+  const openSheet = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [translateY, backdropOpacity]);
+
+  // Close sheet with animation
+  const closeSheet = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: SCREEN_HEIGHT,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onCloseRef.current();
+    });
+  }, [translateY, backdropOpacity]);
+
+  // Animate in when visible changes
+  useEffect(() => {
+    if (visible) {
+      // Ensure starting from off-screen position before animating
+      translateY.setValue(SCREEN_HEIGHT);
+      backdropOpacity.setValue(0);
+      // Start animation after a frame to ensure modal is rendered
+      requestAnimationFrame(() => {
+        openSheet();
+      });
+    }
+  }, [visible, openSheet, translateY, backdropOpacity]);
+
+  // Pan responder for swipe-to-dismiss on grabber/header area
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only respond to downward swipes
+        return gestureState.dy > 10 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          translateY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        // If swiped down more than 100px or with velocity, dismiss
+        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
+          closeSheet();
+        } else {
+          // Snap back
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 10,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // All state and logic from hook
   const picker = useLocationPicker({
@@ -131,29 +257,70 @@ export function LocationPicker({
     return picker.ui.showingDetails ? 'Create Location' : 'Select Location';
   };
 
+  // Don't render Modal when not visible (avoids flash on mount)
+  if (!visible) return null;
+
   return (
     <Modal
       visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-      onRequestClose={onClose}
+      animationType="none"
+      transparent={true}
+      statusBarTranslucent={true}
+      onRequestClose={closeSheet}
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: dynamicTheme.colors.background.primary }]}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: dynamicTheme.colors.border.light }]}>
-          <Text style={[styles.headerTitle, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>{getHeaderTitle()}</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.primary} strokeWidth={2}>
-              <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.modalContainer}>
+        {/* Backdrop */}
+        <Animated.View
+          style={[
+            styles.backdrop,
+            { opacity: backdropOpacity },
+          ]}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={closeSheet}
+          />
+        </Animated.View>
+
+        {/* Sheet */}
+        <Animated.View
+          style={[
+            styles.sheetContainer,
+            {
+              backgroundColor: dynamicTheme.colors.background.primary,
+              transform: [{ translateY }],
+            }
+          ]}
+        >
+          <SafeAreaView style={styles.container}>
+            {/* Grabber bar for swipe-to-dismiss (attaches pan responder here) */}
+            <View {...panResponder.panHandlers}>
+              <View style={styles.grabberContainer}>
+                <View style={[styles.grabber, { backgroundColor: dynamicTheme.colors.border.medium }]} />
+              </View>
+
+              {/* Header - left-aligned title, close button on right (matches PickerBottomSheet) */}
+              <View style={styles.pickerHeader}>
+                <Text style={[styles.pickerHeaderTitle, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>{getHeaderTitle()}</Text>
+                <TouchableOpacity
+                  style={styles.pickerCloseButton}
+                  onPress={closeSheet}
+                  hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                >
+                  <Svg2 width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
+                    <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
+                    <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
+                  </Svg2>
+                </TouchableOpacity>
+              </View>
+            </View>
 
         {/* Main Content */}
         <View style={styles.content}>
-          {/* Map - Always visible */}
+          {/* Map - Always visible, shrinks when keyboard is showing */}
           {picker.mapState.region && (
-            <View style={styles.mapContainer}>
+            <Animated.View style={[styles.mapContainer, { height: mapHeight }]}>
               <MapView
                 ref={picker.mapRef}
                 style={styles.map}
@@ -217,7 +384,7 @@ export function LocationPicker({
                   <Path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
                 </Svg>
               </TouchableOpacity>
-            </View>
+            </Animated.View>
           )}
 
           {/* Switchable Content Below Map */}
@@ -244,6 +411,7 @@ export function LocationPicker({
               handlePOISelect={picker.handlePOISelect}
               onSelect={onSelect}
               onClose={onClose}
+              keyboardHeight={keyboardHeight}
             />
           ) : (
             <LocationDetailsView
@@ -254,10 +422,14 @@ export function LocationPicker({
               handleOKPress={picker.handleOKPress}
               handleSwitchToSelectMode={picker.handleSwitchToSelectMode}
               handleRemoveLocation={picker.handleRemoveLocation}
+              handleEditLocation={picker.handleEditLocation}
+              keyboardHeight={keyboardHeight}
             />
           )}
         </View>
-      </SafeAreaView>
+          </SafeAreaView>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }

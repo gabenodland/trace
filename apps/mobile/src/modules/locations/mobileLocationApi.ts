@@ -68,13 +68,64 @@ export async function getUnsyncedLocations(): Promise<LocationEntity[]> {
 // ============================================================================
 
 /**
+ * Find an existing location with the same name and address (for auto-merge)
+ * Returns null if no duplicate found
+ */
+export async function findDuplicateLocation(name: string, address: string | null): Promise<LocationEntity | null> {
+  if (!name) return null;
+
+  const normalizedName = name.toLowerCase().trim();
+  const normalizedAddress = address?.toLowerCase().trim() || null;
+
+  const allLocations = await localDB.getAllLocations();
+
+  // Find location with same name AND address (both must match)
+  const duplicate = allLocations.find(loc => {
+    const locName = loc.name.toLowerCase().trim();
+    const locAddress = loc.address?.toLowerCase().trim() || null;
+
+    // Name must match
+    if (locName !== normalizedName) return false;
+
+    // If both have addresses, they must match
+    if (normalizedAddress && locAddress) {
+      return locAddress === normalizedAddress;
+    }
+
+    // If neither has an address, consider it a match (same name, both no address)
+    if (!normalizedAddress && !locAddress) {
+      return true;
+    }
+
+    // One has address, one doesn't - not a duplicate
+    return false;
+  });
+
+  return duplicate || null;
+}
+
+/**
  * Create a new location (offline-first)
  * Writes to local SQLite immediately, syncs to Supabase in background
+ *
+ * Auto-merge: If a location with the same name and address already exists,
+ * returns the existing location instead of creating a duplicate.
  */
 export async function createLocation(data: CreateLocationInput): Promise<LocationEntity> {
   // Get user ID from LocalDB (cached from login)
   const userId = localDB.getCurrentUserId();
   if (!userId) throw new Error('Not authenticated');
+
+  // Auto-merge: Check for existing location with same name and address
+  const existingLocation = await findDuplicateLocation(data.name, data.address || null);
+  if (existingLocation) {
+    log.info('Auto-merging with existing location', {
+      existingId: existingLocation.location_id,
+      name: data.name,
+      address: data.address,
+    });
+    return existingLocation;
+  }
 
   // Generate location ID
   const location_id = generateUUID();
@@ -153,6 +204,50 @@ export async function deleteLocation(id: string): Promise<void> {
 
   // Trigger sync in background (non-blocking)
   triggerPushSync();
+}
+
+/**
+ * Update a location's name and propagate to all entries using it
+ *
+ * This updates:
+ * 1. The location record's name
+ * 2. All entries with this location_id - their place_name field
+ *
+ * Returns the number of entries updated
+ */
+export async function updateLocationName(
+  locationId: string,
+  newName: string
+): Promise<{ location: LocationEntity; entriesUpdated: number }> {
+  log.info('Updating location name and entries', { locationId, newName });
+
+  // Update the location record
+  const updatedLocation = await updateLocation(locationId, { name: newName });
+
+  // Update all entries that reference this location
+  // Note: We don't update updated_at since the entry content itself hasn't changed,
+  // only the denormalized location name. This preserves "last edited" semantics.
+  const entriesUpdated = await localDB.runCustomQuery(
+    `UPDATE entries
+     SET place_name = ?,
+         synced = 0,
+         sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END
+     WHERE location_id = ? AND deleted_at IS NULL`,
+    [newName, locationId]
+  );
+
+  // Get the count of updated entries
+  const countResult = await localDB.runCustomQuery(
+    `SELECT changes() as count`
+  );
+  const count = countResult[0]?.count ?? 0;
+
+  log.info('Updated location and entries', { locationId, entriesUpdated: count });
+
+  // Trigger sync
+  triggerPushSync();
+
+  return { location: updatedLocation, entriesUpdated: count };
 }
 
 /**

@@ -160,6 +160,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
       // Build locationData from entry's location hierarchy fields
       const hasLocationData = entry.place_name || entry.city || entry.region || entry.country;
       const locationData: LocationType | null = hasLocationData ? {
+        location_id: entry.location_id ?? undefined, // Include location_id if entry was linked to saved location
         latitude: entry.entry_latitude ?? 0,
         longitude: entry.entry_longitude ?? 0,
         name: entry.place_name,

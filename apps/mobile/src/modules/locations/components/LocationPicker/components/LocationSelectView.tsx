@@ -49,8 +49,8 @@ interface LocationSelectViewProps {
   // Loading States
   isLoadingSavedLocations: boolean;
 
-  // Locations
-  savedLocations: Array<LocationEntity & { distance: number }>;
+  // Locations (with entry counts for saved locations)
+  savedLocations: Array<LocationEntity & { distance: number; entry_count: number }>;
   displayedPOIs: POIItem[] | undefined;
   displayedLoading: boolean;
 
@@ -74,6 +74,9 @@ interface LocationSelectViewProps {
   // Callbacks
   onSelect: (location: any) => void;
   onClose: () => void;
+
+  // Keyboard
+  keyboardHeight?: number;
 }
 
 export function LocationSelectView({
@@ -98,6 +101,7 @@ export function LocationSelectView({
   handlePOISelect,
   onSelect,
   onClose,
+  keyboardHeight = 0,
 }: LocationSelectViewProps) {
   const { settings } = useSettings();
   const dynamicTheme = useTheme();
@@ -131,8 +135,9 @@ export function LocationSelectView({
     address?: string | null;
     category?: string | null;
     city?: string | null;
+    entryCount?: number; // Number of entries using this location (for saved locations)
     poi?: POIItem;
-    savedLocation?: LocationEntity & { distance: number };
+    savedLocation?: LocationEntity & { distance: number; entry_count: number };
     googlePOI?: TappedGooglePOI;
   };
 
@@ -177,6 +182,7 @@ export function LocationSelectView({
           distance: loc.distance,
           address: loc.address,
           city: loc.city,
+          entryCount: loc.entry_count,
           savedLocation: loc,
         });
       });
@@ -321,61 +327,71 @@ export function LocationSelectView({
     );
   };
 
+  // Saved count for toggle badge
+  const savedCount = savedLocations.length;
+
   return (
     <View style={styles.listContainer}>
-      {/* Search Input with Icon */}
-      <View style={[styles.searchContainer, { backgroundColor: dynamicTheme.colors.background.secondary }]}>
-        <View style={styles.searchIcon}>
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
-            <Circle cx={11} cy={11} r={8} />
-            <Path d="M21 21l-4.35-4.35" strokeLinecap="round" />
-          </Svg>
-        </View>
-        <TextInput
-          style={[styles.searchInput, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}
-          placeholder="Search places..."
-          placeholderTextColor={dynamicTheme.colors.text.tertiary}
-          value={ui.searchQuery}
-          onChangeText={(text) => setUI(prev => ({ ...prev, searchQuery: text }))}
-        />
-        {ui.searchQuery.length > 0 && (
-          <TouchableOpacity
-            style={styles.searchClearButton}
-            onPress={() => setUI(prev => ({ ...prev, searchQuery: '' }))}
-          >
+      {/* Search Row: Search Input + Saved Only Toggle */}
+      <View style={styles.searchRow}>
+        {/* Search Input */}
+        <View style={[styles.searchContainer, { backgroundColor: dynamicTheme.colors.background.secondary, flex: 1 }]}>
+          <View style={styles.searchIcon}>
             <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
-              <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              <Circle cx={11} cy={11} r={8} />
+              <Path d="M21 21l-4.35-4.35" strokeLinecap="round" />
             </Svg>
-          </TouchableOpacity>
-        )}
+          </View>
+          <TextInput
+            style={[styles.searchInput, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}
+            placeholder="Search places..."
+            placeholderTextColor={dynamicTheme.colors.text.tertiary}
+            value={ui.searchQuery}
+            onChangeText={(text) => setUI(prev => ({ ...prev, searchQuery: text }))}
+          />
+          {ui.searchQuery.length > 0 && (
+            <TouchableOpacity
+              style={styles.searchClearButton}
+              onPress={() => setUI(prev => ({ ...prev, searchQuery: '' }))}
+            >
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
+                <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Saved Only Toggle */}
+        <TouchableOpacity
+          style={[
+            styles.savedOnlyToggle,
+            { backgroundColor: dynamicTheme.colors.background.secondary },
+            activeListTab === 'saved' && { backgroundColor: dynamicTheme.colors.functional.accent + '20', borderColor: dynamicTheme.colors.functional.accent }
+          ]}
+          onPress={() => setActiveListTab(activeListTab === 'saved' ? 'nearby' : 'saved')}
+        >
+          <Svg width={14} height={14} viewBox="0 0 24 24" fill={activeListTab === 'saved' ? dynamicTheme.colors.functional.accent : 'none'} stroke={activeListTab === 'saved' ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.tertiary} strokeWidth={2}>
+            <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+          <Text style={[
+            styles.savedOnlyText,
+            { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary },
+            activeListTab === 'saved' && { color: dynamicTheme.colors.functional.accent }
+          ]}>
+            ({savedCount})
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Results List */}
-      <ScrollView style={styles.poiList} contentContainerStyle={styles.poiListContent}>
-        {/* Tabs or Search Results title */}
-        {ui.searchQuery.length >= 2 ? (
-          <Text style={[styles.listTitle, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>Search Results</Text>
-        ) : (
-          <View style={[styles.listTabs, { backgroundColor: dynamicTheme.colors.background.secondary }]}>
-            <TouchableOpacity
-              style={[styles.listTab, activeListTab === 'nearby' && [styles.listTabActive, { backgroundColor: dynamicTheme.colors.background.primary }]]}
-              onPress={() => setActiveListTab('nearby')}
-            >
-              <Text style={[styles.listTabText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }, activeListTab === 'nearby' && { color: dynamicTheme.colors.text.primary }]}>
-                Nearby
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.listTab, activeListTab === 'saved' && [styles.listTabActive, { backgroundColor: dynamicTheme.colors.background.primary }]]}
-              onPress={() => setActiveListTab('saved')}
-            >
-              <Text style={[styles.listTabText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }, activeListTab === 'saved' && { color: dynamicTheme.colors.text.primary }]}>
-                Saved
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
+      <ScrollView
+        style={styles.poiList}
+        contentContainerStyle={[
+          styles.poiListContent,
+          keyboardHeight > 0 && { paddingBottom: keyboardHeight + 40 }
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
         {displayedLoading && <ActivityIndicator style={styles.loader} />}
 
         {/* Currently Selected Location - Card at top */}
@@ -405,11 +421,13 @@ export function LocationSelectView({
             </View>
             <View style={styles.poiInfo}>
               <Text style={[styles.poiName, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>
-                {selection.location?.name || 'Selected Location'}
+                Selected Location
               </Text>
-              <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>{getSubtitleText()}</Text>
+              <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>
+                {selection.location?.name ? `${selection.location.name} • ${getSubtitleText()}` : getSubtitleText()}
+              </Text>
             </View>
-            {/* Use button - consistent with Select buttons */}
+            {/* Create button - takes user to details view to name/save */}
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation();
@@ -422,7 +440,7 @@ export function LocationSelectView({
               }}
               style={[styles.useButton, { backgroundColor: dynamicTheme.colors.functional.accent }]}
             >
-              <Text style={[styles.useButtonText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: '#ffffff' }]}>New</Text>
+              <Text style={[styles.useButtonText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: '#ffffff' }]}>Create</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         )}
@@ -493,8 +511,10 @@ export function LocationSelectView({
                     {item.type === 'google_poi' && (
                       <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>From map</Text>
                     )}
-                    {item.type === 'saved' && item.city && (
-                      <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>{item.city}</Text>
+                    {item.type === 'saved' && (
+                      <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>
+                        {item.city ? `${item.city}` : ''}{item.city && item.entryCount ? ' • ' : ''}{item.entryCount ? `${item.entryCount} ${item.entryCount === 1 ? 'entry' : 'entries'}` : ''}
+                      </Text>
                     )}
                     {item.address && typeof item.address === 'string' && (
                       <Text style={[styles.poiAddress, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]} numberOfLines={1}>{item.address}</Text>
@@ -538,7 +558,7 @@ export function LocationSelectView({
               {ui.searchQuery.length >= 2
                 ? 'Try a different search term'
                 : activeListTab === 'saved'
-                  ? 'Save locations from the Nearby tab'
+                  ? 'Select a location and save it'
                   : 'Tap the map to drop a pin'}
             </Text>
           </View>
