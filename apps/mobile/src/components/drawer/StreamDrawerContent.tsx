@@ -13,10 +13,10 @@ import { useDrawer, type ViewMode } from "../../shared/contexts/DrawerContext";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
 import { useStreams } from "../../modules/streams/mobileStreamHooks";
-import { useEntryCounts, useTags, useMentions } from "../../modules/entries/mobileEntryHooks";
-import { useLocationsWithCounts } from "../../modules/locations/mobileLocationHooks";
+import { useEntryCounts, useTags, useMentions, useLocationHierarchy } from "../../modules/entries/mobileEntryHooks";
 import { StreamDrawerItem, QuickFilterItem } from "./StreamDrawerItem";
 import type { Stream } from "@trace/core";
+import type { LocationTreeNode } from "@trace/core/src/modules/entries/EntryTypes";
 
 /** View mode option for the selector */
 interface ViewModeOption {
@@ -56,6 +56,173 @@ const VIEW_MODES: ViewModeOption[] = [
   },
 ];
 
+/** Indentation per level in the location tree (pixels) */
+const LOCATION_INDENT_PER_LEVEL = 16;
+
+/** Props for LocationTreeView component */
+interface LocationTreeViewProps {
+  nodes: LocationTreeNode[];
+  level: number;
+  expandedLocations: Set<string>;
+  selectedStreamId: string | null;
+  onSelect: (node: LocationTreeNode) => void;
+  onToggleExpand: (nodeKey: string) => void;
+  drawerTextPrimary: string;
+  drawerTextSecondary: string;
+  drawerTextTertiary: string;
+  theme: ReturnType<typeof useTheme>;
+}
+
+/**
+ * Get unique key for a location node
+ * For places: use location_id (stable UUID) as unique identifier
+ * For hierarchy levels: use geo:type:value:parent chain
+ */
+function getNodeKey(node: LocationTreeNode): string {
+  if (node.type === "no_location") return "geo:none";
+
+  // For places, use location_id if available (stable UUID)
+  if (node.type === "place" && node.locationId) {
+    return `location:${node.locationId}`;
+  }
+
+  // For hierarchy levels (country, region, city), build ancestry chain
+  const parts = [node.value || ""];
+  if (node.parentCity) parts.push(node.parentCity);
+  if (node.parentRegion) parts.push(node.parentRegion);
+  if (node.parentCountry) parts.push(node.parentCountry);
+
+  return `geo:${node.type}:${parts.join(":")}`;
+}
+
+/**
+ * Recursive component to render location tree with indentation
+ *
+ * Tap behavior:
+ * - Nodes with children: left side (chevron + name) expands/collapses
+ * - Leaf nodes (no children): left side filters entries
+ * - Count badge always filters entries
+ */
+function LocationTreeView({
+  nodes,
+  level,
+  expandedLocations,
+  selectedStreamId,
+  onSelect,
+  onToggleExpand,
+  drawerTextPrimary,
+  drawerTextSecondary,
+  drawerTextTertiary,
+  theme,
+}: LocationTreeViewProps) {
+  return (
+    <>
+      {nodes.map((node) => {
+        const nodeKey = getNodeKey(node);
+        const hasChildren = node.children && node.children.length > 0;
+        const isExpanded = expandedLocations.has(nodeKey);
+        const isSelected = selectedStreamId === nodeKey;
+        const indent = level * LOCATION_INDENT_PER_LEVEL;
+
+        return (
+          <View key={nodeKey}>
+            {/* Node row */}
+            <View
+              style={[
+                styles.locationRow,
+                isSelected && { backgroundColor: theme.colors.background.tertiary },
+              ]}
+            >
+              {/* Left area: indent + chevron (expand/collapse) + name (filter) */}
+              <View style={[styles.locationMainArea, { paddingLeft: 20 + indent }]}>
+                {/* Chevron - tap to expand/collapse (only if has children) */}
+                {hasChildren ? (
+                  <TouchableOpacity
+                    style={styles.locationChevron}
+                    onPress={() => onToggleExpand(nodeKey)}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 4 }}
+                  >
+                    <Svg
+                      width={12}
+                      height={12}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke={drawerTextTertiary}
+                      strokeWidth={2}
+                      style={isExpanded ? styles.chevronExpanded : styles.chevron}
+                    >
+                      <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.locationChevronPlaceholder} />
+                )}
+
+                {/* Location name - tap to filter entries */}
+                <TouchableOpacity
+                  style={styles.locationNameTouch}
+                  onPress={() => onSelect(node)}
+                  activeOpacity={0.6}
+                  delayPressIn={0}
+                >
+                  <Text
+                    style={[
+                      styles.locationName,
+                      { color: drawerTextPrimary },
+                      isSelected && { fontWeight: "600" },
+                      node.type === "no_location" && { fontStyle: "italic" },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {node.displayName}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Count badge - tapping filters (for nodes with children) */}
+              {node.entryCount > 0 && (
+                <TouchableOpacity
+                  style={styles.locationCountTouch}
+                  onPress={() => onSelect(node)}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                >
+                  <Text
+                    style={[
+                      styles.locationCount,
+                      { color: drawerTextTertiary },
+                      isSelected && { color: drawerTextSecondary },
+                    ]}
+                  >
+                    {node.entryCount}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Render children if expanded */}
+            {hasChildren && isExpanded && (
+              <LocationTreeView
+                nodes={node.children}
+                level={level + 1}
+                expandedLocations={expandedLocations}
+                selectedStreamId={selectedStreamId}
+                onSelect={onSelect}
+                onToggleExpand={onToggleExpand}
+                drawerTextPrimary={drawerTextPrimary}
+                drawerTextSecondary={drawerTextSecondary}
+                drawerTextTertiary={drawerTextTertiary}
+                theme={theme}
+              />
+            )}
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
 export function StreamDrawerContent() {
   const theme = useTheme();
 
@@ -83,29 +250,16 @@ export function StreamDrawerContent() {
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [mentionsExpanded, setMentionsExpanded] = useState(false);
 
-  // Only load locations/tags when expanded (data is cached by React Query)
-  const { data: locationsData } = useLocationsWithCounts();
+  // Expanded state for location tree nodes (key = node type:value)
+  const [expandedLocations, setExpandedLocations] = useState<Set<string>>(new Set());
+
+  // Location hierarchy data
+  const { data: locationTree } = useLocationHierarchy();
   const { tags } = useTags();
   const { mentions } = useMentions();
 
   const allEntriesCount = entryCounts?.total || 0;
   const noStreamCount = entryCounts?.noStream || 0;
-
-  // Transform and sort locations by entry count
-  const locations = useMemo(() => {
-    if (!locationsData) return [];
-    const items = locationsData.map(loc => ({
-      name: loc.name,
-      entryCount: loc.entry_count,
-      locationId: loc.location_id,
-    }));
-    // Sort by entry count descending, then by name
-    items.sort((a, b) => {
-      if (b.entryCount !== a.entryCount) return b.entryCount - a.entryCount;
-      return a.name.localeCompare(b.name);
-    });
-    return items;
-  }, [locationsData]);
 
   // Sort tags alphabetically (add # prefix for display)
   const sortedTags = useMemo(() => {
@@ -154,19 +308,36 @@ export function StreamDrawerContent() {
     [onStreamSelect, closeDrawer, setSelectedStreamId, setSelectedStreamName]
   );
 
-  // Handle location selection
-  const handleLocationSelect = useCallback(
-    (locationId: string, locationName: string) => {
-      const filterId = `location:${locationId}`;
+  // Handle geo location selection (hierarchical)
+  // Uses full ancestry for disambiguation (e.g., Kansas City in MO vs KS)
+  const handleGeoSelect = useCallback(
+    (node: LocationTreeNode) => {
+      // Use getNodeKey for consistent filter ID generation
+      const filterId = getNodeKey(node);
+      const displayName = node.displayName;
+
       setSelectedStreamId(filterId);
-      setSelectedStreamName(locationName);
+      setSelectedStreamName(displayName);
       if (onStreamSelect) {
-        onStreamSelect(filterId, locationName);
+        onStreamSelect(filterId, displayName);
       }
       closeDrawer();
     },
     [onStreamSelect, closeDrawer, setSelectedStreamId, setSelectedStreamName]
   );
+
+  // Toggle location tree node expansion
+  const toggleLocationExpand = useCallback((nodeKey: string) => {
+    setExpandedLocations((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeKey)) {
+        next.delete(nodeKey);
+      } else {
+        next.add(nodeKey);
+      }
+      return next;
+    });
+  }, []);
 
   // Handle tag/mention selection
   const handleTagSelect = useCallback(
@@ -307,34 +478,22 @@ export function StreamDrawerContent() {
           <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>LOCATIONS</Text>
         </TouchableOpacity>
 
-        {/* Locations Content - Collapsible */}
+        {/* Locations Content - Collapsible (Hierarchical Tree) */}
         {locationsExpanded && (
           <>
-            {locations.length > 0 ? (
-              locations.map((location) => {
-                const isSelected = selectedStreamId === `location:${location.locationId}`;
-                return (
-                  <TouchableOpacity
-                    key={location.locationId}
-                    style={[styles.locationItem, isSelected && { backgroundColor: theme.colors.background.tertiary }]}
-                    onPress={() => handleLocationSelect(location.locationId, location.name)}
-                    activeOpacity={0.6}
-                    delayPressIn={0}
-                  >
-                    <Text
-                      style={[styles.locationName, { color: drawerTextPrimary }, isSelected && { fontWeight: "600" }]}
-                      numberOfLines={1}
-                    >
-                      {location.name}
-                    </Text>
-                    {location.entryCount > 0 && (
-                      <Text style={[styles.locationCount, { color: drawerTextTertiary }, isSelected && { color: drawerTextSecondary }]}>
-                        {location.entryCount}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              })
+            {locationTree && locationTree.length > 0 ? (
+              <LocationTreeView
+                nodes={locationTree}
+                level={0}
+                expandedLocations={expandedLocations}
+                selectedStreamId={selectedStreamId}
+                onSelect={handleGeoSelect}
+                onToggleExpand={toggleLocationExpand}
+                drawerTextPrimary={drawerTextPrimary}
+                drawerTextSecondary={drawerTextSecondary}
+                drawerTextTertiary={drawerTextTertiary}
+                theme={theme}
+              />
             ) : (
               <View style={styles.emptyLocations}>
                 <Text style={[styles.emptyText, { color: drawerTextTertiary }]}>No locations yet</Text>
@@ -529,6 +688,38 @@ const styles = StyleSheet.create({
   quickFilters: {
     paddingBottom: 4,
   },
+  // Location tree styles
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 12,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginHorizontal: 8,
+  },
+  locationMainArea: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  locationChevron: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 4,
+  },
+  locationChevronPlaceholder: {
+    width: 24,
+    height: 24,
+    marginRight: 4,
+  },
+  locationCountTouch: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  // Legacy location item (kept for tags/mentions)
   locationItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -540,12 +731,16 @@ const styles = StyleSheet.create({
   },
   locationName: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "400",
     letterSpacing: -0.2,
   },
+  locationNameTouch: {
+    flex: 1,
+    paddingVertical: 8,
+  },
   locationCount: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
     marginLeft: 12,
   },

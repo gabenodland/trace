@@ -7,6 +7,7 @@ import { useDrawer } from "../shared/contexts/DrawerContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
+import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { TopBar } from "../components/layout/TopBar";
 import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
@@ -144,33 +145,8 @@ export function MapScreen() {
     })
   ).current;
 
-  // Use the proper hooks - privacy filtering is handled automatically by useEntries
-  // When selectedStreamId is "all", we pass undefined for stream_id which triggers auto-filtering
-  // When a specific stream is selected, we pass that stream_id
-  const entryFilter = useMemo(() => {
-    if (selectedStreamId === "all") {
-      return {}; // No stream_id filter = show all (with auto privacy filtering)
-    }
-    if (selectedStreamId === "no-stream" || selectedStreamId === null) {
-      return { stream_id: null }; // Explicitly null = unassigned only
-    }
-    // Handle tag: prefix
-    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("tag:")) {
-      const tag = selectedStreamId.substring(4);
-      return { tag };
-    }
-    // Handle mention: prefix
-    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("mention:")) {
-      const mention = selectedStreamId.substring(8);
-      return { mention };
-    }
-    // Handle location: prefix
-    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("location:")) {
-      const locationId = selectedStreamId.substring(9);
-      return { location_id: locationId };
-    }
-    return { stream_id: selectedStreamId }; // Specific stream
-  }, [selectedStreamId]);
+  // Parse selection into filter using shared helper
+  const entryFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
 
   const { entries: allEntriesFromHook, isLoading, isFetching } = useEntries(entryFilter);
 

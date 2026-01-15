@@ -16,6 +16,7 @@ import {
   groupEntriesByDueDate,
 } from "@trace/core";
 import { useEntries, MobileEntryFilter } from "../modules/entries/mobileEntryHooks";
+import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
@@ -290,7 +291,7 @@ export function EntryListScreen() {
   // Build breadcrumbs from selected stream (flat - no hierarchy)
   const breadcrumbs = useMemo((): BreadcrumbSegment[] => {
     // If a stream is selected - show only stream name (no Home >)
-    if (selectedStreamId && typeof selectedStreamId === 'string' && !selectedStreamId.startsWith("tag:") && !selectedStreamId.startsWith("mention:") && !selectedStreamId.startsWith("location:") && selectedStreamId !== "all") {
+    if (selectedStreamId && typeof selectedStreamId === 'string' && !selectedStreamId.startsWith("tag:") && !selectedStreamId.startsWith("mention:") && !selectedStreamId.startsWith("location:") && !selectedStreamId.startsWith("geo:") && selectedStreamId !== "all") {
       const stream = streams.find(s => s.stream_id === selectedStreamId);
       if (stream) {
         return [{ id: stream.stream_id, label: stream.name }];
@@ -320,41 +321,27 @@ export function EntryListScreen() {
           )
         }
       ];
+    } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith("geo:")) {
+      // Geo hierarchy filter (country, region, city, place, none)
+      return [
+        {
+          id: selectedStreamId,
+          label: selectedStreamName || "Location",
+          icon: (
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
+              <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+              <Circle cx={12} cy={10} r={3} />
+            </Svg>
+          )
+        }
+      ];
     }
 
     return [{ id: "all", label: "All Entries" }];
   }, [selectedStreamId, selectedStreamName, streams]);
 
-  // Determine filter based on selected stream
-  let streamFilter: MobileEntryFilter = {};
-
-  if (selectedStreamId === "all") {
-    // "All" / "Home" - fetch all entries
-    // streamFilter stays empty
-  } else if (selectedStreamId === null) {
-    // No Stream - show only entries without a stream
-    streamFilter = { stream_id: null };
-  } else if (selectedStreamId === "streams") {
-    // Just a nav item, treat like "all"
-  } else if (selectedStreamId === "events") {
-    // TODO: Filter by events when implemented
-  } else if (selectedStreamId === "tags" || selectedStreamId === "people") {
-    // Just nav items, noop
-  } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith('tag:')) {
-    const tag = selectedStreamId.substring(4);
-    streamFilter = { tag };
-  } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith('mention:')) {
-    const mention = selectedStreamId.substring(8);
-    streamFilter = { mention };
-  } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith('location:')) {
-    const locationId = selectedStreamId.substring(9);
-    streamFilter = { location_id: locationId };
-  } else if (selectedStreamId !== null) {
-    // Specific stream ID (flat - no children)
-    streamFilter = { stream_id: selectedStreamId };
-  } else {
-    streamFilter = { stream_id: null };
-  }
+  // Parse selection into filter using shared helper
+  const streamFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
 
   const { entries, isLoading, entryMutations } = useEntries(streamFilter);
 

@@ -195,4 +195,60 @@ export interface EntryFilter {
   end_date?: string;
   status?: EntryStatus;
   type?: string; // Filter by type
+  // Geographic hierarchy filters (filter entries by location fields)
+  geo_country?: string;
+  geo_region?: string;
+  geo_city?: string;
+  geo_neighborhood?: string;
+  geo_place_name?: string;
+  geo_address?: string;
+  geo_lat?: number; // GPS latitude for exact place matching
+  geo_lng?: number; // GPS longitude for exact place matching
+  geo_none?: boolean; // Filter entries with no location data
+}
+
+// ============================================================================
+// LOCATION HIERARCHY TYPES
+// ============================================================================
+
+/**
+ * Raw row from location hierarchy SQL aggregation query
+ * Each row represents a unique combination of location fields
+ * Places are uniquely identified by location_id (stable UUID)
+ */
+export interface LocationHierarchyRow {
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  neighborhood: string | null;
+  place_name: string | null;
+  location_id: string | null;
+  entry_count: number;
+}
+
+/**
+ * Node in the location hierarchy tree
+ * Used for drawer display with expandable/collapsible sections
+ */
+export interface LocationTreeNode {
+  /** Type of location level */
+  type: 'country' | 'region' | 'city' | 'neighborhood' | 'place' | 'no_location';
+  /** The actual value (e.g., "United States", "Missouri", "Kansas City") */
+  value: string | null;
+  /** Display name (may include disambiguation like "Starbucks • Westport") */
+  displayName: string;
+  /** Total entry count at this node and all children */
+  entryCount: number;
+  /** Child nodes (regions under country, cities under region, etc.) */
+  children: LocationTreeNode[];
+  /** Location ID for unique identification of places (stable UUID) */
+  locationId?: string | null;
+  /** For disambiguation - parent neighborhood when displaying place names */
+  parentNeighborhood?: string | null;
+  /** For disambiguation - parent city when displaying place names */
+  parentCity?: string | null;
+  /** For disambiguation - parent region when displaying cities */
+  parentRegion?: string | null;
+  /** For disambiguation - parent country when displaying regions */
+  parentCountry?: string | null;
 }

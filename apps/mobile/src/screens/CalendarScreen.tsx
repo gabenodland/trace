@@ -17,6 +17,7 @@ import {
   groupEntriesByDueDate,
 } from "@trace/core";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
+import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useDrawer } from "../shared/contexts/DrawerContext";
@@ -212,31 +213,8 @@ export function CalendarScreen() {
     });
   }, [registerStreamHandler, setSelectedStreamId, setSelectedStreamName]);
 
-  // Entry filter based on selected stream/location/tag/mention
-  const entryFilter = useMemo(() => {
-    if (selectedStreamId === "all") {
-      return {}; // No filter = show all
-    }
-    if (selectedStreamId === "no-stream" || selectedStreamId === null) {
-      return { stream_id: null }; // Unassigned only
-    }
-    // Handle tag: prefix
-    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("tag:")) {
-      const tag = selectedStreamId.substring(4);
-      return { tag };
-    }
-    // Handle mention: prefix
-    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("mention:")) {
-      const mention = selectedStreamId.substring(8);
-      return { mention };
-    }
-    // Handle location: prefix
-    if (typeof selectedStreamId === "string" && selectedStreamId.startsWith("location:")) {
-      const locationId = selectedStreamId.substring(9);
-      return { location_id: locationId };
-    }
-    return { stream_id: selectedStreamId }; // Specific stream
-  }, [selectedStreamId]);
+  // Parse selection into filter using shared helper
+  const entryFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
 
   // Build breadcrumbs for header
   const breadcrumbs = useMemo((): BreadcrumbSegment[] => {

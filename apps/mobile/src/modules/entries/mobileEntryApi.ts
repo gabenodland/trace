@@ -34,6 +34,15 @@ export interface MobileEntryFilter extends EntryFilter {
    * When viewing a specific stream directly, this should be false.
    */
   excludePrivateStreams?: boolean;
+
+  // Geographic hierarchy filters (filter entries by location fields)
+  // For places, use location_id (stable UUID) instead of GPS coords
+  geo_country?: string;
+  geo_region?: string;
+  geo_city?: string;
+  geo_neighborhood?: string;
+  geo_place_name?: string;
+  geo_none?: boolean; // Filter entries with no location data
 }
 
 /**
@@ -42,6 +51,103 @@ export interface MobileEntryFilter extends EntryFilter {
 export interface ReadOptions {
   /** If true, pulls latest from server before reading (requires network) */
   refreshFirst?: boolean;
+}
+
+/**
+ * Parse a drawer selection ID (stream, tag, location, geo hierarchy) into a MobileEntryFilter.
+ * Used by EntryListScreen, MapScreen, and CalendarScreen for consistent filtering.
+ *
+ * @param selectedStreamId - The selection ID from drawer (stream UUID, "all", "no-stream", "tag:X", "location:UUID", "geo:type:value:...")
+ * @returns MobileEntryFilter object for useEntries hook
+ */
+export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEntryFilter {
+  // "All" / "Home" - fetch all entries
+  if (selectedStreamId === "all") {
+    return {};
+  }
+
+  // No Stream - show only entries without a stream
+  if (selectedStreamId === "no-stream" || selectedStreamId === null) {
+    return { stream_id: null };
+  }
+
+  // Navigation items - treat like "all"
+  if (selectedStreamId === "streams" || selectedStreamId === "events" ||
+      selectedStreamId === "tags" || selectedStreamId === "people") {
+    return {};
+  }
+
+  // Handle tag: prefix
+  if (selectedStreamId.startsWith("tag:")) {
+    const tag = selectedStreamId.substring(4);
+    return { tag };
+  }
+
+  // Handle mention: prefix
+  if (selectedStreamId.startsWith("mention:")) {
+    const mention = selectedStreamId.substring(8);
+    return { mention };
+  }
+
+  // Handle location: prefix (place with location_id)
+  if (selectedStreamId.startsWith("location:")) {
+    const locationId = selectedStreamId.substring(9);
+    return { location_id: locationId };
+  }
+
+  // Handle geo: hierarchy filters (country, region, city, neighborhood, place, none)
+  if (selectedStreamId.startsWith("geo:")) {
+    const parts = selectedStreamId.split(':');
+    const geoType = parts[1];
+
+    if (geoType === 'none') {
+      return { geo_none: true };
+    } else if (geoType === 'country') {
+      const countryName = parts.slice(2).join(':');
+      return { geo_country: countryName };
+    } else if (geoType === 'region') {
+      const regionName = parts[2];
+      const countryName = parts[3] || undefined;
+      return {
+        geo_region: regionName,
+        ...(countryName && { geo_country: countryName }),
+      };
+    } else if (geoType === 'city') {
+      const cityName = parts[2];
+      const regionName = parts[3] || undefined;
+      const countryName = parts[4] || undefined;
+      return {
+        geo_city: cityName,
+        ...(regionName && { geo_region: regionName }),
+        ...(countryName && { geo_country: countryName }),
+      };
+    } else if (geoType === 'neighborhood') {
+      const neighborhoodName = parts[2];
+      const cityName = parts[3] || undefined;
+      const regionName = parts[4] || undefined;
+      const countryName = parts[5] || undefined;
+      return {
+        geo_neighborhood: neighborhoodName,
+        ...(cityName && { geo_city: cityName }),
+        ...(regionName && { geo_region: regionName }),
+        ...(countryName && { geo_country: countryName }),
+      };
+    } else if (geoType === 'place') {
+      const placeName = parts[2];
+      const cityName = parts[3] || undefined;
+      const regionName = parts[4] || undefined;
+      const countryName = parts[5] || undefined;
+      return {
+        geo_place_name: placeName,
+        ...(cityName && { geo_city: cityName }),
+        ...(regionName && { geo_region: regionName }),
+        ...(countryName && { geo_country: countryName }),
+      };
+    }
+  }
+
+  // Default: Specific stream ID
+  return { stream_id: selectedStreamId };
 }
 
 /**
@@ -473,4 +579,32 @@ async function copyPhotosForEntry(
   }
 
   return pendingPhotos;
+}
+
+// ============================================================================
+// LOCATION HIERARCHY (for drawer navigation)
+// ============================================================================
+
+/**
+ * Get location hierarchy aggregated from entries
+ * Returns rows with country, region, city, neighborhood, place_name, location_id, and entry counts
+ * location_id is the stable unique identifier for places (no GPS jitter issues)
+ */
+export async function getLocationHierarchy(): Promise<Array<{
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  neighborhood: string | null;
+  place_name: string | null;
+  location_id: string | null;
+  entry_count: number;
+}>> {
+  return await localDB.getLocationHierarchy();
+}
+
+/**
+ * Get count of entries with no location data
+ */
+export async function getNoLocationCount(): Promise<number> {
+  return await localDB.getNoLocationCount();
 }

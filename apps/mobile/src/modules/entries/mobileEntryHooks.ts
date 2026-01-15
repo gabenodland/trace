@@ -15,11 +15,15 @@ import {
   getEntryCounts,
   getTags,
   getMentions,
+  getLocationHierarchy,
+  getNoLocationCount,
   MobileEntryFilter,
   CopiedEntryData,
 } from './mobileEntryApi';
 import { CreateEntryInput, Entry } from '@trace/core';
 import * as entryHelpers from '@trace/core/src/modules/entries/entryHelpers';
+import { buildLocationTree } from '@trace/core/src/modules/entries/entryHelpers';
+import type { LocationTreeNode } from '@trace/core/src/modules/entries/EntryTypes';
 
 // Re-export types for consumers
 export type { MobileEntryFilter, CopiedEntryData } from './mobileEntryApi';
@@ -85,6 +89,7 @@ function useCreateEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
+      queryClient.invalidateQueries({ queryKey: ['locationHierarchy'] });
     },
   });
 }
@@ -123,6 +128,7 @@ function useUpdateEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
+      queryClient.invalidateQueries({ queryKey: ['locationHierarchy'] });
     },
   });
 }
@@ -155,6 +161,7 @@ function useDeleteEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
+      queryClient.invalidateQueries({ queryKey: ['locationHierarchy'] });
     },
   });
 }
@@ -329,5 +336,23 @@ export function useEntryCounts() {
     queryKey: ['entryCounts'],
     queryFn: getEntryCounts,
     staleTime: 30000, // Consider fresh for 30 seconds
+  });
+}
+
+/**
+ * Hook for location hierarchy - builds a tree from entry location fields
+ * Used in drawer navigation for hierarchical location filtering
+ *
+ * @returns Tree of locations: country → region → city → place_name
+ */
+export function useLocationHierarchy() {
+  return useQuery<LocationTreeNode[]>({
+    queryKey: ['locationHierarchy'],
+    queryFn: async () => {
+      const rows = await getLocationHierarchy();
+      const noLocationCount = await getNoLocationCount();
+      return buildLocationTree(rows, noLocationCount);
+    },
+    staleTime: 60 * 1000, // Consider fresh for 1 minute
   });
 }

@@ -925,6 +925,16 @@ class LocalDatabase {
     location_id?: string;
     includeDeleted?: boolean;
     excludePrivateStreams?: boolean;
+    // Geographic hierarchy filters
+    geo_country?: string;
+    geo_region?: string;
+    geo_city?: string;
+    geo_neighborhood?: string;
+    geo_place_name?: string;
+    geo_address?: string;
+    geo_lat?: number; // GPS latitude for exact place matching
+    geo_lng?: number; // GPS longitude for exact place matching
+    geo_none?: boolean;
   }): Promise<Entry[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
@@ -971,6 +981,39 @@ class LocalDatabase {
         params.push(filter.location_id);
       }
 
+      // Geographic hierarchy filters
+      if (filter.geo_country) {
+        query += ' AND country = ?';
+        params.push(filter.geo_country);
+      }
+
+      if (filter.geo_region) {
+        query += ' AND region = ?';
+        params.push(filter.geo_region);
+      }
+
+      if (filter.geo_city) {
+        query += ' AND city = ?';
+        params.push(filter.geo_city);
+      }
+
+      if (filter.geo_neighborhood) {
+        query += ' AND neighborhood = ?';
+        params.push(filter.geo_neighborhood);
+      }
+
+      if (filter.geo_place_name) {
+        query += ' AND place_name = ?';
+        params.push(filter.geo_place_name);
+      }
+
+      // Note: geo_address filter removed - use location_id for place filtering instead
+
+      // Filter for entries with no location data
+      if (filter.geo_none) {
+        query += ' AND country IS NULL AND region IS NULL AND city IS NULL AND neighborhood IS NULL AND place_name IS NULL AND entry_latitude IS NULL';
+      }
+
       // Privacy filtering - exclude entries from private streams
       // Only applies when NOT viewing a specific stream (i.e., viewing "All Entries")
       if (filter.excludePrivateStreams) {
@@ -985,6 +1028,92 @@ class LocalDatabase {
     const rows = await this.db.getAllAsync<any>(query, params);
 
     return rows.map(row => this.rowToEntry(row));
+  }
+
+  /**
+   * Get location hierarchy aggregated from entries
+   * Returns rows grouped by country, region, city, neighborhood, place_name, and location_id
+   * location_id is the stable unique identifier for places (no GPS jitter issues)
+   * Used for building the location tree in the drawer
+   */
+  async getLocationHierarchy(): Promise<Array<{
+    country: string | null;
+    region: string | null;
+    city: string | null;
+    neighborhood: string | null;
+    place_name: string | null;
+    location_id: string | null;
+    entry_count: number;
+  }>> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Group by location_id for places - it's a stable UUID, no jitter issues
+    let query = `
+      SELECT
+        country,
+        region,
+        city,
+        neighborhood,
+        place_name,
+        location_id,
+        COUNT(*) as entry_count
+      FROM entries
+      WHERE deleted_at IS NULL
+        AND (country IS NOT NULL OR region IS NOT NULL OR city IS NOT NULL OR neighborhood IS NOT NULL OR place_name IS NOT NULL)
+    `;
+    const params: any[] = [];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    query += `
+      GROUP BY country, region, city, neighborhood, place_name, location_id
+      ORDER BY country, region, city, neighborhood, place_name
+    `;
+
+    const rows = await this.db.getAllAsync<any>(query, params);
+
+    return rows.map(row => ({
+      country: row.country,
+      region: row.region,
+      city: row.city,
+      neighborhood: row.neighborhood,
+      place_name: row.place_name,
+      location_id: row.location_id,
+      entry_count: row.entry_count,
+    }));
+  }
+
+  /**
+   * Get count of entries with no location data
+   * Used for the "No Location" node in the location tree
+   */
+  async getNoLocationCount(): Promise<number> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    let query = `
+      SELECT COUNT(*) as count
+      FROM entries
+      WHERE deleted_at IS NULL
+        AND country IS NULL
+        AND region IS NULL
+        AND city IS NULL
+        AND place_name IS NULL
+        AND entry_latitude IS NULL
+    `;
+    const params: any[] = [];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    const result = await this.db.getFirstAsync<{ count: number }>(query, params);
+    return result?.count || 0;
   }
 
   /**

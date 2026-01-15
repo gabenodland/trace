@@ -29,7 +29,10 @@ import {
   aggregateLocations,
   getEntryCounts,
   MAX_TYPE_NAME_LENGTH,
+  buildLocationTree,
+  getLocationTreeTotalCount,
 } from "./entryHelpers";
+import type { LocationHierarchyRow } from "./EntryTypes";
 
 // ============================================
 // PARSING TESTS
@@ -627,5 +630,174 @@ describe("formatEntryDate", () => {
     const now = new Date("2026-01-14T11:59:00Z");
     const result = formatEntryDate(now.toISOString());
     expect(result).toContain("Last edited");
+  });
+});
+
+// ============================================
+// LOCATION HIERARCHY TESTS
+// ============================================
+
+describe("buildLocationTree", () => {
+  it("builds empty tree from empty rows", () => {
+    const result = buildLocationTree([], 0);
+    expect(result).toEqual([]);
+  });
+
+  it("builds single country node", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: "United States", region: null, city: null, place_name: null, entry_count: 5 },
+    ];
+    const result = buildLocationTree(rows);
+    expect(result.length).toBe(1);
+    expect(result[0].type).toBe("country");
+    expect(result[0].value).toBe("United States");
+    expect(result[0].entryCount).toBe(5);
+  });
+
+  it("builds full hierarchy", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: "United States", region: "Missouri", city: "Kansas City", place_name: "Home", entry_count: 10 },
+      { country: "United States", region: "Missouri", city: "Kansas City", place_name: "Work", entry_count: 5 },
+      { country: "United States", region: "Missouri", city: "St. Louis", place_name: null, entry_count: 3 },
+    ];
+    const result = buildLocationTree(rows);
+
+    // Should have 1 country
+    expect(result.length).toBe(1);
+    expect(result[0].value).toBe("United States");
+    expect(result[0].entryCount).toBe(18); // 10 + 5 + 3
+
+    // Should have 1 region under country
+    const regions = result[0].children;
+    expect(regions.length).toBe(1);
+    expect(regions[0].value).toBe("Missouri");
+    expect(regions[0].entryCount).toBe(18);
+
+    // Should have 2 cities under region
+    const cities = regions[0].children;
+    expect(cities.length).toBe(2);
+
+    // Kansas City should be first (more entries)
+    expect(cities[0].value).toBe("Kansas City");
+    expect(cities[0].entryCount).toBe(15);
+
+    // St. Louis second
+    expect(cities[1].value).toBe("St. Louis");
+    expect(cities[1].entryCount).toBe(3);
+
+    // Kansas City should have 2 places
+    expect(cities[0].children.length).toBe(2);
+    expect(cities[0].children[0].value).toBe("Home"); // 10 entries, first
+    expect(cities[0].children[1].value).toBe("Work"); // 5 entries, second
+  });
+
+  it("handles multiple countries", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: "United States", region: "Missouri", city: null, place_name: null, entry_count: 10 },
+      { country: "Canada", region: "Ontario", city: null, place_name: null, entry_count: 5 },
+    ];
+    const result = buildLocationTree(rows);
+
+    expect(result.length).toBe(2);
+    // US first (more entries)
+    expect(result[0].value).toBe("United States");
+    expect(result[1].value).toBe("Canada");
+  });
+
+  it("adds No Location node when noLocationCount > 0", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: "United States", region: null, city: null, place_name: null, entry_count: 5 },
+    ];
+    const result = buildLocationTree(rows, 10);
+
+    expect(result.length).toBe(2);
+    expect(result[1].type).toBe("no_location");
+    expect(result[1].displayName).toBe("No Location");
+    expect(result[1].entryCount).toBe(10);
+  });
+
+  it("skips rows with no location data", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: null, region: null, city: null, place_name: null, entry_count: 5 },
+      { country: "United States", region: null, city: null, place_name: null, entry_count: 3 },
+    ];
+    const result = buildLocationTree(rows);
+
+    expect(result.length).toBe(1);
+    expect(result[0].value).toBe("United States");
+    expect(result[0].entryCount).toBe(3);
+  });
+
+  it("handles place without city (attached to region)", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: "United States", region: "Missouri", city: null, place_name: "State Capitol", entry_count: 2 },
+    ];
+    const result = buildLocationTree(rows);
+
+    expect(result[0].children[0].children.length).toBe(1);
+    expect(result[0].children[0].children[0].type).toBe("place");
+    expect(result[0].children[0].children[0].value).toBe("State Capitol");
+  });
+
+  it("handles city without region (attached to country)", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: "United States", region: null, city: "Washington D.C.", place_name: null, entry_count: 5 },
+    ];
+    const result = buildLocationTree(rows);
+
+    expect(result[0].children.length).toBe(1);
+    expect(result[0].children[0].type).toBe("city");
+    expect(result[0].children[0].value).toBe("Washington D.C.");
+  });
+
+  it("includes parent references in nodes", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: "United States", region: "Missouri", city: "Kansas City", place_name: "Home", entry_count: 1 },
+    ];
+    const result = buildLocationTree(rows);
+
+    const placeNode = result[0].children[0].children[0].children[0];
+    expect(placeNode.parentCity).toBe("Kansas City");
+    expect(placeNode.parentRegion).toBe("Missouri");
+    expect(placeNode.parentCountry).toBe("United States");
+  });
+
+  it("sorts children by entry count descending", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: "United States", region: "California", city: null, place_name: null, entry_count: 5 },
+      { country: "United States", region: "Texas", city: null, place_name: null, entry_count: 20 },
+      { country: "United States", region: "Missouri", city: null, place_name: null, entry_count: 10 },
+    ];
+    const result = buildLocationTree(rows);
+
+    const regions = result[0].children;
+    expect(regions[0].value).toBe("Texas"); // 20
+    expect(regions[1].value).toBe("Missouri"); // 10
+    expect(regions[2].value).toBe("California"); // 5
+  });
+});
+
+describe("getLocationTreeTotalCount", () => {
+  it("returns 0 for empty tree", () => {
+    expect(getLocationTreeTotalCount([])).toBe(0);
+  });
+
+  it("counts leaf nodes correctly", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: "United States", region: "Missouri", city: "Kansas City", place_name: "Home", entry_count: 10 },
+      { country: "United States", region: "Missouri", city: "Kansas City", place_name: "Work", entry_count: 5 },
+    ];
+    const tree = buildLocationTree(rows);
+    // Total should be 15 (from leaf nodes)
+    expect(getLocationTreeTotalCount(tree)).toBe(15);
+  });
+
+  it("includes no location count", () => {
+    const rows: LocationHierarchyRow[] = [
+      { country: "United States", region: null, city: null, place_name: null, entry_count: 5 },
+    ];
+    const tree = buildLocationTree(rows, 10);
+    // Tree has US with 5 entries and No Location with 10
+    expect(getLocationTreeTotalCount(tree)).toBe(15);
   });
 });

@@ -1,6 +1,6 @@
 // Pure helper functions for entry operations
 
-import type { EntryStatus } from "./EntryTypes";
+import type { EntryStatus, LocationHierarchyRow, LocationTreeNode } from "./EntryTypes";
 
 // Statuses that indicate work is not started or in progress (actionable)
 const ACTIONABLE_STATUSES: EntryStatus[] = ["new", "todo", "in_progress", "in_review", "waiting", "on_hold"];
@@ -547,4 +547,265 @@ export function getEntryCounts(entries: Array<{ stream_id?: string | null }>): {
     total: entries.length,
     noStream,
   };
+}
+
+// ============================================
+// LOCATION HIERARCHY HELPERS
+// Build tree structure from flat SQL aggregation results
+// ============================================
+
+/**
+ * Build a hierarchical location tree from flat SQL aggregation rows
+ *
+ * Hierarchy: country → region → city → place (no neighborhood level)
+ *
+ * Each level can have an <unnamed> node showing entries that have
+ * that level but no deeper level (e.g., country but no region).
+ *
+ * @param rows - Flat rows from SQL GROUP BY query
+ * @param noLocationCount - Count of entries with no location data
+ * @returns Array of root-level nodes (countries + optional "No Location" node)
+ */
+export function buildLocationTree(
+  rows: LocationHierarchyRow[],
+  noLocationCount: number = 0
+): LocationTreeNode[] {
+  // Maps for building hierarchy: key -> node
+  const countryMap = new Map<string, LocationTreeNode & { directCount: number }>();
+  const regionMap = new Map<string, LocationTreeNode & { directCount: number }>();
+  const cityMap = new Map<string, LocationTreeNode & { directCount: number }>();
+
+  for (const row of rows) {
+    const { country, region, city, neighborhood, place_name, location_id, entry_count } = row;
+
+    // Skip rows with no location data at all
+    if (!country && !region && !city && !place_name) {
+      continue;
+    }
+
+    // Handle country level
+    if (country) {
+      if (!countryMap.has(country)) {
+        countryMap.set(country, {
+          type: 'country',
+          value: country,
+          displayName: country,
+          entryCount: 0,
+          directCount: 0,
+          children: [],
+        });
+      }
+      const countryNode = countryMap.get(country)!;
+      countryNode.entryCount += entry_count;
+
+      // If no deeper level, this is a direct entry for country
+      if (!region && !city && !place_name) {
+        countryNode.directCount += entry_count;
+        continue;
+      }
+
+      // Handle region level
+      if (region) {
+        const regionKey = `${country}|${region}`;
+        if (!regionMap.has(regionKey)) {
+          const regionNode = {
+            type: 'region' as const,
+            value: region,
+            displayName: region,
+            entryCount: 0,
+            directCount: 0,
+            children: [],
+            parentCountry: country,
+          };
+          regionMap.set(regionKey, regionNode);
+          countryNode.children.push(regionNode);
+        }
+        const regionNode = regionMap.get(regionKey)!;
+        regionNode.entryCount += entry_count;
+
+        // If no deeper level, this is a direct entry for region
+        if (!city && !place_name) {
+          regionNode.directCount += entry_count;
+          continue;
+        }
+
+        // Handle city level
+        if (city) {
+          const cityKey = `${country}|${region}|${city}`;
+          if (!cityMap.has(cityKey)) {
+            const cityNode = {
+              type: 'city' as const,
+              value: city,
+              displayName: city,
+              entryCount: 0,
+              directCount: 0,
+              children: [],
+              parentRegion: region,
+              parentCountry: country,
+            };
+            cityMap.set(cityKey, cityNode);
+            regionNode.children.push(cityNode);
+          }
+          const cityNode = cityMap.get(cityKey)!;
+          cityNode.entryCount += entry_count;
+
+          // If no place_name, this is a direct entry for city
+          if (!place_name) {
+            cityNode.directCount += entry_count;
+            continue;
+          }
+
+          // Place attaches directly to city
+          const placeNode: LocationTreeNode = {
+            type: 'place',
+            value: place_name,
+            displayName: place_name,
+            entryCount: entry_count,
+            children: [],
+            locationId: location_id,
+            parentNeighborhood: neighborhood,
+            parentCity: city,
+            parentRegion: region,
+            parentCountry: country,
+          };
+          cityNode.children.push(placeNode);
+        } else if (place_name) {
+          // Place without city - attach to region
+          const placeNode: LocationTreeNode = {
+            type: 'place',
+            value: place_name,
+            displayName: place_name,
+            entryCount: entry_count,
+            children: [],
+            locationId: location_id,
+            parentNeighborhood: neighborhood,
+            parentRegion: region,
+            parentCountry: country,
+          };
+          regionNode.children.push(placeNode);
+        }
+      } else if (city) {
+        // City without region - create under country directly
+        const cityKey = `${country}||${city}`;
+        if (!cityMap.has(cityKey)) {
+          const cityNode = {
+            type: 'city' as const,
+            value: city,
+            displayName: city,
+            entryCount: 0,
+            directCount: 0,
+            children: [],
+            parentCountry: country,
+          };
+          cityMap.set(cityKey, cityNode);
+          countryNode.children.push(cityNode);
+        }
+        const cityNode = cityMap.get(cityKey)!;
+        cityNode.entryCount += entry_count;
+
+        if (!place_name) {
+          cityNode.directCount += entry_count;
+        } else {
+          const placeNode: LocationTreeNode = {
+            type: 'place',
+            value: place_name,
+            displayName: place_name,
+            entryCount: entry_count,
+            children: [],
+            locationId: location_id,
+            parentNeighborhood: neighborhood,
+            parentCity: city,
+            parentCountry: country,
+          };
+          cityNode.children.push(placeNode);
+        }
+      } else if (place_name) {
+        // Place with only country - attach directly to country
+        const placeNode: LocationTreeNode = {
+          type: 'place',
+          value: place_name,
+          displayName: place_name,
+          entryCount: entry_count,
+          children: [],
+          locationId: location_id,
+          parentNeighborhood: neighborhood,
+          parentCountry: country,
+        };
+        countryNode.children.push(placeNode);
+      }
+    }
+  }
+
+  // Helper to add <unnamed> node if needed and sort children
+  const addUnnamedAndSort = (node: LocationTreeNode & { directCount: number }) => {
+    // Add <unnamed> node if there are direct entries and other children exist
+    if (node.directCount > 0 && node.children.length > 0) {
+      node.children.unshift({
+        type: node.type === 'country' ? 'region' :
+              node.type === 'region' ? 'city' :
+              'place',
+        value: null,
+        displayName: '<unnamed>',
+        entryCount: node.directCount,
+        children: [],
+        parentCountry: node.parentCountry || (node.type === 'country' ? node.value : undefined),
+        parentRegion: node.parentRegion || (node.type === 'region' ? node.value : undefined),
+        parentCity: node.parentCity || (node.type === 'city' ? node.value : undefined),
+      } as LocationTreeNode);
+    }
+    // Sort children by entry count (descending), but keep <unnamed> at top
+    node.children.sort((a, b) => {
+      if (a.displayName === '<unnamed>') return -1;
+      if (b.displayName === '<unnamed>') return 1;
+      return b.entryCount - a.entryCount;
+    });
+  };
+
+  // Process all levels and add <unnamed> nodes
+  for (const cityNode of cityMap.values()) {
+    addUnnamedAndSort(cityNode);
+  }
+  for (const regionNode of regionMap.values()) {
+    addUnnamedAndSort(regionNode);
+  }
+  for (const countryNode of countryMap.values()) {
+    addUnnamedAndSort(countryNode);
+  }
+
+  // Build final result array (strip directCount from output)
+  const result: LocationTreeNode[] = Array.from(countryMap.values()).map(
+    ({ directCount, ...rest }) => rest
+  );
+  result.sort((a, b) => b.entryCount - a.entryCount);
+
+  // Add "No Location" node if there are entries without location data
+  if (noLocationCount > 0) {
+    result.push({
+      type: 'no_location',
+      value: null,
+      displayName: 'No Location',
+      entryCount: noLocationCount,
+      children: [],
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Flatten location tree to get total entry count
+ * Useful for verifying tree building correctness
+ */
+export function getLocationTreeTotalCount(nodes: LocationTreeNode[]): number {
+  let total = 0;
+  for (const node of nodes) {
+    if (node.children.length === 0) {
+      // Leaf node - count its entries
+      total += node.entryCount;
+    } else {
+      // Branch node - recurse into children
+      total += getLocationTreeTotalCount(node.children);
+    }
+  }
+  return total;
 }
