@@ -489,6 +489,253 @@ export const locationPickerStyles = StyleSheet.create({
     marginTop: 10,
     fontSize: 14,
   },
+
+  // ============================================================================
+  // NEW CARD-BASED STYLES (for CurrentLocationView and CreateLocationView)
+  // ============================================================================
+
+  // View container with padding
+  viewContainer: {
+    flex: 1,
+  },
+  viewScroll: {
+    flex: 1,
+  },
+  viewContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+
+  // Hero Card - Location name display (CurrentLocationView)
+  heroCard: {
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+  },
+  heroIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  heroName: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  heroBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  heroBadgeText: {
+    fontSize: 12,
+  },
+
+  // Info Card - Address/coordinates display
+  infoCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  infoCardLabel: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  infoCardText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  infoCardCoords: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    gap: 6,
+  },
+  infoCardCoordsText: {
+    fontSize: 13,
+  },
+
+  // Input Card - Name input (CreateLocationView)
+  inputCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  inputCardLabel: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  inputCardInput: {
+    fontSize: 16,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+
+  // Action Card - Settings-style action rows
+  actionCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+  },
+  actionRowLast: {
+    borderBottomWidth: 0,
+  },
+  actionRowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  actionRowText: {
+    fontSize: 16,
+  },
+
+  // Change Location button (link style, for going back to select)
+  changeLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 6,
+    marginBottom: 16,
+  },
+  changeLocationText: {
+    fontSize: 15,
+  },
+
+  // Primary Save Button (full width)
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  saveButtonText: {
+    fontSize: 16,
+  },
+
+  // Edit mode inline input (CurrentLocationView)
+  editModeCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  editModeInput: {
+    fontSize: 18,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  editModeButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  editModeButtonPrimary: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  editModeButtonSecondary: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  editModeButtonText: {
+    fontSize: 15,
+  },
+
+  // ============================================================================
+  // HORIZONTAL LOCATION CARD (CurrentLocationView - modern layout)
+  // ============================================================================
+
+  // Main card with horizontal layout: icon left, content right
+  locationCard: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'flex-start',
+  },
+  // Large pin icon on left
+  locationCardIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  // Content area on right
+  locationCardContent: {
+    flex: 1,
+    paddingTop: 2,
+  },
+  // Primary text: Name or coordinates (large)
+  locationCardName: {
+    fontSize: 18,
+    lineHeight: 24,
+    marginBottom: 2,
+  },
+  // Context: Neighborhood · City, State
+  locationCardContext: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 2,
+  },
+  // Street address and postal/country
+  locationCardAddress: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  // Coordinates row with icon
+  locationCardCoordsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 4,
+  },
+  locationCardCoords: {
+    fontSize: 12,
+  },
+  // Entry count badge
+  locationCardBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  locationCardBadgeText: {
+    fontSize: 12,
+  },
 });
 
 export default locationPickerStyles;

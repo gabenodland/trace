@@ -5,7 +5,8 @@
  * Parent orchestrator that composes:
  * - MapView with markers
  * - LocationSelectView (search, tabs, POI list)
- * - LocationDetailsView (name input, address, actions)
+ * - CurrentLocationView (view mode - existing location display)
+ * - CreateLocationView (create mode - name input and save)
  *
  * Uses useLocationPicker hook for all state and logic.
  */
@@ -13,7 +14,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, SafeAreaView, Platform, Animated, PanResponder, Dimensions, Keyboard } from 'react-native';
 import Svg2, { Line } from 'react-native-svg';
-import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Callout, Circle as MapCircle } from 'react-native-maps';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { type Location as LocationType } from '@trace/core';
 import { useTheme } from '../../../../shared/contexts/ThemeContext';
@@ -21,7 +22,8 @@ import { locationPickerStyles as styles } from '../../styles/locationPickerStyle
 import { type LocationPickerMode, createSelectionFromMapTap } from '../../types/LocationPickerTypes';
 import { useLocationPicker } from './hooks/useLocationPicker';
 import { LocationSelectView } from './components/LocationSelectView';
-import { LocationDetailsView } from './components/LocationDetailsView';
+import { CurrentLocationView } from './components/CurrentLocationView';
+import { CreateLocationView } from './components/CreateLocationView';
 
 interface LocationPickerProps {
   visible: boolean;
@@ -325,8 +327,8 @@ export function LocationPicker({
                 ref={picker.mapRef}
                 style={styles.map}
                 initialRegion={picker.mapState.region}
-                onPress={picker.effectiveMode === 'select' ? picker.handleMapPress : undefined}
-                onRegionChangeComplete={picker.effectiveMode === 'select' ? picker.handleRegionChangeComplete : undefined}
+                onPress={picker.effectiveMode === 'select' && !picker.ui.showingDetails ? picker.handleMapPress : undefined}
+                onRegionChangeComplete={picker.effectiveMode === 'select' && !picker.ui.showingDetails ? picker.handleRegionChangeComplete : undefined}
                 mapType="standard"
                 userInterfaceStyle={dynamicTheme.isDark ? "dark" : "light"}
                 showsUserLocation={false}
@@ -340,15 +342,29 @@ export function LocationPicker({
                 // Hide POI labels on iOS since onPoiClick doesn't work with Apple Maps
                 // Users can still find POIs via the search/nearby list below
                 showsPointsOfInterest={Platform.OS === 'android'}
-                onPoiClick={Platform.OS === 'android' && picker.effectiveMode === 'select' ? handlePoiClick : undefined}
+                onPoiClick={Platform.OS === 'android' && picker.effectiveMode === 'select' && !picker.ui.showingDetails ? handlePoiClick : undefined}
               >
-                {/* Selected Location Marker (blue) */}
+                {/* GPS Accuracy Circle (only shown for GPS coordinates) */}
+                {picker.gpsAccuracy && picker.gpsAccuracy > 0 && picker.mapState.markerPosition && (
+                  <MapCircle
+                    center={picker.mapState.markerPosition}
+                    radius={picker.gpsAccuracy}
+                    fillColor={`${dynamicTheme.colors.functional.accent}15`}
+                    strokeColor={`${dynamicTheme.colors.functional.accent}40`}
+                    strokeWidth={1}
+                  />
+                )}
+
+                {/* Selected Location Marker (accent color) */}
                 {picker.mapState.markerPosition && (
                   <Marker
                     ref={picker.blueMarkerRef}
                     coordinate={picker.mapState.markerPosition}
-                    pinColor="blue"
                   >
+                    <Svg width={32} height={32} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accent}>
+                      <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                      <Circle cx="12" cy="10" r="3" fill="#ffffff" />
+                    </Svg>
                     {picker.effectiveMode !== 'view' && (
                       <Callout tooltip>
                         <View style={[styles.calloutContainer, { backgroundColor: dynamicTheme.colors.functional.accent }]}>
@@ -361,7 +377,7 @@ export function LocationPicker({
                   </Marker>
                 )}
 
-                {/* Preview Marker (red) - no callout, just a simple pin */}
+                {/* Preview Marker (accent color) - for hovering over list items */}
                 {picker.previewMarker && (
                   <Marker
                     ref={picker.redMarkerRef}
@@ -369,8 +385,12 @@ export function LocationPicker({
                       latitude: picker.previewMarker.latitude,
                       longitude: picker.previewMarker.longitude,
                     }}
-                    pinColor="red"
-                  />
+                  >
+                    <Svg width={32} height={32} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accent} opacity={0.7}>
+                      <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                      <Circle cx="12" cy="10" r="3" fill="#ffffff" />
+                    </Svg>
+                  </Marker>
                 )}
               </MapView>
 
@@ -387,8 +407,34 @@ export function LocationPicker({
             </Animated.View>
           )}
 
-          {/* Switchable Content Below Map */}
-          {!picker.ui.showingDetails ? (
+          {/* Switchable Content Below Map - 3 views */}
+          {picker.effectiveMode === 'view' ? (
+            /* View Mode - CurrentLocationView */
+            <CurrentLocationView
+              selection={picker.selection}
+              ui={picker.ui}
+              setUI={picker.setUI}
+              handleSwitchToSelectMode={picker.handleSwitchToSelectMode}
+              handleRemoveLocation={picker.handleRemoveLocation}
+              handleEditLocation={picker.handleEditLocation}
+              onClearAddress={picker.handleClearAddress}
+              onLookupAddress={picker.handleLookupAddress}
+              keyboardHeight={keyboardHeight}
+            />
+          ) : picker.ui.showingDetails ? (
+            /* Create Mode - CreateLocationView */
+            <CreateLocationView
+              selection={picker.selection}
+              ui={picker.ui}
+              setUI={picker.setUI}
+              handleOKPress={picker.handleOKPress}
+              onBack={() => picker.setUI(prev => ({ ...prev, showingDetails: false }))}
+              onClearAddress={picker.handleClearAddress}
+              onLookupAddress={picker.handleLookupAddress}
+              keyboardHeight={keyboardHeight}
+            />
+          ) : (
+            /* Select Mode - LocationSelectView */
             <LocationSelectView
               ui={picker.ui}
               setUI={picker.setUI}
@@ -407,22 +453,12 @@ export function LocationPicker({
               setPreviewMarker={picker.setPreviewMarker}
               selectedListItemId={picker.selectedListItemId}
               setSelectedListItemId={picker.setSelectedListItemId}
+              isSelectedLocationHighlighted={picker.isSelectedLocationHighlighted}
+              setIsSelectedLocationHighlighted={picker.setIsSelectedLocationHighlighted}
               setReverseGeocodeRequest={picker.setReverseGeocodeRequest}
               handlePOISelect={picker.handlePOISelect}
               onSelect={onSelect}
               onClose={onClose}
-              keyboardHeight={keyboardHeight}
-            />
-          ) : (
-            <LocationDetailsView
-              effectiveMode={picker.effectiveMode}
-              selection={picker.selection}
-              ui={picker.ui}
-              setUI={picker.setUI}
-              handleOKPress={picker.handleOKPress}
-              handleSwitchToSelectMode={picker.handleSwitchToSelectMode}
-              handleRemoveLocation={picker.handleRemoveLocation}
-              handleEditLocation={picker.handleEditLocation}
               keyboardHeight={keyboardHeight}
             />
           )}

@@ -17,6 +17,149 @@ import type {
 } from './LocationTypes';
 
 // ============================================================================
+// LOCATION LABEL (Single source of truth for display names)
+// ============================================================================
+
+/**
+ * Location fields that can be used to derive a display label.
+ * Works with Location, LocationEntity, entry rows, or any object with these fields.
+ */
+export interface LocationLabelFields {
+  name?: string | null;
+  place_name?: string | null;  // Alternative field name (some DB rows)
+  city?: string | null;
+  neighborhood?: string | null;
+  region?: string | null;
+  country?: string | null;
+  geographicFeature?: { name: string; class: string } | null;  // Water bodies, landforms from Tilequery
+}
+
+/**
+ * Get the display label for a location.
+ *
+ * This is the single source of truth for how locations should be labeled across the app.
+ * Priority order:
+ * 1. name/place_name - Named places like "Starbucks", "Home", etc.
+ * 2. geographicFeature - Water bodies/landforms from Tilequery ("Missouri River", "Lake Michigan")
+ * 3. city - City name like "Kansas City"
+ * 4. neighborhood - Neighborhood like "Westport"
+ * 5. region - State/province like "Missouri", "California"
+ * 6. country - Country name as last resort
+ * 7. "Unnamed Location" - Final fallback when no data available
+ *
+ * NOTE: Geographic feature takes priority over city because when you're IN a water body,
+ * the geographic feature is your actual location, not the nearest city boundary.
+ *
+ * @param location - Object containing location fields (any subset)
+ * @returns Display label string, never null/undefined
+ *
+ * @example
+ * // Named place
+ * getLocationLabel({ name: "Starbucks", city: "Kansas City" }) // => "Starbucks"
+ *
+ * // Middle of river with tile query data (geographic feature beats city)
+ * getLocationLabel({ geographicFeature: { name: "Missouri River", class: "river" }, city: "Liberty" }) // => "Missouri River"
+ *
+ * // GPS with geocoded data (no geographic feature)
+ * getLocationLabel({ city: "Kansas City", region: "Missouri" }) // => "Kansas City"
+ *
+ * // Middle of ocean with tile query data
+ * getLocationLabel({ geographicFeature: { name: "Pacific Ocean", class: "ocean" } }) // => "Pacific Ocean"
+ *
+ * // No data at all
+ * getLocationLabel({}) // => "Unnamed Location"
+ */
+export function getLocationLabel(location: LocationLabelFields | null | undefined): string {
+  if (!location) {
+    return 'Unnamed Location';
+  }
+
+  // Priority 1: Named place (name or place_name field)
+  const name = location.name || location.place_name;
+  if (name && name.trim()) {
+    return name.trim();
+  }
+
+  // Priority 2: Geographic feature (water bodies, landforms from Tilequery)
+  // Takes priority over city because when you're IN a river/lake/ocean,
+  // the geographic feature is your actual location, not the nearest city
+  if (location.geographicFeature?.name && location.geographicFeature.name.trim()) {
+    return location.geographicFeature.name.trim();
+  }
+
+  // Priority 3: City
+  if (location.city && location.city.trim()) {
+    return location.city.trim();
+  }
+
+  // Priority 4: Neighborhood
+  if (location.neighborhood && location.neighborhood.trim()) {
+    return location.neighborhood.trim();
+  }
+
+  // Priority 5: Region (state/province)
+  if (location.region && location.region.trim()) {
+    return location.region.trim();
+  }
+
+  // Priority 6: Country
+  if (location.country && location.country.trim()) {
+    return location.country.trim();
+  }
+
+  // Final fallback
+  return 'Unnamed Location';
+}
+
+/**
+ * Check if a location has any displayable label data beyond "Unnamed Location"
+ */
+export function hasLocationLabel(location: LocationLabelFields | null | undefined): boolean {
+  return getLocationLabel(location) !== 'Unnamed Location';
+}
+
+// US state and Canadian province name to abbreviation mapping
+const REGION_ABBREVIATIONS: Record<string, string> = {
+  // US States
+  'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+  'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
+  'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+  'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+  'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
+  'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
+  'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+  'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+  'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
+  'District of Columbia': 'DC', 'Puerto Rico': 'PR', 'Guam': 'GU', 'U.S. Virgin Islands': 'VI',
+  // Canadian Provinces and Territories
+  'Alberta': 'AB', 'British Columbia': 'BC', 'Manitoba': 'MB', 'New Brunswick': 'NB',
+  'Newfoundland and Labrador': 'NL', 'Newfoundland': 'NL', 'Northwest Territories': 'NT',
+  'Nova Scotia': 'NS', 'Nunavut': 'NU', 'Ontario': 'ON', 'Prince Edward Island': 'PE',
+  'Quebec': 'QC', 'Québec': 'QC', 'Saskatchewan': 'SK', 'Yukon': 'YT',
+};
+
+/**
+ * Get state/province abbreviation from full name.
+ * Uses lookup for US states and Canadian provinces, falls back to original value for other regions.
+ *
+ * @param region - Full region name (e.g., "Missouri", "Ontario")
+ * @returns Abbreviation if found (e.g., "MO", "ON"), otherwise original value
+ *
+ * @example
+ * getStateAbbreviation("Missouri") // => "MO"
+ * getStateAbbreviation("California") // => "CA"
+ * getStateAbbreviation("Ontario") // => "ON"
+ * getStateAbbreviation("British Columbia") // => "BC"
+ * getStateAbbreviation("Bavaria") // => "Bavaria" (not US/CA, returns as-is)
+ */
+export function getStateAbbreviation(region: string | null | undefined): string {
+  if (!region) return '';
+  const trimmed = region.trim();
+  return REGION_ABBREVIATIONS[trimmed] || trimmed;
+}
+
+// ============================================================================
 // DISTANCE CALCULATION
 // ============================================================================
 
@@ -77,8 +220,34 @@ export function formatDistance(meters: number): string {
 // MAPBOX RESPONSE PARSING
 // ============================================================================
 
+// Maximum distance (meters) for address/poi/postcode/neighborhood to be considered valid
+// If the returned feature center is further than this from query point, skip it
+// 500 feet = ~152 meters
+const MAX_PRECISE_FEATURE_DISTANCE = 152;
+
+/**
+ * Calculate distance between query point and feature center
+ */
+function getFeatureDistanceFromQuery(
+  query: [number, number],
+  featureCenter: [number, number]
+): number {
+  const [queryLng, queryLat] = query;
+  const [featureLng, featureLat] = featureCenter;
+  const result = calculateDistance(
+    { latitude: queryLat, longitude: queryLng },
+    { latitude: featureLat, longitude: featureLng }
+  );
+  return result.meters;
+}
+
 /**
  * Parse location hierarchy from Mapbox reverse geocode response
+ *
+ * Distance validation: Address/POI/postcode data is only used if the feature
+ * center is within MAX_PRECISE_FEATURE_DISTANCE of the query point.
+ * This prevents returning "1160 Michigan Avenue" when you're 700m away in Lake Michigan.
+ * City/region/country are always used regardless of distance.
  */
 export function parseMapboxHierarchy(
   response: MapboxReverseGeocodeResponse
@@ -90,41 +259,110 @@ export function parseMapboxHierarchy(
   }
 
   const feature = response.features[0];
+  const queryPoint = response.query as [number, number];
 
-  // Check if this is a POI
+  // Calculate distance from query to feature center (for precise features)
+  const distanceToFeature = queryPoint && feature.center
+    ? getFeatureDistanceFromQuery(queryPoint, feature.center)
+    : 0;
+
+  // Only use POI if it's actually near the query point
   if (feature.place_type.includes('poi')) {
-    hierarchy.poi = feature.text;
+    if (distanceToFeature <= MAX_PRECISE_FEATURE_DISTANCE) {
+      hierarchy.poi = feature.text;
+    }
   }
 
-  // Check if this is an address
+  // Only use address if it's actually near the query point
   if (feature.place_type.includes('address')) {
-    hierarchy.address = feature.place_name.split(',')[0];
+    if (distanceToFeature <= MAX_PRECISE_FEATURE_DISTANCE) {
+      hierarchy.address = feature.place_name.split(',')[0];
+    }
   }
 
-  // Parse context for hierarchy
-  if (feature.context) {
-    for (const ctx of feature.context) {
-      const [type] = ctx.id.split('.');
+  // Iterate through ALL features to find hierarchy levels
+  // Check both feature place_type AND context arrays
+  for (const feat of response.features) {
+    const featDistance = queryPoint && feat.center
+      ? getFeatureDistanceFromQuery(queryPoint, feat.center)
+      : 0;
 
-      switch (type) {
-        case 'neighborhood':
-          hierarchy.neighborhood = ctx.text;
-          break;
-        case 'postcode':
-          hierarchy.postcode = ctx.text;
-          break;
-        case 'place':
-          hierarchy.place = ctx.text;
-          break;
-        case 'district':
-          hierarchy.district = ctx.text;
-          break;
-        case 'region':
-          hierarchy.region = ctx.text;
-          break;
-        case 'country':
-          hierarchy.country = ctx.text;
-          break;
+    const isNearby = featDistance <= MAX_PRECISE_FEATURE_DISTANCE;
+    const placeType = feat.place_type[0];
+
+    // Extract from feature's place_type
+    switch (placeType) {
+      case 'neighborhood':
+        if (!hierarchy.neighborhood && isNearby) {
+          hierarchy.neighborhood = feat.text;
+        }
+        break;
+      case 'postcode':
+        if (!hierarchy.postcode && isNearby) {
+          hierarchy.postcode = feat.text;
+        }
+        break;
+      case 'place':
+        // City/town - broad enough to always use
+        if (!hierarchy.place) {
+          hierarchy.place = feat.text;
+        }
+        break;
+      case 'district':
+        if (!hierarchy.district) {
+          hierarchy.district = feat.text;
+        }
+        break;
+      case 'region':
+        if (!hierarchy.region) {
+          hierarchy.region = feat.text;
+        }
+        break;
+      case 'country':
+        if (!hierarchy.country) {
+          hierarchy.country = feat.text;
+        }
+        break;
+    }
+
+    // Also parse context from this feature (if it's nearby or a broad type)
+    // This handles cases where hierarchy comes from context, not separate features
+    const shouldUseContext = isNearby || ['place', 'district', 'region', 'country'].includes(placeType);
+    if (feat.context && shouldUseContext) {
+      for (const ctx of feat.context) {
+        const [ctxType] = ctx.id.split('.');
+        switch (ctxType) {
+          case 'neighborhood':
+            if (!hierarchy.neighborhood && isNearby) {
+              hierarchy.neighborhood = ctx.text;
+            }
+            break;
+          case 'postcode':
+            if (!hierarchy.postcode && isNearby) {
+              hierarchy.postcode = ctx.text;
+            }
+            break;
+          case 'place':
+            if (!hierarchy.place) {
+              hierarchy.place = ctx.text;
+            }
+            break;
+          case 'district':
+            if (!hierarchy.district) {
+              hierarchy.district = ctx.text;
+            }
+            break;
+          case 'region':
+            if (!hierarchy.region) {
+              hierarchy.region = ctx.text;
+            }
+            break;
+          case 'country':
+            if (!hierarchy.country) {
+              hierarchy.country = ctx.text;
+            }
+            break;
+        }
       }
     }
   }
@@ -440,9 +678,18 @@ export interface LocationSnapResult {
  * Used for location snapping - match GPS to nearby saved locations before
  * calling the geocode API. 100 feet ≈ 30 meters.
  *
+ * The effective snapping threshold is the larger of:
+ * - The base threshold (default 30m)
+ * - The GPS accuracy (if provided)
+ *
+ * This means: if GPS accuracy is poor (e.g., 50m), we'll snap within 50m
+ * because we might actually be at that location. If accuracy is good (5m),
+ * we use the base threshold.
+ *
  * @param coords - GPS coordinates to match
  * @param locations - List of saved locations to search
- * @param thresholdMeters - Maximum distance to consider a match (default: 30m = ~100ft)
+ * @param thresholdMeters - Minimum distance to consider a match (default: 30m = ~100ft)
+ * @param accuracy - GPS accuracy in meters (optional). If provided and larger than threshold, used as effective threshold.
  * @returns The nearest matching location or null if none within threshold
  */
 export function findNearbyLocation<T extends {
@@ -460,8 +707,12 @@ export function findNearbyLocation<T extends {
 }>(
   coords: Coordinates,
   locations: T[],
-  thresholdMeters: number = 30
+  thresholdMeters: number = 30,
+  accuracy?: number | null
 ): LocationSnapResult {
+  // Effective threshold: use GPS accuracy if larger than base threshold
+  // This allows snapping when accuracy is poor (we might actually be at the location)
+  const effectiveThreshold = Math.max(thresholdMeters, accuracy ?? 0);
   if (!locations || locations.length === 0) {
     return { location: null, distanceMeters: null };
   }
@@ -475,7 +726,7 @@ export function findNearbyLocation<T extends {
       longitude: loc.longitude,
     });
 
-    if (distance.meters < nearestDistance && distance.meters <= thresholdMeters) {
+    if (distance.meters < nearestDistance && distance.meters <= effectiveThreshold) {
       nearestLocation = loc;
       nearestDistance = distance.meters;
     }

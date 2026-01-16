@@ -16,8 +16,12 @@ export { locationHelpers } from './locationHooks';
 export { calculateDistance, formatDistance } from './locationHelpers';
 
 // API Configuration
-export { configureLocationAPI, reverseGeocode } from './locationApi';
+export { configureLocationAPI, reverseGeocode, tilequeryGeographicFeature } from './locationApi';
 
 // Helpers for parsing geocode responses and location snapping
 export { parseMapboxHierarchy, geocodeResponseToEntryFields, findNearbyLocation } from './locationHelpers';
 export type { EntryLocationFields, LocationSnapResult } from './locationHelpers';
+
+// Location label helper - single source of truth for display names
+export { getLocationLabel, hasLocationLabel, getStateAbbreviation } from './locationHelpers';
+export type { LocationLabelFields } from './locationHelpers';

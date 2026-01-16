@@ -158,7 +158,8 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
         : null;
 
       // Build locationData from entry's location hierarchy fields
-      const hasLocationData = entry.place_name || entry.city || entry.region || entry.country;
+      // Include address in check - tiledata (rivers, lakes) may only have address field
+      const hasLocationData = entry.place_name || entry.address || entry.city || entry.region || entry.country;
       const locationData: LocationType | null = hasLocationData ? {
         location_id: entry.location_id ?? undefined, // Include location_id if entry was linked to saved location
         latitude: entry.entry_latitude ?? 0,

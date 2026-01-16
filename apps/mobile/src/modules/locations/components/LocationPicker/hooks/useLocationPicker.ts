@@ -22,14 +22,18 @@ import {
   useReverseGeocode,
   useNearbyPOIs,
   useLocationAutocomplete,
+  useTilequeryGeographicFeature,
   parseMapboxHierarchy,
   calculateDistance,
+  locationToCreateInput,
   type POIItem,
   type Location as LocationType,
   type LocationEntity,
   type MapboxReverseGeocodeResponse,
+  type GeographicFeature,
 } from '@trace/core';
-import { useLocationsWithCounts, useUpdateLocationName } from '../../../mobileLocationHooks';
+import { useLocationsWithCounts, useUpdateLocationDetails } from '../../../mobileLocationHooks';
+import { createLocation } from '../../../mobileLocationApi';
 import {
   type LocationSelection,
   type LocationPickerUI,
@@ -66,32 +70,37 @@ interface PreviewMarker {
 /**
  * Parse Mapbox response to extract location hierarchy
  * Uses core's parseMapboxHierarchy and enriches with additional fields
+ *
+ * For most geo fields: replaces with Mapbox data (prevents stale data).
+ * For address: preserves existing if Mapbox returns none (keeps tiledata like "Missouri River").
+ *
+ * This is important for water body locations where:
+ * - Tilequery returned "Missouri River" as address
+ * - Mapbox reverse geocode returns no nearby address (filtered by distance)
+ * - We want to keep "Missouri River" instead of replacing with null
  */
 function enrichLocationFromMapbox(
   location: LocationType,
   response: MapboxReverseGeocodeResponse
 ): LocationType {
+  // parseMapboxHierarchy includes distance validation - address/poi/neighborhood
+  // are only returned if the feature is within 500ft of the query point
   const hierarchy = parseMapboxHierarchy(response);
 
-  // Get street address from the main feature
-  let streetAddress: string | null = null;
-  if (response.features.length > 0) {
-    const feature = response.features[0];
-    // MapboxFeature doesn't have 'address' property - use place_name
-    if (feature.place_name) {
-      streetAddress = feature.place_name.split(',')[0];
-    }
-  }
+  // For address: preserve existing if Mapbox doesn't return one
+  // This keeps tiledata (like "Missouri River") when viewing saved water body locations
+  const newAddress = hierarchy.address || location.address || null;
 
+  // Replace geo fields from Mapbox, but preserve address from tiledata
   return {
     ...location,
-    address: streetAddress || location.address || null,
-    city: hierarchy.place || location.city || null,
-    region: hierarchy.region || location.region || null,
-    country: hierarchy.country || location.country || null,
-    postalCode: hierarchy.postcode || location.postalCode || null,
-    neighborhood: hierarchy.neighborhood || location.neighborhood || null,
-    subdivision: hierarchy.district || location.subdivision || null,
+    address: newAddress,
+    city: hierarchy.place || null,
+    region: hierarchy.region || null,
+    country: hierarchy.country || null,
+    postalCode: hierarchy.postcode || null,
+    neighborhood: hierarchy.neighborhood || null,
+    subdivision: hierarchy.district || null,
   };
 }
 
@@ -109,8 +118,8 @@ export function useLocationPicker({
   // Fetch all saved locations with entry counts via React Query hook (SQLite)
   const { data: allSavedLocations = [] } = useLocationsWithCounts();
 
-  // Mutation for updating location name
-  const updateLocationNameMutation = useUpdateLocationName();
+  // Mutation for updating location details (name and address)
+  const updateLocationDetailsMutation = useUpdateLocationDetails();
 
   // UNIFIED STATE ARCHITECTURE
   // 1. Selection state - SINGLE SOURCE OF TRUTH for what user has chosen
@@ -149,6 +158,9 @@ export function useLocationPicker({
   // State for triggering reverse geocoding
   const [reverseGeocodeRequest, setReverseGeocodeRequest] = useState<{ latitude: number; longitude: number } | null>(null);
 
+  // State for triggering Tilequery (geographic features like oceans, lakes)
+  const [tilequeryRequest, setTilequeryRequest] = useState<{ latitude: number; longitude: number } | null>(null);
+
   // State for tapped Google Maps POI
   const [tappedGooglePOI, setTappedGooglePOI] = useState<TappedGooglePOI | null>(null);
 
@@ -157,6 +169,12 @@ export function useLocationPicker({
 
   // State to track selected list item for visual highlighting
   const [selectedListItemId, setSelectedListItemId] = useState<string | null>(null);
+
+  // State to track if "Selected Location" row is highlighted
+  const [isSelectedLocationHighlighted, setIsSelectedLocationHighlighted] = useState(false);
+
+  // GPS accuracy in meters (for circle on map)
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
 
   // Refs
   const mapRef = useRef<MapView>(null);
@@ -213,13 +231,17 @@ export function useLocationPicker({
           },
         });
 
-        setReverseGeocodeRequest({
-          latitude: initialLocation.originalLatitude || initialLocation.latitude,
-          longitude: initialLocation.originalLongitude || initialLocation.longitude,
-        });
+        // Only reverse geocode in SELECT mode (not view mode)
+        // In view mode, we use the saved data as-is to respect user's cleared address
+        if (propMode !== 'view') {
+          setReverseGeocodeRequest({
+            latitude: initialLocation.originalLatitude || initialLocation.latitude,
+            longitude: initialLocation.originalLongitude || initialLocation.longitude,
+          });
 
-        if (!isGpsOnlyEntry) {
-          setSelection(prev => ({ ...prev, isLoadingDetails: true }));
+          if (!isGpsOnlyEntry) {
+            setSelection(prev => ({ ...prev, isLoadingDetails: true }));
+          }
         }
       } else {
         setSelection(createEmptySelection());
@@ -287,6 +309,10 @@ export function useLocationPicker({
                 },
                 markerPosition: coords,
               });
+              // Store GPS accuracy for circle display
+              if (location.coords.accuracy) {
+                setGpsAccuracy(location.coords.accuracy);
+              }
               const newSelection = createSelectionFromMapTap(coords.latitude, coords.longitude);
               setSelection(newSelection);
               setReverseGeocodeRequest(coords);
@@ -376,14 +402,59 @@ export function useLocationPicker({
   // Fetch reverse geocode data via core hook (Mapbox)
   const { data: mapboxData, isLoading: mapboxLoading } = useReverseGeocode(reverseGeocodeRequest);
 
+  // Fetch geographic feature via Tilequery (for water bodies, landforms when no address)
+  const { data: tilequeryData, isLoading: tilequeryLoading } = useTilequeryGeographicFeature(tilequeryRequest);
+
   // Update selection with Mapbox data when it arrives
   useEffect(() => {
+    // DEBUG: Log effect state
+    console.log('[LocationPicker] 📍 Mapbox effect check:', {
+      isLoadingDetails: selection.isLoadingDetails,
+      hasMapboxData: !!mapboxData,
+      mapboxLoading,
+      hasLocation: !!selection.location,
+      reverseGeocodeRequest,
+    });
+
     if (selection.isLoadingDetails && mapboxData && !mapboxLoading && selection.location) {
+      // DEBUG: Log full Mapbox response
+      console.log('[LocationPicker] 📍 MAPBOX RESPONSE - Processing data');
+
       // Use core helper to parse and enrich location
       const enrichedLocation = enrichLocationFromMapbox(selection.location, mapboxData);
 
       // Store mapboxJson for privacy level selection (temporary, not saved to entry)
       (enrichedLocation as any).mapboxJson = mapboxData;
+
+      // Check if we need to query for geographic features (water bodies, landforms)
+      //
+      // Trigger tilequery when:
+      // - No NEARBY address (enrichedLocation.address is distance-validated to ~500ft)
+      // - No NEARBY neighborhood
+      //
+      // This handles:
+      // - Ocean/lake clicks: Mapbox returns far addresses, enrichedLocation.address is null → tilequery
+      // - River clicks: Mapbox returns far addresses, enrichedLocation.address is null → tilequery
+      // - Land clicks near address: enrichedLocation.address is set → no tilequery
+      //
+      // Note: We intentionally DON'T check hasAddressFeatureInResponse anymore.
+      // If Mapbox returns an address 734m away, it's filtered out by parseMapboxHierarchy,
+      // and we should still query for geographic features (might be standing on a river).
+      const needsGeographicFeature = !enrichedLocation.address && !enrichedLocation.neighborhood;
+
+      if (needsGeographicFeature && reverseGeocodeRequest) {
+        console.log('[LocationPicker] 🌊 No nearby address/neighborhood, triggering Tilequery for geographic features');
+        setTilequeryRequest({
+          latitude: reverseGeocodeRequest.latitude,
+          longitude: reverseGeocodeRequest.longitude,
+        });
+      } else {
+        // Clear any pending tilequery if we have a nearby address
+        if (enrichedLocation.address || enrichedLocation.neighborhood) {
+          console.log('[LocationPicker] 🏠 Nearby address/neighborhood found, skipping Tilequery');
+        }
+        setTilequeryRequest(null);
+      }
 
       setSelection(prev => ({
         ...prev,
@@ -419,6 +490,7 @@ export function useLocationPicker({
           country: enrichedLocation.country,
           category: enrichedLocation.category,
           distance: enrichedLocation.distance,
+          geographicFeature: enrichedLocation.geographicFeature,
         };
 
         setUI(prev => ({ ...prev, quickSelectMode: false }));
@@ -426,7 +498,34 @@ export function useLocationPicker({
         onClose();
       }
     }
-  }, [selection.isLoadingDetails, mapboxData, mapboxLoading, selection.type, ui.editableNameInput, ui.quickSelectMode, onSelect, onClose, tappedGooglePOI]);
+  }, [selection.isLoadingDetails, mapboxData, mapboxLoading, selection.type, ui.editableNameInput, ui.quickSelectMode, onSelect, onClose, tappedGooglePOI, reverseGeocodeRequest]);
+
+  // Update selection with Tilequery data when it arrives (geographic features like oceans, lakes)
+  useEffect(() => {
+    // Debug logging
+    console.log('[LocationPicker] 🌊 Tilequery effect:', {
+      hasData: !!tilequeryData,
+      isLoading: tilequeryLoading,
+      hasLocation: !!selection.location,
+      request: tilequeryRequest,
+    });
+
+    if (tilequeryData && !tilequeryLoading && selection.location) {
+      console.log('[LocationPicker] 🌊 TILEQUERY RESPONSE:', JSON.stringify(tilequeryData, null, 2));
+
+      // Add geographic feature to the location
+      setSelection(prev => ({
+        ...prev,
+        location: prev.location ? {
+          ...prev.location,
+          geographicFeature: tilequeryData,
+        } : null,
+      }));
+
+      // Clear the request so it doesn't re-trigger
+      setTilequeryRequest(null);
+    }
+  }, [tilequeryData, tilequeryLoading, selection.location, tilequeryRequest]);
 
   // Handler: Saved location selected from list
   const handleSavedLocationSelect = useCallback((location: LocationEntity & { distance: number }) => {
@@ -578,6 +677,9 @@ export function useLocationPicker({
 
     setPreviewMarker(null);
     setSelectedListItemId(null);
+    setIsSelectedLocationHighlighted(false);
+    // Clear GPS accuracy when user manually taps the map (no longer GPS position)
+    setGpsAccuracy(null);
 
     if (ui.showingDetails) {
       const coords = {
@@ -631,9 +733,48 @@ export function useLocationPicker({
     setReverseGeocodeRequest({ latitude: coordinate.latitude, longitude: coordinate.longitude });
   }, [ui.showingDetails]);
 
-  // Handler: OK button
-  const handleOKPress = useCallback(() => {
+  // Handler: Clear address (for saving location without nearby address)
+  // Also clears geographicFeature so it doesn't get used as fallback on save
+  const handleClearAddress = useCallback(() => {
     if (selection.location) {
+      setSelection(prev => ({
+        ...prev,
+        location: prev.location ? {
+          ...prev.location,
+          address: null,
+          geographicFeature: null,
+        } : null,
+      }));
+    }
+  }, [selection.location]);
+
+  // Handler: Lookup address (re-trigger reverse geocoding after clearing)
+  const handleLookupAddress = useCallback(() => {
+    if (selection.location) {
+      console.log('[LocationPicker] 🔍 handleLookupAddress called, re-triggering reverse geocode');
+      // Use original coordinates if available (preserves the original pin location)
+      const lat = selection.location.originalLatitude ?? selection.location.latitude;
+      const lng = selection.location.originalLongitude ?? selection.location.longitude;
+      console.log('[LocationPicker] 🔍 Coordinates:', { lat, lng });
+
+      // Set isLoadingDetails to true so the effect processes the result
+      setSelection(prev => ({
+        ...prev,
+        isLoadingDetails: true,
+      }));
+
+      setReverseGeocodeRequest({ latitude: lat, longitude: lng });
+    }
+  }, [selection.location]);
+
+  // Handler: OK button - saves location to database if new, then returns to parent
+  const handleOKPress = useCallback(async () => {
+    if (selection.location) {
+      // Use geographic feature name as address if no street address (water bodies, etc.)
+      const addressOrFeature = selection.location.address
+        || selection.location.geographicFeature?.name
+        || null;
+
       const finalLocation: LocationType = {
         location_id: selection.location.location_id,
         latitude: selection.location.latitude,
@@ -642,7 +783,7 @@ export function useLocationPicker({
         originalLongitude: selection.location.originalLongitude ?? selection.location.longitude,
         name: ui.editableNameInput || selection.location.name || null,
         source: selection.location.source,
-        address: selection.location.address,
+        address: addressOrFeature,
         postalCode: selection.location.postalCode,
         neighborhood: selection.location.neighborhood,
         city: selection.location.city,
@@ -651,7 +792,20 @@ export function useLocationPicker({
         country: selection.location.country,
         category: selection.location.category,
         distance: selection.location.distance,
+        geographicFeature: selection.location.geographicFeature,
       };
+
+      // If this is a new location (no location_id), save it to the database first
+      if (!finalLocation.location_id && finalLocation.name) {
+        try {
+          const locationInput = locationToCreateInput(finalLocation);
+          const savedLocation = await createLocation(locationInput);
+          finalLocation.location_id = savedLocation.location_id;
+        } catch (error) {
+          console.error('Failed to save location:', error);
+          // Still proceed with the location even if save fails
+        }
+      }
 
       onSelect(finalLocation);
       onClose();
@@ -659,7 +813,24 @@ export function useLocationPicker({
   }, [selection.location, ui.editableNameInput, onSelect, onClose]);
 
   // Handler: Center on my location (uses expo-location)
+  // In Create mode (showingDetails), recenters on selected point instead
   const handleCenterOnMyLocation = useCallback(async () => {
+    // In Create mode, just recenter on the selected point (don't get GPS)
+    if (ui.showingDetails && mapState.markerPosition && mapRef.current) {
+      const recenterRegion = {
+        latitude: mapState.markerPosition.latitude,
+        longitude: mapState.markerPosition.longitude,
+        latitudeDelta: mapState.region?.latitudeDelta || 0.01,
+        longitudeDelta: mapState.region?.longitudeDelta || 0.01,
+      };
+      mapRef.current.animateToRegion(recenterRegion, 300);
+      setMapState(prev => ({
+        ...prev,
+        region: recenterRegion,
+      }));
+      return;
+    }
+
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
@@ -717,6 +888,11 @@ export function useLocationPicker({
           markerPosition: coords,
         }));
 
+        // Store GPS accuracy for circle display
+        if (location.coords.accuracy) {
+          setGpsAccuracy(location.coords.accuracy);
+        }
+
         const newSelection = createSelectionFromMapTap(coords.latitude, coords.longitude);
         setSelection(newSelection);
         setReverseGeocodeRequest(coords);
@@ -724,7 +900,7 @@ export function useLocationPicker({
     } catch (error) {
       console.error('Error getting location:', error);
     }
-  }, [effectiveMode, mapState.markerPosition]);
+  }, [effectiveMode, mapState.markerPosition, mapState.region, ui.showingDetails]);
 
   // Handler: Switch to select mode (from view mode)
   const handleSwitchToSelectMode = useCallback(() => {
@@ -733,23 +909,51 @@ export function useLocationPicker({
     setPreviewMarker(null);
   }, []);
 
-  // Handler: Remove location
+  // Handler: Remove location (clears location_id and name, preserves geo data)
   const handleRemoveLocation = useCallback(() => {
-    onSelect(null);
+    if (selection.location) {
+      // Keep coordinates and reverse-geocoded data, clear location_id and name
+      const geoOnlyLocation: LocationType = {
+        latitude: selection.location.latitude,
+        longitude: selection.location.longitude,
+        originalLatitude: selection.location.originalLatitude ?? selection.location.latitude,
+        originalLongitude: selection.location.originalLongitude ?? selection.location.longitude,
+        name: null, // Clear the place name
+        source: 'user_custom', // No longer from a saved location
+        // Preserve all reverse-geocoded address data
+        address: selection.location.address,
+        city: selection.location.city,
+        region: selection.location.region,
+        country: selection.location.country,
+        postalCode: selection.location.postalCode,
+        neighborhood: selection.location.neighborhood,
+        subdivision: selection.location.subdivision,
+        category: selection.location.category,
+        distance: selection.location.distance,
+        // No location_id - not linked to a saved location
+      };
+      onSelect(geoOnlyLocation);
+    } else {
+      onSelect(null);
+    }
     onClose();
-  }, [onSelect, onClose]);
+  }, [selection.location, onSelect, onClose]);
 
-  // Handler: Edit location name (updates location and all entries using it)
+  // Handler: Edit location details (name and address) - updates location and all entries using it
   const handleEditLocation = useCallback(async (newName: string) => {
     if (!selection.locationId || !newName.trim()) return;
 
+    // Get current address from selection (may be null if user clicked "Clear Address")
+    const currentAddress = selection.location?.address ?? null;
+
     try {
-      await updateLocationNameMutation.mutateAsync({
+      await updateLocationDetailsMutation.mutateAsync({
         locationId: selection.locationId,
-        newName: newName.trim(),
+        name: newName.trim(),
+        address: currentAddress,
       });
 
-      // Update local selection with new name
+      // Update local selection with new name (address was already updated by handleClearAddress)
       const updatedLocation = selection.location ? { ...selection.location, name: newName.trim() } : null;
 
       setSelection(prev => ({
@@ -771,7 +975,7 @@ export function useLocationPicker({
           originalLongitude: updatedLocation.originalLongitude ?? updatedLocation.longitude,
           name: newName.trim(),
           source: updatedLocation.source,
-          address: updatedLocation.address,
+          address: currentAddress,
           postalCode: updatedLocation.postalCode,
           neighborhood: updatedLocation.neighborhood,
           city: updatedLocation.city,
@@ -780,13 +984,14 @@ export function useLocationPicker({
           country: updatedLocation.country,
           category: updatedLocation.category,
           distance: updatedLocation.distance,
+          geographicFeature: updatedLocation.geographicFeature,
         };
         onSelect(finalLocation);
       }
     } catch (error) {
-      console.error('Failed to update location name:', error);
+      console.error('Failed to update location details:', error);
     }
-  }, [selection.locationId, selection.location, updateLocationNameMutation, setSelection, setUI, onSelect]);
+  }, [selection.locationId, selection.location, updateLocationDetailsMutation, setSelection, setUI, onSelect]);
 
   // Displayed POIs
   const displayedPOIs = ui.searchQuery.length >= 2 ? searchResults : nearbyPOIs;
@@ -835,6 +1040,13 @@ export function useLocationPicker({
     selectedListItemId,
     setSelectedListItemId,
 
+    // Selected Location Highlight (for "Selected Location" row)
+    isSelectedLocationHighlighted,
+    setIsSelectedLocationHighlighted,
+
+    // GPS Accuracy (for circle on map)
+    gpsAccuracy,
+
     // Reverse Geocode Request
     setReverseGeocodeRequest,
 
@@ -845,6 +1057,8 @@ export function useLocationPicker({
     handleRegionChangeComplete,
     handleMapPress,
     handleOKPress,
+    handleClearAddress,
+    handleLookupAddress,
     handleCenterOnMyLocation,
     handleSwitchToSelectMode,
     handleRemoveLocation,

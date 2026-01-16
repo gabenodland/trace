@@ -8,7 +8,7 @@ import Svg, { Path, Circle, Line } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { styles } from "./EntryScreen.styles";
 import { StatusIcon } from "../../../shared/components/StatusIcon";
-import { getStatusLabel, isLegacyType, formatRatingDisplay, decimalToStars, type Location as LocationType, type EntryStatus, type RatingType } from "@trace/core";
+import { getStatusLabel, isLegacyType, formatRatingDisplay, decimalToStars, getLocationLabel, hasLocationLabel, type Location as LocationType, type EntryStatus, type RatingType } from "@trace/core";
 import type { GpsData } from "./hooks/useCaptureFormState";
 
 interface MetadataBarProps {
@@ -100,23 +100,24 @@ export function MetadataBar({
 }: MetadataBarProps) {
   const theme = useTheme();
 
-  // Unified location display logic
-  // Priority: place_name > city > GPS > empty
-  const hasPlaceName = !!locationData?.name;
-  const hasCity = !!locationData?.city;
+  // Unified location display logic using core helper
   const hasGpsCoords = !!(gpsData || (locationData?.latitude && locationData?.longitude));
-  const hasAnyLocation = hasPlaceName || hasCity || hasGpsCoords;
+  const hasAnyLocation = !!(locationData?.name || locationData?.city || locationData?.neighborhood || locationData?.region || locationData?.country || hasGpsCoords);
 
-  // Determine what text to display for location
+  // Determine what text to display for location using standardized helper
   const getLocationDisplayText = () => {
-    if (hasPlaceName) return locationData!.name;
-    if (hasCity) return locationData!.city;
-    if (hasGpsCoords) return "GPS";
+    if (locationData) {
+      const label = getLocationLabel(locationData);
+      // If we have actual label data, use it
+      if (label !== 'Unnamed Location') return label;
+    }
+    // If we have GPS but no geocoded data, show "Unnamed Location"
+    if (hasGpsCoords) return "Unnamed Location";
     return "Set Location";
   };
 
   // Determine if location is "set" (has any data)
-  const locationIsSet = hasPlaceName || hasCity || hasGpsCoords;
+  const locationIsSet = hasAnyLocation;
 
   const handlePress = (callback: () => void, needsEditMode = false) => {
     editorRef.current?.blur();
@@ -193,7 +194,7 @@ export function MetadataBar({
         </>
       )}
 
-      {/* Unified Location Display - shows place_name, city, or GPS based on what's set */}
+      {/* Unified Location Display - shows location label based on available data */}
       {/* Show if: has any location data, OR stream supports location (placeholder) */}
       {((showLocation || unsupportedLocation) && locationIsSet) && (
         <>
@@ -204,14 +205,14 @@ export function MetadataBar({
           >
             <View style={styles.metadataLinkContent}>
               {/* Icon varies by location type */}
-              {hasPlaceName || hasCity ? (
+              {hasLocationLabel(locationData) ? (
                 // Pin icon for named places or geocoded locations
                 <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={unsupportedLocation ? "#9ca3af" : theme.colors.text.primary} strokeWidth={2.5}>
                   <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
                   <Circle cx={12} cy={10} r={3} fill={unsupportedLocation ? "#9ca3af" : theme.colors.text.primary} />
                 </Svg>
               ) : (
-                // Crosshair icon for GPS-only
+                // Crosshair icon for coordinates-only (Unnamed Location)
                 <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
                   <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
                   <Circle cx={12} cy={12} r={3} fill={theme.colors.text.primary} stroke="none" />

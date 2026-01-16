@@ -119,3 +119,24 @@ export function useUpdateLocationName() {
     },
   });
 }
+
+/**
+ * Hook for updating location details (name and address) and all entries using it
+ * This is used for "Edit Location" which allows editing name and clearing address.
+ * Updates propagate to the location record AND all entries with this location_id.
+ */
+export function useUpdateLocationDetails() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ locationId, name, address }: { locationId: string; name: string; address: string | null }) =>
+      locationApi.updateLocationDetails(locationId, { name, address }),
+    onSuccess: (_, variables) => {
+      // Invalidate location queries to refetch
+      queryClient.invalidateQueries({ queryKey: mobileLocationKeys.all });
+      queryClient.invalidateQueries({ queryKey: mobileLocationKeys.detail(variables.locationId) });
+      // Also invalidate entries since we updated their place_name and address
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+    },
+  });
+}

@@ -1153,6 +1153,9 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
           const locationInput = locationToCreateInput(formData.locationData);
           const savedLocation = await createLocation(locationInput);
           location_id = savedLocation.location_id;
+          // Update form state with new location_id so subsequent LocationPicker opens
+          // show "Edit Name" option (requires location_id to be set)
+          updateField("locationData", { ...formData.locationData, location_id });
         }
       }
 

@@ -12,6 +12,7 @@ import {
   type LocationEntity,
   calculateDistance,
   formatDistanceWithUnits,
+  getStateAbbreviation,
 } from '@trace/core';
 import { useSettings } from '../../../../../shared/contexts/SettingsContext';
 import { useTheme } from '../../../../../shared/contexts/ThemeContext';
@@ -65,6 +66,10 @@ interface LocationSelectViewProps {
   selectedListItemId: string | null;
   setSelectedListItemId: React.Dispatch<React.SetStateAction<string | null>>;
 
+  // Selected Location Highlight (for "Selected Location" row)
+  isSelectedLocationHighlighted: boolean;
+  setIsSelectedLocationHighlighted: React.Dispatch<React.SetStateAction<boolean>>;
+
   // Reverse Geocode
   setReverseGeocodeRequest: React.Dispatch<React.SetStateAction<{ latitude: number; longitude: number } | null>>;
 
@@ -97,6 +102,8 @@ export function LocationSelectView({
   setPreviewMarker,
   selectedListItemId,
   setSelectedListItemId,
+  isSelectedLocationHighlighted,
+  setIsSelectedLocationHighlighted,
   setReverseGeocodeRequest,
   handlePOISelect,
   onSelect,
@@ -106,24 +113,58 @@ export function LocationSelectView({
   const { settings } = useSettings();
   const dynamicTheme = useTheme();
 
-  // Get subtitle text for "Currently Selected" row
-  const getSubtitleText = () => {
+  // Get address lines for "Currently Selected" row - returns separate lines for display
+  const getAddressLines = (): { line1: string; line2?: string } => {
     if (selection.isLoadingDetails) {
-      return 'Loading address...';
+      return { line1: 'Loading address...' };
     }
-    if (selection.location?.address) {
-      return selection.location.address;
-    }
-    const coords = selection.location
-      ? { lat: selection.location.latitude, lng: selection.location.longitude }
-      : mapState.markerPosition
-        ? { lat: mapState.markerPosition.latitude, lng: mapState.markerPosition.longitude }
-        : null;
 
-    if (coords) {
-      return `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
+    const loc = selection.location;
+    if (!loc) {
+      // Fall back to coordinates from marker
+      if (mapState.markerPosition) {
+        return { line1: `${mapState.markerPosition.latitude.toFixed(6)}, ${mapState.markerPosition.longitude.toFixed(6)}` };
+      }
+      return { line1: 'Tap map to set location' };
     }
-    return 'Tap map to set location';
+
+    // Line 1: Street address OR geographic feature (if no address)
+    let line1: string | undefined;
+    if (loc.address) {
+      line1 = loc.address;
+    } else if (loc.geographicFeature?.name) {
+      line1 = loc.geographicFeature.name;
+    }
+
+    // Line 2: City, State, Postal Code
+    const cityParts: string[] = [];
+    if (loc.city) cityParts.push(loc.city);
+    if (loc.region) cityParts.push(getStateAbbreviation(loc.region));
+    if (loc.postalCode) cityParts.push(loc.postalCode);
+    const line2 = cityParts.length > 0 ? cityParts.join(', ') : undefined;
+
+    // If we have both lines
+    if (line1 && line2) {
+      return { line1, line2 };
+    }
+
+    // If only line1 (address or geographic feature)
+    if (line1) {
+      return { line1 };
+    }
+
+    // If only line2 (city/state)
+    if (line2) {
+      return { line1: line2 };
+    }
+
+    // Fall back to country
+    if (loc.country) {
+      return { line1: loc.country };
+    }
+
+    // Final fallback to coordinates
+    return { line1: `${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}` };
   };
 
   // Build merged list of POIs and saved locations
@@ -283,12 +324,12 @@ export function LocationSelectView({
 
   // Render icon based on item type and selection state
   const renderIcon = (item: MergedItem, isSelected: boolean) => {
-    // Saved items: yellow star normally, red pin when selected (on yellow background)
+    // Saved items: yellow star normally, accent pin when selected
     if (item.type === 'saved') {
       if (isSelected) {
         return (
-          <View style={[styles.poiIconContainer, styles.poiIconContainerSaved, { backgroundColor: '#fef3c720' }]}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="#ef4444" stroke="#ef4444" strokeWidth={2}>
+          <View style={[styles.poiIconContainer, styles.poiIconContainerSaved, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }]}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accent} stroke={dynamicTheme.colors.functional.accent} strokeWidth={2}>
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
               <Circle cx={12} cy={10} r={3} fill="white" />
             </Svg>
@@ -304,11 +345,11 @@ export function LocationSelectView({
       );
     }
 
-    // Selected non-saved items show red pin (matches map marker)
+    // Selected non-saved items show accent pin (matches map marker)
     if (isSelected) {
       return (
-        <View style={[styles.poiIconContainer, styles.poiIconContainerSelected, { backgroundColor: '#fee2e220' }]}>
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="#ef4444" stroke="#ef4444" strokeWidth={2}>
+        <View style={[styles.poiIconContainer, styles.poiIconContainerSelected, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }]}>
+          <Svg width={18} height={18} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accent} stroke={dynamicTheme.colors.functional.accent} strokeWidth={2}>
             <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
             <Circle cx={12} cy={10} r={3} fill="white" />
           </Svg>
@@ -397,9 +438,18 @@ export function LocationSelectView({
         {/* Currently Selected Location - Card at top */}
         {(selection.location || mapState.markerPosition) && (
           <TouchableOpacity
-            style={[styles.poiItem, styles.mapLocationItem, { backgroundColor: dynamicTheme.colors.background.secondary, borderColor: dynamicTheme.colors.border.light }]}
+            style={[
+              styles.poiItem,
+              styles.mapLocationItem,
+              { backgroundColor: dynamicTheme.colors.background.secondary, borderColor: dynamicTheme.colors.border.light },
+              isSelectedLocationHighlighted && [styles.poiItemSelected, { borderColor: dynamicTheme.colors.functional.accent, backgroundColor: `${dynamicTheme.colors.functional.accent}08` }]
+            ]}
             onPress={() => {
-              // Click on row = refocus map on blue marker
+              // Toggle highlight state and refocus map on marker
+              setIsSelectedLocationHighlighted(!isSelectedLocationHighlighted);
+              setSelectedListItemId(null); // Clear any selected list item
+              setPreviewMarker(null);
+
               if (mapState.markerPosition && mapRef.current) {
                 mapRef.current.animateToRegion({
                   latitude: mapState.markerPosition.latitude,
@@ -407,12 +457,10 @@ export function LocationSelectView({
                   latitudeDelta: 0.005,
                   longitudeDelta: 0.005,
                 }, 300);
-                setPreviewMarker(null);
-                setSelectedListItemId(null);
               }
             }}
           >
-            {/* Blue marker icon */}
+            {/* Marker icon - accent color */}
             <View style={[styles.poiIconContainer, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }]}>
               <Svg width={18} height={18} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accent} stroke={dynamicTheme.colors.functional.accent} strokeWidth={2}>
                 <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
@@ -420,28 +468,44 @@ export function LocationSelectView({
               </Svg>
             </View>
             <View style={styles.poiInfo}>
-              <Text style={[styles.poiName, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>
-                Selected Location
+              <Text style={[styles.poiName, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]} numberOfLines={1}>
+                {/* Show user-given name if exists, otherwise "Selected Location" */}
+                {selection.location?.name?.trim() ? selection.location.name : 'Selected Location'}
               </Text>
-              <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>
-                {selection.location?.name ? `${selection.location.name} • ${getSubtitleText()}` : getSubtitleText()}
-              </Text>
+              {(() => {
+                const addressLines = getAddressLines();
+                return (
+                  <>
+                    <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>
+                      {addressLines.line1}
+                    </Text>
+                    {addressLines.line2 && (
+                      <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>
+                        {addressLines.line2}
+                      </Text>
+                    )}
+                  </>
+                );
+              })()}
             </View>
-            {/* Create button - takes user to details view to name/save */}
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                setUI(prev => ({
-                  ...prev,
-                  showingDetails: true,
-                  editableNameInput: selection.location?.name || '',
-                }));
-                setPreviewMarker(null);
-              }}
-              style={[styles.useButton, { backgroundColor: dynamicTheme.colors.functional.accent }]}
-            >
-              <Text style={[styles.useButtonText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: '#ffffff' }]}>Create</Text>
-            </TouchableOpacity>
+            {/* Create button - only shown when highlighted */}
+            {isSelectedLocationHighlighted && (
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setUI(prev => ({
+                    ...prev,
+                    showingDetails: true,
+                    editableNameInput: selection.location?.name || '',
+                  }));
+                  setPreviewMarker(null);
+                  setIsSelectedLocationHighlighted(false);
+                }}
+                style={[styles.useButton, { backgroundColor: dynamicTheme.colors.functional.accent }]}
+              >
+                <Text style={[styles.useButtonText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: '#ffffff' }]}>Create</Text>
+              </TouchableOpacity>
+            )}
           </TouchableOpacity>
         )}
 
@@ -484,6 +548,7 @@ export function LocationSelectView({
 
                     if (coords && mapRef.current) {
                       setSelectedListItemId(item.id);
+                      setIsSelectedLocationHighlighted(false); // Clear "Selected Location" highlight
                       mapRef.current.animateToRegion({
                         ...coords,
                         latitudeDelta: 0.005,
