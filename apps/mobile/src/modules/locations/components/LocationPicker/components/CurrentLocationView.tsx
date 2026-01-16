@@ -37,6 +37,7 @@ interface CurrentLocationViewProps {
   // Handlers
   handleSwitchToSelectMode: () => void;
   handleRemoveLocation: () => void;
+  handleRemovePin: () => void;
   handleEditLocation?: (newName: string) => void;
   onClearAddress?: () => void;
   onLookupAddress?: () => void;
@@ -51,6 +52,7 @@ export function CurrentLocationView({
   setUI,
   handleSwitchToSelectMode,
   handleRemoveLocation,
+  handleRemovePin,
   handleEditLocation,
   onClearAddress,
   onLookupAddress,
@@ -75,7 +77,6 @@ export function CurrentLocationView({
       postalCode: selection.location.postalCode,
       latitude: selection.location.latitude,
       longitude: selection.location.longitude,
-      geographicFeature: selection.location.geographicFeature,
     } : null,
   }, null, 2));
 
@@ -146,6 +147,7 @@ export function CurrentLocationView({
     if (!loc) return null;
 
     const hasName = !!loc.name;
+    const hasSavedLocation = !!selection.locationId;
     const hasNeighborhood = !!loc.neighborhood;
     const hasCity = !!loc.city;
     const hasRegion = !!loc.region;
@@ -154,8 +156,8 @@ export function CurrentLocationView({
     const hasCountry = !!loc.country;
     const hasAnyAddressData = hasNeighborhood || hasCity || hasRegion || hasAddress || hasPostalCode || hasCountry;
 
-    // Primary: Name or formatted coordinates
-    const primaryText = hasName ? loc.name : `${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`;
+    // Primary: Name if saved, "Dropped Pin" for GPS-captured locations without a name
+    const primaryText = hasName ? loc.name : (hasSavedLocation ? `${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}` : 'Dropped Pin');
 
     // Address line (street address or tiledata like "Missouri River")
     const addressLine = hasAddress ? loc.address : null;
@@ -173,6 +175,9 @@ export function CurrentLocationView({
     // Coordinates (always show as reference, subtle)
     const coordsText = `${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`;
 
+    // Is this a dropped pin (GPS-captured but not saved)?
+    const isDroppedPin = !hasName && !hasSavedLocation;
+
     return {
       primaryText,
       addressLine,
@@ -181,6 +186,7 @@ export function CurrentLocationView({
       coordsText,
       hasAnyAddressData,
       hasName,
+      isDroppedPin,
     };
   };
 
@@ -194,10 +200,16 @@ export function CurrentLocationView({
 
   // Handle save edit
   const handleSaveEdit = () => {
-    if (handleEditLocation && editName.trim()) {
-      handleEditLocation(editName.trim());
-      setUI(prev => ({ ...prev, editableNameInput: editName.trim() }));
-      setIsEditing(false);
+    if (editName.trim()) {
+      // Name provided - update the saved location
+      if (handleEditLocation) {
+        handleEditLocation(editName.trim());
+        setUI(prev => ({ ...prev, editableNameInput: editName.trim() }));
+        setIsEditing(false);
+      }
+    } else {
+      // Name cleared - convert to dropped pin (keeps geo data, removes location_id)
+      handleRemoveLocation();
     }
   };
 
@@ -258,22 +270,53 @@ export function CurrentLocationView({
               <Text style={[styles.inputCardLabel, { fontFamily: theme.typography.fontFamily.medium, color: theme.colors.text.secondary }]}>
                 NAME
               </Text>
-              <TextInput
-                style={[
-                  styles.inputCardInput,
-                  {
-                    fontFamily: theme.typography.fontFamily.regular,
-                    color: theme.colors.text.primary,
-                    backgroundColor: theme.colors.background.secondary,
-                    borderColor: theme.colors.border.light,
-                  }
-                ]}
-                value={editName}
-                onChangeText={setEditName}
-                placeholder="Enter location name..."
-                placeholderTextColor={theme.colors.text.tertiary}
-                autoFocus
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={[
+                    styles.inputCardInput,
+                    {
+                      fontFamily: theme.typography.fontFamily.regular,
+                      color: theme.colors.text.primary,
+                      backgroundColor: theme.colors.background.secondary,
+                      borderColor: theme.colors.border.light,
+                      paddingRight: editName ? 40 : 16, // Make room for clear button
+                    }
+                  ]}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Enter location name..."
+                  placeholderTextColor={theme.colors.text.tertiary}
+                  autoFocus
+                />
+                {/* Clear button */}
+                {editName ? (
+                  <TouchableOpacity
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      top: 0,
+                      bottom: 0,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setEditName('')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <View style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: theme.colors.text.tertiary,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}>
+                      <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={3}>
+                        <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             </View>
 
             {/* Location Info Card */}
@@ -347,43 +390,60 @@ export function CurrentLocationView({
               </Text>
             </TouchableOpacity>
 
-            {/* Save Button */}
+            {/* Save Button - contextual based on whether name is entered */}
             <TouchableOpacity
               style={[
                 styles.saveButton,
-                {
-                  backgroundColor: editName.trim() ? theme.colors.functional.accent : theme.colors.border.medium,
-                }
+                { backgroundColor: theme.colors.functional.accent }
               ]}
               onPress={handleSaveEdit}
-              disabled={!editName.trim()}
               activeOpacity={0.7}
             >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
-                <Path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M17 21v-8H7v8M7 3v5h8" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              {editName.trim() ? (
+                /* Save icon for "Save Changes" */
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
+                  <Path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M17 21v-8H7v8M7 3v5h8" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              ) : (
+                /* Crosshairs icon for "Save Pin" */
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
+                  <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
+                  <Circle cx={12} cy={12} r={3} fill="#ffffff" stroke="none" />
+                  <Path d="M12 2v4M12 18v4M2 12h4M18 12h4" strokeLinecap="round" />
+                </Svg>
+              )}
               <Text style={[styles.saveButtonText, { fontFamily: theme.typography.fontFamily.semibold, color: '#ffffff' }]}>
-                Save Changes
+                {editName.trim() ? 'Save Changes' : 'Save Pin'}
               </Text>
             </TouchableOpacity>
 
             {/* Helper text */}
-            {!editName.trim() && (
-              <Text style={[{ fontSize: 13, textAlign: 'center', marginTop: 12, fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.tertiary }]}>
-                Enter a name to save this location
-              </Text>
-            )}
+            <Text style={[{ fontSize: 13, textAlign: 'center', marginTop: 12, fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.tertiary }]}>
+              {editName.trim()
+                ? 'Changes will update all entries using this location'
+                : 'Clear name to convert to a dropped pin'}
+            </Text>
           </>
         ) : locationDisplay && (
-          /* Location Card - Horizontal layout: Pin left, data right */
+          /* Location Card - Horizontal layout: Icon left, data right */
           <View style={[styles.locationCard, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-            {/* Pin Icon - Left side */}
+            {/* Icon - Crosshairs for dropped pin, Pin for saved location */}
             <View style={[styles.locationCardIcon, { backgroundColor: theme.colors.functional.accentLight }]}>
-              <Svg width={28} height={28} viewBox="0 0 24 24" fill={theme.colors.functional.accent}>
-                <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                <Circle cx={12} cy={10} r={3} fill="#ffffff" />
-              </Svg>
+              {locationDisplay.isDroppedPin ? (
+                /* Crosshairs icon for dropped pins */
+                <Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.accent} strokeWidth={2}>
+                  <Circle cx={12} cy={12} r={10} />
+                  <Path d="M22 12h-4M6 12H2M12 6V2M12 22v-4" strokeLinecap="round" />
+                  <Circle cx={12} cy={12} r={3} fill={theme.colors.functional.accent} />
+                </Svg>
+              ) : (
+                /* Pin icon for saved locations */
+                <Svg width={28} height={28} viewBox="0 0 24 24" fill={theme.colors.functional.accent}>
+                  <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                  <Circle cx={12} cy={10} r={3} fill="#ffffff" />
+                </Svg>
+              )}
             </View>
 
             {/* Location Data - Right side */}
@@ -414,8 +474,8 @@ export function CurrentLocationView({
                 </Text>
               )}
 
-              {/* Coordinates (always show, very subtle) */}
-              {locationDisplay.hasName && (
+              {/* Coordinates (show for named locations and dropped pins) */}
+              {(locationDisplay.hasName || locationDisplay.isDroppedPin) && (
                 <View style={styles.locationCardCoordsRow}>
                   <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
                     <Circle cx={12} cy={12} r={10} />
@@ -487,7 +547,7 @@ export function CurrentLocationView({
         {/* Action Card - Settings-style rows */}
         {!isEditing && (
           <View style={[styles.actionCard, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-            {/* Edit Location Row */}
+            {/* Edit Location Row - for saved locations only */}
             {canEdit && (
               <TouchableOpacity
                 style={[styles.actionRow, { borderBottomColor: theme.colors.border.light }]}
@@ -514,7 +574,6 @@ export function CurrentLocationView({
               style={[
                 styles.actionRow,
                 { borderBottomColor: theme.colors.border.light },
-                !canEdit && { borderTopWidth: 0 },
               ]}
               onPress={handleSwitchToSelectMode}
               activeOpacity={0.7}
@@ -533,10 +592,10 @@ export function CurrentLocationView({
               </Svg>
             </TouchableOpacity>
 
-            {/* Remove Location Row */}
+            {/* Clear Location Row - removes all location data */}
             <TouchableOpacity
               style={[styles.actionRow, styles.actionRowLast]}
-              onPress={handleRemoveLocation}
+              onPress={handleRemovePin}
               activeOpacity={0.7}
             >
               <View style={styles.actionRowContent}>
@@ -544,7 +603,7 @@ export function CurrentLocationView({
                   <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
                 <Text style={[styles.actionRowText, { fontFamily: theme.typography.fontFamily.medium, color: '#dc2626' }]}>
-                  Remove Location
+                  Clear Location
                 </Text>
               </View>
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>

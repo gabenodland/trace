@@ -56,17 +56,9 @@ export function CreateLocationView({
     const loc = selection.location;
     const lines: string[] = [];
 
-    // Geographic feature from tilequery (rivers, oceans, lakes, etc.)
-    const hasGeographicFeature = loc.geographicFeature?.name;
-
     // Street address
     if (loc.address) {
       lines.push(loc.address);
-    }
-
-    // Geographic feature (show if no street address, or in addition to address)
-    if (hasGeographicFeature && !loc.address) {
-      lines.push(loc.geographicFeature!.name);
     }
 
     // City, State, Postal Code
@@ -81,11 +73,6 @@ export function CreateLocationView({
     // Country
     if (loc.country) {
       lines.push(loc.country);
-    }
-
-    // Geographic feature shown at end if we also have address (for context)
-    if (hasGeographicFeature && loc.address) {
-      lines.push(`Near ${loc.geographicFeature!.name}`);
     }
 
     return lines;
@@ -218,33 +205,42 @@ export function CreateLocationView({
           </Text>
         </TouchableOpacity>
 
-        {/* Save Location Button */}
+        {/* Action Button - contextual based on whether name is entered */}
         <TouchableOpacity
           style={[
             styles.saveButton,
             {
-              backgroundColor: hasName ? theme.colors.functional.accent : theme.colors.border.medium,
+              backgroundColor: theme.colors.functional.accent,
             }
           ]}
           onPress={handleOKPress}
-          disabled={!hasName}
           activeOpacity={0.7}
         >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
-            <Path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M17 21v-8H7v8M7 3v5h8" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          {hasName ? (
+            /* Save icon for "Save Location" */
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
+              <Path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M17 21v-8H7v8M7 3v5h8" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          ) : (
+            /* Crosshairs icon for "Use Pin" */
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
+              <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
+              <Circle cx={12} cy={12} r={3} fill="#ffffff" stroke="none" />
+              <Path d="M12 2v4M12 18v4M2 12h4M18 12h4" strokeLinecap="round" />
+            </Svg>
+          )}
           <Text style={[styles.saveButtonText, { fontFamily: theme.typography.fontFamily.semibold, color: '#ffffff' }]}>
-            Save Location
+            {hasName ? 'Save Location' : 'Use Pin'}
           </Text>
         </TouchableOpacity>
 
         {/* Helper text */}
-        {!hasName && (
-          <Text style={[{ fontSize: 13, textAlign: 'center', marginTop: 12, fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.tertiary }]}>
-            Enter a name to save this location
-          </Text>
-        )}
+        <Text style={[{ fontSize: 13, textAlign: 'center', marginTop: 12, fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.tertiary }]}>
+          {hasName
+            ? 'Location will be saved to My Places'
+            : 'Enter a name to save to My Places'}
+        </Text>
       </ScrollView>
     </View>
   );

@@ -560,8 +560,10 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   // Determine if formData.title should be collapsed
   const shouldCollapse = !formData.title.trim() && formData.content.trim().length > 0 && !isTitleExpanded;
 
-  // Location picker mode: 'view' if already has named location, 'select' to pick/create
-  const locationPickerMode: 'select' | 'view' = formData.locationData?.name ? 'view' : 'select';
+  // Location picker mode: 'view' if already has location data (saved or GPS-captured), 'select' to pick/create
+  // Even unnamed GPS-captured locations should open in view mode to show "Dropped Pin"
+  const locationPickerMode: 'select' | 'view' =
+    (formData.locationData?.latitude && formData.locationData?.longitude) ? 'view' : 'select';
 
   // Get viewMode from DrawerContext for back navigation
   const { viewMode } = useDrawer();

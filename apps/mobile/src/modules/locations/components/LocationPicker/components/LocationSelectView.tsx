@@ -128,13 +128,8 @@ export function LocationSelectView({
       return { line1: 'Tap map to set location' };
     }
 
-    // Line 1: Street address OR geographic feature (if no address)
-    let line1: string | undefined;
-    if (loc.address) {
-      line1 = loc.address;
-    } else if (loc.geographicFeature?.name) {
-      line1 = loc.geographicFeature.name;
-    }
+    // Line 1: Street address
+    const line1 = loc.address || undefined;
 
     // Line 2: City, State, Postal Code
     const cityParts: string[] = [];
@@ -148,7 +143,7 @@ export function LocationSelectView({
       return { line1, line2 };
     }
 
-    // If only line1 (address or geographic feature)
+    // If only line1 (address)
     if (line1) {
       return { line1 };
     }

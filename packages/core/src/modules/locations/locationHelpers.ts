@@ -31,7 +31,6 @@ export interface LocationLabelFields {
   neighborhood?: string | null;
   region?: string | null;
   country?: string | null;
-  geographicFeature?: { name: string; class: string } | null;  // Water bodies, landforms from Tilequery
 }
 
 /**
@@ -40,15 +39,11 @@ export interface LocationLabelFields {
  * This is the single source of truth for how locations should be labeled across the app.
  * Priority order:
  * 1. name/place_name - Named places like "Starbucks", "Home", etc.
- * 2. geographicFeature - Water bodies/landforms from Tilequery ("Missouri River", "Lake Michigan")
- * 3. city - City name like "Kansas City"
- * 4. neighborhood - Neighborhood like "Westport"
- * 5. region - State/province like "Missouri", "California"
- * 6. country - Country name as last resort
- * 7. "Unnamed Location" - Final fallback when no data available
- *
- * NOTE: Geographic feature takes priority over city because when you're IN a water body,
- * the geographic feature is your actual location, not the nearest city boundary.
+ * 2. city - City name like "Kansas City"
+ * 3. neighborhood - Neighborhood like "Westport"
+ * 4. region - State/province like "Missouri", "California"
+ * 5. country - Country name as last resort
+ * 6. "Unnamed Location" - Final fallback when no data available
  *
  * @param location - Object containing location fields (any subset)
  * @returns Display label string, never null/undefined
@@ -57,14 +52,8 @@ export interface LocationLabelFields {
  * // Named place
  * getLocationLabel({ name: "Starbucks", city: "Kansas City" }) // => "Starbucks"
  *
- * // Middle of river with tile query data (geographic feature beats city)
- * getLocationLabel({ geographicFeature: { name: "Missouri River", class: "river" }, city: "Liberty" }) // => "Missouri River"
- *
- * // GPS with geocoded data (no geographic feature)
+ * // GPS with geocoded data
  * getLocationLabel({ city: "Kansas City", region: "Missouri" }) // => "Kansas City"
- *
- * // Middle of ocean with tile query data
- * getLocationLabel({ geographicFeature: { name: "Pacific Ocean", class: "ocean" } }) // => "Pacific Ocean"
  *
  * // No data at all
  * getLocationLabel({}) // => "Unnamed Location"
@@ -80,29 +69,22 @@ export function getLocationLabel(location: LocationLabelFields | null | undefine
     return name.trim();
   }
 
-  // Priority 2: Geographic feature (water bodies, landforms from Tilequery)
-  // Takes priority over city because when you're IN a river/lake/ocean,
-  // the geographic feature is your actual location, not the nearest city
-  if (location.geographicFeature?.name && location.geographicFeature.name.trim()) {
-    return location.geographicFeature.name.trim();
-  }
-
-  // Priority 3: City
+  // Priority 2: City
   if (location.city && location.city.trim()) {
     return location.city.trim();
   }
 
-  // Priority 4: Neighborhood
+  // Priority 3: Neighborhood
   if (location.neighborhood && location.neighborhood.trim()) {
     return location.neighborhood.trim();
   }
 
-  // Priority 5: Region (state/province)
+  // Priority 4: Region (state/province)
   if (location.region && location.region.trim()) {
     return location.region.trim();
   }
 
-  // Priority 6: Country
+  // Priority 5: Country
   if (location.country && location.country.trim()) {
     return location.country.trim();
   }

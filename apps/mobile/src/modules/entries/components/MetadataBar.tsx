@@ -204,15 +204,17 @@ export function MetadataBar({
             onPress={() => handlePress(onLocationPress)}
           >
             <View style={styles.metadataLinkContent}>
-              {/* Icon varies by location type */}
-              {hasLocationLabel(locationData) ? (
-                // Pin icon for named places or geocoded locations
+              {/* Icon varies by location type:
+                  - Pin icon: Saved location (has location_id) or named place (has name)
+                  - Crosshairs: Dropped pin with only geocoded data or coordinates */}
+              {(locationData?.location_id || locationData?.name) ? (
+                // Pin icon for saved locations or named places
                 <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={unsupportedLocation ? "#9ca3af" : theme.colors.text.primary} strokeWidth={2.5}>
                   <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
                   <Circle cx={12} cy={10} r={3} fill={unsupportedLocation ? "#9ca3af" : theme.colors.text.primary} />
                 </Svg>
               ) : (
-                // Crosshair icon for coordinates-only (Unnamed Location)
+                // Crosshair icon for dropped pins (coordinates + geocoded data but no location_id/name)
                 <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
                   <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
                   <Circle cx={12} cy={12} r={3} fill={theme.colors.text.primary} stroke="none" />

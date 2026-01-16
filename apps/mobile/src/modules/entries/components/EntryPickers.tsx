@@ -202,6 +202,7 @@ export function EntryPickers({
           onSelect={(location: LocationType | null) => {
             if (location === null) {
               updateField("locationData", null);
+              updateField("gpsData", null); // Clear GPS when removing pin
               setActivePicker(null);
               showSnackbar("You removed the location");
               if (!isEditMode) {

@@ -1,8 +1,8 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import Svg, { Path, Circle } from "react-native-svg";
+import Svg, { Path, Circle, Line } from "react-native-svg";
 import type { Entry, EntryStatus, StreamAttributeVisibility, EntryDisplayMode } from "@trace/core";
-import { formatEntryDateTime, formatEntryDateOnly, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor, formatRatingDisplay, getFormattedContent, getDisplayModeLines, getFirstLineOfText, getLocationLabel } from "@trace/core";
+import { formatEntryDateTime, formatEntryDateOnly, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor, formatRatingDisplay, getFormattedContent, getDisplayModeLines, getFirstLineOfText, getLocationLabel, hasLocationLabel } from "@trace/core";
 import { HtmlRenderer } from "../helpers/htmlRenderer";
 import { WebViewHtmlRenderer } from "../helpers/webViewHtmlRenderer";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
@@ -183,9 +183,24 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             {/* Location Badge - only show if stream supports location */}
             {showLocation && (locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
               <View style={[styles.locationBadge, { backgroundColor: theme.colors.background.tertiary }]}>
-                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.tertiary} stroke="none">
-                  <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                </Svg>
+                {/* Pin icon for saved locations (has location_id) or named places (has place_name)
+                    Crosshairs for dropped pins (only coordinates + geocoded data) */}
+                {(entry.location_id || entry.place_name) ? (
+                  // Pin icon for saved locations or named places
+                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.tertiary} stroke="none">
+                    <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </Svg>
+                ) : (
+                  // Crosshairs icon for dropped pins (coordinates + geocoded data but no location_id/name)
+                  <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2.5}>
+                    <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
+                    <Circle cx={12} cy={12} r={3} fill={theme.colors.text.tertiary} stroke="none" />
+                    <Line x1={12} y1={2} x2={12} y2={6} strokeLinecap="round" />
+                    <Line x1={12} y1={18} x2={12} y2={22} strokeLinecap="round" />
+                    <Line x1={2} y1={12} x2={6} y2={12} strokeLinecap="round" />
+                    <Line x1={18} y1={12} x2={22} y2={12} strokeLinecap="round" />
+                  </Svg>
+                )}
                 <Text style={[styles.locationText, { color: theme.colors.text.tertiary }]}>{locationName || getLocationLabel({ name: entry.place_name, city: entry.city, neighborhood: entry.neighborhood, region: entry.region, country: entry.country })}</Text>
               </View>
             )}
@@ -478,9 +493,24 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               {/* Location Badge - only show if stream supports location */}
               {showLocation && (locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
                 <View style={[styles.locationBadge, { backgroundColor: theme.colors.background.tertiary }]}>
-                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.tertiary} stroke="none">
-                    <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                  </Svg>
+                  {/* Pin icon for saved locations (has location_id) or named places (has place_name)
+                      Crosshairs for dropped pins (only coordinates + geocoded data) */}
+                  {(entry.location_id || entry.place_name) ? (
+                    // Pin icon for saved locations or named places
+                    <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.tertiary} stroke="none">
+                      <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                    </Svg>
+                  ) : (
+                    // Crosshairs icon for dropped pins (coordinates + geocoded data but no location_id/name)
+                    <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2.5}>
+                      <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
+                      <Circle cx={12} cy={12} r={3} fill={theme.colors.text.tertiary} stroke="none" />
+                      <Line x1={12} y1={2} x2={12} y2={6} strokeLinecap="round" />
+                      <Line x1={12} y1={18} x2={12} y2={22} strokeLinecap="round" />
+                      <Line x1={2} y1={12} x2={6} y2={12} strokeLinecap="round" />
+                      <Line x1={18} y1={12} x2={22} y2={12} strokeLinecap="round" />
+                    </Svg>
+                  )}
                   <Text style={[styles.locationText, { color: theme.colors.text.tertiary }]}>{locationName || getLocationLabel({ name: entry.place_name, city: entry.city, neighborhood: entry.neighborhood, region: entry.region, country: entry.country })}</Text>
                 </View>
               )}

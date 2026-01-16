@@ -86,63 +86,6 @@ export interface MapboxLocationHierarchy {
 }
 
 // ============================================================================
-// MAPBOX TILEQUERY API TYPES
-// ============================================================================
-
-/**
- * Mapbox Tilequery Feature
- * Response from querying vector tiles for geographic features
- * https://docs.mapbox.com/api/maps/tilequery/
- */
-export interface TilequeryFeature {
-  type: 'Feature';
-  id: number;
-  geometry: {
-    type: 'Point';
-    coordinates: [number, number]; // [longitude, latitude]
-  };
-  properties: {
-    // Feature name (e.g., "Pacific Ocean", "Lake Michigan")
-    name?: string;
-    name_en?: string;           // English name
-    name_script?: string;       // Writing system (Latin, Han, etc.)
-    // Classification
-    class?: string;             // ocean, sea, bay, water, river, landform, etc.
-    // Ranking (0=most prominent, 16=least)
-    sizerank?: number;
-    filterrank?: number;
-    // Elevation (for landforms like peaks)
-    elevation_m?: number;
-    elevation_ft?: number;
-    // Tilequery metadata
-    tilequery: {
-      distance: number;         // Meters from query point
-      geometry: string;         // Original geometry type (point, polygon, etc.)
-      layer: string;            // Vector tile layer name (natural_label, etc.)
-    };
-  };
-}
-
-/**
- * Mapbox Tilequery Response
- */
-export interface TilequeryResponse {
-  type: 'FeatureCollection';
-  features: TilequeryFeature[];
-}
-
-/**
- * Geographic feature from Tilequery
- * Simplified result for app use
- */
-export interface GeographicFeature {
-  name: string;                 // "Pacific Ocean", "Lake Michigan"
-  class: string;                // "ocean", "sea", "water", "landform"
-  distance: number;             // Meters from query point
-  sizerank?: number;            // Prominence (0=largest)
-}
-
-// ============================================================================
 // FOURSQUARE API TYPES
 // ============================================================================
 
@@ -288,9 +231,6 @@ export interface Location {
   subdivision?: string | null;
   region?: string | null;
   country?: string | null;
-
-  // Geographic feature (for water bodies, landforms when no address)
-  geographicFeature?: GeographicFeature | null;
 
   // Privacy level selected by user
   privacyLevel?: 'exact' | 'address' | 'postal_code' | 'neighborhood' | 'city' | 'subdivision' | 'region' | 'country';

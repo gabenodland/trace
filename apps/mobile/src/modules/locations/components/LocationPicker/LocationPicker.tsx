@@ -416,6 +416,7 @@ export function LocationPicker({
               setUI={picker.setUI}
               handleSwitchToSelectMode={picker.handleSwitchToSelectMode}
               handleRemoveLocation={picker.handleRemoveLocation}
+              handleRemovePin={picker.handleRemovePin}
               handleEditLocation={picker.handleEditLocation}
               onClearAddress={picker.handleClearAddress}
               onLookupAddress={picker.handleLookupAddress}

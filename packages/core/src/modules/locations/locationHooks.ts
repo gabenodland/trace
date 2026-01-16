@@ -17,7 +17,6 @@ import type {
   MapboxLocationHierarchy,
   LocationEntity,
   CreateLocationInput,
-  GeographicFeature,
 } from './LocationTypes';
 
 /**
@@ -28,7 +27,6 @@ export const locationKeys = {
   list: () => [...locationKeys.all, 'list'] as const,
   detail: (id: string) => [...locationKeys.all, 'detail', id] as const,
   geocode: (lat: number, lng: number) => [...locationKeys.all, 'geocode', lat, lng] as const,
-  tilequery: (lat: number, lng: number) => [...locationKeys.all, 'tilequery', lat, lng] as const,
   nearby: (lat: number, lng: number, radius: number) => [...locationKeys.all, 'nearby', lat, lng, radius] as const,
   autocomplete: (query: string) => [...locationKeys.all, 'autocomplete', query] as const,
 };
@@ -47,26 +45,6 @@ export function useReverseGeocode(
     queryFn: () => locationApi.reverseGeocode(request!),
     enabled: !!request && locationHelpers.isValidCoordinates(request),
     staleTime: 30 * 24 * 60 * 60 * 1000, // 30 days - matches API cache
-  });
-}
-
-/**
- * Hook to query geographic features (oceans, lakes, etc.) from Mapbox Tilequery
- * Used when reverse geocoding returns no address (e.g., middle of Lake Michigan)
- *
- * @param request - Coordinates to query, or null to disable
- * @returns Geographic feature if found, null otherwise
- */
-export function useTilequeryGeographicFeature(
-  request: { latitude: number; longitude: number } | null
-): UseQueryResult<GeographicFeature | null, Error> {
-  return useQuery({
-    queryKey: request
-      ? locationKeys.tilequery(request.latitude, request.longitude)
-      : ['locations', 'tilequery', 'disabled'],
-    queryFn: () => locationApi.tilequeryGeographicFeature(request!.latitude, request!.longitude),
-    enabled: !!request && locationHelpers.isValidCoordinates(request),
-    staleTime: 30 * 24 * 60 * 60 * 1000, // 30 days - geographic features don't change
   });
 }
 

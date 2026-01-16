@@ -16,7 +16,7 @@ export { locationHelpers } from './locationHooks';
 export { calculateDistance, formatDistance } from './locationHelpers';
 
 // API Configuration
-export { configureLocationAPI, reverseGeocode, tilequeryGeographicFeature } from './locationApi';
+export { configureLocationAPI, reverseGeocode } from './locationApi';
 
 // Helpers for parsing geocode responses and location snapping
 export { parseMapboxHierarchy, geocodeResponseToEntryFields, findNearbyLocation } from './locationHelpers';

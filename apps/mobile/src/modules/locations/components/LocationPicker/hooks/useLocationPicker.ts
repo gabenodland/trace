@@ -22,7 +22,6 @@ import {
   useReverseGeocode,
   useNearbyPOIs,
   useLocationAutocomplete,
-  useTilequeryGeographicFeature,
   parseMapboxHierarchy,
   calculateDistance,
   locationToCreateInput,
@@ -30,7 +29,6 @@ import {
   type Location as LocationType,
   type LocationEntity,
   type MapboxReverseGeocodeResponse,
-  type GeographicFeature,
 } from '@trace/core';
 import { useLocationsWithCounts, useUpdateLocationDetails } from '../../../mobileLocationHooks';
 import { createLocation } from '../../../mobileLocationApi';
@@ -158,9 +156,6 @@ export function useLocationPicker({
   // State for triggering reverse geocoding
   const [reverseGeocodeRequest, setReverseGeocodeRequest] = useState<{ latitude: number; longitude: number } | null>(null);
 
-  // State for triggering Tilequery (geographic features like oceans, lakes)
-  const [tilequeryRequest, setTilequeryRequest] = useState<{ latitude: number; longitude: number } | null>(null);
-
   // State for tapped Google Maps POI
   const [tappedGooglePOI, setTappedGooglePOI] = useState<TappedGooglePOI | null>(null);
 
@@ -210,6 +205,9 @@ export function useLocationPicker({
           ...newSelection,
           locationId: initialLocation.location_id,
           entryCount,
+          // In view mode, don't show loading since we're not reverse geocoding
+          // (createSelectionFromMapTap sets isLoadingDetails: true by default)
+          isLoadingDetails: propMode === 'view' ? false : newSelection.isLoadingDetails,
         });
 
         setUI(prev => ({
@@ -230,6 +228,13 @@ export function useLocationPicker({
             longitude: initialLocation.originalLongitude || initialLocation.longitude,
           },
         });
+
+        // Set GPS accuracy for the accuracy ring on the map
+        if (initialLocation.accuracy && initialLocation.accuracy > 0) {
+          setGpsAccuracy(initialLocation.accuracy);
+        } else {
+          setGpsAccuracy(null);
+        }
 
         // Only reverse geocode in SELECT mode (not view mode)
         // In view mode, we use the saved data as-is to respect user's cleared address
@@ -255,6 +260,7 @@ export function useLocationPicker({
           region: undefined,
           markerPosition: undefined,
         });
+        setGpsAccuracy(null);
       }
     }
   }, [visible]);
@@ -402,9 +408,6 @@ export function useLocationPicker({
   // Fetch reverse geocode data via core hook (Mapbox)
   const { data: mapboxData, isLoading: mapboxLoading } = useReverseGeocode(reverseGeocodeRequest);
 
-  // Fetch geographic feature via Tilequery (for water bodies, landforms when no address)
-  const { data: tilequeryData, isLoading: tilequeryLoading } = useTilequeryGeographicFeature(tilequeryRequest);
-
   // Update selection with Mapbox data when it arrives
   useEffect(() => {
     // DEBUG: Log effect state
@@ -425,36 +428,6 @@ export function useLocationPicker({
 
       // Store mapboxJson for privacy level selection (temporary, not saved to entry)
       (enrichedLocation as any).mapboxJson = mapboxData;
-
-      // Check if we need to query for geographic features (water bodies, landforms)
-      //
-      // Trigger tilequery when:
-      // - No NEARBY address (enrichedLocation.address is distance-validated to ~500ft)
-      // - No NEARBY neighborhood
-      //
-      // This handles:
-      // - Ocean/lake clicks: Mapbox returns far addresses, enrichedLocation.address is null → tilequery
-      // - River clicks: Mapbox returns far addresses, enrichedLocation.address is null → tilequery
-      // - Land clicks near address: enrichedLocation.address is set → no tilequery
-      //
-      // Note: We intentionally DON'T check hasAddressFeatureInResponse anymore.
-      // If Mapbox returns an address 734m away, it's filtered out by parseMapboxHierarchy,
-      // and we should still query for geographic features (might be standing on a river).
-      const needsGeographicFeature = !enrichedLocation.address && !enrichedLocation.neighborhood;
-
-      if (needsGeographicFeature && reverseGeocodeRequest) {
-        console.log('[LocationPicker] 🌊 No nearby address/neighborhood, triggering Tilequery for geographic features');
-        setTilequeryRequest({
-          latitude: reverseGeocodeRequest.latitude,
-          longitude: reverseGeocodeRequest.longitude,
-        });
-      } else {
-        // Clear any pending tilequery if we have a nearby address
-        if (enrichedLocation.address || enrichedLocation.neighborhood) {
-          console.log('[LocationPicker] 🏠 Nearby address/neighborhood found, skipping Tilequery');
-        }
-        setTilequeryRequest(null);
-      }
 
       setSelection(prev => ({
         ...prev,
@@ -490,7 +463,6 @@ export function useLocationPicker({
           country: enrichedLocation.country,
           category: enrichedLocation.category,
           distance: enrichedLocation.distance,
-          geographicFeature: enrichedLocation.geographicFeature,
         };
 
         setUI(prev => ({ ...prev, quickSelectMode: false }));
@@ -499,33 +471,6 @@ export function useLocationPicker({
       }
     }
   }, [selection.isLoadingDetails, mapboxData, mapboxLoading, selection.type, ui.editableNameInput, ui.quickSelectMode, onSelect, onClose, tappedGooglePOI, reverseGeocodeRequest]);
-
-  // Update selection with Tilequery data when it arrives (geographic features like oceans, lakes)
-  useEffect(() => {
-    // Debug logging
-    console.log('[LocationPicker] 🌊 Tilequery effect:', {
-      hasData: !!tilequeryData,
-      isLoading: tilequeryLoading,
-      hasLocation: !!selection.location,
-      request: tilequeryRequest,
-    });
-
-    if (tilequeryData && !tilequeryLoading && selection.location) {
-      console.log('[LocationPicker] 🌊 TILEQUERY RESPONSE:', JSON.stringify(tilequeryData, null, 2));
-
-      // Add geographic feature to the location
-      setSelection(prev => ({
-        ...prev,
-        location: prev.location ? {
-          ...prev.location,
-          geographicFeature: tilequeryData,
-        } : null,
-      }));
-
-      // Clear the request so it doesn't re-trigger
-      setTilequeryRequest(null);
-    }
-  }, [tilequeryData, tilequeryLoading, selection.location, tilequeryRequest]);
 
   // Handler: Saved location selected from list
   const handleSavedLocationSelect = useCallback((location: LocationEntity & { distance: number }) => {
@@ -734,7 +679,6 @@ export function useLocationPicker({
   }, [ui.showingDetails]);
 
   // Handler: Clear address (for saving location without nearby address)
-  // Also clears geographicFeature so it doesn't get used as fallback on save
   const handleClearAddress = useCallback(() => {
     if (selection.location) {
       setSelection(prev => ({
@@ -742,7 +686,6 @@ export function useLocationPicker({
         location: prev.location ? {
           ...prev.location,
           address: null,
-          geographicFeature: null,
         } : null,
       }));
     }
@@ -770,11 +713,6 @@ export function useLocationPicker({
   // Handler: OK button - saves location to database if new, then returns to parent
   const handleOKPress = useCallback(async () => {
     if (selection.location) {
-      // Use geographic feature name as address if no street address (water bodies, etc.)
-      const addressOrFeature = selection.location.address
-        || selection.location.geographicFeature?.name
-        || null;
-
       const finalLocation: LocationType = {
         location_id: selection.location.location_id,
         latitude: selection.location.latitude,
@@ -783,7 +721,7 @@ export function useLocationPicker({
         originalLongitude: selection.location.originalLongitude ?? selection.location.longitude,
         name: ui.editableNameInput || selection.location.name || null,
         source: selection.location.source,
-        address: addressOrFeature,
+        address: selection.location.address,
         postalCode: selection.location.postalCode,
         neighborhood: selection.location.neighborhood,
         city: selection.location.city,
@@ -792,7 +730,6 @@ export function useLocationPicker({
         country: selection.location.country,
         category: selection.location.category,
         distance: selection.location.distance,
-        geographicFeature: selection.location.geographicFeature,
       };
 
       // If this is a new location (no location_id), save it to the database first
@@ -909,10 +846,22 @@ export function useLocationPicker({
     setPreviewMarker(null);
   }, []);
 
-  // Handler: Remove location (clears location_id and name, preserves geo data)
+  // Handler: Save dropped pin - switch to create mode to name and save the location
+  const handleSaveDroppedPin = useCallback(() => {
+    setModeOverride('select');
+    setUI(prev => ({
+      ...prev,
+      showingDetails: true,
+      editableNameInput: '', // Start with empty name for user to fill in
+    }));
+  }, []);
+
+  // Handler: Remove location (for saved locations)
+  // Unlinks from saved location (clears location_id and name) but preserves all GPS/geo data
+  // After this, the entry becomes a "dropped pin" with coordinates and address data
   const handleRemoveLocation = useCallback(() => {
-    if (selection.location) {
-      // Keep coordinates and reverse-geocoded data, clear location_id and name
+    if (selection.location && selection.locationId) {
+      // Keep coordinates and reverse-geocoded data, just unlink from saved location
       const geoOnlyLocation: LocationType = {
         latitude: selection.location.latitude,
         longitude: selection.location.longitude,
@@ -933,11 +882,16 @@ export function useLocationPicker({
         // No location_id - not linked to a saved location
       };
       onSelect(geoOnlyLocation);
-    } else {
-      onSelect(null);
+      onClose();
     }
+  }, [selection.location, selection.locationId, onSelect, onClose]);
+
+  // Handler: Remove pin (clears ALL location data)
+  // This completely removes all geo data from the entry
+  const handleRemovePin = useCallback(() => {
+    onSelect(null);
     onClose();
-  }, [selection.location, onSelect, onClose]);
+  }, [onSelect, onClose]);
 
   // Handler: Edit location details (name and address) - updates location and all entries using it
   const handleEditLocation = useCallback(async (newName: string) => {
@@ -984,7 +938,6 @@ export function useLocationPicker({
           country: updatedLocation.country,
           category: updatedLocation.category,
           distance: updatedLocation.distance,
-          geographicFeature: updatedLocation.geographicFeature,
         };
         onSelect(finalLocation);
       }
@@ -1061,7 +1014,9 @@ export function useLocationPicker({
     handleLookupAddress,
     handleCenterOnMyLocation,
     handleSwitchToSelectMode,
+    handleSaveDroppedPin,
     handleRemoveLocation,
+    handleRemovePin,
     handleEditLocation,
 
     // Helpers

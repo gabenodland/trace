@@ -34,44 +34,16 @@ describe("locationHelpers", () => {
       expect(getLocationLabel({ city: "Kansas City", region: "Missouri" })).toBe("Kansas City");
     });
 
-    it("returns geographicFeature when no name or city", () => {
-      expect(
-        getLocationLabel({
-          geographicFeature: { name: "Lake Michigan", class: "water" },
-          region: "Illinois",
-        })
-      ).toBe("Lake Michigan");
-    });
-
-    it("returns neighborhood when no name, city, or geographicFeature", () => {
+    it("returns neighborhood when no name or city", () => {
       expect(getLocationLabel({ neighborhood: "Westport", region: "Missouri" })).toBe("Westport");
     });
 
-    it("returns region when no name, city, geographicFeature, or neighborhood", () => {
+    it("returns region when no name, city, or neighborhood", () => {
       expect(getLocationLabel({ region: "Missouri" })).toBe("Missouri");
     });
 
     it("returns country when only country available", () => {
       expect(getLocationLabel({ country: "United States" })).toBe("United States");
-    });
-
-    it("returns geographicFeature for ocean locations", () => {
-      expect(
-        getLocationLabel({
-          geographicFeature: { name: "Pacific Ocean", class: "ocean" },
-          country: "United States",
-        })
-      ).toBe("Pacific Ocean");
-    });
-
-    it("prefers geographicFeature over city (when IN a water body)", () => {
-      expect(
-        getLocationLabel({
-          city: "Liberty",
-          geographicFeature: { name: "Missouri River", class: "river" },
-          region: "Missouri",
-        })
-      ).toBe("Missouri River");
     });
 
     it("returns 'Unnamed Location' for empty object", () => {
@@ -112,10 +84,6 @@ describe("locationHelpers", () => {
 
     it("returns true when region exists", () => {
       expect(hasLocationLabel({ region: "Missouri" })).toBe(true);
-    });
-
-    it("returns true when geographicFeature exists", () => {
-      expect(hasLocationLabel({ geographicFeature: { name: "Lake Michigan", class: "water" } })).toBe(true);
     });
 
     it("returns false for empty object", () => {

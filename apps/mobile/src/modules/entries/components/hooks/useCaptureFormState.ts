@@ -159,7 +159,9 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
 
       // Build locationData from entry's location hierarchy fields
       // Include address in check - tiledata (rivers, lakes) may only have address field
-      const hasLocationData = entry.place_name || entry.address || entry.city || entry.region || entry.country;
+      // Also include coordinates-only locations (dropped pins with no geocoded data)
+      const hasLocationData = entry.place_name || entry.address || entry.city || entry.region || entry.country ||
+        (entry.entry_latitude != null && entry.entry_longitude != null);
       const locationData: LocationType | null = hasLocationData ? {
         location_id: entry.location_id ?? undefined, // Include location_id if entry was linked to saved location
         latitude: entry.entry_latitude ?? 0,
@@ -173,6 +175,8 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
         subdivision: entry.subdivision,
         region: entry.region,
         country: entry.country,
+        // Include GPS accuracy for dropped pins
+        accuracy: entry.location_accuracy ?? undefined,
       } : null;
 
       return {
@@ -359,7 +363,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
       priority: formData.priority !== baseline.priority,
       entryDate: !areDatesEqual(formData.entryDate, baseline.entryDate),
       gpsData: JSON.stringify(formData.gpsData) !== JSON.stringify(baseline.gpsData),
-      locationData: (formData.locationData?.location_id || null) !== (baseline.locationData?.location_id || null),
+      locationData: JSON.stringify(formData.locationData) !== JSON.stringify(baseline.locationData),
       pendingPhotos: formData.pendingPhotos.length !== baseline.pendingPhotos.length,
     };
 

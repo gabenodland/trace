@@ -14,8 +14,6 @@ import type {
   LocationAutocompleteRequest,
   GeocodeCache,
   POICache,
-  TilequeryResponse,
-  GeographicFeature,
 } from './LocationTypes';
 import config from '../../../config.json';
 
@@ -179,121 +177,6 @@ export async function forwardGeocode(
   }
 
   return response.json() as Promise<MapboxReverseGeocodeResponse>;
-}
-
-// ============================================================================
-// MAPBOX TILEQUERY API
-// ============================================================================
-
-/**
- * Query Mapbox vector tiles for geographic features at a location
- * Used to get feature names like "Pacific Ocean" or "Lake Michigan" when
- * reverse geocoding returns no address data.
- *
- * @param latitude - Latitude to query
- * @param longitude - Longitude to query
- * @returns Geographic feature if found, null otherwise
- *
- * @internal Not exported - use hooks
- */
-export async function tilequeryGeographicFeature(
-  latitude: number,
-  longitude: number
-): Promise<GeographicFeature | null> {
-  if (!mapboxAccessToken) {
-    throw new Error('Mapbox access token not configured. Call configureLocationAPI() first.');
-  }
-
-  // Query the natural_label layer from mapbox-streets-v8 tileset
-  // Use large radius (100km) since geographic features can be sparse
-  const url = new URL(
-    `https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/${longitude},${latitude}.json`
-  );
-  url.searchParams.set('access_token', mapboxAccessToken);
-  url.searchParams.set('layers', 'natural_label');
-  url.searchParams.set('radius', '100000'); // 100km radius
-  url.searchParams.set('limit', '5'); // Get top 5 features
-
-  console.log('[LocationAPI] 🗺️ Tilequery request:', url.toString().replace(mapboxAccessToken, '***'));
-
-  const response = await fetch(url.toString());
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({ message: response.statusText })) as { message?: string };
-    console.error('[LocationAPI] ❌ Tilequery error:', errorBody);
-    throw new Error(`Mapbox Tilequery API error: ${errorBody.message || response.statusText}`);
-  }
-
-  const data = await response.json() as TilequeryResponse;
-  console.log('[LocationAPI] 🗺️ Tilequery response:', JSON.stringify(data, null, 2));
-
-  if (!data.features || data.features.length === 0) {
-    console.log('[LocationAPI] 🗺️ No geographic features found');
-    return null;
-  }
-
-  // Find the most relevant feature (prefer major water bodies)
-  // Water class priority: larger/named bodies first, then streams/creeks
-  // Order matters: earlier = higher priority
-  const waterClassPriority = [
-    'ocean',      // 0 - Highest priority
-    'sea',        // 1
-    'bay',        // 2
-    'water',      // 3 - Lakes, large bodies
-    'river',      // 4 - Named rivers
-    'reservoir',  // 5
-    'canal',      // 6
-    'wetland',    // 7
-    'glacier',    // 8
-    'stream',     // 9 - Creeks, streams - lowest water priority
-  ];
-
-  // Sort features by: water class priority, sizerank, then distance
-  const sortedFeatures = [...data.features].sort((a, b) => {
-    const aClass = a.properties.class || '';
-    const bClass = b.properties.class || '';
-    const aPriority = waterClassPriority.indexOf(aClass);
-    const bPriority = waterClassPriority.indexOf(bClass);
-    const aIsWater = aPriority !== -1;
-    const bIsWater = bPriority !== -1;
-
-    // Water features first
-    if (aIsWater && !bIsWater) return -1;
-    if (!aIsWater && bIsWater) return 1;
-
-    // Both are water: prefer higher priority class (river > stream)
-    if (aIsWater && bIsWater && aPriority !== bPriority) {
-      return aPriority - bPriority;
-    }
-
-    // Then by sizerank (lower = more prominent)
-    const aRank = a.properties.sizerank ?? 16;
-    const bRank = b.properties.sizerank ?? 16;
-    if (aRank !== bRank) {
-      return aRank - bRank;
-    }
-
-    // Finally by distance (closer = better)
-    return a.properties.tilequery.distance - b.properties.tilequery.distance;
-  });
-
-  const bestFeature = sortedFeatures[0];
-  const name = bestFeature.properties.name_en || bestFeature.properties.name;
-
-  if (!name) {
-    console.log('[LocationAPI] 🗺️ Feature found but no name');
-    return null;
-  }
-
-  const result: GeographicFeature = {
-    name,
-    class: bestFeature.properties.class || 'unknown',
-    distance: bestFeature.properties.tilequery.distance,
-    sizerank: bestFeature.properties.sizerank,
-  };
-
-  console.log('[LocationAPI] 🗺️ Found geographic feature:', result);
-  return result;
 }
 
 // ============================================================================
