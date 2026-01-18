@@ -108,6 +108,21 @@ export const locationPickerStyles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  mapFitButton: {
+    position: 'absolute',
+    right: 12,
+    bottom: 60, // Above the location button
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
 
   // List Container
   listContainer: {
@@ -209,6 +224,37 @@ export const locationPickerStyles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 10,
     borderWidth: 1,
+  },
+  // Compact mode styles (keyboard visible)
+  poiItemCompact: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 4,
+    borderRadius: 8,
+  },
+  poiIconContainerCompact: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 8,
+  },
+  poiInfoCompact: {
+    marginRight: 4,
+  },
+  poiNameCompact: {
+    fontSize: 14,
+    marginBottom: 0,
+  },
+  poiAddressCompact: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  poiDistanceCompact: {
+    fontSize: 11,
+  },
+  poiListContentCompact: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
   },
   poiItemSelected: {
     borderWidth: 1.5,

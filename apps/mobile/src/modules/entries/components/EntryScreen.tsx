@@ -391,21 +391,38 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
               neighborhood: fields.neighborhood ?? null,
               postalCode: fields.postal_code ?? null,
               subdivision: fields.subdivision ?? null,
+              // Geo fields (immutable, from geocode)
+              geoAddress: fields.geo_address ?? null,
+              geoNeighborhood: fields.geo_neighborhood ?? null,
+              geoPostalCode: fields.geo_postal_code ?? null,
+              geoCity: fields.geo_city ?? null,
+              geoSubdivision: fields.geo_subdivision ?? null,
+              geoRegion: fields.geo_region ?? null,
+              geoCountry: fields.geo_country ?? null,
             }
           : null;
       updateField("locationData", updatedLocationData);
     },
     onGeocodeStatusChange: (status) => updateField("geocodeStatus", status),
-    onLocationIdChange: (locationId, locationName) => {
-      // When snapping to a saved location, set the location_id and update the name
-      if (locationId && formData.gpsData) {
+    onLocationIdChange: (snappedLocation) => {
+      // When snapping to a saved location, use ALL fields from the saved location
+      if (snappedLocation && formData.gpsData) {
         const snappedLocationData: LocationType = {
-          ...formData.locationData,
+          // Keep original GPS coordinates (where user is)
           latitude: formData.gpsData.latitude,
           longitude: formData.gpsData.longitude,
-          location_id: locationId,
-          name: locationName,
+          locationRadius: undefined, // GPS accuracy is transient, not stored
+          // Copy ALL geo fields from the saved location
+          location_id: snappedLocation.location_id,
+          name: snappedLocation.name,
           source: 'user_custom', // Snapped to user's saved location
+          address: snappedLocation.address || null,
+          neighborhood: snappedLocation.neighborhood || null,
+          postalCode: snappedLocation.postal_code || null,
+          city: snappedLocation.city || null,
+          subdivision: snappedLocation.subdivision || null,
+          region: snappedLocation.region || null,
+          country: snappedLocation.country || null,
         };
         updateField("locationData", snappedLocationData);
       }
@@ -426,6 +443,14 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
                 neighborhood: fields.neighborhood ?? null,
                 postalCode: fields.postal_code ?? null,
                 subdivision: fields.subdivision ?? null,
+                // Geo fields (immutable, from geocode)
+                geoAddress: fields.geo_address ?? null,
+                geoNeighborhood: fields.geo_neighborhood ?? null,
+                geoPostalCode: fields.geo_postal_code ?? null,
+                geoCity: fields.geo_city ?? null,
+                geoSubdivision: fields.geo_subdivision ?? null,
+                geoRegion: fields.geo_region ?? null,
+                geoCountry: fields.geo_country ?? null,
               }
             : null;
           setBaseline({
@@ -521,7 +546,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       gpsData: entry.entry_latitude && entry.entry_longitude ? {
         latitude: entry.entry_latitude,
         longitude: entry.entry_longitude,
-        accuracy: entry.location_accuracy || null,
+        accuracy: null, // GPS accuracy is transient, not stored
       } : null,
       // Keep current locationData - location_id changes are rare and would need async fetch
       locationData: formData.locationData,
@@ -614,7 +639,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       ? {
           latitude: entry.entry_latitude,
           longitude: entry.entry_longitude,
-          accuracy: entry.location_accuracy || null,
+          accuracy: null, // GPS accuracy is transient, not stored
         }
       : null;
 
@@ -736,7 +761,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       ? {
           latitude: copiedEntry.entry_latitude,
           longitude: copiedEntry.entry_longitude,
-          accuracy: copiedEntry.location_accuracy || null,
+          accuracy: null, // GPS accuracy is transient, not stored
         }
       : null;
 
@@ -974,7 +999,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
                     gpsData: entry.entry_latitude && entry.entry_longitude ? {
                       latitude: entry.entry_latitude,
                       longitude: entry.entry_longitude,
-                      accuracy: entry.location_accuracy || null,
+                      accuracy: null, // GPS accuracy is transient, not stored
                     } : null,
                   });
                   // Update known version to current
@@ -993,21 +1018,21 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
                     const { tags, mentions } = extractTagsAndMentions(formData.content);
 
                     // Build GPS fields
-                    let gpsFields: { entry_latitude: number | null; entry_longitude: number | null; location_accuracy: number | null };
+                    let gpsFields: { entry_latitude: number | null; entry_longitude: number | null; location_radius: number | null };
                     if (formData.gpsData) {
                       gpsFields = {
                         entry_latitude: formData.gpsData.latitude,
                         entry_longitude: formData.gpsData.longitude,
-                        location_accuracy: formData.gpsData.accuracy,
+                        location_radius: null, // GPS accuracy is transient, not stored
                       };
                     } else if (formData.locationData) {
                       gpsFields = {
                         entry_latitude: formData.locationData.latitude,
                         entry_longitude: formData.locationData.longitude,
-                        location_accuracy: null,
+                        location_radius: formData.locationData.locationRadius ?? null,
                       };
                     } else {
-                      gpsFields = { entry_latitude: null, entry_longitude: null, location_accuracy: null };
+                      gpsFields = { entry_latitude: null, entry_longitude: null, location_radius: null };
                     }
 
                     // Get or create location
@@ -1119,27 +1144,27 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
 
       // Build GPS fields - use GPS data if available, otherwise use location coordinates
       // When a Location is set, it supersedes GPS, but we still save coords to entry_latitude/longitude
-      let gpsFields: { entry_latitude: number | null; entry_longitude: number | null; location_accuracy: number | null };
+      let gpsFields: { entry_latitude: number | null; entry_longitude: number | null; location_radius: number | null };
       if (formData.gpsData) {
         // Use captured GPS coordinates
         gpsFields = {
           entry_latitude: formData.gpsData.latitude,
           entry_longitude: formData.gpsData.longitude,
-          location_accuracy: formData.gpsData.accuracy,
+          location_radius: null, // GPS accuracy is transient, not stored
         };
       } else if (formData.locationData) {
         // Use location coordinates (when Location supersedes GPS)
         gpsFields = {
           entry_latitude: formData.locationData.latitude,
           entry_longitude: formData.locationData.longitude,
-          location_accuracy: null,
+          location_radius: formData.locationData.locationRadius ?? null,
         };
       } else {
         // No location data at all
         gpsFields = {
           entry_latitude: null,
           entry_longitude: null,
-          location_accuracy: null,
+          location_radius: null,
         };
       }
 
@@ -1164,6 +1189,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       // Build location hierarchy fields from locationData
       // These are copied directly to the entry (entry-owned data model)
       const locationHierarchyFields = formData.locationData ? {
+        // Display fields (user-editable)
         place_name: formData.locationData.name || null,
         address: formData.locationData.address || null,
         neighborhood: formData.locationData.neighborhood || null,
@@ -1173,6 +1199,14 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         region: formData.locationData.region || null,
         country: formData.locationData.country || null,
         geocode_status: formData.geocodeStatus,
+        // Geo fields (immutable, from geocode)
+        geo_address: formData.locationData.geoAddress || null,
+        geo_neighborhood: formData.locationData.geoNeighborhood || null,
+        geo_postal_code: formData.locationData.geoPostalCode || null,
+        geo_city: formData.locationData.geoCity || null,
+        geo_subdivision: formData.locationData.geoSubdivision || null,
+        geo_region: formData.locationData.geoRegion || null,
+        geo_country: formData.locationData.geoCountry || null,
       } : {
         place_name: null,
         address: null,
@@ -1183,6 +1217,14 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         region: null,
         country: null,
         geocode_status: formData.geocodeStatus,
+        // Geo fields (null when no location data)
+        geo_address: null,
+        geo_neighborhood: null,
+        geo_postal_code: null,
+        geo_city: null,
+        geo_subdivision: null,
+        geo_region: null,
+        geo_country: null,
       };
 
       if (isEditing) {

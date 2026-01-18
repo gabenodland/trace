@@ -120,6 +120,7 @@ class LocalDatabase {
             subdivision TEXT,
             region TEXT,
             country TEXT,
+            location_radius REAL,
             mapbox_place_id TEXT,
             foursquare_fsq_id TEXT,
             created_at INTEGER NOT NULL,
@@ -170,7 +171,7 @@ class LocalDatabase {
           entry_date INTEGER,
           entry_latitude REAL,
           entry_longitude REAL,
-          location_accuracy REAL,
+          location_radius REAL,
           location_id TEXT,
           status TEXT CHECK (status IN ('none', 'new', 'todo', 'in_progress', 'in_review', 'waiting', 'on_hold', 'done', 'closed', 'cancelled')) DEFAULT 'none',
           due_date INTEGER,
@@ -198,7 +199,7 @@ class LocalDatabase {
         // Build explicit column list for INSERT (only columns that exist in both old and new tables)
         const newTableColumnNames = [
           'entry_id', 'user_id', 'title', 'content', 'tags', 'mentions', 'stream_id',
-          'entry_date', 'entry_latitude', 'entry_longitude', 'location_accuracy', 'location_id',
+          'entry_date', 'entry_latitude', 'entry_longitude', 'location_radius', 'location_id',
           'status', 'due_date', 'completed_at', 'created_at', 'updated_at', 'deleted_at',
           'priority', 'rating', 'is_pinned', 'local_only', 'synced', 'sync_action',
           'sync_error', 'sync_retry_count', 'sync_last_attempt', 'version', 'base_version',
@@ -269,7 +270,7 @@ class LocalDatabase {
           entry_date INTEGER,
           entry_latitude REAL,
           entry_longitude REAL,
-          location_accuracy REAL,
+          location_radius REAL,
           location_id TEXT,
           status TEXT CHECK (status IN ('none', 'new', 'todo', 'in_progress', 'in_review', 'waiting', 'on_hold', 'done', 'closed', 'cancelled')) DEFAULT 'none',
           due_date INTEGER,
@@ -297,7 +298,7 @@ class LocalDatabase {
         // Build explicit column list for INSERT
         const newTableColumnNames = [
           'entry_id', 'user_id', 'title', 'content', 'tags', 'mentions', 'stream_id',
-          'entry_date', 'entry_latitude', 'entry_longitude', 'location_accuracy', 'location_id',
+          'entry_date', 'entry_latitude', 'entry_longitude', 'location_radius', 'location_id',
           'status', 'due_date', 'completed_at', 'created_at', 'updated_at', 'deleted_at',
           'priority', 'rating', 'is_pinned', 'local_only', 'synced', 'sync_action',
           'sync_error', 'sync_retry_count', 'sync_last_attempt', 'version', 'base_version',
@@ -585,6 +586,135 @@ class LocalDatabase {
     } catch (error) {
       console.error('Migration error (entries geocode_status):', error);
     }
+
+    // Migration: Add location_radius field to locations table (renamed from accuracy)
+    try {
+      const locationRadiusCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('locations') WHERE name = 'location_radius'`
+      );
+
+      if (!locationRadiusCheck) {
+        console.log('📦 Running migration: Adding location_radius to locations table...');
+        await this.db.execAsync(`
+          ALTER TABLE locations ADD COLUMN location_radius REAL;
+        `);
+        console.log('✅ Migration complete: location_radius added to locations');
+      }
+    } catch (error) {
+      console.error('Migration error (locations location_radius):', error);
+    }
+
+    // Migration: Rename accuracy to location_radius (for existing databases)
+    try {
+      const hasAccuracy = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('locations') WHERE name = 'accuracy'`
+      );
+      const hasLocationRadius = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('locations') WHERE name = 'location_radius'`
+      );
+
+      if (hasAccuracy && !hasLocationRadius) {
+        console.log('📦 Running migration: Renaming accuracy to location_radius...');
+        await this.db.execAsync(`
+          ALTER TABLE locations RENAME COLUMN accuracy TO location_radius;
+        `);
+        console.log('✅ Migration complete: locations.accuracy renamed to location_radius');
+      }
+
+      // Also rename on entries table
+      const entriesHasAccuracy = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('entries') WHERE name = 'location_accuracy'`
+      );
+      const entriesHasRadius = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('entries') WHERE name = 'location_radius'`
+      );
+
+      if (entriesHasAccuracy && !entriesHasRadius) {
+        console.log('📦 Running migration: Renaming entries.location_accuracy to location_radius...');
+        await this.db.execAsync(`
+          ALTER TABLE entries RENAME COLUMN location_accuracy TO location_radius;
+        `);
+        console.log('✅ Migration complete: entries.location_accuracy renamed to location_radius');
+      }
+    } catch (error) {
+      console.error('Migration error (rename accuracy to location_radius):', error);
+    }
+
+    // Migration: Add geo_ fields for immutable geographic data from reverse geocode
+    try {
+      const geoCityCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('entries') WHERE name = 'geo_city'`
+      );
+
+      if (!geoCityCheck) {
+        console.log('📦 Running migration: Adding geo_ fields to entries and locations tables...');
+
+        // Add geo_ fields to entries table
+        await this.db.execAsync(`
+          ALTER TABLE entries ADD COLUMN geo_address TEXT;
+          ALTER TABLE entries ADD COLUMN geo_neighborhood TEXT;
+          ALTER TABLE entries ADD COLUMN geo_city TEXT;
+          ALTER TABLE entries ADD COLUMN geo_subdivision TEXT;
+          ALTER TABLE entries ADD COLUMN geo_region TEXT;
+          ALTER TABLE entries ADD COLUMN geo_country TEXT;
+          ALTER TABLE entries ADD COLUMN geo_postal_code TEXT;
+        `);
+
+        // Add geo_ fields to locations table
+        await this.db.execAsync(`
+          ALTER TABLE locations ADD COLUMN geo_address TEXT;
+          ALTER TABLE locations ADD COLUMN geo_neighborhood TEXT;
+          ALTER TABLE locations ADD COLUMN geo_city TEXT;
+          ALTER TABLE locations ADD COLUMN geo_subdivision TEXT;
+          ALTER TABLE locations ADD COLUMN geo_region TEXT;
+          ALTER TABLE locations ADD COLUMN geo_country TEXT;
+          ALTER TABLE locations ADD COLUMN geo_postal_code TEXT;
+        `);
+
+        // Create indexes for geo_ fields on entries (used for filtering/sorting)
+        await this.db.execAsync(`
+          CREATE INDEX IF NOT EXISTS idx_entries_geo_city ON entries(geo_city);
+          CREATE INDEX IF NOT EXISTS idx_entries_geo_region ON entries(geo_region);
+          CREATE INDEX IF NOT EXISTS idx_entries_geo_country ON entries(geo_country);
+        `);
+
+        // Create indexes for geo_ fields on locations
+        await this.db.execAsync(`
+          CREATE INDEX IF NOT EXISTS idx_locations_geo_city ON locations(geo_city);
+          CREATE INDEX IF NOT EXISTS idx_locations_geo_region ON locations(geo_region);
+          CREATE INDEX IF NOT EXISTS idx_locations_geo_country ON locations(geo_country);
+        `);
+
+        // Backfill geo_ fields from display fields for existing data
+        await this.db.execAsync(`
+          UPDATE entries SET
+            geo_address = address,
+            geo_neighborhood = neighborhood,
+            geo_city = city,
+            geo_subdivision = subdivision,
+            geo_region = region,
+            geo_country = country,
+            geo_postal_code = postal_code
+          WHERE geo_city IS NULL AND city IS NOT NULL;
+        `);
+
+        await this.db.execAsync(`
+          UPDATE locations SET
+            geo_address = address,
+            geo_neighborhood = neighborhood,
+            geo_city = city,
+            geo_subdivision = subdivision,
+            geo_region = region,
+            geo_country = country,
+            geo_postal_code = postal_code
+          WHERE geo_city IS NULL AND city IS NOT NULL;
+        `);
+
+        console.log('✅ Migration complete: geo_ fields added to entries and locations');
+      }
+    } catch (error) {
+      console.error('Migration error (geo_ fields):', error);
+    }
   }
 
   private async createTables(): Promise<void> {
@@ -599,6 +729,7 @@ class LocalDatabase {
         latitude REAL NOT NULL,
         longitude REAL NOT NULL,
         source TEXT,                  -- 'mapbox_poi', 'foursquare', 'user_custom', 'gps'
+        -- Display fields (user-editable)
         address TEXT,
         neighborhood TEXT,
         postal_code TEXT,
@@ -606,6 +737,15 @@ class LocalDatabase {
         subdivision TEXT,
         region TEXT,
         country TEXT,
+        -- Geo fields (immutable, from reverse geocode, for filtering/sorting)
+        geo_address TEXT,
+        geo_neighborhood TEXT,
+        geo_city TEXT,
+        geo_subdivision TEXT,
+        geo_region TEXT,
+        geo_country TEXT,
+        geo_postal_code TEXT,
+        location_radius REAL,         -- User-selected radius in meters for location generalization
         mapbox_place_id TEXT,
         foursquare_fsq_id TEXT,
         created_at INTEGER NOT NULL,
@@ -631,12 +771,12 @@ class LocalDatabase {
         -- GPS coordinates (where user was when creating entry)
         entry_latitude REAL,
         entry_longitude REAL,
-        location_accuracy REAL,
+        location_radius REAL,
 
         -- Location reference (optional FK to locations table for anchors)
         location_id TEXT,
 
-        -- Location hierarchy (owned by entry, copied from anchor or reverse geocode)
+        -- Location hierarchy - display fields (user-editable)
         place_name TEXT,              -- Named place (e.g., "Starbucks", "Home")
         address TEXT,                 -- Street address
         neighborhood TEXT,            -- Neighborhood name
@@ -645,6 +785,14 @@ class LocalDatabase {
         subdivision TEXT,             -- County/district
         region TEXT,                  -- State/province
         country TEXT,                 -- Country name
+        -- Geo fields (immutable, from reverse geocode, for filtering/sorting)
+        geo_address TEXT,
+        geo_neighborhood TEXT,
+        geo_city TEXT,
+        geo_subdivision TEXT,
+        geo_region TEXT,
+        geo_country TEXT,
+        geo_postal_code TEXT,
         geocode_status TEXT,          -- Reverse geocode status: null, 'pending', 'success', 'no_data', 'error'
 
         status TEXT CHECK (status IN ('none', 'new', 'todo', 'in_progress', 'in_review', 'waiting', 'on_hold', 'done', 'closed', 'cancelled')) DEFAULT 'none',
@@ -832,9 +980,10 @@ class LocalDatabase {
       `INSERT OR REPLACE INTO entries (
         entry_id, user_id, title, content, tags, mentions,
         stream_id, entry_date,
-        entry_latitude, entry_longitude, location_accuracy,
+        entry_latitude, entry_longitude, location_radius,
         location_id,
         place_name, address, neighborhood, postal_code, city, subdivision, region, country,
+        geo_address, geo_neighborhood, geo_city, geo_subdivision, geo_region, geo_country, geo_postal_code,
         geocode_status,
         status, type, due_date, completed_at, created_at, updated_at,
         deleted_at,
@@ -843,7 +992,7 @@ class LocalDatabase {
         version, base_version,
         conflict_status, conflict_backup,
         last_edited_by, last_edited_device
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -855,7 +1004,7 @@ class LocalDatabase {
         entry.entry_date ? Date.parse(entry.entry_date) : (entry.created_at ? Date.parse(entry.created_at) : now),
         entry.entry_latitude || null,
         entry.entry_longitude || null,
-        entry.location_accuracy || null,
+        entry.location_radius || null,
         entry.location_id || null,
         entry.place_name || null,
         entry.address || null,
@@ -865,6 +1014,13 @@ class LocalDatabase {
         entry.subdivision || null,
         entry.region || null,
         entry.country || null,
+        entry.geo_address || null,
+        entry.geo_neighborhood || null,
+        entry.geo_city || null,
+        entry.geo_subdivision || null,
+        entry.geo_region || null,
+        entry.geo_country || null,
+        entry.geo_postal_code || null,
         entry.geocode_status || null,
         entry.status || 'none',
         entry.type || null,
@@ -1145,10 +1301,12 @@ class LocalDatabase {
       `UPDATE entries SET
         title = ?, content = ?, tags = ?, mentions = ?,
         stream_id = ?, entry_date = ?,
-        entry_latitude = ?, entry_longitude = ?, location_accuracy = ?,
+        entry_latitude = ?, entry_longitude = ?, location_radius = ?,
         location_id = ?,
         place_name = ?, address = ?, neighborhood = ?, postal_code = ?,
         city = ?, subdivision = ?, region = ?, country = ?,
+        geo_address = ?, geo_neighborhood = ?, geo_city = ?, geo_subdivision = ?,
+        geo_region = ?, geo_country = ?, geo_postal_code = ?,
         geocode_status = ?,
         status = ?, type = ?, due_date = ?, completed_at = ?,
         priority = ?, rating = ?, is_pinned = ?,
@@ -1167,7 +1325,7 @@ class LocalDatabase {
         updated.entry_date ? Date.parse(updated.entry_date) : null,
         updated.entry_latitude || null,
         updated.entry_longitude || null,
-        updated.location_accuracy || null,
+        updated.location_radius || null,
         updated.location_id || null,
         updated.place_name || null,
         updated.address || null,
@@ -1177,6 +1335,13 @@ class LocalDatabase {
         updated.subdivision || null,
         updated.region || null,
         updated.country || null,
+        updated.geo_address || null,
+        updated.geo_neighborhood || null,
+        updated.geo_city || null,
+        updated.geo_subdivision || null,
+        updated.geo_region || null,
+        updated.geo_country || null,
+        updated.geo_postal_code || null,
         updated.geocode_status || null,
         updated.status || 'none',
         updated.type || null,
@@ -1360,7 +1525,7 @@ class LocalDatabase {
       entry_date: row.entry_date ? new Date(row.entry_date).toISOString() : null,
       entry_latitude: row.entry_latitude,
       entry_longitude: row.entry_longitude,
-      location_accuracy: row.location_accuracy,
+      location_radius: row.location_radius,
       location_id: row.location_id,
       // Location hierarchy fields
       place_name: row.place_name || null,
@@ -1414,9 +1579,9 @@ class LocalDatabase {
       `INSERT OR REPLACE INTO locations (
         location_id, user_id, name, latitude, longitude,
         source, address, neighborhood, postal_code, city,
-        subdivision, region, country, mapbox_place_id, foursquare_fsq_id,
+        subdivision, region, country, location_radius, mapbox_place_id, foursquare_fsq_id,
         created_at, updated_at, synced, sync_action
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         location.location_id,
         location.user_id,
@@ -1431,6 +1596,7 @@ class LocalDatabase {
         location.subdivision || null,
         location.region || null,
         location.country || null,
+        location.location_radius ?? null,
         location.mapbox_place_id || null,
         location.foursquare_fsq_id || null,
         location.created_at ? Date.parse(location.created_at) : now,
@@ -1536,7 +1702,7 @@ class LocalDatabase {
       `UPDATE locations SET
         name = ?, latitude = ?, longitude = ?,
         source = ?, address = ?, neighborhood = ?, postal_code = ?,
-        city = ?, subdivision = ?, region = ?, country = ?,
+        city = ?, subdivision = ?, region = ?, country = ?, location_radius = ?,
         mapbox_place_id = ?, foursquare_fsq_id = ?,
         updated_at = ?, synced = ?, sync_action = ?
       WHERE location_id = ?`,
@@ -1552,6 +1718,7 @@ class LocalDatabase {
         updates.subdivision !== undefined ? updates.subdivision : existing.subdivision,
         updates.region !== undefined ? updates.region : existing.region,
         updates.country !== undefined ? updates.country : existing.country,
+        updates.location_radius !== undefined ? updates.location_radius : existing.location_radius,
         updates.mapbox_place_id !== undefined ? updates.mapbox_place_id : existing.mapbox_place_id,
         updates.foursquare_fsq_id !== undefined ? updates.foursquare_fsq_id : existing.foursquare_fsq_id,
         updatedAt,
@@ -1637,6 +1804,15 @@ class LocalDatabase {
       subdivision: row.subdivision,
       region: row.region,
       country: row.country,
+      // Geo fields (immutable, from geocode)
+      geo_address: row.geo_address,
+      geo_neighborhood: row.geo_neighborhood,
+      geo_city: row.geo_city,
+      geo_subdivision: row.geo_subdivision,
+      geo_region: row.geo_region,
+      geo_country: row.geo_country,
+      geo_postal_code: row.geo_postal_code,
+      location_radius: row.location_radius,
       mapbox_place_id: row.mapbox_place_id,
       foursquare_fsq_id: row.foursquare_fsq_id,
       created_at: new Date(row.created_at).toISOString(),

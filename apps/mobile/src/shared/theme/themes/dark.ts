@@ -41,6 +41,7 @@ export const darkTheme: Theme = {
       overdue: '#F87171',      // Lighter red for dark bg
       accent: '#60A5FA',       // Lighter blue for dark bg
       accentLight: '#1E3A5F',  // Dark blue bg
+      accentSecondary: '#FB923C', // Orange - secondary accent for previews
     },
 
     interactive: {

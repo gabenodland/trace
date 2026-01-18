@@ -43,6 +43,14 @@ export interface LocationPickerUI {
   showingDetails: boolean; // true = showing location info, false = showing POI list
   searchQuery: string;
   editableNameInput: string;
+  // Editable location fields (display fields - user can edit, geo_ fields preserved for filtering)
+  editableAddressInput: string;
+  editableCityInput: string;
+  editableRegionInput: string;
+  editableCountryInput: string;
+  editableNeighborhoodInput: string;
+  editablePostalCodeInput: string;
+  isAddressEditing: boolean; // true = user is editing location fields
   quickSelectMode?: boolean; // true = auto-complete after enrichment (from Select button)
 }
 
@@ -124,6 +132,7 @@ export function createSelectionFromMapTap(
       longitude,
       name: null, // Will be filled by reverse geocoding
       source: 'user_custom',
+      locationRadius: 0, // Map taps default to Exact precision (0 = exact)
     },
     tempCoordinates: { latitude, longitude },
     isLoadingDetails: true,

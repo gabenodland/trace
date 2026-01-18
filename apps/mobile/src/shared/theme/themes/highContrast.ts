@@ -42,6 +42,7 @@ export const highContrastTheme: Theme = {
       overdue: '#CC0000',      // Pure red
       accent: '#0000CC',       // Pure blue
       accentLight: '#E6E6FF',  // Light blue bg
+      accentSecondary: '#EA580C', // Orange - secondary accent for previews
     },
 
     interactive: {

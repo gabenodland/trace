@@ -43,6 +43,7 @@ export const synthwaveDarkTheme: Theme = {
       overdue: '#FF6B6B',      // Neon coral
       accent: '#FF2E97',       // Hot pink
       accentLight: '#2D1A2E',  // Dark magenta
+      accentSecondary: '#22D3EE', // Neon cyan - secondary accent for previews
     },
 
     interactive: {

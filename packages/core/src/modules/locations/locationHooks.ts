@@ -28,7 +28,7 @@ export const locationKeys = {
   detail: (id: string) => [...locationKeys.all, 'detail', id] as const,
   geocode: (lat: number, lng: number) => [...locationKeys.all, 'geocode', lat, lng] as const,
   nearby: (lat: number, lng: number, radius: number) => [...locationKeys.all, 'nearby', lat, lng, radius] as const,
-  autocomplete: (query: string) => [...locationKeys.all, 'autocomplete', query] as const,
+  autocomplete: (query: string, lat?: number, lng?: number) => [...locationKeys.all, 'autocomplete', query, lat, lng] as const,
 };
 
 /**
@@ -88,8 +88,10 @@ export function useLocationAutocomplete(
   request: LocationAutocompleteRequest | null
 ): UseQueryResult<POIItem[], Error> {
   return useQuery({
+    // Normalize query to lowercase for consistent caching (matches API normalization)
+    // Include lat/lng in cache key so "pine" in Seattle != "pine" in Kansas City
     queryKey: request
-      ? locationKeys.autocomplete(request.query)
+      ? locationKeys.autocomplete(request.query.toLowerCase().trim(), request.latitude, request.longitude)
       : ['locations', 'autocomplete', 'disabled'],
     queryFn: async () => {
       const response = await locationApi.autocompleteLocation(request!);

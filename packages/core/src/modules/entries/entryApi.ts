@@ -25,7 +25,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
       entry_date: data.entry_date || null,
       entry_latitude: data.entry_latitude || null,
       entry_longitude: data.entry_longitude || null,
-      location_accuracy: data.location_accuracy || null,
+      location_radius: data.location_radius || null,
       location_id: data.location_id || null,
       status: data.status || "none",
       due_date: data.due_date || null,

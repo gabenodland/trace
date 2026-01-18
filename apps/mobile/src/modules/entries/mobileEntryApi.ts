@@ -263,7 +263,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     // GPS coordinates (where user was when creating entry)
     entry_latitude: data.entry_latitude || null,
     entry_longitude: data.entry_longitude || null,
-    location_accuracy: data.location_accuracy || null,
+    location_radius: data.location_radius || null,
     // Location reference (optional - points to anchor in locations table)
     location_id: data.location_id || null,
     // Location hierarchy (owned by entry - copied from anchor or reverse geocode)
@@ -276,6 +276,14 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     region: data.region || null,
     country: data.country || null,
     geocode_status: data.geocode_status || null,
+    // Geo fields (immutable, from geocode, for filtering/sorting)
+    geo_address: data.geo_address || null,
+    geo_neighborhood: data.geo_neighborhood || null,
+    geo_city: data.geo_city || null,
+    geo_subdivision: data.geo_subdivision || null,
+    geo_region: data.geo_region || null,
+    geo_country: data.geo_country || null,
+    geo_postal_code: data.geo_postal_code || null,
     status: data.status || 'none',
     type: data.type || null,
     due_date: data.due_date || null,
@@ -451,7 +459,7 @@ export async function copyEntry(
     // Fresh GPS coordinates
     entry_latitude: gpsCoords?.latitude || null,
     entry_longitude: gpsCoords?.longitude || null,
-    location_accuracy: gpsCoords?.accuracy || null,
+    location_radius: originalEntry.location_radius || null, // Copy from original, not GPS accuracy
     // Keep the same location reference if set
     location_id: originalEntry.location_id,
     // Copy location hierarchy from original entry
@@ -464,6 +472,14 @@ export async function copyEntry(
     region: originalEntry.region || null,
     country: originalEntry.country || null,
     geocode_status: originalEntry.geocode_status || null,
+    // Copy geo fields (immutable, from original geocode)
+    geo_address: originalEntry.geo_address || null,
+    geo_neighborhood: originalEntry.geo_neighborhood || null,
+    geo_city: originalEntry.geo_city || null,
+    geo_subdivision: originalEntry.geo_subdivision || null,
+    geo_region: originalEntry.geo_region || null,
+    geo_country: originalEntry.geo_country || null,
+    geo_postal_code: originalEntry.geo_postal_code || null,
     // Copy status, type, and task-related fields
     status: originalEntry.status || 'none',
     type: originalEntry.type || null,

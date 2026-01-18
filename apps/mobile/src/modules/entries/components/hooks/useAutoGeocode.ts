@@ -45,8 +45,18 @@ export interface UseAutoGeocodeOptions {
   onLocationFieldsChange: (fields: Partial<EntryLocationFields>) => void;
   /** Callback to update geocode status */
   onGeocodeStatusChange: (status: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | null) => void;
-  /** Callback to set location_id when snapping to saved location */
-  onLocationIdChange?: (locationId: string | null, locationName: string | null) => void;
+  /** Callback to set location_id when snapping to saved location (passes full location data) */
+  onLocationIdChange?: (snappedLocation: {
+    location_id: string;
+    name: string;
+    address: string | null;
+    neighborhood: string | null;
+    postal_code: string | null;
+    city: string | null;
+    subdivision: string | null;
+    region: string | null;
+    country: string | null;
+  } | null) => void;
   /** Whether this is initial capture (should update baseline) */
   isInitialCapture: boolean;
   /** Callback to update baseline for initial capture */
@@ -133,9 +143,9 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
         });
         onGeocodeStatusChange('snapped');
 
-        // Set the location_id to link to the saved location
+        // Set the location_id to link to the saved location (pass full location for all geo fields)
         if (onLocationIdChange) {
-          onLocationIdChange(snapResult.location.location_id, snapResult.location.name);
+          onLocationIdChange(snapResult.location);
         }
 
         // For initial capture, also update baseline
@@ -180,7 +190,7 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
         status: fields.geocode_status,
       });
 
-      // Update form with geocoded fields
+      // Update form with geocoded fields (both display and geo_ fields)
       onLocationFieldsChange({
         address: fields.address,
         neighborhood: fields.neighborhood,
@@ -189,6 +199,14 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
         subdivision: fields.subdivision,
         region: fields.region,
         country: fields.country,
+        // Geo fields (immutable, from geocode)
+        geo_address: fields.geo_address,
+        geo_neighborhood: fields.geo_neighborhood,
+        geo_postal_code: fields.geo_postal_code,
+        geo_city: fields.geo_city,
+        geo_subdivision: fields.geo_subdivision,
+        geo_region: fields.geo_region,
+        geo_country: fields.geo_country,
       });
       onGeocodeStatusChange(fields.geocode_status);
 
@@ -203,6 +221,14 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
           region: fields.region,
           country: fields.country,
           geocode_status: fields.geocode_status,
+          // Geo fields (immutable, from geocode)
+          geo_address: fields.geo_address,
+          geo_neighborhood: fields.geo_neighborhood,
+          geo_postal_code: fields.geo_postal_code,
+          geo_city: fields.geo_city,
+          geo_subdivision: fields.geo_subdivision,
+          geo_region: fields.geo_region,
+          geo_country: fields.geo_country,
         });
       }
 

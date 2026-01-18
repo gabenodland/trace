@@ -42,6 +42,7 @@ export const modernTheme: Theme = {
       overdue: '#DC2626',      // Red-600 (vibrant red)
       accent: '#6366F1',       // Indigo-500 (vibrant purple-blue)
       accentLight: '#EEF2FF',  // Indigo-50
+      accentSecondary: '#F59E0B', // Orange - secondary accent for previews
     },
 
     interactive: {

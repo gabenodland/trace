@@ -234,9 +234,13 @@ export function EntryPickers({
                   name: formData.locationData.name,
                   source: "user_custom",
                   address: formData.locationData.address,
+                  neighborhood: formData.locationData.neighborhood,
                   city: formData.locationData.city,
                   region: formData.locationData.region,
                   country: formData.locationData.country,
+                  postalCode: formData.locationData.postalCode,
+                  subdivision: formData.locationData.subdivision,
+                  locationRadius: formData.locationData.locationRadius, // Location radius for precision circle on map
                 }
               : formData.gpsData
               ? {
@@ -244,6 +248,7 @@ export function EntryPickers({
                   longitude: formData.gpsData.longitude,
                   name: null,
                   source: "user_custom",
+                  locationRadius: undefined, // GPS accuracy is not stored as locationRadius
                 }
               : null
           }

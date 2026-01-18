@@ -5,7 +5,8 @@
  * Used when user is selecting a location (not viewing details).
  */
 
-import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator } from 'react-native';
+import { useRef, useImperativeHandle, forwardRef, useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Keyboard } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import {
   type POIItem,
@@ -32,6 +33,11 @@ interface TappedGooglePOI {
   address?: string | null;
 }
 
+// Ref type for external access to scroll methods
+export interface LocationSelectViewRef {
+  scrollToSelectedItem: () => void;
+}
+
 interface LocationSelectViewProps {
   // UI State
   ui: LocationPickerUI;
@@ -52,6 +58,7 @@ interface LocationSelectViewProps {
 
   // Locations (with entry counts for saved locations)
   savedLocations: Array<LocationEntity & { distance: number; entry_count: number }>;
+  allSavedLocations: Array<LocationEntity & { entry_count: number }>; // All saved locations for search
   displayedPOIs: POIItem[] | undefined;
   displayedLoading: boolean;
 
@@ -59,8 +66,8 @@ interface LocationSelectViewProps {
   tappedGooglePOI: TappedGooglePOI | null;
 
   // Preview Marker
-  previewMarker: { latitude: number; longitude: number; name: string } | null;
-  setPreviewMarker: React.Dispatch<React.SetStateAction<{ latitude: number; longitude: number; name: string } | null>>;
+  previewMarker: { latitude: number; longitude: number; name: string; locationRadius?: number | null } | null;
+  setPreviewMarker: React.Dispatch<React.SetStateAction<{ latitude: number; longitude: number; name: string; locationRadius?: number | null } | null>>;
 
   // Selected List Item
   selectedListItemId: string | null;
@@ -75,16 +82,13 @@ interface LocationSelectViewProps {
 
   // Handlers
   handlePOISelect: (poi: POIItem) => void;
-
-  // Callbacks
-  onSelect: (location: any) => void;
-  onClose: () => void;
+  handleSavedLocationSelect: (location: LocationEntity & { distance: number }) => void;
 
   // Keyboard
   keyboardHeight?: number;
 }
 
-export function LocationSelectView({
+export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSelectViewProps>(function LocationSelectView({
   ui,
   setUI,
   activeListTab,
@@ -95,6 +99,7 @@ export function LocationSelectView({
   mapRef,
   isLoadingSavedLocations,
   savedLocations,
+  allSavedLocations,
   displayedPOIs,
   displayedLoading,
   tappedGooglePOI,
@@ -106,12 +111,54 @@ export function LocationSelectView({
   setIsSelectedLocationHighlighted,
   setReverseGeocodeRequest,
   handlePOISelect,
-  onSelect,
-  onClose,
+  handleSavedLocationSelect,
   keyboardHeight = 0,
-}: LocationSelectViewProps) {
+}, ref) {
   const { settings } = useSettings();
   const dynamicTheme = useTheme();
+
+  // Refs for scrolling
+  const scrollViewRef = useRef<ScrollView>(null);
+  const itemPositionsRef = useRef<Record<string, number>>({});
+
+  // 3-click zoom pattern state - cycles through street -> city -> state
+  const [zoomLevel, setZoomLevel] = useState<'street' | 'city' | 'state'>('street');
+
+  // Compact mode when keyboard is visible - maximize screen space for results
+  const isCompactMode = keyboardHeight > 0;
+
+  // Track previous compact mode to detect transition
+  const wasCompactModeRef = useRef(isCompactMode);
+
+  // Scroll to selected item when transitioning from compact to normal mode
+  useEffect(() => {
+    if (wasCompactModeRef.current && !isCompactMode && selectedListItemId) {
+      // Delay scroll slightly to allow layout to settle after keyboard dismisses
+      const timer = setTimeout(() => {
+        if (scrollViewRef.current && itemPositionsRef.current[selectedListItemId] !== undefined) {
+          scrollViewRef.current.scrollTo({
+            y: Math.max(0, itemPositionsRef.current[selectedListItemId] - 100),
+            animated: true,
+          });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    wasCompactModeRef.current = isCompactMode;
+  }, [isCompactMode, selectedListItemId]);
+
+  // Expose scroll method via ref
+  useImperativeHandle(ref, () => ({
+    scrollToSelectedItem: () => {
+      if (selectedListItemId && scrollViewRef.current) {
+        const yPosition = itemPositionsRef.current[selectedListItemId];
+        if (yPosition !== undefined) {
+          // Scroll to item with some offset from top
+          scrollViewRef.current.scrollTo({ y: Math.max(0, yPosition - 100), animated: true });
+        }
+      }
+    },
+  }), [selectedListItemId]);
 
   // Get address lines for "Currently Selected" row - returns separate lines for display
   const getAddressLines = (): { line1: string; line2?: string } => {
@@ -181,8 +228,9 @@ export function LocationSelectView({
     const mergedItems: MergedItem[] = [];
 
     const isSearching = ui.searchQuery.length >= 2;
-    const showSavedOnly = !isSearching && activeListTab === 'saved';
-    const showNearby = isSearching || activeListTab === 'nearby';
+    // Star button now works during search too - search saved locations only (no API call)
+    const showSavedOnly = activeListTab === 'saved';
+    const showNearby = activeListTab === 'nearby';
 
     const googlePoiName = tappedGooglePOI?.name.toLowerCase().trim();
 
@@ -199,8 +247,12 @@ export function LocationSelectView({
     }
 
     // Add saved locations
-    if (savedLocations.length > 0 && (showSavedOnly || showNearby)) {
-      savedLocations.forEach(loc => {
+    // When searching, use ALL saved locations (not just nearby) so users can find any saved place
+    // When not searching, use nearby savedLocations (already filtered to 10 miles)
+    if (showSavedOnly || showNearby) {
+      const locationsToShow = isSearching ? allSavedLocations : savedLocations;
+
+      locationsToShow.forEach(loc => {
         if (isSearching) {
           const query = ui.searchQuery.toLowerCase().trim();
           const matchesName = loc.name.toLowerCase().includes(query);
@@ -211,21 +263,33 @@ export function LocationSelectView({
           }
         }
 
+        // Calculate distance for allSavedLocations (they don't have distance pre-computed)
+        const distance = 'distance' in loc
+          ? (loc as any).distance
+          : (mapState.markerPosition
+            ? calculateDistance(
+                { latitude: mapState.markerPosition.latitude, longitude: mapState.markerPosition.longitude },
+                { latitude: loc.latitude, longitude: loc.longitude }
+              ).meters
+            : 0);
+
         mergedItems.push({
           type: 'saved',
           id: `saved-${loc.location_id}`,
           name: loc.name,
-          distance: loc.distance,
+          distance,
           address: loc.address,
           city: loc.city,
           entryCount: loc.entry_count,
-          savedLocation: loc,
+          savedLocation: { ...loc, distance } as LocationEntity & { distance: number; entry_count: number },
         });
       });
     }
 
-    // Add POIs (only for Nearby tab or when searching)
-    if (showNearby && !showSavedOnly && displayedPOIs && displayedPOIs.length > 0) {
+    // Add POIs (only for Nearby tab - not when savedOnly/star is active)
+    if (showNearby && displayedPOIs && displayedPOIs.length > 0) {
+      console.log(`🔍 [MergedList] Processing ${displayedPOIs.length} POIs for query "${ui.searchQuery}":`);
+      displayedPOIs.slice(0, 5).forEach((p, i) => console.log(`  ${i+1}. ${p.name}`));
       const savedLocationKeys = new Map<string, LocationEntity & { distance: number }>();
       savedLocations.forEach(loc => {
         const nameKey = loc.name.toLowerCase().trim();
@@ -240,10 +304,29 @@ export function LocationSelectView({
         const normalizedName = poi.name.toLowerCase().trim();
         const normalizedAddress = poi.address?.toLowerCase().trim() || '';
 
+        // Check for exact duplicate by name+address
         const fullKey = normalizedAddress ? `${normalizedName}|${normalizedAddress}` : '';
         const isDuplicateByFullKey = fullKey && savedLocationKeys.has(fullKey);
-        const isDuplicateByName = savedLocationKeys.has(normalizedName);
-        const isDuplicateOfSaved = isDuplicateByFullKey || isDuplicateByName;
+        if (isDuplicateByFullKey) {
+          console.log(`🔍 [DupeCheck] "${poi.name}" FILTERED by exact key match: ${fullKey}`);
+        }
+
+        // Check for name match, but only suppress if within 91 meters (300 feet)
+        // This allows chains like "The Peanut" to show multiple locations
+        let isDuplicateByNameAndProximity = false;
+        const savedWithSameName = savedLocationKeys.get(normalizedName);
+        if (savedWithSameName && savedWithSameName.latitude && savedWithSameName.longitude) {
+          const distanceToSaved = calculateDistance(
+            { latitude: poi.latitude, longitude: poi.longitude },
+            { latitude: savedWithSameName.latitude, longitude: savedWithSameName.longitude }
+          ).meters;
+          isDuplicateByNameAndProximity = distanceToSaved < 91; // ~300 feet
+          console.log(`🔍 [DupeCheck] "${poi.name}" dist=${distanceToSaved.toFixed(0)}m to saved "${savedWithSameName.name}" → ${isDuplicateByNameAndProximity ? 'FILTERED' : 'SHOW'}`);
+        } else if (savedWithSameName) {
+          console.log(`🔍 [DupeCheck] "${poi.name}" has saved match but no coords - SHOWING`);
+        }
+
+        const isDuplicateOfSaved = isDuplicateByFullKey || isDuplicateByNameAndProximity;
         const isDuplicateOfGoogle = googlePoiName && normalizedName === googlePoiName;
 
         if (isDuplicateOfSaved || isDuplicateOfGoogle) {
@@ -284,27 +367,13 @@ export function LocationSelectView({
   // Handle item selection (Select button press)
   const handleItemSelect = (item: MergedItem) => {
     if (item.type === 'saved' && item.savedLocation) {
-      const loc = item.savedLocation;
-      onSelect({
-        location_id: loc.location_id,
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        name: loc.name,
-        address: loc.address || undefined,
-        city: loc.city || undefined,
-        region: loc.region || undefined,
-        country: loc.country || undefined,
-        postalCode: loc.postal_code || undefined,
-        neighborhood: loc.neighborhood || undefined,
-        subdivision: loc.subdivision || undefined,
-        source: (loc.source as any) || 'user_custom',
-      });
-      onClose();
+      // Saved locations (My Places) add immediately to entry - no create screen
+      handleSavedLocationSelect(item.savedLocation);
     } else if (item.type === 'poi' && item.poi) {
-      setUI(prev => ({ ...prev, quickSelectMode: true }));
+      // POI selections go to Create screen - no quickSelectMode (user needs to edit name/toggle save)
       handlePOISelect(item.poi);
     } else if (item.type === 'google_poi' && item.googlePOI) {
-      setUI(prev => ({ ...prev, quickSelectMode: true }));
+      // Google POI selections go to Create screen - no quickSelectMode
       const googlePoi: POIItem = {
         id: item.googlePOI.placeId,
         source: 'google',
@@ -318,13 +387,18 @@ export function LocationSelectView({
   };
 
   // Render icon based on item type and selection state
-  const renderIcon = (item: MergedItem, isSelected: boolean) => {
-    // Saved items: yellow star normally, accent pin when selected
+  const renderIcon = (item: MergedItem, isSelected: boolean, compact: boolean = false) => {
+    const iconSize = compact ? 14 : 18;
+    const containerStyle = compact
+      ? [styles.poiIconContainer, styles.poiIconContainerCompact]
+      : [styles.poiIconContainer];
+
+    // Saved items: yellow star normally, accentSecondary pin when selected (matches preview marker)
     if (item.type === 'saved') {
       if (isSelected) {
         return (
-          <View style={[styles.poiIconContainer, styles.poiIconContainerSaved, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }]}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accent} stroke={dynamicTheme.colors.functional.accent} strokeWidth={2}>
+          <View style={[...containerStyle, styles.poiIconContainerSaved, { backgroundColor: `${dynamicTheme.colors.functional.accentSecondary}20` }]}>
+            <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accentSecondary} stroke={dynamicTheme.colors.functional.accentSecondary} strokeWidth={2}>
               <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
               <Circle cx={12} cy={10} r={3} fill="white" />
             </Svg>
@@ -332,19 +406,19 @@ export function LocationSelectView({
         );
       }
       return (
-        <View style={[styles.poiIconContainer, styles.poiIconContainerSaved, { backgroundColor: '#fef3c720' }]}>
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth={2}>
+        <View style={[...containerStyle, styles.poiIconContainerSaved, { backgroundColor: '#fef3c720' }]}>
+          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth={2}>
             <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </View>
       );
     }
 
-    // Selected non-saved items show accent pin (matches map marker)
+    // Selected non-saved items show accentSecondary pin (matches preview marker on map)
     if (isSelected) {
       return (
-        <View style={[styles.poiIconContainer, styles.poiIconContainerSelected, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }]}>
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accent} stroke={dynamicTheme.colors.functional.accent} strokeWidth={2}>
+        <View style={[...containerStyle, styles.poiIconContainerSelected, { backgroundColor: `${dynamicTheme.colors.functional.accentSecondary}20` }]}>
+          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accentSecondary} stroke={dynamicTheme.colors.functional.accentSecondary} strokeWidth={2}>
             <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
             <Circle cx={12} cy={10} r={3} fill="white" />
           </Svg>
@@ -354,8 +428,8 @@ export function LocationSelectView({
 
     // Default: gray pin
     return (
-      <View style={[styles.poiIconContainer, { backgroundColor: dynamicTheme.colors.background.secondary }]}>
-        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
+      <View style={[...containerStyle, { backgroundColor: dynamicTheme.colors.background.secondary }]}>
+        <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
           <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
           <Circle cx={12} cy={10} r={3} fill={dynamicTheme.colors.text.tertiary} />
         </Svg>
@@ -421,17 +495,20 @@ export function LocationSelectView({
 
       {/* Results List */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.poiList}
         contentContainerStyle={[
           styles.poiListContent,
+          isCompactMode && styles.poiListContentCompact,
           keyboardHeight > 0 && { paddingBottom: keyboardHeight + 40 }
         ]}
         keyboardShouldPersistTaps="handled"
+        // Keep keyboard visible while scrolling - only dismiss when user taps an item
       >
         {displayedLoading && <ActivityIndicator style={styles.loader} />}
 
-        {/* Currently Selected Location - Card at top */}
-        {(selection.location || mapState.markerPosition) && (
+        {/* Currently Selected Location - Card at top (hidden in compact mode) */}
+        {!isCompactMode && (selection.location || mapState.markerPosition) && (
           <TouchableOpacity
             style={[
               styles.poiItem,
@@ -457,15 +534,24 @@ export function LocationSelectView({
           >
             {/* Marker icon - accent color */}
             <View style={[styles.poiIconContainer, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }]}>
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accent} stroke={dynamicTheme.colors.functional.accent} strokeWidth={2}>
-                <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                <Circle cx={12} cy={10} r={3} fill="white" />
-              </Svg>
+              {ui.searchQuery.length >= 2 ? (
+                // Crosshairs icon when in search mode - indicates search center point
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.accent} strokeWidth={2}>
+                  <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M22 12h-4M6 12H2M12 6V2M12 22v-4" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              ) : (
+                // Map pin icon when not searching
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accent} stroke={dynamicTheme.colors.functional.accent} strokeWidth={2}>
+                  <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+                  <Circle cx={12} cy={10} r={3} fill="white" />
+                </Svg>
+              )}
             </View>
             <View style={styles.poiInfo}>
               <Text style={[styles.poiName, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]} numberOfLines={1}>
-                {/* Show user-given name if exists, otherwise "Selected Location" */}
-                {selection.location?.name?.trim() ? selection.location.name : 'Selected Location'}
+                {/* Show user-given name if exists, otherwise contextual label */}
+                {selection.location?.name?.trim() ? selection.location.name : (ui.searchQuery.length >= 2 ? 'Search Center' : 'Current Point')}
               </Text>
               {(() => {
                 const addressLines = getAddressLines();
@@ -515,20 +601,30 @@ export function LocationSelectView({
                   key={item.id}
                   style={[
                     styles.poiItem,
+                    isCompactMode && styles.poiItemCompact,
                     { backgroundColor: dynamicTheme.colors.background.primary, borderColor: dynamicTheme.colors.border.light },
                     item.type === 'saved' && styles.savedLocationItem,
-                    isSelected && [styles.poiItemSelected, { borderColor: dynamicTheme.colors.functional.accent }]
+                    isSelected && [styles.poiItemSelected, { borderColor: dynamicTheme.colors.functional.accentSecondary }]
                   ]}
+                  onLayout={(event) => {
+                    // Track item position for scrolling
+                    itemPositionsRef.current[item.id] = event.nativeEvent.layout.y;
+                  }}
                   onPress={() => {
+                    // Dismiss keyboard first to restore normal view
+                    Keyboard.dismiss();
                     // Click on row = pan/zoom to location and show red preview marker
+                    // 3-click zoom pattern: street -> city -> state -> street
                     let coords: { latitude: number; longitude: number } | null = null;
                     let name = item.name;
+                    let locationRadius: number | null = null;
 
                     if (item.type === 'saved' && item.savedLocation) {
                       coords = {
                         latitude: item.savedLocation.latitude,
                         longitude: item.savedLocation.longitude,
                       };
+                      locationRadius = item.savedLocation.location_radius ?? null;
                     } else if (item.type === 'poi' && item.poi) {
                       coords = {
                         latitude: item.poi.latitude,
@@ -542,51 +638,84 @@ export function LocationSelectView({
                     }
 
                     if (coords && mapRef.current) {
+                      // Determine zoom level: if same item, cycle; if different item, start at street
+                      const isSameItem = selectedListItemId === item.id;
+                      const nextZoom = isSameItem
+                        ? (zoomLevel === 'street' ? 'city' : zoomLevel === 'city' ? 'state' : 'street')
+                        : 'street';
+
+                      // Zoom deltas matching CurrentLocationView pattern
+                      const deltas: Record<typeof nextZoom, number> = {
+                        street: 0.005,  // ~500m view
+                        city: 0.05,     // ~5km view
+                        state: 2.0,     // ~200km view
+                      };
+
                       setSelectedListItemId(item.id);
+                      setZoomLevel(nextZoom);
                       setIsSelectedLocationHighlighted(false); // Clear "Selected Location" highlight
                       mapRef.current.animateToRegion({
                         ...coords,
-                        latitudeDelta: 0.005,
-                        longitudeDelta: 0.005,
+                        latitudeDelta: deltas[nextZoom],
+                        longitudeDelta: deltas[nextZoom],
                       }, 300);
                       setPreviewMarker({
                         latitude: coords.latitude,
                         longitude: coords.longitude,
                         name: name,
+                        locationRadius: locationRadius,
                       });
                     }
                   }}
                 >
                   {/* Icon */}
-                  {renderIcon(item, isSelected)}
+                  {renderIcon(item, isSelected, isCompactMode)}
 
-                  {/* Info */}
-                  <View style={styles.poiInfo}>
-                    <Text style={[styles.poiName, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]} numberOfLines={1}>
+                  {/* Info - compact mode shows only name + address (2 lines) */}
+                  <View style={[styles.poiInfo, isCompactMode && styles.poiInfoCompact]}>
+                    <Text
+                      style={[
+                        styles.poiName,
+                        isCompactMode && styles.poiNameCompact,
+                        { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }
+                      ]}
+                      numberOfLines={1}
+                    >
                       {item.name}
                     </Text>
-                    {item.type === 'poi' && item.category && typeof item.category === 'string' && (
+                    {/* Category/city line - hidden in compact mode */}
+                    {!isCompactMode && item.type === 'poi' && item.category && typeof item.category === 'string' && (
                       <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>{item.category}</Text>
                     )}
-                    {item.type === 'google_poi' && (
+                    {!isCompactMode && item.type === 'google_poi' && (
                       <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>From map</Text>
                     )}
-                    {item.type === 'saved' && (
+                    {!isCompactMode && item.type === 'saved' && (
                       <Text style={[styles.poiCategory, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]} numberOfLines={1}>
                         {item.city ? `${item.city}` : ''}{item.city && item.entryCount ? ' • ' : ''}{item.entryCount ? `${item.entryCount} ${item.entryCount === 1 ? 'entry' : 'entries'}` : ''}
                       </Text>
                     )}
+                    {/* Address line - always shown, compact uses smaller font */}
                     {item.address && typeof item.address === 'string' && (
-                      <Text style={[styles.poiAddress, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]} numberOfLines={1}>{item.address}</Text>
+                      <Text
+                        style={[
+                          styles.poiAddress,
+                          isCompactMode && styles.poiAddressCompact,
+                          { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.address}
+                      </Text>
                     )}
                   </View>
 
-                  {/* Right side: Distance + Select button (only when selected) */}
+                  {/* Right side: Distance + Select button (only when selected, hidden in compact) */}
                   <View style={styles.poiRightColumn}>
-                    <Text style={[styles.poiDistance, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>
+                    <Text style={[styles.poiDistance, isCompactMode && styles.poiDistanceCompact, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>
                       {formatDistanceWithUnits(item.distance, settings.units)}
                     </Text>
-                    {isSelected && (
+                    {!isCompactMode && isSelected && (
                       <TouchableOpacity
                         onPress={(e) => {
                           e.stopPropagation();
@@ -626,4 +755,4 @@ export function LocationSelectView({
       </ScrollView>
     </View>
   );
-}
+});

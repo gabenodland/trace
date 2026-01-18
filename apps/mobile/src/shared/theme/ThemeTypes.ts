@@ -42,6 +42,7 @@ export interface ThemeColors {
     overdue: string;      // Error/overdue
     accent: string;       // Primary accent (buttons, links)
     accentLight: string;  // Light accent background
+    accentSecondary: string; // Secondary accent (preview markers, alternative highlights)
   };
 
   // Interactive elements

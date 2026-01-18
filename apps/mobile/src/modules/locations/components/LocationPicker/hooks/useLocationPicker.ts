@@ -63,6 +63,7 @@ interface PreviewMarker {
   latitude: number;
   longitude: number;
   name: string;
+  locationRadius?: number | null;
 }
 
 /**
@@ -128,10 +129,20 @@ export function useLocationPicker({
     showingDetails: !!initialLocation,
     searchQuery: '',
     editableNameInput: '',
+    editableAddressInput: '',
+    editableCityInput: '',
+    editableRegionInput: '',
+    editableCountryInput: '',
+    editableNeighborhoodInput: '',
+    editablePostalCodeInput: '',
+    isAddressEditing: false,
   });
 
   // Tab state for Nearby/Saved
   const [activeListTab, setActiveListTab] = useState<'nearby' | 'saved'>('nearby');
+
+  // Save to My Places toggle (defaults to true for new locations)
+  const [saveToMyPlaces, setSaveToMyPlaces] = useState(true);
 
   // 3. Map state - Separate from selection (map can pan independently)
   const [mapState, setMapState] = useState<MapState>({
@@ -183,7 +194,17 @@ export function useLocationPicker({
 
       if (initialLocation) {
         const hasLocationName = !!initialLocation.name;
-        const isGpsOnlyEntry = !hasLocationName && !initialLocation.address;
+        // Check if entry has ANY geo data (not just name/address)
+        const hasAnyGeoData = !!(
+          initialLocation.address ||
+          initialLocation.neighborhood ||
+          initialLocation.city ||
+          initialLocation.region ||
+          initialLocation.country ||
+          initialLocation.postalCode
+        );
+        // Only treat as GPS-only if there's truly no geo data at all
+        const isGpsOnlyEntry = !hasLocationName && !hasAnyGeoData;
 
         const newSelection = isGpsOnlyEntry
           ? createSelectionFromMapTap(
@@ -229,9 +250,9 @@ export function useLocationPicker({
           },
         });
 
-        // Set GPS accuracy for the accuracy ring on the map
-        if (initialLocation.accuracy && initialLocation.accuracy > 0) {
-          setGpsAccuracy(initialLocation.accuracy);
+        // Set location radius for the precision ring on the map
+        if (initialLocation.locationRadius && initialLocation.locationRadius > 0) {
+          setGpsAccuracy(initialLocation.locationRadius);
         } else {
           setGpsAccuracy(null);
         }
@@ -255,6 +276,13 @@ export function useLocationPicker({
           showingDetails: false,
           searchQuery: '',
           editableNameInput: '',
+          editableAddressInput: '',
+          editableCityInput: '',
+          editableRegionInput: '',
+          editableCountryInput: '',
+          editableNeighborhoodInput: '',
+          editablePostalCodeInput: '',
+          isAddressEditing: false,
         });
         setMapState({
           region: undefined,
@@ -381,7 +409,16 @@ export function useLocationPicker({
   }, []);
 
   // Fetch nearby POIs via core hook (Foursquare)
-  const nearbyRequest = useMemo(() => {
+  // Lock the request when previewMarker is shown - prevents list reload when fitting/panning
+  const [lockedNearbyRequest, setLockedNearbyRequest] = useState<{
+    latitude: number;
+    longitude: number;
+    radius: number;
+    limit: number;
+  } | null>(null);
+
+  // Calculate the current request based on map state
+  const currentNearbyRequest = useMemo(() => {
     if (ui.showingDetails || !mapState.markerPosition || ui.searchQuery.length > 0) {
       return null;
     }
@@ -394,14 +431,31 @@ export function useLocationPicker({
     };
   }, [ui.showingDetails, mapState.markerPosition?.latitude, mapState.markerPosition?.longitude, mapState.region?.longitudeDelta, mapState.region?.latitude, ui.searchQuery.length, calculateSearchRadius]);
 
+  // Lock the request when preview marker appears, unlock when it clears
+  useEffect(() => {
+    if (previewMarker && currentNearbyRequest && !lockedNearbyRequest) {
+      // Lock the current request when preview starts
+      setLockedNearbyRequest(currentNearbyRequest);
+    } else if (!previewMarker && lockedNearbyRequest) {
+      // Unlock when preview clears
+      setLockedNearbyRequest(null);
+    }
+  }, [previewMarker, currentNearbyRequest, lockedNearbyRequest]);
+
+  // Use locked request when preview is shown, otherwise use current
+  const nearbyRequest = previewMarker ? lockedNearbyRequest : currentNearbyRequest;
+
   const { data: nearbyPOIs, isLoading: nearbyLoading } = useNearbyPOIs(nearbyRequest);
 
   // Fetch autocomplete results via core hook (Foursquare)
+  // Use markerPosition (the "Selected Point") as search center, not map region
+  // This prevents re-querying when user pans to look at results
+  // Skip API call when star button is active (saved-only search mode)
   const searchRequest = useMemo(() => {
-    return !ui.showingDetails && ui.searchQuery.length >= 2 && mapState.region
-      ? { query: ui.searchQuery, latitude: mapState.region.latitude, longitude: mapState.region.longitude }
+    return !ui.showingDetails && ui.searchQuery.length >= 2 && mapState.markerPosition && activeListTab !== 'saved'
+      ? { query: ui.searchQuery, latitude: mapState.markerPosition.latitude, longitude: mapState.markerPosition.longitude }
       : null;
-  }, [ui.showingDetails, ui.searchQuery, mapState.region?.latitude, mapState.region?.longitude]);
+  }, [ui.showingDetails, ui.searchQuery, mapState.markerPosition?.latitude, mapState.markerPosition?.longitude, activeListTab]);
 
   const { data: searchResults, isLoading: searchLoading } = useLocationAutocomplete(searchRequest);
 
@@ -446,85 +500,47 @@ export function useLocationPicker({
         setUI(prev => ({ ...prev, editableNameInput: enrichedLocation.name || '' }));
       }
 
-      if (ui.quickSelectMode && enrichedLocation.name) {
-        const finalLocation: LocationType = {
-          latitude: enrichedLocation.latitude,
-          longitude: enrichedLocation.longitude,
-          originalLatitude: enrichedLocation.originalLatitude ?? enrichedLocation.latitude,
-          originalLongitude: enrichedLocation.originalLongitude ?? enrichedLocation.longitude,
-          name: enrichedLocation.name,
-          source: enrichedLocation.source,
-          address: enrichedLocation.address,
-          postalCode: enrichedLocation.postalCode,
-          neighborhood: enrichedLocation.neighborhood,
-          city: enrichedLocation.city,
-          subdivision: enrichedLocation.subdivision,
-          region: enrichedLocation.region,
-          country: enrichedLocation.country,
-          category: enrichedLocation.category,
-          distance: enrichedLocation.distance,
-        };
-
-        setUI(prev => ({ ...prev, quickSelectMode: false }));
-        onSelect(finalLocation);
-        onClose();
+      // If address was restored from geocoding, exit address editing mode
+      if (enrichedLocation.address && ui.isAddressEditing) {
+        setUI(prev => ({ ...prev, isAddressEditing: false, editableAddressInput: '' }));
       }
     }
-  }, [selection.isLoadingDetails, mapboxData, mapboxLoading, selection.type, ui.editableNameInput, ui.quickSelectMode, onSelect, onClose, tappedGooglePOI, reverseGeocodeRequest]);
+  }, [selection.isLoadingDetails, mapboxData, mapboxLoading, selection.type, ui.editableNameInput, ui.isAddressEditing, onSelect, onClose, tappedGooglePOI, reverseGeocodeRequest]);
 
-  // Handler: Saved location selected from list
+  // Handler: Saved location selected from list - immediately adds to entry
   const handleSavedLocationSelect = useCallback((location: LocationEntity & { distance: number }) => {
-    const coords = {
+    // Saved locations (My Places) add immediately to entry - no create screen
+    // Note: LocationEntity stores only display coordinates, not original GPS
+    const finalLocation: LocationType = {
+      location_id: location.location_id,
       latitude: location.latitude,
       longitude: location.longitude,
+      // Saved locations don't store original GPS separately
+      originalLatitude: location.latitude,
+      originalLongitude: location.longitude,
+      name: location.name,
+      source: (location.source as any) || 'user_custom',
+      address: location.address,
+      city: location.city,
+      region: location.region,
+      country: location.country,
+      postalCode: location.postal_code,
+      neighborhood: location.neighborhood,
+      subdivision: location.subdivision,
+      locationRadius: location.location_radius ?? null,
+      // Preserve geo_ fields from saved location
+      geoAddress: location.geo_address,
+      geoCity: location.geo_city,
+      geoRegion: location.geo_region,
+      geoCountry: location.geo_country,
+      geoNeighborhood: location.geo_neighborhood,
+      geoPostalCode: location.geo_postal_code,
+      geoSubdivision: location.geo_subdivision,
     };
 
-    setMapState(prev => ({
-      region: {
-        ...coords,
-        latitudeDelta: prev.region?.latitudeDelta || 0.005,
-        longitudeDelta: prev.region?.longitudeDelta || 0.005,
-      },
-      markerPosition: coords,
-    }));
-
-    if (mapRef.current) {
-      mapRef.current.animateToRegion({
-        ...coords,
-        latitudeDelta: mapState.region?.latitudeDelta || 0.005,
-        longitudeDelta: mapState.region?.longitudeDelta || 0.005,
-      }, 300);
-    }
-
-    const newSelection: LocationSelection = {
-      type: 'poi',
-      location: {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        name: location.name,
-        source: (location.source as any) || 'user_custom',
-        address: location.address,
-        city: location.city,
-        region: location.region,
-        country: location.country,
-        postalCode: location.postal_code,
-        neighborhood: location.neighborhood,
-        subdivision: location.subdivision,
-      },
-      tempCoordinates: null,
-      isLoadingDetails: false,
-      locationId: location.location_id,
-    };
-    setSelection(newSelection);
-
-    setUI(prev => ({
-      ...prev,
-      showingDetails: true,
-      editableNameInput: location.name,
-    }));
-
-    setReverseGeocodeRequest({ latitude: location.latitude, longitude: location.longitude });
-  }, [mapState.region]);
+    onSelect(finalLocation);
+    onClose();
+  }, [onSelect, onClose]);
 
   // Handler: POI selected from list
   const handlePOISelect = useCallback((poi: POIItem) => {
@@ -623,8 +639,7 @@ export function useLocationPicker({
     setPreviewMarker(null);
     setSelectedListItemId(null);
     setIsSelectedLocationHighlighted(false);
-    // Clear GPS accuracy when user manually taps the map (no longer GPS position)
-    setGpsAccuracy(null);
+    // Note: We preserve gpsAccuracy here so dropped pins inherit GPS accuracy
 
     if (ui.showingDetails) {
       const coords = {
@@ -673,20 +688,34 @@ export function useLocationPicker({
     setTappedGooglePOI(null);
 
     const newSelection = createSelectionFromMapTap(coordinate.latitude, coordinate.longitude);
+    // Note: GPS accuracy is NOT stored in location.accuracy here.
+    // It's only used for map circle display via picker.gpsAccuracy.
+    // User must explicitly set precision via slider to store accuracy.
     setSelection(newSelection);
 
     setReverseGeocodeRequest({ latitude: coordinate.latitude, longitude: coordinate.longitude });
-  }, [ui.showingDetails]);
+  }, [ui.showingDetails, gpsAccuracy]);
 
-  // Handler: Clear address (for saving location without nearby address)
+  // Handler: Edit address (enters address editing mode with current values)
   const handleClearAddress = useCallback(() => {
     if (selection.location) {
-      setSelection(prev => ({
+      // Enable address editing mode, pre-populate address field with existing value
+      setUI(prev => ({
         ...prev,
-        location: prev.location ? {
-          ...prev.location,
-          address: null,
-        } : null,
+        editableAddressInput: selection.location?.address || '',
+        isAddressEditing: true,
+      }));
+    }
+  }, [selection.location]);
+
+  // Handler: Reset to original (exits editing mode, restores original geocoded values)
+  const handleResetToOriginal = useCallback(() => {
+    if (selection.location) {
+      // Exit editing mode and restore address from geocoded data
+      setUI(prev => ({
+        ...prev,
+        editableAddressInput: selection.location?.address || '',
+        isAddressEditing: false,
       }));
     }
   }, [selection.location]);
@@ -710,18 +739,26 @@ export function useLocationPicker({
     }
   }, [selection.location]);
 
-  // Handler: OK button - saves location to database if new, then returns to parent
+  // Handler: OK button - saves location to My Places if toggle is on, then returns to parent
   const handleOKPress = useCallback(async () => {
     if (selection.location) {
+      // Only street address is editable now - other fields come from geocoding
+      const finalAddress = ui.isAddressEditing
+        ? (ui.editableAddressInput.trim() || null)
+        : selection.location.address;
+
+      // Name is required (button is disabled without it)
+      const finalName = ui.editableNameInput.trim() || selection.location.name || null;
+
       const finalLocation: LocationType = {
         location_id: selection.location.location_id,
         latitude: selection.location.latitude,
         longitude: selection.location.longitude,
         originalLatitude: selection.location.originalLatitude ?? selection.location.latitude,
         originalLongitude: selection.location.originalLongitude ?? selection.location.longitude,
-        name: ui.editableNameInput || selection.location.name || null,
+        name: finalName,
         source: selection.location.source,
-        address: selection.location.address,
+        address: finalAddress,
         postalCode: selection.location.postalCode,
         neighborhood: selection.location.neighborhood,
         city: selection.location.city,
@@ -730,10 +767,19 @@ export function useLocationPicker({
         country: selection.location.country,
         category: selection.location.category,
         distance: selection.location.distance,
+        locationRadius: selection.location.locationRadius ?? null,
+        // Preserve geo_ fields (immutable, for filtering)
+        geoAddress: selection.location.geoAddress,
+        geoCity: selection.location.geoCity,
+        geoRegion: selection.location.geoRegion,
+        geoCountry: selection.location.geoCountry,
+        geoNeighborhood: selection.location.geoNeighborhood,
+        geoPostalCode: selection.location.geoPostalCode,
+        geoSubdivision: selection.location.geoSubdivision,
       };
 
-      // If this is a new location (no location_id), save it to the database first
-      if (!finalLocation.location_id && finalLocation.name) {
+      // Only save to My Places if toggle is on AND we have a name
+      if (saveToMyPlaces && !finalLocation.location_id && finalLocation.name) {
         try {
           const locationInput = locationToCreateInput(finalLocation);
           const savedLocation = await createLocation(locationInput);
@@ -747,12 +793,58 @@ export function useLocationPicker({
       onSelect(finalLocation);
       onClose();
     }
-  }, [selection.location, ui.editableNameInput, onSelect, onClose]);
+  }, [selection.location, ui.editableNameInput, ui.isAddressEditing, ui.editableAddressInput, saveToMyPlaces, onSelect, onClose]);
 
   // Handler: Center on my location (uses expo-location)
-  // In Create mode (showingDetails), recenters on selected point instead
+  // - View mode: Get GPS and fit both user location + pin (show relative position)
+  // - Create mode (showingDetails in select): Recenter on selected point
+  // - Select mode: Get GPS and move marker there
   const handleCenterOnMyLocation = useCallback(async () => {
-    // In Create mode, just recenter on the selected point (don't get GPS)
+    // In VIEW mode, always get GPS and fit both marker and user location
+    // This shows the user where they are relative to the pin
+    if (effectiveMode === 'view' && mapState.markerPosition && mapRef.current) {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+
+        let location = await Location.getLastKnownPositionAsync({});
+        if (!location) {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+        }
+
+        if (location) {
+          const markerLat = mapState.markerPosition.latitude;
+          const markerLng = mapState.markerPosition.longitude;
+          const userLat = location.coords.latitude;
+          const userLng = location.coords.longitude;
+
+          const centerLat = (markerLat + userLat) / 2;
+          const centerLng = (markerLng + userLng) / 2;
+          const latDelta = Math.abs(markerLat - userLat) * 1.5;
+          const lngDelta = Math.abs(markerLng - userLng) * 1.5;
+
+          const fitRegion = {
+            latitude: centerLat,
+            longitude: centerLng,
+            latitudeDelta: Math.max(latDelta, 0.01),
+            longitudeDelta: Math.max(lngDelta, 0.01),
+          };
+
+          mapRef.current.animateToRegion(fitRegion, 500);
+          setMapState(prev => ({
+            ...prev,
+            region: fitRegion,
+          }));
+        }
+      } catch (error) {
+        console.error('Error getting location:', error);
+      }
+      return;
+    }
+
+    // In CREATE mode (showingDetails in select mode), just recenter on the selected point
     if (ui.showingDetails && mapState.markerPosition && mapRef.current) {
       const recenterRegion = {
         latitude: mapState.markerPosition.latitude,
@@ -768,6 +860,8 @@ export function useLocationPicker({
       return;
     }
 
+    // SELECT mode - zoom to my location WITHOUT moving the selected point/search center
+    // This lets user see where they are while keeping their search centered elsewhere (e.g. a different city)
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
@@ -790,49 +884,13 @@ export function useLocationPicker({
           longitudeDelta: 0.01,
         };
 
-        // In view mode, zoom to fit both marker and user location
-        if (effectiveMode === 'view' && mapState.markerPosition) {
-          const markerLat = mapState.markerPosition.latitude;
-          const markerLng = mapState.markerPosition.longitude;
-          const userLat = coords.latitude;
-          const userLng = coords.longitude;
-
-          const centerLat = (markerLat + userLat) / 2;
-          const centerLng = (markerLng + userLng) / 2;
-          const latDelta = Math.abs(markerLat - userLat) * 1.5;
-          const lngDelta = Math.abs(markerLng - userLng) * 1.5;
-
-          const fitRegion = {
-            latitude: centerLat,
-            longitude: centerLng,
-            latitudeDelta: Math.max(latDelta, 0.01),
-            longitudeDelta: Math.max(lngDelta, 0.01),
-          };
-
-          mapRef.current.animateToRegion(fitRegion, 500);
-          setMapState(prev => ({
-            ...prev,
-            region: fitRegion,
-          }));
-          return;
-        }
-
-        // Select mode - animate and move marker
+        // Only animate map view - don't move marker or change selection
         mapRef.current.animateToRegion(newRegion, 500);
         setMapState(prev => ({
           ...prev,
           region: newRegion,
-          markerPosition: coords,
+          // markerPosition stays unchanged - user's search center is preserved
         }));
-
-        // Store GPS accuracy for circle display
-        if (location.coords.accuracy) {
-          setGpsAccuracy(location.coords.accuracy);
-        }
-
-        const newSelection = createSelectionFromMapTap(coords.latitude, coords.longitude);
-        setSelection(newSelection);
-        setReverseGeocodeRequest(coords);
       }
     } catch (error) {
       console.error('Error getting location:', error);
@@ -840,10 +898,22 @@ export function useLocationPicker({
   }, [effectiveMode, mapState.markerPosition, mapState.region, ui.showingDetails]);
 
   // Handler: Switch to select mode (from view mode)
+  // When switching from view to select, clear the location name so the card
+  // shows "Current Point" instead of the old saved location name
   const handleSwitchToSelectMode = useCallback(() => {
     setModeOverride('select');
     setUI(prev => ({ ...prev, showingDetails: false }));
     setPreviewMarker(null);
+    // Clear the location name but keep coordinates and other geo data
+    // This makes the "Selected Point" card show "Current Point" instead of the old name
+    setSelection(prev => ({
+      ...prev,
+      location: prev.location ? {
+        ...prev.location,
+        name: null,
+      } : null,
+      locationId: undefined,  // No longer linked to saved location
+    }));
   }, []);
 
   // Handler: Save dropped pin - switch to create mode to name and save the location
@@ -893,22 +963,25 @@ export function useLocationPicker({
     onClose();
   }, [onSelect, onClose]);
 
-  // Handler: Edit location details (name and address) - updates location and all entries using it
-  const handleEditLocation = useCallback(async (newName: string) => {
+  // Handler: Edit location details (name, address, location_radius) - updates location and all entries using it
+  const handleEditLocation = useCallback(async (newName: string, newAddress?: string | null, newLocationRadius?: number | null) => {
     if (!selection.locationId || !newName.trim()) return;
 
-    // Get current address from selection (may be null if user clicked "Clear Address")
-    const currentAddress = selection.location?.address ?? null;
+    // Use provided address if passed, otherwise use current selection address
+    const finalAddress = newAddress !== undefined ? newAddress : (selection.location?.address ?? null);
+    // Use provided location_radius if passed, otherwise use current selection locationRadius
+    const finalLocationRadius = newLocationRadius !== undefined ? newLocationRadius : (selection.location?.locationRadius ?? null);
 
     try {
       await updateLocationDetailsMutation.mutateAsync({
         locationId: selection.locationId,
         name: newName.trim(),
-        address: currentAddress,
+        address: finalAddress,
+        location_radius: finalLocationRadius,
       });
 
-      // Update local selection with new name (address was already updated by handleClearAddress)
-      const updatedLocation = selection.location ? { ...selection.location, name: newName.trim() } : null;
+      // Update local selection with new name, address, and locationRadius
+      const updatedLocation = selection.location ? { ...selection.location, name: newName.trim(), address: finalAddress, locationRadius: finalLocationRadius } : null;
 
       setSelection(prev => ({
         ...prev,
@@ -929,7 +1002,7 @@ export function useLocationPicker({
           originalLongitude: updatedLocation.originalLongitude ?? updatedLocation.longitude,
           name: newName.trim(),
           source: updatedLocation.source,
-          address: currentAddress,
+          address: finalAddress,
           postalCode: updatedLocation.postalCode,
           neighborhood: updatedLocation.neighborhood,
           city: updatedLocation.city,
@@ -938,6 +1011,7 @@ export function useLocationPicker({
           country: updatedLocation.country,
           category: updatedLocation.category,
           distance: updatedLocation.distance,
+          locationRadius: finalLocationRadius,
         };
         onSelect(finalLocation);
       }
@@ -965,6 +1039,10 @@ export function useLocationPicker({
     activeListTab,
     setActiveListTab,
 
+    // Save to My Places toggle
+    saveToMyPlaces,
+    setSaveToMyPlaces,
+
     // Map State
     mapState,
     setMapState,
@@ -977,7 +1055,8 @@ export function useLocationPicker({
     isLoadingSavedLocations,
 
     // Locations
-    savedLocations,
+    savedLocations,      // Nearby saved locations (within 10 miles) - for Nearby tab
+    allSavedLocations,   // All saved locations - for search results
     displayedPOIs,
     displayedLoading,
 
@@ -1011,10 +1090,10 @@ export function useLocationPicker({
     handleMapPress,
     handleOKPress,
     handleClearAddress,
+    handleResetToOriginal,
     handleLookupAddress,
     handleCenterOnMyLocation,
     handleSwitchToSelectMode,
-    handleSaveDroppedPin,
     handleRemoveLocation,
     handleRemovePin,
     handleEditLocation,

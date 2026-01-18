@@ -43,14 +43,14 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
 
 12. **Core package changes require tests** - When adding or modifying `@trace/core`:
    - Helper functions MUST have unit tests (vitest)
-   - Run `npm run test:run -w @trace/core` to verify tests pass
+   - Run `npm run test:run` to verify tests pass
    - New helper files need corresponding `.test.ts` files
    - Follow existing test patterns in `entryHelpers.test.ts` and `templateHelpers.test.ts`
    - Mobile code relies on type-check only (no unit tests)
 
 13. **Verify CI pipeline passes** - Before considering work complete:
-   - Run `npm run test:run -w @trace/core` for unit tests
-   - Run `npm run type-check -w @trace/mobile` for type checking
+   - Run `npm run test:run` for unit tests
+   - Run `npm run type-check:mobile` for type checking
    - These commands mirror what GitHub Actions runs on every PR
    - Do NOT merge or consider work done if tests fail
 

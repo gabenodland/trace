@@ -43,6 +43,7 @@ export const synthwaveLightTheme: Theme = {
       overdue: '#FF6B8A',      // Coral pink
       accent: '#FF69B4',       // Hot pink
       accentLight: '#FFE4F0',  // Pale pink bg
+      accentSecondary: '#06B6D4', // Tropical cyan - secondary accent for previews
     },
 
     interactive: {

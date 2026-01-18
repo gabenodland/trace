@@ -121,16 +121,16 @@ export function useUpdateLocationName() {
 }
 
 /**
- * Hook for updating location details (name and address) and all entries using it
- * This is used for "Edit Location" which allows editing name and clearing address.
+ * Hook for updating location details (name, address, location_radius) and all entries using it
+ * This is used for "Edit Location" which allows editing name, address, and precision.
  * Updates propagate to the location record AND all entries with this location_id.
  */
 export function useUpdateLocationDetails() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ locationId, name, address }: { locationId: string; name: string; address: string | null }) =>
-      locationApi.updateLocationDetails(locationId, { name, address }),
+    mutationFn: ({ locationId, name, address, location_radius }: { locationId: string; name: string; address: string | null; location_radius?: number | null }) =>
+      locationApi.updateLocationDetails(locationId, { name, address, location_radius }),
     onSuccess: (_, variables) => {
       // Invalidate location queries to refetch
       queryClient.invalidateQueries({ queryKey: mobileLocationKeys.all });

@@ -269,10 +269,13 @@ export async function autocompleteLocation(
     throw new Error('Foursquare API key not configured. Call configureLocationAPI() first.');
   }
 
-  const { query, latitude, longitude, limit = 10 } = request;
+  const { query, latitude, longitude, limit = 20 } = request;
+
+  // Normalize query to lowercase for consistent results (Foursquare may rank exact case matches higher)
+  const normalizedQuery = query.toLowerCase().trim();
 
   // Build URL with query parameters - matching Location Builder autocomplete params
-  let url = `https://places-api.foursquare.com/autocomplete?query=${encodeURIComponent(query)}&limit=${limit}&radius=50000`;
+  let url = `https://places-api.foursquare.com/autocomplete?query=${encodeURIComponent(normalizedQuery)}&limit=${limit}&radius=50000`;
 
   if (latitude !== undefined && longitude !== undefined) {
     url += `&ll=${latitude},${longitude}`;

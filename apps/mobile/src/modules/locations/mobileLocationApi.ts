@@ -146,6 +146,15 @@ export async function createLocation(data: CreateLocationInput): Promise<Locatio
     subdivision: data.subdivision || null,
     region: data.region || null,
     country: data.country || null,
+    location_radius: data.location_radius ?? null,
+    // Geo fields (immutable, from geocode)
+    geo_address: data.geo_address || null,
+    geo_neighborhood: data.geo_neighborhood || null,
+    geo_city: data.geo_city || null,
+    geo_subdivision: data.geo_subdivision || null,
+    geo_region: data.geo_region || null,
+    geo_country: data.geo_country || null,
+    geo_postal_code: data.geo_postal_code || null,
     mapbox_place_id: data.mapbox_place_id || null,
     foursquare_fsq_id: data.foursquare_fsq_id || null,
     created_at: now,
@@ -251,25 +260,26 @@ export async function updateLocationName(
 }
 
 /**
- * Update location details (name and address) and propagate to all entries
+ * Update location details (name, address, accuracy) and propagate to all entries
  *
- * This is used for "Edit Location" which allows editing name and clearing address.
+ * This is used for "Edit Location" which allows editing name, address, and precision.
  * Updates:
- * 1. The location record's name and address
+ * 1. The location record's name, address, and accuracy
  * 2. All entries with this location_id - their place_name and address fields
  *
  * Returns the number of entries updated
  */
 export async function updateLocationDetails(
   locationId: string,
-  updates: { name: string; address: string | null }
+  updates: { name: string; address: string | null; location_radius?: number | null }
 ): Promise<{ location: LocationEntity; entriesUpdated: number }> {
-  log.info('Updating location details and entries', { locationId, name: updates.name, hasAddress: !!updates.address });
+  log.info('Updating location details and entries', { locationId, name: updates.name, hasAddress: !!updates.address, location_radius: updates.location_radius });
 
   // Update the location record
   const updatedLocation = await updateLocation(locationId, {
     name: updates.name,
     address: updates.address,
+    ...(updates.location_radius !== undefined && { location_radius: updates.location_radius }),
   });
 
   // Update all entries that reference this location
@@ -279,10 +289,11 @@ export async function updateLocationDetails(
     `UPDATE entries
      SET place_name = ?,
          address = ?,
+         location_radius = ?,
          synced = 0,
          sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END
      WHERE location_id = ? AND deleted_at IS NULL`,
-    [updates.name, updates.address, locationId]
+    [updates.name, updates.address, updates.location_radius ?? null, locationId]
   );
 
   // Get the count of updated entries

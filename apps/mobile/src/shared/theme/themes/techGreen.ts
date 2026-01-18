@@ -41,6 +41,7 @@ export const techGreenTheme: Theme = {
       overdue: '#F85149',      // GitHub red
       accent: '#39D353',       // Bright green
       accentLight: '#0D2818',  // Dark green bg
+      accentSecondary: '#F97316', // Techy orange - secondary accent for previews
     },
 
     interactive: {

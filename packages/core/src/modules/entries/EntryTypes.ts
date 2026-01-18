@@ -82,7 +82,8 @@ export interface Entry {
   // GPS coordinates captured when entry was created (private, exact, never changes)
   entry_latitude: number | null;
   entry_longitude: number | null;
-  location_accuracy: number | null; // GPS accuracy in meters
+  // User-selected radius for location generalization (privacy feature)
+  location_radius: number | null;
   // Location reference (optional - points to anchor in locations table)
   location_id: string | null;
   // Location hierarchy (owned by entry - copied from anchor or reverse geocode)
@@ -103,6 +104,15 @@ export interface Entry {
   // 'error' = API call failed
   // 'manual' = user manually entered location data
   geocode_status?: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
+  // Geo fields - immutable original data from reverse geocode (for filtering/sorting)
+  // Display fields above can be edited by user; these preserve the original geocode data
+  geo_address: string | null;
+  geo_neighborhood: string | null;
+  geo_city: string | null;
+  geo_subdivision: string | null;
+  geo_region: string | null;
+  geo_country: string | null;
+  geo_postal_code: string | null;
   status: EntryStatus;
   type: string | null; // User-defined type from stream's entry_types
   due_date: string | null;
@@ -135,7 +145,7 @@ export interface CreateEntryInput {
   entry_date?: string | null; // When the memory/event actually happened
   entry_latitude?: number | null;
   entry_longitude?: number | null;
-  location_accuracy?: number | null;
+  location_radius?: number | null;
   location_id?: string | null;
   // Location hierarchy (copied from anchor or reverse geocode)
   place_name?: string | null;
@@ -147,6 +157,14 @@ export interface CreateEntryInput {
   region?: string | null;
   country?: string | null;
   geocode_status?: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
+  // Geo fields - immutable original data from reverse geocode
+  geo_address?: string | null;
+  geo_neighborhood?: string | null;
+  geo_city?: string | null;
+  geo_subdivision?: string | null;
+  geo_region?: string | null;
+  geo_country?: string | null;
+  geo_postal_code?: string | null;
   status?: EntryStatus;
   type?: string | null; // User-defined type from stream's entry_types
   due_date?: string | null;
@@ -164,7 +182,7 @@ export interface UpdateEntryInput {
   entry_date?: string | null; // When the memory/event actually happened
   entry_latitude?: number | null;
   entry_longitude?: number | null;
-  location_accuracy?: number | null;
+  location_radius?: number | null;
   location_id?: string | null;
   // Location hierarchy (copied from anchor or reverse geocode)
   place_name?: string | null;
@@ -176,6 +194,14 @@ export interface UpdateEntryInput {
   region?: string | null;
   country?: string | null;
   geocode_status?: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
+  // Geo fields - immutable original data from reverse geocode
+  geo_address?: string | null;
+  geo_neighborhood?: string | null;
+  geo_city?: string | null;
+  geo_subdivision?: string | null;
+  geo_region?: string | null;
+  geo_country?: string | null;
+  geo_postal_code?: string | null;
   status?: EntryStatus;
   type?: string | null; // User-defined type from stream's entry_types
   due_date?: string | null;

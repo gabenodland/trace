@@ -41,6 +41,7 @@ export const sepiaTheme: Theme = {
       overdue: '#B85450',      // Muted red
       accent: '#C06C52',       // Terracotta/coral
       accentLight: '#FDF0EC',  // Light terracotta bg
+      accentSecondary: '#D97706', // Amber - secondary accent for previews
     },
 
     interactive: {

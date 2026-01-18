@@ -175,8 +175,8 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
         subdivision: entry.subdivision,
         region: entry.region,
         country: entry.country,
-        // Include GPS accuracy for dropped pins
-        accuracy: entry.location_accuracy ?? undefined,
+        // Include location radius for precision display
+        locationRadius: entry.location_radius ?? undefined,
       } : null;
 
       return {
@@ -192,7 +192,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
         entryDate,
         includeTime,
         gpsData: entry.entry_latitude != null && entry.entry_longitude != null
-          ? { latitude: entry.entry_latitude, longitude: entry.entry_longitude, accuracy: entry.location_accuracy ?? null }
+          ? { latitude: entry.entry_latitude, longitude: entry.entry_longitude, accuracy: null } // GPS accuracy is transient, not stored
           : null,
         locationData,
         geocodeStatus: (entry.geocode_status as GeocodeStatus) ?? null,
