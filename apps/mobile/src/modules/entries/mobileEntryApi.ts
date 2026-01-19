@@ -35,14 +35,14 @@ export interface MobileEntryFilter extends EntryFilter {
    */
   excludePrivateStreams?: boolean;
 
-  // Geographic hierarchy filters (filter entries by location fields)
+  // Location hierarchy filters (filter entries by location fields)
   // For places, use location_id (stable UUID) instead of GPS coords
-  geo_country?: string;
-  geo_region?: string;
-  geo_city?: string;
-  geo_neighborhood?: string;
-  geo_place_name?: string;
-  geo_none?: boolean; // Filter entries with no location data
+  filter_country?: string;
+  filter_region?: string;
+  filter_city?: string;
+  filter_neighborhood?: string;
+  filter_place_name?: string;
+  filter_no_location?: boolean; // Filter entries with no location data
 }
 
 /**
@@ -101,25 +101,25 @@ export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEn
     const geoType = parts[1];
 
     if (geoType === 'none') {
-      return { geo_none: true };
+      return { filter_no_location: true };
     } else if (geoType === 'country') {
       const countryName = parts.slice(2).join(':');
-      return { geo_country: countryName };
+      return { filter_country: countryName };
     } else if (geoType === 'region') {
       const regionName = parts[2];
       const countryName = parts[3] || undefined;
       return {
-        geo_region: regionName,
-        ...(countryName && { geo_country: countryName }),
+        filter_region: regionName,
+        ...(countryName && { filter_country: countryName }),
       };
     } else if (geoType === 'city') {
       const cityName = parts[2];
       const regionName = parts[3] || undefined;
       const countryName = parts[4] || undefined;
       return {
-        geo_city: cityName,
-        ...(regionName && { geo_region: regionName }),
-        ...(countryName && { geo_country: countryName }),
+        filter_city: cityName,
+        ...(regionName && { filter_region: regionName }),
+        ...(countryName && { filter_country: countryName }),
       };
     } else if (geoType === 'neighborhood') {
       const neighborhoodName = parts[2];
@@ -127,10 +127,10 @@ export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEn
       const regionName = parts[4] || undefined;
       const countryName = parts[5] || undefined;
       return {
-        geo_neighborhood: neighborhoodName,
-        ...(cityName && { geo_city: cityName }),
-        ...(regionName && { geo_region: regionName }),
-        ...(countryName && { geo_country: countryName }),
+        filter_neighborhood: neighborhoodName,
+        ...(cityName && { filter_city: cityName }),
+        ...(regionName && { filter_region: regionName }),
+        ...(countryName && { filter_country: countryName }),
       };
     } else if (geoType === 'place') {
       const placeName = parts[2];
@@ -138,10 +138,10 @@ export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEn
       const regionName = parts[4] || undefined;
       const countryName = parts[5] || undefined;
       return {
-        geo_place_name: placeName,
-        ...(cityName && { geo_city: cityName }),
-        ...(regionName && { geo_region: regionName }),
-        ...(countryName && { geo_country: countryName }),
+        filter_place_name: placeName,
+        ...(cityName && { filter_city: cityName }),
+        ...(regionName && { filter_region: regionName }),
+        ...(countryName && { filter_country: countryName }),
       };
     }
   }
@@ -276,14 +276,6 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     region: data.region || null,
     country: data.country || null,
     geocode_status: data.geocode_status || null,
-    // Geo fields (immutable, from geocode, for filtering/sorting)
-    geo_address: data.geo_address || null,
-    geo_neighborhood: data.geo_neighborhood || null,
-    geo_city: data.geo_city || null,
-    geo_subdivision: data.geo_subdivision || null,
-    geo_region: data.geo_region || null,
-    geo_country: data.geo_country || null,
-    geo_postal_code: data.geo_postal_code || null,
     status: data.status || 'none',
     type: data.type || null,
     due_date: data.due_date || null,
@@ -472,14 +464,6 @@ export async function copyEntry(
     region: originalEntry.region || null,
     country: originalEntry.country || null,
     geocode_status: originalEntry.geocode_status || null,
-    // Copy geo fields (immutable, from original geocode)
-    geo_address: originalEntry.geo_address || null,
-    geo_neighborhood: originalEntry.geo_neighborhood || null,
-    geo_city: originalEntry.geo_city || null,
-    geo_subdivision: originalEntry.geo_subdivision || null,
-    geo_region: originalEntry.geo_region || null,
-    geo_country: originalEntry.geo_country || null,
-    geo_postal_code: originalEntry.geo_postal_code || null,
     // Copy status, type, and task-related fields
     status: originalEntry.status || 'none',
     type: originalEntry.type || null,

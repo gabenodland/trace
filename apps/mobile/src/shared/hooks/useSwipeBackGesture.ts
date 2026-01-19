@@ -76,8 +76,9 @@ export function useSwipeBackGesture({
       // Main view: visible
       mainViewTranslateX.setValue(0);
     }
-    setIsSwipingBack(false);
-  }, [isEnabled, mainViewTranslateX]);
+    // Only update state if it's not already false to avoid unnecessary re-renders
+    setIsSwipingBack(prev => prev === false ? prev : false);
+  }, [isEnabled]); // Remove mainViewTranslateX from deps - it's a stable ref
 
   const panResponder = useRef(
     PanResponder.create({

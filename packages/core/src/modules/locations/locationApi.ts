@@ -22,20 +22,8 @@ import config from '../../../config.json';
 // ============================================================================
 
 // Configuration from package-level config.json - easy to find and modify
-let mapboxAccessToken: string = config.mapbox.accessToken;
-let foursquareApiKey: string = config.foursquare.apiKey;
-
-/**
- * Configure location API credentials
- * For backwards compatibility - allows apps to override config.json
- */
-export function configureLocationAPI(apiConfig: {
-  mapboxAccessToken: string;
-  foursquareApiKey: string;
-}) {
-  mapboxAccessToken = apiConfig.mapboxAccessToken;
-  foursquareApiKey = apiConfig.foursquareApiKey;
-}
+const mapboxAccessToken: string = config.mapbox.accessToken;
+const foursquareApiKey: string = config.foursquare.apiKey;
 
 // ============================================================================
 // IN-MEMORY CACHE
@@ -104,7 +92,7 @@ export async function reverseGeocode(
   request: ReverseGeocodeRequest
 ): Promise<MapboxReverseGeocodeResponse> {
   if (!mapboxAccessToken) {
-    throw new Error('Mapbox access token not configured. Call configureLocationAPI() first.');
+    throw new Error('Mapbox access token not configured. Check config.json.');
   }
 
   const { latitude, longitude } = request;
@@ -144,41 +132,6 @@ export async function reverseGeocode(
   return data;
 }
 
-/**
- * Forward geocode a search query to coordinates
- *
- * @internal Not exported - use hooks
- */
-export async function forwardGeocode(
-  query: string,
-  options?: {
-    proximity?: { latitude: number; longitude: number };
-    limit?: number;
-  }
-): Promise<MapboxReverseGeocodeResponse> {
-  if (!mapboxAccessToken) {
-    throw new Error('Mapbox access token not configured. Call configureLocationAPI() first.');
-  }
-
-  const url = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`);
-  url.searchParams.set('access_token', mapboxAccessToken);
-  url.searchParams.set('types', 'poi,address,place');
-  url.searchParams.set('limit', String(options?.limit || 10));
-
-  if (options?.proximity) {
-    url.searchParams.set('proximity', `${options.proximity.longitude},${options.proximity.latitude}`);
-  }
-
-  const response = await fetch(url.toString());
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({ message: response.statusText })) as { message?: string };
-    throw new Error(`Mapbox API error: ${errorBody.message || response.statusText}`);
-  }
-
-  return response.json() as Promise<MapboxReverseGeocodeResponse>;
-}
-
 // ============================================================================
 // FOURSQUARE PLACES API
 // ============================================================================
@@ -196,7 +149,7 @@ export async function searchNearbyPOIs(
 
   if (!foursquareApiKey) {
     console.error('[LocationAPI] ❌ Foursquare API key not configured!');
-    throw new Error('Foursquare API key not configured. Call configureLocationAPI() first.');
+    throw new Error('Foursquare API key not configured. Check config.json.');
   }
 
   const { latitude, longitude, radius = 500, limit = 50 } = request;
@@ -266,7 +219,7 @@ export async function autocompleteLocation(
 
   if (!foursquareApiKey) {
     console.error('[LocationAPI] ❌ Foursquare API key not configured!');
-    throw new Error('Foursquare API key not configured. Call configureLocationAPI() first.');
+    throw new Error('Foursquare API key not configured. Check config.json.');
   }
 
   const { query, latitude, longitude, limit = 20 } = request;
@@ -307,40 +260,4 @@ export async function autocompleteLocation(
   }
 
   return data;
-}
-
-// ============================================================================
-// CACHE MANAGEMENT
-// ============================================================================
-
-/**
- * Clear all cached location data
- */
-export function clearLocationCache() {
-  geocodeCache.clear();
-  poiCache.clear();
-}
-
-/**
- * Get cache statistics
- */
-export function getCacheStats() {
-  return {
-    geocode: {
-      size: geocodeCache.size,
-      entries: Array.from(geocodeCache.values()).map(e => ({
-        key: e.key,
-        timestamp: new Date(e.timestamp).toISOString(),
-        expiresAt: new Date(e.expiresAt).toISOString(),
-      })),
-    },
-    poi: {
-      size: poiCache.size,
-      entries: Array.from(poiCache.values()).map(e => ({
-        key: e.key,
-        timestamp: new Date(e.timestamp).toISOString(),
-        expiresAt: new Date(e.expiresAt).toISOString(),
-      })),
-    },
-  };
 }

@@ -29,6 +29,7 @@ import { ThemeProvider, useTheme } from "./src/shared/contexts/ThemeContext";
 import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/DrawerContext";
 import { StreamDrawer } from "./src/components/drawer";
 import { useSwipeBackGesture } from "./src/shared/hooks/useSwipeBackGesture";
+import { ErrorBoundary } from "./src/shared/components/ErrorBoundary";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { EntryScreen } from "./src/modules/entries/components/EntryScreen";
@@ -96,35 +97,76 @@ function AuthGate() {
     mainViewScreenRef.current = screen;
   }, []);
 
-  // Initialize database and sync when authenticated
-  useEffect(() => {
-    if (isAuthenticated && !dbInitialized) {
-      console.log('🚀 Initializing offline database...');
-
-      localDB.init()
-        .then(() => {
-          console.log('✅ Database initialized');
-          return initializeSync(queryClient);
-        })
-        .then(() => {
-          console.log('✅ Sync initialized');
-          setDbInitialized(true);
-        })
-        .catch((error) => {
-          console.error('❌ Failed to initialize:', error);
-        });
-    }
-
-    // Cleanup on unmount
-    return () => {
-      if (dbInitialized) {
-        destroySync();
-      }
-    };
-  }, [isAuthenticated, dbInitialized, queryClient]);
+  // Track current activeTab via ref for use in stable callbacks
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
 
   // Main view screens - back from these exits app
   const mainViewScreens = ["inbox", "map", "calendar"];
+
+  // Handle back navigation - always returns to main view
+  // Using refs to avoid recreating callback when state changes
+  const handleBackAsync = useCallback(async () => {
+    const isOnMainView = mainViewScreens.includes(activeTabRef.current);
+    if (isOnMainView) return; // Already on main view
+
+    // Check if screen allows back navigation
+    const canGoBack = await checkBeforeBack();
+    if (!canGoBack) {
+      return; // Screen blocked back navigation
+    }
+
+    // Go back to main view using the current viewMode
+    setNavParams({});
+    setActiveTab(mainViewScreenRef.current);
+  }, [checkBeforeBack]);
+
+  // Handle navigation - simple screen change, no history stack
+  const handleNavigate = useCallback((tabId: string, params?: Record<string, any>) => {
+    // Handle "back" navigation specially - go to main view
+    if (tabId === "back") {
+      handleBackAsync();
+      return;
+    }
+    setActiveTab(tabId);
+    setNavParams(params || {});
+  }, [handleBackAsync]);
+
+  // Track initialization state to prevent duplicate initialization
+  const hasInitializedRef = useRef(false);
+
+  // Initialize database and sync when authenticated
+  useEffect(() => {
+    // Not authenticated - ensure cleanup
+    if (!isAuthenticated) {
+      if (hasInitializedRef.current) {
+        destroySync();
+        hasInitializedRef.current = false;
+        setDbInitialized(false);
+      }
+      return;
+    }
+
+    // Already initialized - skip
+    if (hasInitializedRef.current) {
+      return;
+    }
+
+    // Initialize for the first time
+    hasInitializedRef.current = true;
+
+    localDB.init()
+      .then(() => {
+        setDbInitialized(true);
+        return initializeSync(queryClient);
+      })
+      .catch((error) => {
+        console.error('Failed to initialize:', error);
+        hasInitializedRef.current = false;
+      });
+  }, [isAuthenticated]);
+
+  // Compute isOnMainView for backHandler effect
   const isOnMainView = mainViewScreens.includes(activeTab);
 
   // Handle Android back button and iOS swipe-back gesture
@@ -163,32 +205,6 @@ function AuthGate() {
     }
     return <LoginScreen onSwitchToSignUp={() => setShowSignUp(true)} />;
   }
-
-  // Handle navigation - simple screen change, no history stack
-  const handleNavigate = (tabId: string, params?: Record<string, any>) => {
-    // Handle "back" navigation specially - go to main view
-    if (tabId === "back") {
-      handleBackAsync();
-      return;
-    }
-    setActiveTab(tabId);
-    setNavParams(params || {});
-  };
-
-  // Handle back navigation - always returns to main view
-  const handleBackAsync = async () => {
-    if (isOnMainView) return; // Already on main view
-
-    // Check if screen allows back navigation
-    const canGoBack = await checkBeforeBack();
-    if (!canGoBack) {
-      return; // Screen blocked back navigation
-    }
-
-    // Go back to main view using the current viewMode
-    setNavParams({});
-    setActiveTab(mainViewScreenRef.current);
-  };
 
   // User is authenticated - show main app with new navigation
   return (
@@ -245,11 +261,16 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
   // Target main view for swipe-back (the screen we came from)
   const targetMainView = screenMap[viewMode];
 
+  // Stable callback for swipe-back navigation
+  const handleSwipeBack = useCallback(() => {
+    navigate(targetMainView);
+  }, [navigate, targetMainView]);
+
   // Swipe-back gesture - extracted to hook for cleaner code
   // Disabled when a fullscreen modal (like LocationPicker) is open
   const { panHandlers, mainViewTranslateX, isSwipingBack } = useSwipeBackGesture({
     isEnabled: !isOnMainView,
-    onBack: () => navigate(targetMainView),
+    onBack: handleSwipeBack,
     checkBeforeBack,
     isModalOpen,
   });
@@ -348,7 +369,9 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
           ]}
           pointerEvents={activeTab === "inbox" ? "auto" : "none"}
         >
-          <EntryListScreen />
+          <ErrorBoundary name="EntryListScreen">
+            <EntryListScreen />
+          </ErrorBoundary>
         </View>
         <View
           style={[
@@ -358,7 +381,9 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
           ]}
           pointerEvents={activeTab === "map" ? "auto" : "none"}
         >
-          <MapScreen />
+          <ErrorBoundary name="MapScreen">
+            <MapScreen isVisible={activeTab === "map"} />
+          </ErrorBoundary>
         </View>
         <View
           style={[
@@ -368,7 +393,9 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
           ]}
           pointerEvents={activeTab === "calendar" ? "auto" : "none"}
         >
-          <CalendarScreen />
+          <ErrorBoundary name="CalendarScreen">
+            <CalendarScreen />
+          </ErrorBoundary>
         </View>
       </Animated.View>
 

@@ -120,10 +120,12 @@ export function createSelectionFromPOI(poi: POIItem): LocationSelection {
 
 /**
  * Helper to create selection from map tap
+ * @param locationRadius - Optional radius to preserve from existing location (for edit mode)
  */
 export function createSelectionFromMapTap(
   latitude: number,
-  longitude: number
+  longitude: number,
+  locationRadius?: number | null
 ): LocationSelection {
   return {
     type: 'map_tap',
@@ -132,7 +134,7 @@ export function createSelectionFromMapTap(
       longitude,
       name: null, // Will be filled by reverse geocoding
       source: 'user_custom',
-      locationRadius: 0, // Map taps default to Exact precision (0 = exact)
+      locationRadius: locationRadius !== undefined ? locationRadius : 0, // Preserve existing or default to Exact (0)
     },
     tempCoordinates: { latitude, longitude },
     isLoadingDetails: true,

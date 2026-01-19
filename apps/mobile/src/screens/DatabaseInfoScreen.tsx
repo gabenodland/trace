@@ -985,6 +985,60 @@ export function DatabaseInfoScreen() {
     );
   };
 
+  const handleClearStaleSyncErrors = async () => {
+    try {
+      // Find all records that have sync_error but are marked as synced
+      // This shouldn't happen in normal operation, but can occur after bug fixes
+      const [entries, streams, locations, attachments] = await Promise.all([
+        localDB.runCustomQuery('SELECT entry_id FROM entries WHERE synced = 1 AND sync_error IS NOT NULL'),
+        localDB.runCustomQuery('SELECT stream_id FROM streams WHERE synced = 1 AND sync_error IS NOT NULL'),
+        localDB.runCustomQuery('SELECT location_id FROM locations WHERE synced = 1 AND sync_error IS NOT NULL'),
+        localDB.runCustomQuery('SELECT attachment_id FROM attachments WHERE synced = 1 AND sync_error IS NOT NULL'),
+      ]);
+
+      const totalStale = entries.length + streams.length + locations.length + attachments.length;
+
+      if (totalStale === 0) {
+        Alert.alert('All Good', 'No stale sync errors found.');
+        return;
+      }
+
+      Alert.alert(
+        'Clear Stale Sync Errors',
+        `Found ${totalStale} stale sync error(s):\n\n` +
+        `Entries: ${entries.length}\n` +
+        `Streams: ${streams.length}\n` +
+        `Locations: ${locations.length}\n` +
+        `Attachments: ${attachments.length}\n\n` +
+        `These records are marked as synced but have error messages from old failed syncs. Clear them?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Clear Errors',
+            onPress: async () => {
+              try {
+                // Clear stale errors from all tables
+                await Promise.all([
+                  localDB.runCustomQuery('UPDATE entries SET sync_error = NULL WHERE synced = 1 AND sync_error IS NOT NULL'),
+                  localDB.runCustomQuery('UPDATE streams SET sync_error = NULL WHERE synced = 1 AND sync_error IS NOT NULL'),
+                  localDB.runCustomQuery('UPDATE locations SET sync_error = NULL WHERE synced = 1 AND sync_error IS NOT NULL'),
+                  localDB.runCustomQuery('UPDATE attachments SET sync_error = NULL WHERE synced = 1 AND sync_error IS NOT NULL'),
+                ]);
+
+                setRefreshKey(prev => prev + 1);
+                Alert.alert('Success', `Cleared ${totalStale} stale sync error(s).`);
+              } catch (error) {
+                Alert.alert('Error', `Failed to clear errors: ${error}`);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', `Failed to check for stale errors: ${error}`);
+    }
+  };
+
   const refreshButton = (
     <TouchableOpacity onPress={() => setRefreshKey(prev => prev + 1)} style={styles.refreshButton}>
       <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
@@ -1236,6 +1290,17 @@ export function DatabaseInfoScreen() {
               </TouchableOpacity>
               <Text style={styles.helperText}>
                 Use "Reset Schema" if you see errors like "no such column"
+              </Text>
+            </View>
+
+            {/* Cleanup Tools */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Cleanup Tools</Text>
+              <TouchableOpacity onPress={handleClearStaleSyncErrors} style={styles.cleanupButton}>
+                <Text style={styles.cleanupButtonText}>🧹 Clear Stale Sync Errors</Text>
+              </TouchableOpacity>
+              <Text style={styles.helperText}>
+                Remove error messages from successfully synced records. These can occur after bug fixes when old failed syncs left error flags behind.
               </Text>
             </View>
           </>

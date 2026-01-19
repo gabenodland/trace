@@ -147,14 +147,6 @@ export async function createLocation(data: CreateLocationInput): Promise<Locatio
     region: data.region || null,
     country: data.country || null,
     location_radius: data.location_radius ?? null,
-    // Geo fields (immutable, from geocode)
-    geo_address: data.geo_address || null,
-    geo_neighborhood: data.geo_neighborhood || null,
-    geo_city: data.geo_city || null,
-    geo_subdivision: data.geo_subdivision || null,
-    geo_region: data.geo_region || null,
-    geo_country: data.geo_country || null,
-    geo_postal_code: data.geo_postal_code || null,
     mapbox_place_id: data.mapbox_place_id || null,
     foursquare_fsq_id: data.foursquare_fsq_id || null,
     created_at: now,
@@ -265,7 +257,8 @@ export async function updateLocationName(
  * This is used for "Edit Location" which allows editing name, address, and precision.
  * Updates:
  * 1. The location record's name, address, and accuracy
- * 2. All entries with this location_id - their place_name and address fields
+ * 2. All entries with this location_id - syncs ALL hierarchy fields (place_name, address,
+ *    neighborhood, postal_code, city, subdivision, region, country, location_radius)
  *
  * Returns the number of entries updated
  */
@@ -282,18 +275,35 @@ export async function updateLocationDetails(
     ...(updates.location_radius !== undefined && { location_radius: updates.location_radius }),
   });
 
-  // Update all entries that reference this location
+  // Update all entries that reference this location - sync ALL hierarchy fields
   // Note: We don't update updated_at since the entry content itself hasn't changed,
   // only the denormalized location data. This preserves "last edited" semantics.
   await localDB.runCustomQuery(
     `UPDATE entries
      SET place_name = ?,
          address = ?,
+         neighborhood = ?,
+         postal_code = ?,
+         city = ?,
+         subdivision = ?,
+         region = ?,
+         country = ?,
          location_radius = ?,
          synced = 0,
          sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END
      WHERE location_id = ? AND deleted_at IS NULL`,
-    [updates.name, updates.address, updates.location_radius ?? null, locationId]
+    [
+      updatedLocation.name,
+      updatedLocation.address,
+      updatedLocation.neighborhood,
+      updatedLocation.postal_code,
+      updatedLocation.city,
+      updatedLocation.subdivision,
+      updatedLocation.region,
+      updatedLocation.country,
+      updatedLocation.location_radius,
+      locationId
+    ]
   );
 
   // Get the count of updated entries
@@ -302,7 +312,7 @@ export async function updateLocationDetails(
   );
   const count = countResult[0]?.count ?? 0;
 
-  log.info('Updated location and entries', { locationId, entriesUpdated: count });
+  log.info('Updated location and synced all hierarchy fields to entries', { locationId, entriesUpdated: count });
 
   // Trigger sync
   triggerPushSync();

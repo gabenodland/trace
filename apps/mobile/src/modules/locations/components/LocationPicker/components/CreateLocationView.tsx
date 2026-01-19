@@ -94,7 +94,10 @@ interface CreateLocationViewProps {
   onBack: () => void;
   onClearAddress?: () => void;
   onResetToOriginal?: () => void;
-  onPrecisionChange?: (radiusMeters: number) => void;
+
+  // Unified radius (from GPS accuracy or user precision slider)
+  radius: number;
+  onRadiusChange: (radiusMeters: number) => void;
 
   // Keyboard
   keyboardHeight?: number;
@@ -112,15 +115,15 @@ export function CreateLocationView({
   onBack,
   onClearAddress,
   onResetToOriginal,
-  onPrecisionChange,
+  radius,
+  onRadiusChange,
   keyboardHeight = 0,
 }: CreateLocationViewProps) {
   const theme = useTheme();
   const { settings } = useSettings();
   const isMetric = settings.units === 'metric';
 
-  // Precision slider state (0 = exact, up to 5000m)
-  const [precisionRadius, setPrecisionRadius] = useState(0);
+  // Local UI state for precision picker visibility
   const [showPrecisionPicker, setShowPrecisionPicker] = useState(false);
 
   // Clear locationRadius when entering create mode - always start at Exact
@@ -133,15 +136,15 @@ export function CreateLocationView({
           locationRadius: null,
         } : null,
       }));
-      // Also notify parent to clear precision circle on map
-      onPrecisionChange?.(0);
+      // Also clear parent radius to remove circle on map
+      onRadiusChange(0);
     }
   }, []); // Only run on mount
 
   // Calculate rounded coordinates based on precision
   const getRoundedCoords = () => {
     if (!selection.location) return { lat: 0, lng: 0 };
-    const decimals = getDecimalsForRadius(precisionRadius);
+    const decimals = getDecimalsForRadius(radius);
     const lat = roundCoordinate(selection.location.latitude, decimals);
     const lng = roundCoordinate(selection.location.longitude, decimals);
     return { lat, lng };
@@ -152,7 +155,8 @@ export function CreateLocationView({
   // The radius is a user-selected privacy/generalization value, not GPS accuracy.
   // Coordinates remain exact - the radius just indicates the displayed area.
   const handlePrecisionChange = (radiusMeters: number) => {
-    setPrecisionRadius(radiusMeters);
+    // Update parent radius state
+    onRadiusChange(radiusMeters);
 
     if (selection.location) {
       const originalLat = selection.location.originalLatitude ?? selection.location.latitude;
@@ -166,8 +170,6 @@ export function CreateLocationView({
           locationRadius: radiusMeters > 0 ? radiusMeters : null,
         } : null,
       }));
-
-      onPrecisionChange?.(radiusMeters);
 
       if (mapRef?.current) {
         const delta = radiusMeters > 0
@@ -426,7 +428,7 @@ export function CreateLocationView({
                 <Circle cx={12} cy={12} r={3} fill={theme.colors.text.tertiary} />
               </Svg>
               <Text style={[styles.infoCardCoordsText, { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.tertiary }]}>
-                {roundedCoords.lat.toFixed(getDecimalsForRadius(precisionRadius))}, {roundedCoords.lng.toFixed(getDecimalsForRadius(precisionRadius))}
+                {roundedCoords.lat.toFixed(getDecimalsForRadius(radius))}, {roundedCoords.lng.toFixed(getDecimalsForRadius(radius))}
               </Text>
             </View>
             {/* Precision Dropdown Button */}
@@ -444,7 +446,7 @@ export function CreateLocationView({
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={{ fontSize: 12, fontFamily: theme.typography.fontFamily.medium, color: theme.colors.text.secondary }}>
-                {formatPrecision(precisionRadius, isMetric)}
+                {formatPrecision(radius, isMetric)}
               </Text>
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
                 <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -485,11 +487,11 @@ export function CreateLocationView({
               {/* Current value display */}
               <View style={{ alignItems: 'center', marginBottom: 16 }}>
                 <Text style={{ fontSize: 28, fontFamily: theme.typography.fontFamily.semibold, color: theme.colors.functional.accent }}>
-                  {formatPrecision(precisionRadius, isMetric)}
+                  {formatPrecision(radius, isMetric)}
                 </Text>
-                {getPrecisionDescription(precisionRadius) && (
+                {getPrecisionDescription(radius) && (
                   <Text style={{ fontSize: 14, fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.secondary, marginTop: 4 }}>
-                    {getPrecisionDescription(precisionRadius)}
+                    {getPrecisionDescription(radius)}
                   </Text>
                 )}
               </View>
@@ -501,7 +503,7 @@ export function CreateLocationView({
                   minimumValue={0}
                   maximumValue={5000}
                   step={10}
-                  value={precisionRadius}
+                  value={radius}
                   onValueChange={(value) => handlePrecisionChange(Math.round(value))}
                   minimumTrackTintColor={theme.colors.functional.accent}
                   maximumTrackTintColor={theme.colors.border.medium}

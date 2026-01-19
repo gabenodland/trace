@@ -9,25 +9,6 @@ import { supabase } from '../../shared/supabase';
 import type { Attachment, CreateAttachmentInput, UpdateAttachmentInput } from './AttachmentTypes';
 
 /**
- * Get all attachments for a user
- */
-export async function getAttachments(userId?: string): Promise<Attachment[]> {
-  let query = supabase
-    .from('attachments')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (userId) {
-    query = query.eq('user_id', userId);
-  }
-
-  const { data, error } = await query;
-
-  if (error) throw error;
-  return (data || []) as Attachment[];
-}
-
-/**
  * Get attachments for a specific entry
  */
 export async function getAttachmentsForEntry(entryId: string): Promise<Attachment[]> {

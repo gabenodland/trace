@@ -104,15 +104,6 @@ export interface Entry {
   // 'error' = API call failed
   // 'manual' = user manually entered location data
   geocode_status?: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
-  // Geo fields - immutable original data from reverse geocode (for filtering/sorting)
-  // Display fields above can be edited by user; these preserve the original geocode data
-  geo_address: string | null;
-  geo_neighborhood: string | null;
-  geo_city: string | null;
-  geo_subdivision: string | null;
-  geo_region: string | null;
-  geo_country: string | null;
-  geo_postal_code: string | null;
   status: EntryStatus;
   type: string | null; // User-defined type from stream's entry_types
   due_date: string | null;
@@ -157,14 +148,6 @@ export interface CreateEntryInput {
   region?: string | null;
   country?: string | null;
   geocode_status?: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
-  // Geo fields - immutable original data from reverse geocode
-  geo_address?: string | null;
-  geo_neighborhood?: string | null;
-  geo_city?: string | null;
-  geo_subdivision?: string | null;
-  geo_region?: string | null;
-  geo_country?: string | null;
-  geo_postal_code?: string | null;
   status?: EntryStatus;
   type?: string | null; // User-defined type from stream's entry_types
   due_date?: string | null;
@@ -194,14 +177,6 @@ export interface UpdateEntryInput {
   region?: string | null;
   country?: string | null;
   geocode_status?: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
-  // Geo fields - immutable original data from reverse geocode
-  geo_address?: string | null;
-  geo_neighborhood?: string | null;
-  geo_city?: string | null;
-  geo_subdivision?: string | null;
-  geo_region?: string | null;
-  geo_country?: string | null;
-  geo_postal_code?: string | null;
   status?: EntryStatus;
   type?: string | null; // User-defined type from stream's entry_types
   due_date?: string | null;
@@ -221,16 +196,6 @@ export interface EntryFilter {
   end_date?: string;
   status?: EntryStatus;
   type?: string; // Filter by type
-  // Geographic hierarchy filters (filter entries by location fields)
-  geo_country?: string;
-  geo_region?: string;
-  geo_city?: string;
-  geo_neighborhood?: string;
-  geo_place_name?: string;
-  geo_address?: string;
-  geo_lat?: number; // GPS latitude for exact place matching
-  geo_lng?: number; // GPS longitude for exact place matching
-  geo_none?: boolean; // Filter entries with no location data
 }
 
 // ============================================================================

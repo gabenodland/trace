@@ -54,7 +54,91 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
    - These commands mirror what GitHub Actions runs on every PR
    - Do NOT merge or consider work done if tests fail
 
-After completing a task that involves tool use provide a quick summary of the work done. prefix the summary with TOOL USE: 
+After completing a task that involves tool use provide a quick summary of the work done. prefix the summary with TOOL USE:
+
+---
+
+## 🐛 DEBUGGING RULES - CRITICAL
+
+**When you encounter a bug or error, FOLLOW THIS PROCESS:**
+
+1. **STOP. Do NOT start fixing immediately.**
+
+2. **Gather evidence FIRST:**
+   - Read the actual error message/logs completely
+   - Identify WHAT is failing and WHEN
+   - Look for patterns (does it happen every time? only on fresh start?)
+   - Note the exact sequence of events leading to the error
+
+3. **Add logging/instrumentation BEFORE making changes:**
+   - Add strategic console.logs to trace execution flow
+   - Track state changes and function calls
+   - Instrument the suspected code paths
+   - Get user to reproduce with logging enabled
+
+4. **Present your diagnosis to the user:**
+   - "I see X happening. I think it's caused by Y because Z."
+   - "To confirm, I want to add logging to A, B, C to see if..."
+   - **WAIT for user confirmation before proceeding with fixes**
+
+5. **NEVER say "this should fix it" without evidence:**
+   - ❌ BAD: "Let me add memoization, that should fix the infinite loop"
+   - ✅ GOOD: "The logs show 3 duplicate hook instances. Let me trace where they're being called."
+
+6. **If your first fix doesn't work:**
+   - **DO NOT** try another fix immediately
+   - Go back to step 2 - gather MORE evidence
+   - The user telling you "that didn't work" means your diagnosis was WRONG
+   - Admit the mistake: "My diagnosis was incorrect. Let me investigate further."
+
+7. **Be skeptical of your own assumptions:**
+   - Just because something is a "common cause" doesn't mean it's THE cause
+   - Verify with data, not assumptions
+   - If you're not 100% sure, SAY SO: "I'm not certain, but one possibility is..."
+
+**Example of CORRECT debugging approach:**
+```
+User: "Getting infinite loop error on app start"
+Assistant: "I see the error happens during sync init. Before I make changes,
+let me add logging to:
+1. Track how many times useAuthState runs
+2. See if queryClient is changing
+3. Check for duplicate hook instances
+
+This will show us what's actually happening. Should I add this instrumentation?"
+
+[User approves]
+Assistant: [Adds logging, gets output]
+Assistant: "The logs show useAuthState is being called from 3 different places:
+- AuthContext (correct)
+- EntryListScreen (wrong - should use useAuth)
+- EntryScreen (wrong - should use useAuth)
+
+This creates 3 separate auth listeners, each calling setState 3 times = 9 simultaneous
+state updates = infinite loop. The fix is to change those two screens to use useAuth()
+instead of useAuthState(). Should I make that change?"
+```
+
+**Example of WRONG debugging approach (DO NOT DO THIS):**
+```
+User: "Getting infinite loop error"
+Assistant: "This is probably Context re-renders. Let me add useMemo to fix it."
+[adds memoization without investigation]
+User: "Still broken"
+Assistant: "Oh, let me try useCallback instead..."
+[keeps guessing without evidence]
+```
+
+**Rule Priority: Investigation > Implementation**
+
+When debugging, spend 80% of your effort understanding the problem and 20% fixing it.
+A correct diagnosis leads to a simple fix. An incorrect diagnosis leads to complexity and wasted code.
+
+**RED FLAGS that indicate you're doing it wrong:**
+- You're making a second fix attempt without new evidence
+- You're using words like "should", "probably", "might" without data to back it up
+- You're adding complexity (memoization, refactoring) before understanding the problem
+- The user has said "that didn't work" and you immediately try something else
 
 ---
 

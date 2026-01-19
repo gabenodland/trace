@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
-import { extractTagsAndMentions, useAuthState, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate } from "@trace/core";
+import { extractTagsAndMentions, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate } from "@trace/core";
 import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
@@ -9,6 +9,7 @@ import { useAttachments } from "../../attachments/mobileAttachmentHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { useDrawer } from "../../../shared/contexts/DrawerContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
+import { useAuth } from "../../../shared/contexts/AuthContext";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { BottomBar } from "../../../components/layout/BottomBar";
@@ -16,7 +17,7 @@ import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/Phot
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { compressAttachment, saveAttachmentToLocalStorage, deleteAttachment, createAttachment, getAttachmentsForEntry } from "../../attachments/mobileAttachmentApi";
 import * as Crypto from "expo-crypto";
-import { useCaptureFormState, type GpsData, type GeocodeStatus } from "./hooks/useCaptureFormState";
+import { useCaptureFormState, type GeocodeStatus } from "./hooks/useCaptureFormState";
 import { useAutosave } from "./hooks/useAutosave";
 import { useGpsCapture } from "./hooks/useGpsCapture";
 import { usePhotoTracking } from "./hooks/usePhotoTracking";
@@ -126,7 +127,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   const [tempEntryId] = useState(() => copiedEntryData?.entry.entry_id || entryId || Crypto.randomUUID());
 
   const { entryMutations } = useEntries();
-  const { user } = useAuthState();
+  const { user } = useAuth();
   // Use React Query for photos to detect external sync changes
   const { attachments: queryAttachments } = useAttachments(effectiveEntryId || null);
 
@@ -351,16 +352,16 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     isGpsLoading,
     isNewGpsCapture,
     setIsNewGpsCapture,
-    pendingGpsData,
+    pendingLocationData,
     captureGps,
     clearPendingGps,
     savePendingGps,
   } = useGpsCapture({
     isEditing,
     captureGpsSetting: settings.captureGpsLocation,
-    currentGpsData: formData.gpsData,
-    onGpsChange: (gps) => updateField("gpsData", gps),
-    onBaselineUpdate: (gpsData) => setBaseline({ ...formData, gpsData }),
+    currentLocationData: formData.locationData,
+    onLocationChange: (location) => updateField("locationData", location),
+    onBaselineUpdate: (locationData) => setBaseline({ ...formData, locationData }),
     isEditMode,
     enterEditMode,
   });
@@ -369,7 +370,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   // First tries to snap to a saved location within 100ft, then falls back to geocode API
   // Only runs if location is enabled for the current stream
   useAutoGeocode({
-    gpsData: formData.gpsData,
     locationData: formData.locationData,
     geocodeStatus: formData.geocodeStatus,
     savedLocations: savedLocations,
@@ -378,40 +378,18 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       // Update locationData with geocoded fields from Mapbox or snapped location
       const updatedLocationData: LocationType | null = formData.locationData
         ? { ...formData.locationData, ...fields }
-        : formData.gpsData
-          ? {
-              latitude: formData.gpsData.latitude,
-              longitude: formData.gpsData.longitude,
-              name: null,
-              source: 'mapbox_poi', // Default source, may be overridden by snapped location
-              city: fields.city ?? null,
-              region: fields.region ?? null,
-              country: fields.country ?? null,
-              address: fields.address ?? null,
-              neighborhood: fields.neighborhood ?? null,
-              postalCode: fields.postal_code ?? null,
-              subdivision: fields.subdivision ?? null,
-              // Geo fields (immutable, from geocode)
-              geoAddress: fields.geo_address ?? null,
-              geoNeighborhood: fields.geo_neighborhood ?? null,
-              geoPostalCode: fields.geo_postal_code ?? null,
-              geoCity: fields.geo_city ?? null,
-              geoSubdivision: fields.geo_subdivision ?? null,
-              geoRegion: fields.geo_region ?? null,
-              geoCountry: fields.geo_country ?? null,
-            }
-          : null;
+        : null;
       updateField("locationData", updatedLocationData);
     },
     onGeocodeStatusChange: (status) => updateField("geocodeStatus", status),
     onLocationIdChange: (snappedLocation) => {
       // When snapping to a saved location, use ALL fields from the saved location
-      if (snappedLocation && formData.gpsData) {
+      if (snappedLocation && formData.locationData) {
         const snappedLocationData: LocationType = {
-          // Keep original GPS coordinates (where user is)
-          latitude: formData.gpsData.latitude,
-          longitude: formData.gpsData.longitude,
-          locationRadius: undefined, // GPS accuracy is transient, not stored
+          // Keep original coordinates and locationRadius from captured location
+          latitude: formData.locationData.latitude,
+          longitude: formData.locationData.longitude,
+          locationRadius: formData.locationData.locationRadius,
           // Copy ALL geo fields from the saved location
           location_id: snappedLocation.location_id,
           name: snappedLocation.name,
@@ -430,28 +408,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     isInitialCapture: !isEditing,
     onBaselineLocationFieldsUpdate: !isEditing
       ? (fields) => {
-          const updatedLocationData: LocationType | null = formData.gpsData
-            ? {
-                latitude: formData.gpsData.latitude,
-                longitude: formData.gpsData.longitude,
-                name: null,
-                source: 'mapbox_poi',
-                city: fields.city ?? null,
-                region: fields.region ?? null,
-                country: fields.country ?? null,
-                address: fields.address ?? null,
-                neighborhood: fields.neighborhood ?? null,
-                postalCode: fields.postal_code ?? null,
-                subdivision: fields.subdivision ?? null,
-                // Geo fields (immutable, from geocode)
-                geoAddress: fields.geo_address ?? null,
-                geoNeighborhood: fields.geo_neighborhood ?? null,
-                geoPostalCode: fields.geo_postal_code ?? null,
-                geoCity: fields.geo_city ?? null,
-                geoSubdivision: fields.geo_subdivision ?? null,
-                geoRegion: fields.geo_region ?? null,
-                geoCountry: fields.geo_country ?? null,
-              }
+          const updatedLocationData: LocationType | null = formData.locationData
+            ? { ...formData.locationData, ...fields }
             : null;
           setBaseline({
             ...formData,
@@ -543,11 +501,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       priority: entry.priority || 0,
       entryDate: entry.entry_date || formData.entryDate,
       includeTime: entry.entry_date ? new Date(entry.entry_date).getMilliseconds() !== 100 : formData.includeTime,
-      gpsData: entry.entry_latitude && entry.entry_longitude ? {
-        latitude: entry.entry_latitude,
-        longitude: entry.entry_longitude,
-        accuracy: null, // GPS accuracy is transient, not stored
-      } : null,
       // Keep current locationData - location_id changes are rare and would need async fetch
       locationData: formData.locationData,
       geocodeStatus: formData.geocodeStatus,
@@ -634,15 +587,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       ? streams.find(s => s.stream_id === entry.stream_id)?.name || null
       : null;
 
-    // Build GPS data
-    const gpsData: GpsData | null = entry.entry_latitude && entry.entry_longitude
-      ? {
-          latitude: entry.entry_latitude,
-          longitude: entry.entry_longitude,
-          accuracy: null, // GPS accuracy is transient, not stored
-        }
-      : null;
-
     // Helper to finalize loading - sets baseline and form atomically
     const finalizeLoad = (locationData: LocationType | null) => {
       const newFormData = {
@@ -657,7 +601,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         priority: entry.priority || 0,
         entryDate,
         includeTime,
-        gpsData,
         locationData,
         geocodeStatus: (entry.geocode_status as GeocodeStatus) ?? null,
         pendingPhotos: [], // Existing entries don't use pendingPhotos
@@ -756,15 +699,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       ? streams.find(s => s.stream_id === copiedEntry.stream_id)?.name || null
       : null;
 
-    // Build GPS data
-    const gpsData: GpsData | null = copiedEntry.entry_latitude && copiedEntry.entry_longitude
-      ? {
-          latitude: copiedEntry.entry_latitude,
-          longitude: copiedEntry.entry_longitude,
-          accuracy: null, // GPS accuracy is transient, not stored
-        }
-      : null;
-
     // Helper to finalize loading - sets baseline and form atomically
     const finalizeLoad = (locationData: LocationType | null) => {
       const newFormData = {
@@ -779,7 +713,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         priority: copiedEntry.priority || 0,
         entryDate: copiedEntry.entry_date || new Date().toISOString(),
         includeTime: hasTime,
-        gpsData,
         locationData,
         geocodeStatus: (copiedEntry.geocode_status as GeocodeStatus) ?? null,
         pendingPhotos, // Copied entries use pendingPhotos
@@ -996,11 +929,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
                     rating: entry.rating || 0,
                     priority: entry.priority || 0,
                     entryDate: entry.entry_date || formData.entryDate,
-                    gpsData: entry.entry_latitude && entry.entry_longitude ? {
-                      latitude: entry.entry_latitude,
-                      longitude: entry.entry_longitude,
-                      accuracy: null, // GPS accuracy is transient, not stored
-                    } : null,
+                    // locationData is already loaded in baseline - keep current value
                   });
                   // Update known version to current
                   updateKnownVersion(currentVersion);
@@ -1017,15 +946,9 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
                   try {
                     const { tags, mentions } = extractTagsAndMentions(formData.content);
 
-                    // Build GPS fields
+                    // Build GPS fields from location data
                     let gpsFields: { entry_latitude: number | null; entry_longitude: number | null; location_radius: number | null };
-                    if (formData.gpsData) {
-                      gpsFields = {
-                        entry_latitude: formData.gpsData.latitude,
-                        entry_longitude: formData.gpsData.longitude,
-                        location_radius: null, // GPS accuracy is transient, not stored
-                      };
-                    } else if (formData.locationData) {
+                    if (formData.locationData) {
                       gpsFields = {
                         entry_latitude: formData.locationData.latitude,
                         entry_longitude: formData.locationData.longitude,
@@ -1142,18 +1065,11 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     try {
       const { tags, mentions } = extractTagsAndMentions(contentToSave);
 
-      // Build GPS fields - use GPS data if available, otherwise use location coordinates
-      // When a Location is set, it supersedes GPS, but we still save coords to entry_latitude/longitude
+      // Build GPS fields from location data
+      // Location data includes coordinates and privacy radius for the entry
       let gpsFields: { entry_latitude: number | null; entry_longitude: number | null; location_radius: number | null };
-      if (formData.gpsData) {
-        // Use captured GPS coordinates
-        gpsFields = {
-          entry_latitude: formData.gpsData.latitude,
-          entry_longitude: formData.gpsData.longitude,
-          location_radius: null, // GPS accuracy is transient, not stored
-        };
-      } else if (formData.locationData) {
-        // Use location coordinates (when Location supersedes GPS)
+      if (formData.locationData) {
+        // Use location coordinates and privacy radius
         gpsFields = {
           entry_latitude: formData.locationData.latitude,
           entry_longitude: formData.locationData.longitude,
@@ -1189,7 +1105,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       // Build location hierarchy fields from locationData
       // These are copied directly to the entry (entry-owned data model)
       const locationHierarchyFields = formData.locationData ? {
-        // Display fields (user-editable)
         place_name: formData.locationData.name || null,
         address: formData.locationData.address || null,
         neighborhood: formData.locationData.neighborhood || null,
@@ -1199,14 +1114,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         region: formData.locationData.region || null,
         country: formData.locationData.country || null,
         geocode_status: formData.geocodeStatus,
-        // Geo fields (immutable, from geocode)
-        geo_address: formData.locationData.geoAddress || null,
-        geo_neighborhood: formData.locationData.geoNeighborhood || null,
-        geo_postal_code: formData.locationData.geoPostalCode || null,
-        geo_city: formData.locationData.geoCity || null,
-        geo_subdivision: formData.locationData.geoSubdivision || null,
-        geo_region: formData.locationData.geoRegion || null,
-        geo_country: formData.locationData.geoCountry || null,
       } : {
         place_name: null,
         address: null,
@@ -1217,14 +1124,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         region: null,
         country: null,
         geocode_status: formData.geocodeStatus,
-        // Geo fields (null when no location data)
-        geo_address: null,
-        geo_neighborhood: null,
-        geo_postal_code: null,
-        geo_city: null,
-        geo_subdivision: null,
-        geo_region: null,
-        geo_country: null,
       };
 
       if (isEditing) {
@@ -1572,7 +1471,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       {!isFullScreen && (
         <MetadataBar
           streamName={formData.streamName}
-          gpsData={formData.gpsData}
           locationData={formData.locationData}
           status={formData.status}
           type={formData.type}

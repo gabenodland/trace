@@ -3,16 +3,18 @@
  *
  * Handles:
  * - GPS loading state
- * - Pending GPS data (before user confirms)
+ * - Pending location data (before user confirms)
  * - New GPS capture tracking (vs reload)
  * - Auto-capture for new entries
  * - The actual GPS capture function
+ *
+ * Note: GPS capture now writes directly to locationData (dropped pin)
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { Alert } from "react-native";
 import * as Location from "expo-location";
-import type { GpsData } from "./useCaptureFormState";
+import type { Location as LocationType } from "@trace/core";
 
 const GPS_TIMEOUT_MS = 15000;
 
@@ -21,12 +23,12 @@ export interface UseGpsCaptureOptions {
   isEditing: boolean;
   /** Whether GPS capture setting is enabled */
   captureGpsSetting: boolean;
-  /** Current GPS data from form */
-  currentGpsData: GpsData | null;
-  /** Callback to update form GPS data */
-  onGpsChange: (gps: GpsData | null) => void;
+  /** Current location data from form */
+  currentLocationData: LocationType | null;
+  /** Callback to update form location data */
+  onLocationChange: (location: LocationType | null) => void;
   /** Callback to update baseline (for initial capture) */
-  onBaselineUpdate: (gpsData: GpsData) => void;
+  onBaselineUpdate: (locationData: LocationType) => void;
   /** Whether form is in edit mode */
   isEditMode: boolean;
   /** Callback to enter edit mode */
@@ -40,18 +42,18 @@ export interface UseGpsCaptureReturn {
   isNewGpsCapture: boolean;
   /** Set the new GPS capture flag */
   setIsNewGpsCapture: (value: boolean) => void;
-  /** Pending GPS data (before user confirms) */
-  pendingGpsData: GpsData | null;
+  /** Pending location data (before user confirms) */
+  pendingLocationData: LocationType | null;
   /**
-   * Capture GPS coordinates
+   * Capture GPS coordinates (creates a dropped pin)
    * @param forceRefresh - if true, skip cache and get fresh GPS reading
-   * @param toPending - if true, store in pendingGpsData instead of form
+   * @param toPending - if true, store in pendingLocationData instead of form
    * @param isInitialCapture - if true, update baseline to avoid dirty state
    */
   captureGps: (forceRefresh?: boolean, toPending?: boolean, isInitialCapture?: boolean) => Promise<void>;
-  /** Clear pending GPS data */
+  /** Clear pending location data */
   clearPendingGps: () => void;
-  /** Save pending GPS to form */
+  /** Save pending location to form */
   savePendingGps: () => void;
 }
 
@@ -62,8 +64,8 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
   const {
     isEditing,
     captureGpsSetting,
-    currentGpsData,
-    onGpsChange,
+    currentLocationData,
+    onLocationChange,
     onBaselineUpdate,
     isEditMode,
     enterEditMode,
@@ -75,8 +77,8 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
   // Track if we're capturing GPS from a cleared state (shows Save button instead of Remove)
   const [isNewGpsCapture, setIsNewGpsCapture] = useState(false);
 
-  // Pending GPS data - holds captured GPS before user confirms with Save button
-  const [pendingGpsData, setPendingGpsData] = useState<GpsData | null>(null);
+  // Pending location data - holds captured GPS before user confirms with Save button
+  const [pendingLocationData, setPendingLocationData] = useState<LocationType | null>(null);
 
   // Auto-capture GPS for new entries when setting is enabled
   useEffect(() => {
@@ -90,8 +92,8 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
       return;
     }
 
-    // Skip if we already have GPS data
-    if (currentGpsData) {
+    // Skip if we already have location data
+    if (currentLocationData) {
       return;
     }
 
@@ -100,9 +102,9 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
   }, [isEditing, captureGpsSetting]);
 
   /**
-   * Capture GPS coordinates
+   * Capture GPS coordinates (creates a dropped pin location)
    * forceRefresh: if true, skip cache and get fresh GPS reading with high accuracy
-   * toPending: if true, store in pendingGpsData instead of formData (for new capture flow)
+   * toPending: if true, store in pendingLocationData instead of formData (for new capture flow)
    * isInitialCapture: if true, this is the initial auto-capture for new entries - update baseline
    */
   const captureGps = useCallback(async (
@@ -160,22 +162,26 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
       if (location) {
         hasGps = true;
         clearTimeout(timeoutId);
-        const gpsData: GpsData = {
+
+        // Create minimal location object (dropped pin)
+        const locationData: LocationType = {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
-          accuracy: location.coords.accuracy,
+          name: null, // Dropped pin has no name
+          source: 'user_custom',
+          locationRadius: location.coords.accuracy ?? undefined, // GPS accuracy becomes location radius
         };
 
         if (toPending) {
           // Store in pending state - user must click Save to commit
-          setPendingGpsData(gpsData);
+          setPendingLocationData(locationData);
         } else {
           // Store directly in form data
-          onGpsChange(gpsData);
+          onLocationChange(locationData);
 
           // For initial auto-capture, also update baseline so form doesn't show as dirty
           if (isInitialCapture) {
-            onBaselineUpdate(gpsData);
+            onBaselineUpdate(locationData);
           }
         }
         setIsGpsLoading(false);
@@ -190,26 +196,26 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
         [{ text: "OK" }]
       );
     }
-  }, [onGpsChange, onBaselineUpdate, isEditMode, enterEditMode]);
+  }, [onLocationChange, onBaselineUpdate, isEditMode, enterEditMode]);
 
   const clearPendingGps = useCallback(() => {
-    setPendingGpsData(null);
+    setPendingLocationData(null);
     setIsNewGpsCapture(false);
   }, []);
 
   const savePendingGps = useCallback(() => {
-    if (pendingGpsData) {
-      onGpsChange(pendingGpsData);
-      setPendingGpsData(null);
+    if (pendingLocationData) {
+      onLocationChange(pendingLocationData);
+      setPendingLocationData(null);
       setIsNewGpsCapture(false);
     }
-  }, [pendingGpsData, onGpsChange]);
+  }, [pendingLocationData, onLocationChange]);
 
   return {
     isGpsLoading,
     isNewGpsCapture,
     setIsNewGpsCapture,
-    pendingGpsData,
+    pendingLocationData,
     captureGps,
     clearPendingGps,
     savePendingGps,

@@ -156,7 +156,8 @@ export function StreamDrawer() {
     if (isDragging) return;
 
     if (isOpen) {
-      setIsVisible(true);
+      // Only set visible if not already visible to avoid unnecessary re-renders
+      setIsVisible(prev => prev === true ? prev : true);
       Animated.parallel([
         Animated.timing(translateX, {
           toValue: 0,
@@ -182,10 +183,11 @@ export function StreamDrawer() {
           useNativeDriver: true,
         }),
       ]).start(() => {
-        setIsVisible(false);
+        // Only set invisible if not already invisible
+        setIsVisible(prev => prev === false ? prev : false);
       });
     }
-  }, [isOpen, isDragging, translateX, backdropOpacity]);
+  }, [isOpen, isDragging]); // Remove translateX, backdropOpacity - they're stable refs
 
   // Always render the drawer - it starts off-screen (translateX = -DRAWER_WIDTH)
   // and backdrop is invisible (opacity = 0). Using pointerEvents to control interaction.

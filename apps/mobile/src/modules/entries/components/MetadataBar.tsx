@@ -9,14 +9,11 @@ import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { styles } from "./EntryScreen.styles";
 import { StatusIcon } from "../../../shared/components/StatusIcon";
 import { getStatusLabel, isLegacyType, formatRatingDisplay, decimalToStars, getLocationLabel, hasLocationLabel, type Location as LocationType, type EntryStatus, type RatingType } from "@trace/core";
-import type { GpsData } from "./hooks/useCaptureFormState";
 
 interface MetadataBarProps {
   // Form data
   streamName: string | null;
-  /** GPS coordinates - where entry was created */
-  gpsData: GpsData | null;
-  /** Named location - where entry "lives" */
+  /** Location data - coordinates, name, address, and privacy radius */
   locationData: LocationType | null;
   status: EntryStatus;
   type: string | null;
@@ -62,7 +59,6 @@ interface MetadataBarProps {
 
 export function MetadataBar({
   streamName,
-  gpsData,
   locationData,
   status,
   type,
@@ -101,7 +97,7 @@ export function MetadataBar({
   const theme = useTheme();
 
   // Unified location display logic using core helper
-  const hasGpsCoords = !!(gpsData || (locationData?.latitude && locationData?.longitude));
+  const hasGpsCoords = !!(locationData?.latitude && locationData?.longitude);
   const hasAnyLocation = !!(locationData?.name || locationData?.city || locationData?.neighborhood || locationData?.region || locationData?.country || hasGpsCoords);
 
   // Determine what text to display for location using standardized helper

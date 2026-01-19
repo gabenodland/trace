@@ -621,13 +621,9 @@ export function formatFullAddress(locationData: LocationData): string {
 
 /**
  * Entry location fields extracted from geocode response or location snap
- * Maps location hierarchy to entry fields
- *
- * Display fields (user-editable): address, neighborhood, city, etc.
- * Geo fields (immutable, for filtering): geo_address, geo_neighborhood, geo_city, etc.
+ * Maps location hierarchy to entry fields (user-editable)
  */
 export interface EntryLocationFields {
-  // Display fields (user-editable)
   address: string | null;
   neighborhood: string | null;
   postal_code: string | null;
@@ -635,14 +631,6 @@ export interface EntryLocationFields {
   subdivision: string | null;
   region: string | null;
   country: string | null;
-  // Geo fields (immutable, from geocode, for filtering/sorting)
-  geo_address: string | null;
-  geo_neighborhood: string | null;
-  geo_postal_code: string | null;
-  geo_city: string | null;
-  geo_subdivision: string | null;
-  geo_region: string | null;
-  geo_country: string | null;
   geocode_status: 'success' | 'snapped' | 'no_data';
 }
 
@@ -774,10 +762,7 @@ export function geocodeResponseToEntryFields(
   // Consider it "no_data" if we have no city, region, or country
   const hasData = !!(hierarchy.place || hierarchy.region || hierarchy.country);
 
-  // Both display and geo_ fields get the same values from geocode
-  // They will diverge only when user edits the display fields
   return {
-    // Display fields (user-editable)
     address: streetAddress,
     neighborhood: hierarchy.neighborhood || null,
     postal_code: hierarchy.postcode || null,
@@ -785,14 +770,6 @@ export function geocodeResponseToEntryFields(
     subdivision: hierarchy.district || null,
     region: hierarchy.region || null,
     country: hierarchy.country || null,
-    // Geo fields (immutable, for filtering/sorting)
-    geo_address: streetAddress,
-    geo_neighborhood: hierarchy.neighborhood || null,
-    geo_postal_code: hierarchy.postcode || null,
-    geo_city: hierarchy.place || null,
-    geo_subdivision: hierarchy.district || null,
-    geo_region: hierarchy.region || null,
-    geo_country: hierarchy.country || null,
     geocode_status: hasData ? 'success' : 'no_data',
   };
 }

@@ -15,7 +15,7 @@
  */
 
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Modal, Alert } from 'react-native';
 import Slider from '@react-native-community/slider';
 import Svg, { Path, Circle } from 'react-native-svg';
 import MapView from 'react-native-maps';
@@ -93,7 +93,10 @@ interface CurrentLocationViewProps {
   handleRemovePin: () => void;
   handleEditLocation?: (newName: string, newAddress?: string | null, newLocationRadius?: number | null) => void;
   onResetToOriginal?: () => void;
-  onPrecisionChange?: (radiusMeters: number) => void;
+
+  // Unified radius (from GPS accuracy or user precision slider)
+  radius: number;
+  onRadiusChange: (radiusMeters: number) => void;
 
   // Keyboard
   keyboardHeight?: number;
@@ -110,44 +113,25 @@ export function CurrentLocationView({
   handleRemovePin,
   handleEditLocation,
   onResetToOriginal,
-  onPrecisionChange,
+  radius,
+  onRadiusChange,
   keyboardHeight = 0,
 }: CurrentLocationViewProps) {
   const theme = useTheme();
   const { settings } = useSettings();
   const isMetric = settings.units === 'metric';
 
-  // DEBUG: Log all selection data
-  console.log('[CurrentLocationView] 📍 SELECTION DATA:', JSON.stringify({
-    locationId: selection.locationId,
-    entryCount: selection.entryCount,
-    isLoadingDetails: selection.isLoadingDetails,
-    type: selection.type,
-    location: selection.location ? {
-      name: selection.location.name,
-      address: selection.location.address,
-      neighborhood: selection.location.neighborhood,
-      city: selection.location.city,
-      region: selection.location.region,
-      country: selection.location.country,
-      postalCode: selection.location.postalCode,
-      latitude: selection.location.latitude,
-      longitude: selection.location.longitude,
-    } : null,
-  }, null, 2));
-
   // Local editing state
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(ui.editableNameInput || '');
   const [editAddress, setEditAddress] = useState('');
   const [isAddressEditing, setIsAddressEditing] = useState(false);
-  const [precisionRadius, setPrecisionRadius] = useState(0); // 0 = exact, up to 5000m
   const [showPrecisionPicker, setShowPrecisionPicker] = useState(false);
 
   // Calculate rounded coordinates based on precision
   const getRoundedCoords = () => {
     if (!selection.location) return { lat: 0, lng: 0 };
-    const decimals = getDecimalsForRadius(precisionRadius);
+    const decimals = getDecimalsForRadius(radius);
     const lat = roundCoordinate(selection.location.latitude, decimals);
     const lng = roundCoordinate(selection.location.longitude, decimals);
     return { lat, lng };
@@ -158,7 +142,7 @@ export function CurrentLocationView({
   // The radius is a user-selected privacy/generalization value, not GPS accuracy.
   // Coordinates remain exact - the radius just indicates the displayed area.
   const handlePrecisionChange = (radiusMeters: number) => {
-    setPrecisionRadius(radiusMeters);
+    onRadiusChange(radiusMeters);
 
     if (selection.location) {
       const originalLat = selection.location.originalLatitude ?? selection.location.latitude;
@@ -173,7 +157,7 @@ export function CurrentLocationView({
         } : null,
       }));
 
-      onPrecisionChange?.(radiusMeters);
+      // Note: onRadiusChange already called above to update parent state
 
       if (mapRef?.current) {
         const delta = radiusMeters > 0
@@ -356,9 +340,9 @@ export function CurrentLocationView({
     const locationRadius = selection.location?.locationRadius;
     if (locationRadius && locationRadius > 0) {
       // Use locationRadius directly as precision radius
-      setPrecisionRadius(locationRadius);
+      onRadiusChange(locationRadius);
     } else {
-      setPrecisionRadius(0); // Exact
+      onRadiusChange(0); // Exact
     }
     setIsEditing(true);
   };
@@ -371,7 +355,7 @@ export function CurrentLocationView({
         // Pass edited address if in address editing mode, otherwise pass current address
         const finalAddress = isAddressEditing ? editAddress.trim() || null : selection.location?.address;
         // Pass precision radius (0 = exact, otherwise the radius in meters)
-        const finalLocationRadius = precisionRadius > 0 ? precisionRadius : null;
+        const finalLocationRadius = radius > 0 ? radius : null;
         handleEditLocation(editName.trim(), finalAddress, finalLocationRadius);
         setUI(prev => ({ ...prev, editableNameInput: editName.trim() }));
         setIsEditing(false);
@@ -387,6 +371,18 @@ export function CurrentLocationView({
   const handleCancelEdit = () => {
     setEditName(selection.location?.name || '');
     setIsEditing(false);
+  };
+
+  // Handle clear location with confirmation
+  const handleClearLocationPress = () => {
+    Alert.alert(
+      'Clear Location',
+      'Are you sure you want to remove all location data from your entry?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear', style: 'destructive', onPress: handleRemovePin },
+      ]
+    );
   };
 
   // Loading state
@@ -620,7 +616,7 @@ export function CurrentLocationView({
                       <Circle cx={12} cy={10} r={3} fill={theme.colors.text.tertiary} />
                     </Svg>
                     <Text style={[styles.infoCardCoordsText, { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.tertiary }]}>
-                      {precisionRadius === 0
+                      {radius === 0
                         ? `${selection.location?.latitude.toFixed(6)}, ${selection.location?.longitude.toFixed(6)}`
                         : `${roundedCoords.lat}, ${roundedCoords.lng}`}
                     </Text>
@@ -646,8 +642,8 @@ export function CurrentLocationView({
                     Coordinate Precision
                   </Text>
                   <Text style={{ fontSize: 13, fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.secondary }}>
-                    {formatPrecision(precisionRadius, isMetric)}
-                    {getPrecisionDescription(precisionRadius) ? ` · ${getPrecisionDescription(precisionRadius)}` : ''}
+                    {formatPrecision(radius, isMetric)}
+                    {getPrecisionDescription(radius) ? ` · ${getPrecisionDescription(radius)}` : ''}
                   </Text>
                 </View>
               </View>
@@ -688,11 +684,11 @@ export function CurrentLocationView({
                   {/* Current value display */}
                   <View style={{ alignItems: 'center', marginBottom: 16 }}>
                     <Text style={{ fontSize: 28, fontFamily: theme.typography.fontFamily.semibold, color: theme.colors.functional.accent }}>
-                      {formatPrecision(precisionRadius, isMetric)}
+                      {formatPrecision(radius, isMetric)}
                     </Text>
-                    {getPrecisionDescription(precisionRadius) && (
+                    {getPrecisionDescription(radius) && (
                       <Text style={{ fontSize: 14, fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.secondary, marginTop: 4 }}>
-                        {getPrecisionDescription(precisionRadius)}
+                        {getPrecisionDescription(radius)}
                       </Text>
                     )}
                   </View>
@@ -704,7 +700,7 @@ export function CurrentLocationView({
                       minimumValue={0}
                       maximumValue={5000}
                       step={10}
-                      value={precisionRadius}
+                      value={radius}
                       onValueChange={(value) => handlePrecisionChange(Math.round(value))}
                       minimumTrackTintColor={theme.colors.functional.accent}
                       maximumTrackTintColor={theme.colors.border.medium}
@@ -956,6 +952,28 @@ export function CurrentLocationView({
               </TouchableOpacity>
             )}
 
+            {/* Save Location Row - for unsaved locations (no location_id) */}
+            {!selection.locationId && (
+              <TouchableOpacity
+                style={[styles.actionRow, { borderBottomColor: theme.colors.border.light, paddingVertical: 18 }]}
+                onPress={() => setUI(prev => ({ ...prev, showingDetails: true }))}
+                activeOpacity={0.7}
+              >
+                <View style={styles.actionRowContent}>
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
+                    <Path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M17 21v-8H7v8M7 3v5h8" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                  <Text style={[styles.actionRowText, { fontFamily: theme.typography.fontFamily.medium, color: theme.colors.text.primary }]}>
+                    Save Location
+                  </Text>
+                </View>
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
+                  <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </TouchableOpacity>
+            )}
+
             {/* Change Location Row */}
             <TouchableOpacity
               style={[
@@ -982,7 +1000,7 @@ export function CurrentLocationView({
             {/* Clear Location Row - removes all location data */}
             <TouchableOpacity
               style={[styles.actionRow, styles.actionRowLast, { paddingVertical: 18 }]}
-              onPress={handleRemovePin}
+              onPress={handleClearLocationPress}
               activeOpacity={0.7}
             >
               <View style={styles.actionRowContent}>

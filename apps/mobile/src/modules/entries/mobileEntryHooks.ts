@@ -4,6 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import {
   createEntry,
   getEntries,
@@ -203,9 +204,12 @@ export function useEntries(filter?: MobileEntryFilter) {
   const deleteMutation = useDeleteEntryMutation();
   const copyMutation = useCopyEntryMutation();
 
+  // Memoize entries to prevent new empty array reference on every render
+  const entries = useMemo(() => entriesQuery.data || [], [entriesQuery.data]);
+
   return {
     // Data
-    entries: entriesQuery.data || [],
+    entries,
     isLoading: entriesQuery.isLoading,
     isFetching: entriesQuery.isFetching,
     error: entriesQuery.error,

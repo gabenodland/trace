@@ -74,7 +74,6 @@ class SyncService {
 
   async initialize(queryClient?: QueryClient): Promise<void> {
     if (this.isInitialized) {
-      log.debug('Already initialized, skipping');
       return;
     }
 
@@ -188,14 +187,6 @@ class SyncService {
         region: serverEntry.region || null,
         country: serverEntry.country || null,
         geocode_status: (serverEntry as any).geocode_status || null,
-        // Geo fields (immutable, from geocode)
-        geo_address: (serverEntry as any).geo_address || null,
-        geo_neighborhood: (serverEntry as any).geo_neighborhood || null,
-        geo_city: (serverEntry as any).geo_city || null,
-        geo_subdivision: (serverEntry as any).geo_subdivision || null,
-        geo_region: (serverEntry as any).geo_region || null,
-        geo_country: (serverEntry as any).geo_country || null,
-        geo_postal_code: (serverEntry as any).geo_postal_code || null,
         status: (serverEntry.status as Entry['status']) || 'none',
         type: serverEntry.type || null,
         due_date: serverEntry.due_date,
@@ -608,14 +599,6 @@ class SyncService {
       region: payloadData.region || null,
       country: payloadData.country || null,
       geocode_status: payloadData.geocode_status || null,
-      // Geo fields (immutable, from geocode)
-      geo_address: payloadData.geo_address || null,
-      geo_neighborhood: payloadData.geo_neighborhood || null,
-      geo_city: payloadData.geo_city || null,
-      geo_subdivision: payloadData.geo_subdivision || null,
-      geo_region: payloadData.geo_region || null,
-      geo_country: payloadData.geo_country || null,
-      geo_postal_code: payloadData.geo_postal_code || null,
       status: (payloadData.status as Entry['status']) || 'none',
       type: payloadData.type || null,
       due_date: payloadData.due_date,
@@ -898,7 +881,10 @@ class SyncService {
   private async cleanupWrongUserData(): Promise<void> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+
+      if (!user) {
+        return;
+      }
 
       const entriesFromOtherUsers = await localDB.runCustomQuery(
         'SELECT entry_id FROM entries WHERE user_id != ? LIMIT 1',
@@ -906,7 +892,7 @@ class SyncService {
       );
 
       if (entriesFromOtherUsers.length > 0) {
-        log.warn('Found entries from other users, cleaning up');
+        log.warn('Found entries from other users, clearing all local data');
         await localDB.clearAllData();
       }
     } catch (error) {

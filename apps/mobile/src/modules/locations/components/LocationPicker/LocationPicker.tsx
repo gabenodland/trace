@@ -89,9 +89,6 @@ export function LocationPicker({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const mapHeight = useRef(new Animated.Value(MAP_HEIGHT_NORMAL)).current;
 
-  // Precision radius for map circle (in meters)
-  const [precisionRadius, setPrecisionRadius] = useState(0);
-
   // Ref to LocationSelectView for scrolling to selected item
   const locationSelectViewRef = useRef<LocationSelectViewRef>(null);
 
@@ -174,15 +171,9 @@ export function LocationPicker({
       requestAnimationFrame(() => {
         openSheet();
       });
-
-      // Initialize precision radius from stored location radius for view mode
-      if (propMode === 'view' && initialLocation?.locationRadius && initialLocation.locationRadius > 0) {
-        setPrecisionRadius(initialLocation.locationRadius);
-      } else {
-        setPrecisionRadius(0);
-      }
+      // Note: radius is initialized by useLocationPicker hook from initialLocation.locationRadius
     }
-  }, [visible, openSheet, translateY, backdropOpacity, propMode, initialLocation?.locationRadius]);
+  }, [visible, openSheet, translateY, backdropOpacity]);
 
   // Pan responder for swipe-to-dismiss on grabber/header area
   const panResponder = useRef(
@@ -223,13 +214,6 @@ export function LocationPicker({
     onClose,
   });
 
-  // Reset precision radius when a new map tap selection is made (always starts as Exact)
-  useEffect(() => {
-    if (picker.selection.type === 'map_tap' && picker.selection.location?.locationRadius === 0) {
-      setPrecisionRadius(0);
-    }
-  }, [picker.selection.type, picker.selection.location?.locationRadius]);
-
   // Check if a point is a general area (park, neighborhood, etc.)
   const isGeneralArea = (poiName: string): boolean => {
     const lowerName = poiName.toLowerCase();
@@ -258,6 +242,9 @@ export function LocationPicker({
   // Handle Google POI click on map
   const handlePoiClick = (event: any) => {
     const { coordinate, placeId, name } = event.nativeEvent;
+
+    // Clear radius when tapping a new location (exact point selection)
+    picker.setRadius(0);
 
     if (placeId && name && !isGeneralArea(name)) {
       // Store the tapped POI
@@ -298,6 +285,11 @@ export function LocationPicker({
       // Treat as regular map tap
       picker.handleMapPress({ nativeEvent: { coordinate } } as any);
     }
+  };
+
+  // Wrapper for map press - hook's handleMapPress already clears radius
+  const handleMapPress = (event: any) => {
+    picker.handleMapPress(event);
   };
 
   // Get header title based on mode
@@ -391,7 +383,7 @@ export function LocationPicker({
                 ref={picker.mapRef}
                 style={styles.map}
                 initialRegion={picker.mapState.region}
-                onPress={picker.effectiveMode === 'select' && !picker.ui.showingDetails ? picker.handleMapPress : undefined}
+                onPress={picker.effectiveMode === 'select' && !picker.ui.showingDetails ? handleMapPress : undefined}
                 onRegionChangeComplete={picker.effectiveMode === 'select' && !picker.ui.showingDetails ? picker.handleRegionChangeComplete : undefined}
                 mapType="standard"
                 userInterfaceStyle={dynamicTheme.isDark ? "dark" : "light"}
@@ -409,35 +401,24 @@ export function LocationPicker({
                 onPoiClick={Platform.OS === 'android' && picker.effectiveMode === 'select' && !picker.ui.showingDetails ? handlePoiClick : undefined}
                 onPanDrag={() => Keyboard.dismiss()}
               >
-                {/* GPS Accuracy Circle (only shown for GPS coordinates, hidden when precision is set) */}
-                {picker.gpsAccuracy && picker.gpsAccuracy > 0 && picker.mapState.markerPosition && precisionRadius === 0 && (
+                {/* Location Radius Circle - shows GPS accuracy or user-set precision area */}
+                {picker.radius > 0 && picker.mapState.markerPosition && (
                   <MapCircle
                     center={picker.mapState.markerPosition}
-                    radius={picker.gpsAccuracy}
-                    fillColor={`${dynamicTheme.colors.functional.accent}15`}
-                    strokeColor={`${dynamicTheme.colors.functional.accent}40`}
-                    strokeWidth={1}
-                  />
-                )}
-
-                {/* Precision Circle - shows location generalization area */}
-                {precisionRadius > 0 && picker.mapState.markerPosition && (
-                  <MapCircle
-                    center={picker.mapState.markerPosition}
-                    radius={precisionRadius}
+                    radius={picker.radius}
                     fillColor={`${dynamicTheme.colors.functional.accent}35`}
                     strokeColor={dynamicTheme.colors.functional.accent}
                     strokeWidth={2}
                   />
                 )}
 
-                {/* Precision Area Marker - sits at top of circle, pointing down into the area */}
-                {precisionRadius > 0 && picker.mapState.markerPosition && (
+                {/* Area Marker - sits at top of circle, pointing down into the area */}
+                {picker.radius > 0 && picker.mapState.markerPosition && (
                   <Marker
                     coordinate={{
                       // Position at top of circle: add radius in meters converted to degrees
                       // 1 degree latitude ≈ 111,000 meters
-                      latitude: picker.mapState.markerPosition.latitude + (precisionRadius / 111000),
+                      latitude: picker.mapState.markerPosition.latitude + (picker.radius / 111000),
                       longitude: picker.mapState.markerPosition.longitude,
                     }}
                     anchor={{ x: 0.5, y: 1 }} // Anchor at bottom center so pin points down into circle
@@ -450,7 +431,7 @@ export function LocationPicker({
                 )}
 
                 {/* Selected Location Marker (accent color) - hidden when precision circle is shown */}
-                {picker.mapState.markerPosition && precisionRadius === 0 && (
+                {picker.mapState.markerPosition && picker.radius === 0 && (
                   <Marker
                     ref={picker.blueMarkerRef}
                     coordinate={picker.mapState.markerPosition}
@@ -577,7 +558,29 @@ export function LocationPicker({
           )}
 
           {/* Switchable Content Below Map - 3 views */}
-          {picker.effectiveMode === 'view' ? (
+          {/* showingDetails takes precedence - allows "Save Location" from view mode */}
+          {picker.ui.showingDetails ? (
+            /* Create Mode - CreateLocationView */
+            <CreateLocationView
+              selection={picker.selection}
+              setSelection={picker.setSelection}
+              ui={picker.ui}
+              setUI={picker.setUI}
+              mapRef={picker.mapRef}
+              saveToMyPlaces={picker.saveToMyPlaces}
+              onSaveToMyPlacesChange={picker.setSaveToMyPlaces}
+              handleOKPress={picker.handleOKPress}
+              onBack={() => {
+                picker.handleSwitchToSelectMode();
+                picker.setRadius(0); // Clear precision circle when going back
+              }}
+              onClearAddress={picker.handleClearAddress}
+              onResetToOriginal={picker.handleResetToOriginal}
+              radius={picker.radius}
+              onRadiusChange={picker.setRadius}
+              keyboardHeight={keyboardHeight}
+            />
+          ) : picker.effectiveMode === 'view' ? (
             /* View Mode - CurrentLocationView */
             <CurrentLocationView
               selection={picker.selection}
@@ -590,27 +593,8 @@ export function LocationPicker({
               handleRemovePin={picker.handleRemovePin}
               handleEditLocation={picker.handleEditLocation}
               onResetToOriginal={picker.handleResetToOriginal}
-              onPrecisionChange={setPrecisionRadius}
-              keyboardHeight={keyboardHeight}
-            />
-          ) : picker.ui.showingDetails ? (
-            /* Create Mode - CreateLocationView */
-            <CreateLocationView
-              selection={picker.selection}
-              setSelection={picker.setSelection}
-              ui={picker.ui}
-              setUI={picker.setUI}
-              mapRef={picker.mapRef}
-              saveToMyPlaces={picker.saveToMyPlaces}
-              onSaveToMyPlacesChange={picker.setSaveToMyPlaces}
-              handleOKPress={picker.handleOKPress}
-              onBack={() => {
-                picker.setUI(prev => ({ ...prev, showingDetails: false }));
-                setPrecisionRadius(0); // Clear precision circle when going back
-              }}
-              onClearAddress={picker.handleClearAddress}
-              onResetToOriginal={picker.handleResetToOriginal}
-              onPrecisionChange={setPrecisionRadius}
+              radius={picker.radius}
+              onRadiusChange={picker.setRadius}
               keyboardHeight={keyboardHeight}
             />
           ) : (

@@ -10,7 +10,7 @@
  * Supports gesture-driven drawer control via DrawerControl interface.
  */
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
 import type { Region } from "react-native-maps";
 
 /** View modes for the primary screen */
@@ -109,8 +109,17 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
   // Gesture-driven drawer control
   const [drawerControl, setDrawerControl] = useState<DrawerControl | null>(null);
 
+  // Use refs to track current values for comparison in registration functions
+  const drawerControlRef = useRef<DrawerControl | null>(null);
+  const streamHandlerRef = useRef<StreamSelectHandler>(null);
+  const viewModeHandlerRef = useRef<ViewModeChangeHandler>(null);
+
   const registerDrawerControl = useCallback((control: DrawerControl | null) => {
-    setDrawerControl(control);
+    // Only update if actually different to prevent re-render loops
+    if (drawerControlRef.current !== control) {
+      drawerControlRef.current = control;
+      setDrawerControl(control);
+    }
   }, []);
 
   const openDrawer = useCallback(() => {
@@ -126,11 +135,19 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
   }, []);
 
   const registerStreamHandler = useCallback((handler: StreamSelectHandler) => {
-    setOnStreamSelect(() => handler);
+    // Only update if actually different to prevent re-render loops
+    if (streamHandlerRef.current !== handler) {
+      streamHandlerRef.current = handler;
+      setOnStreamSelect(() => handler);
+    }
   }, []);
 
   const registerViewModeHandler = useCallback((handler: ViewModeChangeHandler) => {
-    setOnViewModeChange(() => handler);
+    // Only update if actually different to prevent re-render loops
+    if (viewModeHandlerRef.current !== handler) {
+      viewModeHandlerRef.current = handler;
+      setOnViewModeChange(() => handler);
+    }
   }, []);
 
   return (

@@ -25,15 +25,13 @@ import {
   type Location as LocationType,
   type LocationEntity,
 } from "@trace/core";
-import type { GpsData, GeocodeStatus } from "./useCaptureFormState";
+import type { GeocodeStatus } from "./useCaptureFormState";
 
 /** Threshold for location snapping: 100 feet ≈ 30 meters */
 const SNAP_THRESHOLD_METERS = 30;
 
 export interface UseAutoGeocodeOptions {
-  /** Current GPS data from form */
-  gpsData: GpsData | null;
-  /** Current location data from form (may already have geocoded data) */
+  /** Current location data from form (coordinates to geocode, may already have geocoded data) */
   locationData: LocationType | null;
   /** Current geocode status */
   geocodeStatus: GeocodeStatus;
@@ -75,7 +73,6 @@ export interface UseAutoGeocodeReturn {
  */
 export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeReturn {
   const {
-    gpsData,
     locationData,
     geocodeStatus,
     savedLocations,
@@ -100,7 +97,6 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
   const performSnapOrGeocode = useCallback(async (latitude: number, longitude: number): Promise<void> => {
     // Prevent concurrent processing
     if (isGeocodingRef.current) {
-      console.log('[AutoGeocode] Already processing, skipping');
       return;
     }
 
@@ -110,7 +106,6 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
       Math.abs(lastProcessedCoordsRef.current.lat - latitude) < 0.00001 &&
       Math.abs(lastProcessedCoordsRef.current.lng - longitude) < 0.00001
     ) {
-      console.log('[AutoGeocode] Coordinates already processed, skipping');
       return;
     }
 
@@ -119,7 +114,6 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
 
     try {
       // STEP 1: Try to snap to a saved location first
-      console.log('[AutoGeocode] Checking for nearby saved locations...');
       const snapResult = findNearbyLocation(
         { latitude, longitude },
         savedLocations,
@@ -128,8 +122,6 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
 
       if (snapResult.location) {
         // Found a saved location within threshold - snap to it!
-        console.log('[AutoGeocode] ✅ Snapped to saved location:', snapResult.location.name,
-          `(${snapResult.distanceMeters?.toFixed(1)}m away)`);
 
         // Update form with snapped location data
         onLocationFieldsChange({
@@ -168,29 +160,18 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
       }
 
       // STEP 2: No snap match - fall back to geocode API
-      console.log('[AutoGeocode] No nearby saved location, checking network for geocode...');
 
       // Check network connectivity before making API call
       const netState = await NetInfo.fetch();
       if (!netState.isConnected) {
-        console.log('[AutoGeocode] No network connection, skipping geocode');
         onGeocodeStatusChange(null); // Reset so we can retry later
         return;
       }
 
-      console.log('[AutoGeocode] Starting reverse geocode for:', latitude.toFixed(6), longitude.toFixed(6));
-
       const response = await reverseGeocode({ latitude, longitude });
       const fields = geocodeResponseToEntryFields(response);
 
-      console.log('[AutoGeocode] Got location fields:', {
-        city: fields.city,
-        region: fields.region,
-        country: fields.country,
-        status: fields.geocode_status,
-      });
-
-      // Update form with geocoded fields (both display and geo_ fields)
+      // Update form with geocoded fields
       onLocationFieldsChange({
         address: fields.address,
         neighborhood: fields.neighborhood,
@@ -199,14 +180,6 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
         subdivision: fields.subdivision,
         region: fields.region,
         country: fields.country,
-        // Geo fields (immutable, from geocode)
-        geo_address: fields.geo_address,
-        geo_neighborhood: fields.geo_neighborhood,
-        geo_postal_code: fields.geo_postal_code,
-        geo_city: fields.geo_city,
-        geo_subdivision: fields.geo_subdivision,
-        geo_region: fields.geo_region,
-        geo_country: fields.geo_country,
       });
       onGeocodeStatusChange(fields.geocode_status);
 
@@ -221,14 +194,6 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
           region: fields.region,
           country: fields.country,
           geocode_status: fields.geocode_status,
-          // Geo fields (immutable, from geocode)
-          geo_address: fields.geo_address,
-          geo_neighborhood: fields.geo_neighborhood,
-          geo_postal_code: fields.geo_postal_code,
-          geo_city: fields.geo_city,
-          geo_subdivision: fields.geo_subdivision,
-          geo_region: fields.geo_region,
-          geo_country: fields.geo_country,
         });
       }
 
@@ -246,59 +211,53 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
    * Manually trigger snap/geocoding (useful for retry)
    */
   const triggerGeocode = useCallback(async (): Promise<void> => {
-    if (!gpsData) {
-      console.log('[AutoGeocode] No GPS data to geocode');
+    if (!locationData || locationData.latitude == null || locationData.longitude == null) {
       return;
     }
 
     // Reset the last processed coords so we can re-process
     lastProcessedCoordsRef.current = null;
 
-    await performSnapOrGeocode(gpsData.latitude, gpsData.longitude);
-  }, [gpsData, performSnapOrGeocode]);
+    await performSnapOrGeocode(locationData.latitude, locationData.longitude);
+  }, [locationData, performSnapOrGeocode]);
 
-  // Auto-geocode when GPS data changes
+  // Auto-geocode when location data changes
   useEffect(() => {
     // Skip if location is not enabled for this stream
     if (!locationEnabled) {
-      console.log('[AutoGeocode] Location not enabled for stream, skipping');
       return;
     }
 
-    // Skip if no GPS data
-    if (!gpsData) {
+    // Skip if no location coordinates
+    if (!locationData || locationData.latitude == null || locationData.longitude == null) {
       return;
     }
 
     // Skip if we already have geocoded data (locationData has city/region/country)
     // This prevents re-geocoding when editing an entry that already has location data
-    if (locationData?.city || locationData?.region || locationData?.country) {
-      console.log('[AutoGeocode] Already have location hierarchy data, skipping');
+    if (locationData.city || locationData.region || locationData.country) {
       return;
     }
 
     // Skip if geocode already attempted and got no_data
     // (Don't keep hitting the API for middle-of-ocean locations)
     if (geocodeStatus === 'no_data') {
-      console.log('[AutoGeocode] Previous geocode returned no_data, skipping');
       return;
     }
 
     // Skip if already snapped to a location
     if (geocodeStatus === 'snapped') {
-      console.log('[AutoGeocode] Already snapped to saved location, skipping');
       return;
     }
 
     // Skip if geocode already successful
     if (geocodeStatus === 'success') {
-      console.log('[AutoGeocode] Already geocoded successfully, skipping');
       return;
     }
 
     // Perform snap check and/or geocoding
-    performSnapOrGeocode(gpsData.latitude, gpsData.longitude);
-  }, [gpsData, locationData, geocodeStatus, locationEnabled, performSnapOrGeocode]);
+    performSnapOrGeocode(locationData.latitude, locationData.longitude);
+  }, [locationData, geocodeStatus, locationEnabled, performSnapOrGeocode]);
 
   return {
     isGeocoding: isGeocodingRef.current,

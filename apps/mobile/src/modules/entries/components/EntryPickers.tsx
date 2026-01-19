@@ -202,7 +202,6 @@ export function EntryPickers({
           onSelect={(location: LocationType | null) => {
             if (location === null) {
               updateField("locationData", null);
-              updateField("gpsData", null); // Clear GPS when removing pin
               setActivePicker(null);
               showSnackbar("You removed the location");
               if (!isEditMode) {
@@ -213,7 +212,6 @@ export function EntryPickers({
 
             const isUpdating = !!formData.locationData?.name;
             updateField("locationData", location);
-            updateField("gpsData", null);
 
             setActivePicker(null);
             showSnackbar(
@@ -241,14 +239,6 @@ export function EntryPickers({
                   postalCode: formData.locationData.postalCode,
                   subdivision: formData.locationData.subdivision,
                   locationRadius: formData.locationData.locationRadius, // Location radius for precision circle on map
-                }
-              : formData.gpsData
-              ? {
-                  latitude: formData.gpsData.latitude,
-                  longitude: formData.gpsData.longitude,
-                  name: null,
-                  source: "user_custom",
-                  locationRadius: undefined, // GPS accuracy is not stored as locationRadius
                 }
               : null
           }
@@ -447,7 +437,7 @@ export function EntryPickers({
         showRating={showRating}
         showPriority={showPriority}
         showPhotos={showPhotos}
-        hasLocationData={!!(formData.gpsData || formData.locationData?.latitude || formData.locationData?.name)}
+        hasLocationData={!!(formData.locationData?.latitude || formData.locationData?.name)}
         status={formData.status}
         type={formData.type}
         dueDate={formData.dueDate}

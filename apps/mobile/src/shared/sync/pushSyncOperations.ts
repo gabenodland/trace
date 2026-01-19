@@ -64,6 +64,7 @@ export async function pushLocations(): Promise<{ success: number; errors: number
       success++;
     } catch (error) {
       log.warn('Failed to push location', { locationId: location.location_id, error });
+      await localDB.recordLocationSyncError(location.location_id, error instanceof Error ? error.message : String(error));
       errors++;
     }
   }
@@ -332,14 +333,6 @@ async function syncEntry(
       region: entry.region || null,
       country: entry.country || null,
       geocode_status: entry.geocode_status || null,
-      // Geo fields (immutable, from geocode)
-      geo_address: entry.geo_address || null,
-      geo_neighborhood: entry.geo_neighborhood || null,
-      geo_city: entry.geo_city || null,
-      geo_subdivision: entry.geo_subdivision || null,
-      geo_region: entry.geo_region || null,
-      geo_country: entry.geo_country || null,
-      geo_postal_code: entry.geo_postal_code || null,
       status: sanitizedStatus,
       type: entry.type || null,
       due_date: entry.due_date && (typeof entry.due_date === 'number'
@@ -439,6 +432,7 @@ async function syncEntry(
             last_edited_device: serverData.last_edited_device,
             synced: 1,
             sync_action: null,
+            sync_error: null,
           });
 
           log.warn('Version conflict resolved - server version accepted', {
@@ -576,14 +570,6 @@ async function syncLocation(location: LocationEntity): Promise<void> {
     subdivision: location.subdivision,
     region: location.region,
     country: location.country,
-    // Geo fields (immutable, from geocode)
-    geo_address: location.geo_address,
-    geo_neighborhood: location.geo_neighborhood,
-    geo_city: location.geo_city,
-    geo_subdivision: location.geo_subdivision,
-    geo_region: location.geo_region,
-    geo_country: location.geo_country,
-    geo_postal_code: location.geo_postal_code,
     mapbox_place_id: location.mapbox_place_id,
     foursquare_fsq_id: location.foursquare_fsq_id,
     created_at: location.created_at,

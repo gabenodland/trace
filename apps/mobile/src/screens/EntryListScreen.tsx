@@ -4,7 +4,6 @@ import Svg, { Path, Circle } from "react-native-svg";
 import * as Location from "expo-location";
 import type { EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
 import {
-  useAuthState,
   ENTRY_DISPLAY_MODES,
   ENTRY_SORT_MODES,
   sortEntries,
@@ -23,6 +22,7 @@ import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useDrawer } from "../shared/contexts/DrawerContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { useSettings } from "../shared/contexts/SettingsContext";
+import { useAuth } from "../shared/contexts/AuthContext";
 import { TopBar } from "../components/layout/TopBar";
 import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
 import { SubBar, SubBarSelector } from "../components/layout/SubBar";
@@ -38,7 +38,7 @@ export function EntryListScreen() {
   const { navigate } = useNavigation();
   const theme = useTheme();
   const { streams } = useStreams();
-  const { user } = useAuthState();
+  const { user } = useAuth();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const {
     registerStreamHandler,
@@ -105,13 +105,9 @@ export function EntryListScreen() {
   const setDisplayMode = (mode: EntryDisplayMode) => setStreamSortPreference(viewPrefKey, { displayMode: mode });
 
   // Keep refs in sync with current values (for PanResponder callbacks)
-  useEffect(() => {
-    displayModeRef.current = displayMode;
-  }, [displayMode]);
-
-  useEffect(() => {
-    setDisplayModeRef.current = setDisplayMode;
-  }, [setDisplayMode]);
+  // Assign directly during render instead of useEffect to avoid re-runs on function reference changes
+  displayModeRef.current = displayMode;
+  setDisplayModeRef.current = setDisplayMode;
 
   // Reordered modes: current mode first, then the others in order
   // This is for JSX rendering (uses state)

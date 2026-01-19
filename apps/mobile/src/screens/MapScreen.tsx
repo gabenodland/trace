@@ -79,7 +79,11 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
   );
 }
 
-export function MapScreen() {
+interface MapScreenProps {
+  isVisible?: boolean;
+}
+
+export function MapScreen({ isVisible = true }: MapScreenProps) {
   const theme = useTheme();
   const { navigate } = useNavigation();
   const {
@@ -192,6 +196,8 @@ export function MapScreen() {
   const previousStreamIdRef = useRef<string | null | undefined>(undefined); // Start undefined to detect first load
   const pendingFitRef = useRef(false); // Track if we need to fit when data settles
   const fitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Debounce fit operations
+  const lastEntriesKeyRef = useRef<string>(""); // Track entries by stable key to avoid unnecessary refits
+  const entriesRef = useRef<Entry[]>([]); // Ref to access current entries without dependency
 
   // entries is now the same as allEntries (filtering already done by hook)
   const entries = allEntries;
@@ -206,8 +212,24 @@ export function MapScreen() {
     return () => registerStreamHandler(null);
   }, [registerStreamHandler, setSelectedStreamId, setSelectedStreamName]);
 
-  // Fit map to show all entries when stream selection changes or on first load
+  // Create a stable key for entries to avoid unnecessary effect re-runs
+  // Only changes when the actual entry IDs change, not on every array reference change
+  const entriesKey = useMemo(() => {
+    if (entries.length === 0) return "";
+    return entries.map(e => e.entry_id).sort().join(",");
+  }, [entries]);
+
+  // Keep entries ref in sync for use inside effects without causing re-runs
   useEffect(() => {
+    entriesRef.current = entries;
+  }, [entries]);
+
+  // Fit map to show all entries when stream selection changes or on first load
+  // Only runs when screen is visible to avoid unnecessary work when hidden
+  useEffect(() => {
+    // Skip if screen is not visible
+    if (!isVisible) return;
+
     // Detect when selectedStreamId changes (or on first render when undefined)
     if (previousStreamIdRef.current !== selectedStreamId) {
       previousStreamIdRef.current = selectedStreamId;
@@ -220,14 +242,21 @@ export function MapScreen() {
       }
     }
 
+    // Also trigger fit if entries actually changed (different IDs, not just reference)
+    if (entriesKey !== lastEntriesKeyRef.current && entriesKey !== "") {
+      lastEntriesKeyRef.current = entriesKey;
+      pendingFitRef.current = true;
+    }
+
     // Execute pending fit when: map is ready, data settled (!isFetching), and have entries
     // Using !isFetching ensures we wait for background refetch to complete with correct data
-    if (pendingFitRef.current && isMapReady && !isFetching && entries.length > 0 && mapRef.current) {
+    const currentEntries = entriesRef.current;
+    if (pendingFitRef.current && isMapReady && !isFetching && currentEntries.length > 0 && mapRef.current) {
       pendingFitRef.current = false; // Clear pending flag before fit
 
       // Small delay to let React settle
       fitTimeoutRef.current = setTimeout(() => {
-        const bounds = calculateBounds(entries);
+        const bounds = calculateBounds(currentEntries);
         mapRef.current?.animateToRegion(bounds, 500);
       }, 100);
     }
@@ -237,7 +266,7 @@ export function MapScreen() {
         clearTimeout(fitTimeoutRef.current);
       }
     };
-  }, [selectedStreamId, entries, isFetching, isMapReady]);
+  }, [selectedStreamId, entriesKey, isFetching, isMapReady, isVisible]);
 
   // Calculate map bounds to fit all entries
   const calculateBounds = (entries: Entry[]): Region => {

@@ -21,13 +21,6 @@ export interface PendingPhoto {
   position: number;
 }
 
-/** GPS coordinates captured at entry creation time */
-export interface GpsData {
-  latitude: number;
-  longitude: number;
-  accuracy: number | null;
-}
-
 /** Geocode status for tracking how location hierarchy data was obtained */
 export type GeocodeStatus = 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | 'manual' | null;
 
@@ -46,9 +39,7 @@ export interface CaptureFormData {
   priority: number;
   entryDate: string;
   includeTime: boolean;
-  /** GPS coordinates - where the entry was created (device location) */
-  gpsData: GpsData | null;
-  /** Named location - where the entry "lives" in the world */
+  /** Location data - coordinates, name, address, and privacy radius */
   locationData: LocationType | null;
   /** Geocode status - tracks reverse geocode attempts for GPS data */
   geocodeStatus: GeocodeStatus;
@@ -191,9 +182,6 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
         priority: entry.priority ?? 0,
         entryDate,
         includeTime,
-        gpsData: entry.entry_latitude != null && entry.entry_longitude != null
-          ? { latitude: entry.entry_latitude, longitude: entry.entry_longitude, accuracy: null } // GPS accuracy is transient, not stored
-          : null,
         locationData,
         geocodeStatus: (entry.geocode_status as GeocodeStatus) ?? null,
         pendingPhotos: [],
@@ -216,8 +204,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
       priority: 0,
       entryDate: initialEntryDate,
       includeTime: !initialDate, // If initialDate provided, hide time initially
-      gpsData: null, // GPS will be captured by CaptureForm if setting enabled
-      locationData: null, // Location is never auto-set
+      locationData: null, // GPS will be captured by CaptureForm if setting enabled
       geocodeStatus: null, // Will be set when GPS is geocoded
       pendingPhotos: [],
     };
@@ -297,7 +284,6 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
       priority: 0,
       entryDate: initialEntryDate,
       includeTime: !initialDate,
-      gpsData: null, // GPS will be re-captured by CaptureForm if setting enabled
       locationData: null,
       geocodeStatus: null, // Will be set when GPS is geocoded
       pendingPhotos: [],
@@ -362,7 +348,6 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
       rating: formData.rating !== baseline.rating,
       priority: formData.priority !== baseline.priority,
       entryDate: !areDatesEqual(formData.entryDate, baseline.entryDate),
-      gpsData: JSON.stringify(formData.gpsData) !== JSON.stringify(baseline.gpsData),
       locationData: JSON.stringify(formData.locationData) !== JSON.stringify(baseline.locationData),
       pendingPhotos: formData.pendingPhotos.length !== baseline.pendingPhotos.length,
     };

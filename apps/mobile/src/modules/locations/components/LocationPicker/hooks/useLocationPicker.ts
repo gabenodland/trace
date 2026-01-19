@@ -179,8 +179,10 @@ export function useLocationPicker({
   // State to track if "Selected Location" row is highlighted
   const [isSelectedLocationHighlighted, setIsSelectedLocationHighlighted] = useState(false);
 
-  // GPS accuracy in meters (for circle on map)
-  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  // Location radius in meters (for circle on map)
+  // Set by: GPS sensor accuracy, initial location's locationRadius, or user precision slider
+  // Cleared to 0 when user taps map (exact point selection)
+  const [radius, setRadius] = useState<number>(0);
 
   // Refs
   const mapRef = useRef<MapView>(null);
@@ -209,7 +211,8 @@ export function useLocationPicker({
         const newSelection = isGpsOnlyEntry
           ? createSelectionFromMapTap(
               initialLocation.originalLatitude || initialLocation.latitude,
-              initialLocation.originalLongitude || initialLocation.longitude
+              initialLocation.originalLongitude || initialLocation.longitude,
+              initialLocation.locationRadius // Preserve existing locationRadius for dropped pins
             )
           : createSelectionFromLocation(initialLocation);
 
@@ -233,7 +236,9 @@ export function useLocationPicker({
 
         setUI(prev => ({
           ...prev,
-          showingDetails: hasLocationName,
+          // In view mode, never show details (CreateLocationView) - just show CurrentLocationView
+          // In select mode, show details if location has a name (user is editing)
+          showingDetails: propMode === 'view' ? false : hasLocationName,
           editableNameInput: initialLocation.name || '',
         }));
 
@@ -252,9 +257,9 @@ export function useLocationPicker({
 
         // Set location radius for the precision ring on the map
         if (initialLocation.locationRadius && initialLocation.locationRadius > 0) {
-          setGpsAccuracy(initialLocation.locationRadius);
+          setRadius(initialLocation.locationRadius);
         } else {
-          setGpsAccuracy(null);
+          setRadius(0);
         }
 
         // Only reverse geocode in SELECT mode (not view mode)
@@ -288,7 +293,7 @@ export function useLocationPicker({
           region: undefined,
           markerPosition: undefined,
         });
-        setGpsAccuracy(null);
+        setRadius(0);
       }
     }
   }, [visible]);
@@ -345,7 +350,7 @@ export function useLocationPicker({
               });
               // Store GPS accuracy for circle display
               if (location.coords.accuracy) {
-                setGpsAccuracy(location.coords.accuracy);
+                setRadius(location.coords.accuracy);
               }
               const newSelection = createSelectionFromMapTap(coords.latitude, coords.longitude);
               setSelection(newSelection);
@@ -528,14 +533,6 @@ export function useLocationPicker({
       neighborhood: location.neighborhood,
       subdivision: location.subdivision,
       locationRadius: location.location_radius ?? null,
-      // Preserve geo_ fields from saved location
-      geoAddress: location.geo_address,
-      geoCity: location.geo_city,
-      geoRegion: location.geo_region,
-      geoCountry: location.geo_country,
-      geoNeighborhood: location.geo_neighborhood,
-      geoPostalCode: location.geo_postal_code,
-      geoSubdivision: location.geo_subdivision,
     };
 
     onSelect(finalLocation);
@@ -639,7 +636,8 @@ export function useLocationPicker({
     setPreviewMarker(null);
     setSelectedListItemId(null);
     setIsSelectedLocationHighlighted(false);
-    // Note: We preserve gpsAccuracy here so dropped pins inherit GPS accuracy
+    // Clear radius - user is manually selecting an exact point
+    setRadius(0);
 
     if (ui.showingDetails) {
       const coords = {
@@ -689,12 +687,12 @@ export function useLocationPicker({
 
     const newSelection = createSelectionFromMapTap(coordinate.latitude, coordinate.longitude);
     // Note: GPS accuracy is NOT stored in location.accuracy here.
-    // It's only used for map circle display via picker.gpsAccuracy.
+    // It's only used for map circle display via picker.radius.
     // User must explicitly set precision via slider to store accuracy.
     setSelection(newSelection);
 
     setReverseGeocodeRequest({ latitude: coordinate.latitude, longitude: coordinate.longitude });
-  }, [ui.showingDetails, gpsAccuracy]);
+  }, [ui.showingDetails]);
 
   // Handler: Edit address (enters address editing mode with current values)
   const handleClearAddress = useCallback(() => {
@@ -768,14 +766,6 @@ export function useLocationPicker({
         category: selection.location.category,
         distance: selection.location.distance,
         locationRadius: selection.location.locationRadius ?? null,
-        // Preserve geo_ fields (immutable, for filtering)
-        geoAddress: selection.location.geoAddress,
-        geoCity: selection.location.geoCity,
-        geoRegion: selection.location.geoRegion,
-        geoCountry: selection.location.geoCountry,
-        geoNeighborhood: selection.location.geoNeighborhood,
-        geoPostalCode: selection.location.geoPostalCode,
-        geoSubdivision: selection.location.geoSubdivision,
       };
 
       // Only save to My Places if toggle is on AND we have a name
@@ -1076,8 +1066,9 @@ export function useLocationPicker({
     isSelectedLocationHighlighted,
     setIsSelectedLocationHighlighted,
 
-    // GPS Accuracy (for circle on map)
-    gpsAccuracy,
+    // Location radius (for circle on map) - unified from GPS accuracy and user precision slider
+    radius,
+    setRadius,
 
     // Reverse Geocode Request
     setReverseGeocodeRequest,

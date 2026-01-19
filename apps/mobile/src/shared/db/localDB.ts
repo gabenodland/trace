@@ -640,80 +640,59 @@ class LocalDatabase {
       console.error('Migration error (rename accuracy to location_radius):', error);
     }
 
-    // Migration: Add geo_ fields for immutable geographic data from reverse geocode
+    // Migration: Remove unused geo_ fields (never used for filtering)
+    // These fields were added but never actually used - location filtering uses regular display fields
     try {
-      const geoCityCheck = await this.db.getFirstAsync<{ name: string }>(
-        `SELECT name FROM pragma_table_info('entries') WHERE name = 'geo_city'`
+      const migrationCheck = await this.db.getFirstAsync<{ value: string }>(
+        `SELECT value FROM sync_metadata WHERE key = 'migration_remove_geo_fields_done'`
       );
 
-      if (!geoCityCheck) {
-        console.log('📦 Running migration: Adding geo_ fields to entries and locations tables...');
+      if (!migrationCheck) {
+        console.log('📦 Running migration: Removing unused geo_ fields from entries and locations tables...');
 
-        // Add geo_ fields to entries table
+        // Drop indexes first
         await this.db.execAsync(`
-          ALTER TABLE entries ADD COLUMN geo_address TEXT;
-          ALTER TABLE entries ADD COLUMN geo_neighborhood TEXT;
-          ALTER TABLE entries ADD COLUMN geo_city TEXT;
-          ALTER TABLE entries ADD COLUMN geo_subdivision TEXT;
-          ALTER TABLE entries ADD COLUMN geo_region TEXT;
-          ALTER TABLE entries ADD COLUMN geo_country TEXT;
-          ALTER TABLE entries ADD COLUMN geo_postal_code TEXT;
+          DROP INDEX IF EXISTS idx_entries_geo_city;
+          DROP INDEX IF EXISTS idx_entries_geo_region;
+          DROP INDEX IF EXISTS idx_entries_geo_country;
+          DROP INDEX IF EXISTS idx_locations_geo_city;
+          DROP INDEX IF EXISTS idx_locations_geo_region;
+          DROP INDEX IF EXISTS idx_locations_geo_country;
         `);
 
-        // Add geo_ fields to locations table
+        // SQLite doesn't support DROP COLUMN directly, so we need to recreate tables
+        // For simplicity, we'll skip dropping the columns since they're unused and don't hurt
+        // The columns will be absent in fresh installs (CREATE TABLE doesn't include them)
+        // and existing users will have empty geo_ columns that are never read or written
+
+        // Mark migration as done
         await this.db.execAsync(`
-          ALTER TABLE locations ADD COLUMN geo_address TEXT;
-          ALTER TABLE locations ADD COLUMN geo_neighborhood TEXT;
-          ALTER TABLE locations ADD COLUMN geo_city TEXT;
-          ALTER TABLE locations ADD COLUMN geo_subdivision TEXT;
-          ALTER TABLE locations ADD COLUMN geo_region TEXT;
-          ALTER TABLE locations ADD COLUMN geo_country TEXT;
-          ALTER TABLE locations ADD COLUMN geo_postal_code TEXT;
+          INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)
+          VALUES ('migration_remove_geo_fields_done', 'true', ${Date.now()});
         `);
 
-        // Create indexes for geo_ fields on entries (used for filtering/sorting)
-        await this.db.execAsync(`
-          CREATE INDEX IF NOT EXISTS idx_entries_geo_city ON entries(geo_city);
-          CREATE INDEX IF NOT EXISTS idx_entries_geo_region ON entries(geo_region);
-          CREATE INDEX IF NOT EXISTS idx_entries_geo_country ON entries(geo_country);
-        `);
-
-        // Create indexes for geo_ fields on locations
-        await this.db.execAsync(`
-          CREATE INDEX IF NOT EXISTS idx_locations_geo_city ON locations(geo_city);
-          CREATE INDEX IF NOT EXISTS idx_locations_geo_region ON locations(geo_region);
-          CREATE INDEX IF NOT EXISTS idx_locations_geo_country ON locations(geo_country);
-        `);
-
-        // Backfill geo_ fields from display fields for existing data
-        await this.db.execAsync(`
-          UPDATE entries SET
-            geo_address = address,
-            geo_neighborhood = neighborhood,
-            geo_city = city,
-            geo_subdivision = subdivision,
-            geo_region = region,
-            geo_country = country,
-            geo_postal_code = postal_code
-          WHERE geo_city IS NULL AND city IS NOT NULL;
-        `);
-
-        await this.db.execAsync(`
-          UPDATE locations SET
-            geo_address = address,
-            geo_neighborhood = neighborhood,
-            geo_city = city,
-            geo_subdivision = subdivision,
-            geo_region = region,
-            geo_country = country,
-            geo_postal_code = postal_code
-          WHERE geo_city IS NULL AND city IS NOT NULL;
-        `);
-
-        console.log('✅ Migration complete: geo_ fields added to entries and locations');
+        console.log('✅ Migration complete: Removed geo_ field indexes');
       }
     } catch (error) {
-      console.error('Migration error (geo_ fields):', error);
+      console.error('Migration error (remove geo_ fields):', error);
+    }
+
+    // Migration: Add sync_error column to locations table
+    // Locations should follow the same sync pattern as entries/streams/attachments
+    try {
+      const syncErrorCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('locations') WHERE name = 'sync_error'`
+      );
+
+      if (!syncErrorCheck) {
+        console.log('📦 Running migration: Adding sync_error column to locations table...');
+        await this.db.execAsync(`
+          ALTER TABLE locations ADD COLUMN sync_error TEXT;
+        `);
+        console.log('✅ Migration complete: sync_error added to locations');
+      }
+    } catch (error) {
+      console.error('Migration error (locations sync_error):', error);
     }
   }
 
@@ -737,14 +716,6 @@ class LocalDatabase {
         subdivision TEXT,
         region TEXT,
         country TEXT,
-        -- Geo fields (immutable, from reverse geocode, for filtering/sorting)
-        geo_address TEXT,
-        geo_neighborhood TEXT,
-        geo_city TEXT,
-        geo_subdivision TEXT,
-        geo_region TEXT,
-        geo_country TEXT,
-        geo_postal_code TEXT,
         location_radius REAL,         -- User-selected radius in meters for location generalization
         mapbox_place_id TEXT,
         foursquare_fsq_id TEXT,
@@ -752,7 +723,8 @@ class LocalDatabase {
         updated_at INTEGER NOT NULL,
         deleted_at INTEGER,           -- Soft delete
         synced INTEGER DEFAULT 0,
-        sync_action TEXT
+        sync_action TEXT,
+        sync_error TEXT               -- Error message from last sync attempt
       );
 
       -- Indexes for locations are created in createIndexes() after migrations
@@ -785,14 +757,6 @@ class LocalDatabase {
         subdivision TEXT,             -- County/district
         region TEXT,                  -- State/province
         country TEXT,                 -- Country name
-        -- Geo fields (immutable, from reverse geocode, for filtering/sorting)
-        geo_address TEXT,
-        geo_neighborhood TEXT,
-        geo_city TEXT,
-        geo_subdivision TEXT,
-        geo_region TEXT,
-        geo_country TEXT,
-        geo_postal_code TEXT,
         geocode_status TEXT,          -- Reverse geocode status: null, 'pending', 'success', 'no_data', 'error'
 
         status TEXT CHECK (status IN ('none', 'new', 'todo', 'in_progress', 'in_review', 'waiting', 'on_hold', 'done', 'closed', 'cancelled')) DEFAULT 'none',
@@ -983,7 +947,6 @@ class LocalDatabase {
         entry_latitude, entry_longitude, location_radius,
         location_id,
         place_name, address, neighborhood, postal_code, city, subdivision, region, country,
-        geo_address, geo_neighborhood, geo_city, geo_subdivision, geo_region, geo_country, geo_postal_code,
         geocode_status,
         status, type, due_date, completed_at, created_at, updated_at,
         deleted_at,
@@ -992,7 +955,7 @@ class LocalDatabase {
         version, base_version,
         conflict_status, conflict_backup,
         last_edited_by, last_edited_device
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -1014,13 +977,6 @@ class LocalDatabase {
         entry.subdivision || null,
         entry.region || null,
         entry.country || null,
-        entry.geo_address || null,
-        entry.geo_neighborhood || null,
-        entry.geo_city || null,
-        entry.geo_subdivision || null,
-        entry.geo_region || null,
-        entry.geo_country || null,
-        entry.geo_postal_code || null,
         entry.geocode_status || null,
         entry.status || 'none',
         entry.type || null,
@@ -1081,16 +1037,13 @@ class LocalDatabase {
     location_id?: string;
     includeDeleted?: boolean;
     excludePrivateStreams?: boolean;
-    // Geographic hierarchy filters
-    geo_country?: string;
-    geo_region?: string;
-    geo_city?: string;
-    geo_neighborhood?: string;
-    geo_place_name?: string;
-    geo_address?: string;
-    geo_lat?: number; // GPS latitude for exact place matching
-    geo_lng?: number; // GPS longitude for exact place matching
-    geo_none?: boolean;
+    // Location hierarchy filters
+    filter_country?: string;
+    filter_region?: string;
+    filter_city?: string;
+    filter_neighborhood?: string;
+    filter_place_name?: string;
+    filter_no_location?: boolean;
   }): Promise<Entry[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
@@ -1137,36 +1090,34 @@ class LocalDatabase {
         params.push(filter.location_id);
       }
 
-      // Geographic hierarchy filters
-      if (filter.geo_country) {
+      // Location hierarchy filters
+      if (filter.filter_country) {
         query += ' AND country = ?';
-        params.push(filter.geo_country);
+        params.push(filter.filter_country);
       }
 
-      if (filter.geo_region) {
+      if (filter.filter_region) {
         query += ' AND region = ?';
-        params.push(filter.geo_region);
+        params.push(filter.filter_region);
       }
 
-      if (filter.geo_city) {
+      if (filter.filter_city) {
         query += ' AND city = ?';
-        params.push(filter.geo_city);
+        params.push(filter.filter_city);
       }
 
-      if (filter.geo_neighborhood) {
+      if (filter.filter_neighborhood) {
         query += ' AND neighborhood = ?';
-        params.push(filter.geo_neighborhood);
+        params.push(filter.filter_neighborhood);
       }
 
-      if (filter.geo_place_name) {
+      if (filter.filter_place_name) {
         query += ' AND place_name = ?';
-        params.push(filter.geo_place_name);
+        params.push(filter.filter_place_name);
       }
-
-      // Note: geo_address filter removed - use location_id for place filtering instead
 
       // Filter for entries with no location data
-      if (filter.geo_none) {
+      if (filter.filter_no_location) {
         query += ' AND country IS NULL AND region IS NULL AND city IS NULL AND neighborhood IS NULL AND place_name IS NULL AND entry_latitude IS NULL';
       }
 
@@ -1305,8 +1256,6 @@ class LocalDatabase {
         location_id = ?,
         place_name = ?, address = ?, neighborhood = ?, postal_code = ?,
         city = ?, subdivision = ?, region = ?, country = ?,
-        geo_address = ?, geo_neighborhood = ?, geo_city = ?, geo_subdivision = ?,
-        geo_region = ?, geo_country = ?, geo_postal_code = ?,
         geocode_status = ?,
         status = ?, type = ?, due_date = ?, completed_at = ?,
         priority = ?, rating = ?, is_pinned = ?,
@@ -1335,13 +1284,6 @@ class LocalDatabase {
         updated.subdivision || null,
         updated.region || null,
         updated.country || null,
-        updated.geo_address || null,
-        updated.geo_neighborhood || null,
-        updated.geo_city || null,
-        updated.geo_subdivision || null,
-        updated.geo_region || null,
-        updated.geo_country || null,
-        updated.geo_postal_code || null,
         updated.geocode_status || null,
         updated.status || 'none',
         updated.type || null,
@@ -1765,6 +1707,21 @@ class LocalDatabase {
   }
 
   /**
+   * Record location sync error
+   */
+  async recordLocationSyncError(locationId: string, error: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.runAsync(
+      `UPDATE locations SET
+        sync_error = ?
+      WHERE location_id = ?`,
+      [error, locationId]
+    );
+  }
+
+  /**
    * Mark location as synced
    */
   async markLocationSynced(locationId: string): Promise<void> {
@@ -1779,7 +1736,8 @@ class LocalDatabase {
       await this.db.runAsync(
         `UPDATE locations SET
           synced = 1,
-          sync_action = NULL
+          sync_action = NULL,
+          sync_error = NULL
         WHERE location_id = ?`,
         [locationId]
       );
@@ -1804,14 +1762,6 @@ class LocalDatabase {
       subdivision: row.subdivision,
       region: row.region,
       country: row.country,
-      // Geo fields (immutable, from geocode)
-      geo_address: row.geo_address,
-      geo_neighborhood: row.geo_neighborhood,
-      geo_city: row.geo_city,
-      geo_subdivision: row.geo_subdivision,
-      geo_region: row.geo_region,
-      geo_country: row.geo_country,
-      geo_postal_code: row.geo_postal_code,
       location_radius: row.location_radius,
       mapbox_place_id: row.mapbox_place_id,
       foursquare_fsq_id: row.foursquare_fsq_id,
