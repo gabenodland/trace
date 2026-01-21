@@ -20,7 +20,7 @@
  * ```
  */
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useLayoutEffect } from "react";
 import { Animated, PanResponder, Dimensions, GestureResponderHandlers } from "react-native";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -56,8 +56,14 @@ export function useSwipeBackGesture({
   isModalOpen = false,
 }: UseSwipeBackGestureOptions): UseSwipeBackGestureResult {
   // Animation value: -SCREEN_WIDTH (off-screen) to 0 (visible)
-  const mainViewTranslateX = useRef(new Animated.Value(0)).current;
+  // CRITICAL: Initialize with correct value based on isEnabled to prevent flash
+  // Previously initialized to 0 always, causing main view to briefly cover sub-screen
+  const initialTranslateX = isEnabled ? -SCREEN_WIDTH : 0;
+  const mainViewTranslateX = useRef(new Animated.Value(initialTranslateX)).current;
   const [isSwipingBack, setIsSwipingBack] = useState(false);
+
+  // Debug logging for paint timing investigation
+  console.log(`🎬 [useSwipeBackGesture] Hook called: isEnabled=${isEnabled}, initialTranslateX=${initialTranslateX}`);
 
   // Refs for pan responder (avoid stale closures)
   const isEnabledRef = useRef(isEnabled);
@@ -67,14 +73,32 @@ export function useSwipeBackGesture({
   const isModalOpenRef = useRef(isModalOpen);
   isModalOpenRef.current = isModalOpen;
 
+  // Track previous isEnabled to detect changes
+  const prevIsEnabledRef = useRef(isEnabled);
+
   // Reset animation when enabled state changes
-  useEffect(() => {
+  // IMPORTANT: useLayoutEffect runs synchronously before paint
+  // This handles CHANGES to isEnabled (initial value handled by useRef above)
+  useLayoutEffect(() => {
+    const prevIsEnabled = prevIsEnabledRef.current;
+    prevIsEnabledRef.current = isEnabled;
+
+    // Skip if this is the initial render (value already set correctly in useRef)
+    if (prevIsEnabled === isEnabled) {
+      console.log(`🎬 [useSwipeBackGesture] useLayoutEffect: no change (isEnabled=${isEnabled})`);
+      return;
+    }
+
+    console.log(`🎬 [useSwipeBackGesture] useLayoutEffect: isEnabled changed ${prevIsEnabled} -> ${isEnabled}`);
+
     if (isEnabled) {
       // Sub-screen: main view off-screen to left
       mainViewTranslateX.setValue(-SCREEN_WIDTH);
+      console.log(`🎬 [useSwipeBackGesture] Set translateX to ${-SCREEN_WIDTH}`);
     } else {
       // Main view: visible
       mainViewTranslateX.setValue(0);
+      console.log(`🎬 [useSwipeBackGesture] Set translateX to 0`);
     }
     // Only update state if it's not already false to avoid unnecessary re-renders
     setIsSwipingBack(prev => prev === false ? prev : false);

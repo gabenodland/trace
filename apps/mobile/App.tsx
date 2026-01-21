@@ -258,6 +258,9 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
   const mainViewScreens = ["inbox", "map", "calendar"];
   const isOnMainView = mainViewScreens.includes(activeTab);
 
+  // Debug logging for paint timing investigation
+  console.log(`🖼️ [AppContent] Render: activeTab=${activeTab}, isOnMainView=${isOnMainView}`);
+
   // Target main view for swipe-back (the screen we came from)
   const targetMainView = screenMap[viewMode];
 
@@ -274,6 +277,9 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
     checkBeforeBack,
     isModalOpen,
   });
+
+  // Debug: Log what the Animated.View will render with
+  console.log(`🖼️ [AppContent] After hook: isSwipingBack=${isSwipingBack}`);
 
   // Keep main view screen ref in sync with viewMode
   useEffect(() => {
@@ -301,9 +307,13 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
 
   // Render sub-screen if not on main view
   const renderSubScreen = () => {
+    let content: React.ReactNode = null;
+    let boundaryName = activeTab;
+
     switch (activeTab) {
       case "capture":
-        return (
+        boundaryName = "EntryScreen";
+        content = (
           <EntryScreen
             entryId={navParams.entryId}
             initialStreamId={navParams.initialStreamId}
@@ -313,21 +323,40 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
             copiedEntryData={navParams.copiedEntryData}
           />
         );
+        break;
       case "profile":
-        return <ProfileScreen />;
+        boundaryName = "ProfileScreen";
+        content = <ProfileScreen />;
+        break;
       case "settings":
-        return <SettingsScreen />;
+        boundaryName = "SettingsScreen";
+        content = <SettingsScreen />;
+        break;
       case "debug":
-        return <DatabaseInfoScreen />;
+        boundaryName = "DatabaseInfoScreen";
+        content = <DatabaseInfoScreen />;
+        break;
       case "locations":
-        return <LocationsScreen />;
+        boundaryName = "LocationsScreen";
+        content = <LocationsScreen />;
+        break;
       case "streams":
-        return <StreamsScreen />;
+        boundaryName = "StreamsScreen";
+        content = <StreamsScreen />;
+        break;
       case "stream-properties":
-        return <StreamPropertiesScreen streamId={navParams.streamId} />;
+        boundaryName = "StreamPropertiesScreen";
+        content = <StreamPropertiesScreen streamId={navParams.streamId} />;
+        break;
       default:
         return null;
     }
+
+    return (
+      <ErrorBoundary name={boundaryName} onBack={() => navigate(targetMainView)}>
+        {content}
+      </ErrorBoundary>
+    );
   };
 
   return (

@@ -61,7 +61,8 @@
           "googleMapsApiKey": "AIzaSyDm9vuCSwQqZu4dbBsQ0sqk0CdSaxvozEE"
         }
       ],
-      "./plugins/withNetworkSecurityConfig"
+      "./plugins/withNetworkSecurityConfig",
+      "./plugins/withReleaseSigning"
     ]
   }
 }

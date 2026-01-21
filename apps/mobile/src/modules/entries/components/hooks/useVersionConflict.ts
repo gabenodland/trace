@@ -104,7 +104,17 @@ export function useVersionConflict(options: UseVersionConflictOptions): UseVersi
   const isExternalUpdate = useCallback((entry: Entry | null): { isExternal: boolean; device: string; thisDevice: string } | null => {
     if (!entry) return null;
 
-    const thisDevice = getDeviceName();
+    // Defensive check: ensure getDeviceName is defined (debugging release build issue)
+    let thisDevice = 'Unknown Device';
+    try {
+      if (typeof getDeviceName === 'function') {
+        thisDevice = getDeviceName();
+      } else {
+        console.error('🚨 [useVersionConflict] getDeviceName is not a function:', typeof getDeviceName);
+      }
+    } catch (err) {
+      console.error('🚨 [useVersionConflict] getDeviceName threw:', err);
+    }
     const editingDevice = entry.last_edited_device || '';
 
     return {

@@ -5,9 +5,12 @@
   "scripts": {
     "start": "expo start",
     "dev": "expo start --tunnel",
-    "android": "expo run:android",
+    "android": "npm run prebuild:android && expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "prebuild": "expo prebuild && node scripts/addDebugAppId.js",
+    "prebuild:android": "expo prebuild --platform android && node scripts/addDebugAppId.js",
+    "prebuild:ios": "expo prebuild --platform ios",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
@@ -66,6 +69,7 @@
     "@tiptap/starter-kit": "^2.27.1",
     "@trace/core": "^1.0.0",
     "expo": "~54.0.22",
+    "expo-clipboard": "^8.0.8",
     "expo-crypto": "~15.0.7",
     "expo-dev-client": "~6.0.20",
     "expo-device": "^8.0.9",
@@ -91,6 +95,7 @@
   "devDependencies": {
     "@expo/ngrok": "^4.1.0",
     "@types/react": "~19.1.0",
+    "sharp": "^0.34.5",
     "typescript": "~5.9.2"
   },
   "private": true

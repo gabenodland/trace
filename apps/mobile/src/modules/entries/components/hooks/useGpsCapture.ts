@@ -11,7 +11,7 @@
  * Note: GPS capture now writes directly to locationData (dropped pin)
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Alert } from "react-native";
 import * as Location from "expo-location";
 import type { Location as LocationType } from "@trace/core";
@@ -79,27 +79,6 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
 
   // Pending location data - holds captured GPS before user confirms with Save button
   const [pendingLocationData, setPendingLocationData] = useState<LocationType | null>(null);
-
-  // Auto-capture GPS for new entries when setting is enabled
-  useEffect(() => {
-    // Only auto-capture GPS for new entries (not editing)
-    if (isEditing) {
-      return;
-    }
-
-    // Skip if GPS capture setting is disabled
-    if (!captureGpsSetting) {
-      return;
-    }
-
-    // Skip if we already have location data
-    if (currentLocationData) {
-      return;
-    }
-
-    // Capture GPS - pass isInitialCapture=true so baseline is updated
-    captureGps(false, false, true);
-  }, [isEditing, captureGpsSetting]);
 
   /**
    * Capture GPS coordinates (creates a dropped pin location)
@@ -197,6 +176,34 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
       );
     }
   }, [onLocationChange, onBaselineUpdate, isEditMode, enterEditMode]);
+
+  // Store captureGps in a ref so the useEffect can access the latest version
+  // This avoids the closure issue where useEffect captures a stale/undefined reference
+  const captureGpsRef = useRef(captureGps);
+  captureGpsRef.current = captureGps;
+
+  // Auto-capture GPS for new entries when setting is enabled
+  useEffect(() => {
+    // Only auto-capture GPS for new entries (not editing)
+    if (isEditing) {
+      return;
+    }
+
+    // Skip if GPS capture setting is disabled
+    if (!captureGpsSetting) {
+      return;
+    }
+
+    // Skip if we already have location data
+    if (currentLocationData) {
+      return;
+    }
+
+    // Use the ref to access the function - avoids closure issues
+    captureGpsRef.current(false, false, true);
+    // Note: We intentionally only run this once on mount for new entries
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const clearPendingGps = useCallback(() => {
     setPendingLocationData(null);

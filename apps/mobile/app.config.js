@@ -37,6 +37,11 @@ module.exports = {
       predictiveBackGestureEnabled: false,
       permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
       softwareKeyboardLayoutMode: 'resize',
+      config: {
+        googleMaps: {
+          apiKey: 'AIzaSyDm9vuCSwQqZu4dbBsQ0sqk0CdSaxvozEE',
+        },
+      },
     },
     web: {
       favicon: './assets/favicon.png',
@@ -65,6 +70,9 @@ module.exports = {
           savePhotosPermission: 'Trace saves photos to your library.',
         },
       ],
+      './plugins/withNetworkSecurityConfig',
+      // './plugins/withReleaseSigning',  // Disabled - using debug signing for now
+      './plugins/withMonorepoRoot',
     ],
   },
 };

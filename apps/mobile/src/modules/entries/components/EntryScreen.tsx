@@ -251,7 +251,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
           formData.pendingPhotos.length > 0;
 
         if (!hasUserContent) {
-          console.log('⬅️ [beforeBackHandler] New entry with no user content, discarding');
           return true; // Proceed with back, no save
         }
       }
@@ -460,21 +459,11 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     const isExternal = externalCheck?.isExternal ?? false;
     const editingDevice = externalCheck?.device || '';
 
-    console.log('🔄 [EntryScreen] Version change detected', {
-      thisDevice: externalCheck?.thisDevice,
-      editingDevice,
-      isExternal,
-      previousVersion: knownVersion,
-      newVersion: entryVersion,
-      willUpdateForm: isExternal && !isFormDirty,
-    });
-
     // Update known version
     updateKnownVersion(entryVersion);
 
     // If change is from THIS device (our own save), don't update form
     if (!isExternal) {
-      console.log('🔄 [EntryScreen] Skipping form update - change from this device');
       return;
     }
 
@@ -576,8 +565,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     // Guard: Don't reload form if already loaded - version change handler deals with updates
     if (isFormReady) return;
 
-    console.time('⏱️ EntryScreen: entry data processing');
-
     // Build base form data synchronously
     const entryDate = entry.entry_date || entry.created_at || formData.entryDate;
     const includeTime = entryDate ? new Date(entryDate).getMilliseconds() !== 100 : formData.includeTime;
@@ -607,22 +594,17 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       };
 
       // Set baseline FIRST, then form data - ensures they're identical
-      // Note: Editor may normalize content slightly, but this is close enough for dirty tracking
       setBaseline(newFormData);
       updateMultipleFields(newFormData);
       // Mark load complete
       isInitialLoad.current = false;
-      console.timeEnd('⏱️ EntryScreen: entry data processing');
-      console.log('⏱️ EntryScreen: setIsFormReady(true)');
       setIsFormReady(true);
     };
 
     // Load location if needed, then finalize
     if (entry.location_id) {
-      console.time('⏱️ EntryScreen: location fetch');
       getLocationById(entry.location_id)
         .then(locationEntity => {
-          console.timeEnd('⏱️ EntryScreen: location fetch');
           if (locationEntity) {
             const location: LocationType = {
               location_id: locationEntity.location_id,
@@ -643,8 +625,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
             finalizeLoad(null);
           }
         })
-        .catch(err => {
-          console.error('Failed to load location:', err);
+        .catch(() => {
           finalizeLoad(null);
         });
     } else {
@@ -678,7 +659,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   useEffect(() => {
     if (isEditing && isFormReady && baselinePhotoCount === null) {
       const actualPhotoCount = queryAttachments.length;
-      console.log('📸 [EntryScreen] Setting baseline photo count:', actualPhotoCount);
       setBaselinePhotoCount(actualPhotoCount);
       // Also sync photoCount via hook if it differs
       if (photoCount !== actualPhotoCount) {
@@ -718,12 +698,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         pendingPhotos, // Copied entries use pendingPhotos
       };
 
-      console.log('🔍 [Load Copied] Setting baseline and form atomically', {
-        streamId: newFormData.streamId,
-        title: newFormData.title?.substring(0, 30),
-        pendingPhotos: pendingPhotos.length,
-      });
-
       // Set baseline FIRST with the exact data we're loading
       setBaseline(newFormData);
       setBaselinePhotoCount(pendingPhotos.length);
@@ -760,8 +734,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
             finalizeLoad(null);
           }
         })
-        .catch(err => {
-          console.error('Failed to load location for copied entry:', err);
+        .catch(() => {
           finalizeLoad(null);
         });
     } else {
