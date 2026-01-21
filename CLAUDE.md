@@ -151,6 +151,116 @@ A correct diagnosis leads to a simple fix. An incorrect diagnosis leads to compl
 
 ---
 
+## 📱 Android Build Configuration
+
+### Dev Build vs Release APK
+
+We use **Expo dev builds** (not Expo Go) for development. This allows native code and custom plugins while maintaining hot reload.
+
+**Two build types that can run side-by-side:**
+| Build | Package ID | Icon | Purpose |
+|-------|------------|------|---------|
+| Debug (dev build) | `com.trace.app.dev` | Orange debug icon | Development with tunnel/local server |
+| Release APK | `com.trace.app` | Normal icon | Standalone production build |
+
+### Build Commands
+
+```bash
+# From apps/mobile directory:
+
+# Dev build (requires prebuild first)
+npm run android              # Runs prebuild:android + expo run:android
+
+# Prebuild only (regenerates android/ folder)
+npm run prebuild:android     # expo prebuild --platform android + addDebugAppId script
+
+# Release APK (after prebuild)
+cd android && ./gradlew assembleRelease
+# Output: android/app/build/outputs/apk/release/app-release.apk
+```
+
+### How Side-by-Side Installation Works
+
+The `scripts/addDebugAppId.js` script runs after every prebuild and:
+1. Adds `applicationIdSuffix ".dev"` to debug builds in `build.gradle`
+2. Installs the debug icon from `assets/adaptive-icon-debug.png`
+
+This allows both debug and release versions to be installed on the same device simultaneously.
+
+### Debug Icon Setup
+
+Place your debug icon at:
+```
+apps/mobile/assets/adaptive-icon-debug.png
+```
+
+The script uses `sharp` to resize it for all Android density folders automatically.
+
+### Network Security Config
+
+Dev builds require cleartext traffic for Metro bundler. The `plugins/withNetworkSecurityConfig.js` plugin creates:
+
+```xml
+<!-- android/app/src/main/res/xml/network_security_config.xml -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>
+```
+
+### Monorepo Metro Bundler Fix
+
+The `plugins/withMonorepoRoot.js` plugin fixes Metro resolution for monorepo builds by setting the correct `root` path in `build.gradle`. Without this, release builds fail with "Unable to resolve module ./index.ts".
+
+### Cache Clearing
+
+**When images or assets don't update properly, clear these caches:**
+
+```bash
+# From apps/mobile directory:
+
+# Clean Android build cache
+rm -rf android/app/build android/app/.cxx android/.gradle
+
+# Then rebuild
+npm run prebuild:android
+npm run android
+```
+
+### Google Maps API Key
+
+Maps API key is configured in both `app.json` and `app.config.js`:
+- iOS: `expo.ios.config.googleMapsApiKey`
+- Android: `expo.android.config.googleMaps.apiKey`
+
+### Running Dev Build with Tunnel (Remote Testing)
+
+```bash
+# Start with tunnel for remote device testing
+npm run dev    # or: expo start --tunnel
+
+# Then press 'a' to run on Android, or scan QR with Expo Go
+```
+
+**Note:** Tunnel mode requires the network security config to allow cleartext traffic.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `app.config.js` | Main Expo config (JS, dynamic) |
+| `app.json` | Static Expo config |
+| `scripts/addDebugAppId.js` | Post-prebuild script for .dev suffix + debug icon |
+| `plugins/withNetworkSecurityConfig.js` | Network security for dev builds |
+| `plugins/withMonorepoRoot.js` | Fixes Metro bundler paths for monorepo |
+| `plugins/withReleaseSigning.js` | Release signing config (disabled by default) |
+
+---
+
 ## 🎯 Project Overview
 
 Trace is a cross-platform monorepo application (mobile/web) with shared business logic. The architecture is designed for:

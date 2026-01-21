@@ -623,6 +623,7 @@ export function LocationPicker({
               setIsSelectedLocationHighlighted={picker.setIsSelectedLocationHighlighted}
               setReverseGeocodeRequest={picker.setReverseGeocodeRequest}
               handlePOISelect={picker.handlePOISelect}
+              handlePOIQuickSelect={picker.handlePOIQuickSelect}
               handleSavedLocationSelect={picker.handleSavedLocationSelect}
               keyboardHeight={keyboardHeight}
             />

@@ -19,7 +19,6 @@ import {
   getLocationHierarchy,
   getNoLocationCount,
   MobileEntryFilter,
-  CopiedEntryData,
 } from './mobileEntryApi';
 import { CreateEntryInput, Entry } from '@trace/core';
 import * as entryHelpers from '@trace/core/src/modules/entries/entryHelpers';
@@ -27,7 +26,7 @@ import { buildLocationTree } from '@trace/core/src/modules/entries/entryHelpers'
 import type { LocationTreeNode } from '@trace/core/src/modules/entries/EntryTypes';
 
 // Re-export types for consumers
-export type { MobileEntryFilter, CopiedEntryData } from './mobileEntryApi';
+export type { MobileEntryFilter } from './mobileEntryApi';
 
 /**
  * Internal: Query hook for fetching entries from local SQLite
@@ -169,15 +168,17 @@ function useDeleteEntryMutation() {
 
 /**
  * Internal: Mutation hook for copying an entry
- * Note: copyEntry no longer saves to DB - it returns in-memory data for EntryScreen
- * No query invalidation needed since nothing is persisted yet
+ * Entry is saved to DB immediately, returns new entry ID
  */
 function useCopyEntryMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: ({ id, gpsCoords }: { id: string; gpsCoords?: { latitude: number; longitude: number; accuracy?: number } }) =>
-      copyEntry(id, gpsCoords),
-    // No onSuccess - entry is not saved to DB yet, so no queries to invalidate
-    // The actual save happens in EntryScreen when user clicks save
+    mutationFn: (id: string) => copyEntry(id),
+    onSuccess: () => {
+      // Invalidate entries list since new entry was created
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+    },
   });
 }
 
@@ -228,8 +229,8 @@ export function useEntries(filter?: MobileEntryFilter) {
         return deleteMutation.mutateAsync(id);
       },
 
-      copyEntry: async (id: string, gpsCoords?: { latitude: number; longitude: number; accuracy?: number }): Promise<CopiedEntryData> => {
-        return copyMutation.mutateAsync({ id, gpsCoords });
+      copyEntry: async (id: string): Promise<string> => {
+        return copyMutation.mutateAsync(id);
       },
     },
 

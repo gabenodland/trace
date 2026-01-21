@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
 import { extractTagsAndMentions, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate } from "@trace/core";
-import { createLocation, getLocation as getLocationById } from '../../locations/mobileLocationApi';
+import { createLocation } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
 import { useLocations } from "../../locations/mobileLocationHooks";
@@ -35,15 +35,9 @@ interface EntryScreenProps {
   initialStreamName?: string;
   initialContent?: string;
   initialDate?: string;
-  /** Copied entry data - when provided, opens form with pre-filled data (not saved to DB yet) */
-  copiedEntryData?: {
-    entry: import('@trace/core').Entry;
-    pendingPhotos: import('./hooks/useCaptureFormState').PendingPhoto[];
-    hasTime: boolean;
-  };
 }
 
-export function EntryScreen({ entryId, initialStreamId, initialStreamName, initialContent, initialDate, copiedEntryData }: EntryScreenProps = {}) {
+export function EntryScreen({ entryId, initialStreamId, initialStreamName, initialContent, initialDate }: EntryScreenProps = {}) {
   // Profiling: Log when component mounts
   console.log(`⏱️ EntryScreen: render (entryId=${entryId})`);
 
@@ -55,9 +49,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   // Determine if we're editing an existing entry or creating a new one
   // - entryId: passed in when editing an existing entry
   // - savedEntryId: set after autosave creates a new entry (transitions to editing mode)
-  // Note: copied entries start as "not editing" but transition to editing after first save
   const isEditing = !!entryId || !!savedEntryId;
-  const isCopiedEntry = !!copiedEntryData;
 
   // The effective entry ID to use for updates (savedEntryId takes precedence for new entries that have been autosaved)
   const effectiveEntryId = savedEntryId || entryId;
@@ -100,14 +92,13 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
 
   // Tracks when form data is fully loaded and ready for baseline
   // Ready immediately when:
-  // - New entry (not editing, not copied)
+  // - New entry (not editing)
   // - Editing AND entry cached AND no location_id (form initialized from entry, no async fetch needed)
   // Not ready when:
   // - Editing but entry not cached yet
   // - Editing with location_id (need to fetch location data)
-  // - Copied entry (needs processing)
   const [isFormReady, setIsFormReady] = useState(() => {
-    if (!isEditing && !isCopiedEntry) return true; // New entry
+    if (!isEditing) return true; // New entry
     if (isEditing && entry && !entry.location_id) return true; // Cached entry, no location fetch
     return false; // Need to wait for entry or location
   });
@@ -122,9 +113,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   const isInitialLoad = useRef(true); // Track if this is first load
   const [baselinePhotoCount, setBaselinePhotoCount] = useState<number | null>(null); // Baseline for dirty tracking (null = not yet initialized)
   const [photosCollapsed, setPhotosCollapsed] = useState(false); // Start expanded
-  // For copied entries, use the pre-generated entry_id from copiedEntryData
   // For new entries, generate a temp ID. For editing, use the existing entryId.
-  const [tempEntryId] = useState(() => copiedEntryData?.entry.entry_id || entryId || Crypto.randomUUID());
+  const [tempEntryId] = useState(() => entryId || Crypto.randomUUID());
 
   const { entryMutations } = useEntries();
   const { user } = useAuth();
@@ -197,9 +187,9 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     return false;
   }, [isDirty, isEditing, photoCount, baselinePhotoCount]);
 
-  // Initialize baseline for new entries (NOT copied entries - those have async data loading)
+  // Initialize baseline for new entries
   useEffect(() => {
-    if (!isEditing && !isCopiedEntry && baselinePhotoCount === null) {
+    if (!isEditing && baselinePhotoCount === null) {
       // Set baseline in hook for dirty tracking
       setBaseline(formData);
       // For new entries, photos use pendingPhotos so baseline starts at 0
@@ -601,37 +591,26 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       setIsFormReady(true);
     };
 
-    // Load location if needed, then finalize
-    if (entry.location_id) {
-      getLocationById(entry.location_id)
-        .then(locationEntity => {
-          if (locationEntity) {
-            const location: LocationType = {
-              location_id: locationEntity.location_id,
-              latitude: locationEntity.latitude,
-              longitude: locationEntity.longitude,
-              name: locationEntity.name,
-              source: (locationEntity.source as any) || 'user_custom',
-              address: locationEntity.address || null,
-              neighborhood: locationEntity.neighborhood || null,
-              postalCode: locationEntity.postal_code || null,
-              city: locationEntity.city || null,
-              subdivision: locationEntity.subdivision || null,
-              region: locationEntity.region || null,
-              country: locationEntity.country || null,
-            };
-            finalizeLoad(location);
-          } else {
-            finalizeLoad(null);
-          }
-        })
-        .catch(() => {
-          finalizeLoad(null);
-        });
-    } else {
-      // No location to load - finalize immediately
-      finalizeLoad(null);
-    }
+    // Build locationData from entry's inline location fields
+    // All location data is cached on the entry itself - no need to fetch from locations table
+    const hasLocationData = entry.place_name || entry.address || entry.city || entry.region || entry.country ||
+      (entry.entry_latitude != null && entry.entry_longitude != null);
+    const locationData: LocationType | null = hasLocationData ? {
+      location_id: entry.location_id ?? undefined,
+      latitude: entry.entry_latitude ?? 0,
+      longitude: entry.entry_longitude ?? 0,
+      name: entry.place_name,
+      source: 'user_custom',
+      address: entry.address,
+      neighborhood: entry.neighborhood,
+      postalCode: entry.postal_code,
+      city: entry.city,
+      subdivision: entry.subdivision,
+      region: entry.region,
+      country: entry.country,
+      locationRadius: entry.location_radius ?? undefined,
+    } : null;
+    finalizeLoad(locationData);
   }, [entry, isEditing, streams, setBaseline, updateMultipleFields, isFormReady]);
 
   // Called when RichTextEditor is ready with its actual content (possibly normalized)
@@ -667,87 +646,11 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     }
   }, [isEditing, isFormReady, baselinePhotoCount, queryAttachments.length, photoCount, syncPhotoCount]);
 
-  // Load copied entry data (for copy workflow - entry is NOT saved to DB yet)
-  // Pattern: Build complete form data object, set baseline AND form atomically, then mark ready
-  useEffect(() => {
-    if (!isCopiedEntry || !copiedEntryData) return;
-
-    const { entry: copiedEntry, pendingPhotos, hasTime } = copiedEntryData;
-
-    // Look up stream name
-    const streamName = copiedEntry.stream_id && streams.length > 0
-      ? streams.find(s => s.stream_id === copiedEntry.stream_id)?.name || null
-      : null;
-
-    // Helper to finalize loading - sets baseline and form atomically
-    const finalizeLoad = (locationData: LocationType | null) => {
-      const newFormData = {
-        title: copiedEntry.title || '',
-        content: copiedEntry.content || '',
-        streamId: copiedEntry.stream_id || null,
-        streamName,
-        status: (copiedEntry.status || 'none') as EntryStatus,
-        type: copiedEntry.type || null,
-        dueDate: copiedEntry.due_date || null,
-        rating: copiedEntry.rating || 0,
-        priority: copiedEntry.priority || 0,
-        entryDate: copiedEntry.entry_date || new Date().toISOString(),
-        includeTime: hasTime,
-        locationData,
-        geocodeStatus: (copiedEntry.geocode_status as GeocodeStatus) ?? null,
-        pendingPhotos, // Copied entries use pendingPhotos
-      };
-
-      // Set baseline FIRST with the exact data we're loading
-      setBaseline(newFormData);
-      setBaselinePhotoCount(pendingPhotos.length);
-      // Then update form to same data - they're identical so isDirty = false
-      updateMultipleFields(newFormData);
-      // Update photo count
-      setPhotoCount(pendingPhotos.length);
-      // Mark load complete
-      isInitialLoad.current = false;
-      setIsFormReady(true);
-    };
-
-    // Load location if needed, then finalize
-    if (copiedEntry.location_id) {
-      getLocationById(copiedEntry.location_id)
-        .then(locationEntity => {
-          if (locationEntity) {
-            const location: LocationType = {
-              location_id: locationEntity.location_id,
-              latitude: locationEntity.latitude,
-              longitude: locationEntity.longitude,
-              name: locationEntity.name,
-              source: (locationEntity.source as any) || 'user_custom',
-              address: locationEntity.address || null,
-              neighborhood: locationEntity.neighborhood || null,
-              postalCode: locationEntity.postal_code || null,
-              city: locationEntity.city || null,
-              subdivision: locationEntity.subdivision || null,
-              region: locationEntity.region || null,
-              country: locationEntity.country || null,
-            };
-            finalizeLoad(location);
-          } else {
-            finalizeLoad(null);
-          }
-        })
-        .catch(() => {
-          finalizeLoad(null);
-        });
-    } else {
-      // No location to load - finalize immediately
-      finalizeLoad(null);
-    }
-  }, [isCopiedEntry, copiedEntryData, streams]);
-
   // Apply default status for new entries with an initial stream
   // This handles the case when navigating directly to capture form with a stream preset
   useEffect(() => {
-    // Only for new entries (not editing, not copied)
-    if (isEditing || isCopiedEntry) return;
+    // Only for new entries (not editing)
+    if (isEditing) return;
 
     // Only if we have an initial stream and streams are loaded
     if (!formData.streamId || streams.length === 0) return;
@@ -760,14 +663,14 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     if (stream?.entry_use_status && stream?.entry_default_status) {
       updateField("status", stream.entry_default_status);
     }
-  }, [isEditing, isCopiedEntry, formData.streamId, formData.status, streams, updateField]);
+  }, [isEditing, formData.streamId, formData.status, streams, updateField]);
 
   // Apply templates when form loads with an initial stream
   // This handles the case where user navigates from a stream view and clicks "new"
   const hasAppliedInitialTemplateRef = useRef(false);
   useEffect(() => {
-    // Only for new entries (not editing, not copied)
-    if (isEditing || isCopiedEntry) return;
+    // Only for new entries (not editing)
+    if (isEditing) return;
 
     // Only run once
     if (hasAppliedInitialTemplateRef.current) return;
@@ -817,7 +720,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     if (selectedStream.entry_default_status && selectedStream.entry_default_status !== "none") {
       updateField("status", selectedStream.entry_default_status);
     }
-  }, [isEditing, isCopiedEntry, streams, initialStreamId, formData.title, formData.content, updateField]);
+  }, [isEditing, streams, initialStreamId, formData.title, formData.content, updateField]);
 
   // Keyboard listeners
   useEffect(() => {
@@ -1385,10 +1288,10 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     }
   };
 
-  // Show loading when editing/copying and form is not fully ready
+  // Show loading when editing and form is not fully ready
   // This blocks rendering until entry AND location are both loaded
-  if ((isEditing || isCopiedEntry) && !isFormReady) {
-    console.log(`⏱️ EntryScreen: showing Loading... (isEditing=${isEditing}, isCopiedEntry=${isCopiedEntry}, isFormReady=${isFormReady})`);
+  if (isEditing && !isFormReady) {
+    console.log(`⏱️ EntryScreen: showing Loading... (isEditing=${isEditing}, isFormReady=${isFormReady})`);
     return (
       <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
         <Text style={[styles.loadingText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading...</Text>

@@ -140,8 +140,8 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
   // Build initial form data based on whether we have cached entry
   // This is computed once and used for both formData and baseline
   const buildInitialFormData = (): CaptureFormData => {
-    // If editing and entry is already available (from React Query cache)
-    if (isEditing && entry) {
+    // If we have an entry (editing existing or copied entry), use its data
+    if (entry) {
       const entryDate = entry.entry_date || entry.created_at || initialEntryDate;
       const includeTime = entryDate ? new Date(entryDate).getMilliseconds() !== 100 : true;
       const streamName = entry.stream_id && streams?.length

@@ -320,7 +320,6 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
             initialStreamName={navParams.initialStreamName}
             initialContent={navParams.initialContent}
             initialDate={navParams.initialDate}
-            copiedEntryData={navParams.copiedEntryData}
           />
         );
         break;

@@ -543,32 +543,10 @@ export function EntryListScreen() {
 
   const handleCopyEntry = async (entryId: string) => {
     try {
-      let gpsCoords: { latitude: number; longitude: number; accuracy?: number } | undefined;
-
-      try {
-        const { status } = await Location.getForegroundPermissionsAsync();
-        if (status === "granted") {
-          let location = await Location.getLastKnownPositionAsync();
-          if (!location) {
-            location = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Low,
-            });
-          }
-          if (location) {
-            gpsCoords = {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              accuracy: location.coords.accuracy ?? undefined,
-            };
-          }
-        }
-      } catch (locError) {
-        console.warn("Could not get location for copy:", locError);
-      }
-
-      const copiedEntryData = await entryMutations.copyEntry(entryId, gpsCoords);
-
-      navigate("capture", { copiedEntryData });
+      // Copy entry and save to DB, get new entry ID
+      const newEntryId = await entryMutations.copyEntry(entryId);
+      // Navigate to edit the new entry
+      navigate("capture", { entryId: newEntryId });
     } catch (error) {
       console.error("Failed to copy entry:", error);
       Alert.alert("Error", "Failed to copy entry");

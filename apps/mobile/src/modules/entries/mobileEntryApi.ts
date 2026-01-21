@@ -18,7 +18,6 @@ import * as Device from 'expo-device';
 import * as FileSystem from 'expo-file-system/legacy';
 import { triggerPushSync, refreshEntryFromServer } from '../../shared/sync';
 import { createScopedLogger } from '../../shared/utils/logger';
-import type { PendingPhoto } from './components/hooks/useCaptureFormState';
 
 const log = createScopedLogger('EntryApi');
 
@@ -382,24 +381,10 @@ export async function deleteEntry(id: string): Promise<void> {
 }
 
 /**
- * Result of copying an entry - returns unsaved entry data and copied photos
- * Entry is NOT saved to database until user clicks save in EntryScreen
+ * Copy an entry - creates a duplicate and saves it to DB immediately
+ * Returns the new entry ID for navigation to EntryScreen
  */
-export interface CopiedEntryData {
-  entry: Entry;
-  pendingPhotos: PendingPhoto[];
-  hasTime: boolean;
-}
-
-/**
- * Copy an entry (in-memory only - not saved until user confirms)
- * Creates a new entry object with copied attributes, current date/time, fresh GPS, and duplicated photos
- * Does NOT save to database - returns data for EntryScreen to display and save later
- */
-export async function copyEntry(
-  id: string,
-  gpsCoords?: { latitude: number; longitude: number; accuracy?: number }
-): Promise<CopiedEntryData> {
+export async function copyEntry(id: string): Promise<string> {
   // Get the original entry
   const originalEntry = await localDB.getEntry(id);
   if (!originalEntry) throw new Error('Entry not found');
@@ -411,35 +396,15 @@ export async function copyEntry(
   // Generate new entry ID
   const entry_id = generateUUID();
 
-  // Determine if original entry included time (has non-zero milliseconds or specific time)
-  // Check if time was set by looking at whether it's midnight UTC
-  // Default to current time if no entry_date on original
-  let hasTime = true;
-  if (originalEntry.entry_date) {
-    const originalDate = new Date(originalEntry.entry_date);
-    hasTime = originalDate.getUTCHours() !== 0 ||
-              originalDate.getUTCMinutes() !== 0 ||
-              originalDate.getUTCSeconds() !== 0 ||
-              originalDate.getUTCMilliseconds() !== 0;
-  }
-
-  // Create new date - if original had time, use current time; otherwise just use current date at midnight
-  let newEntryDate: string;
-  if (hasTime) {
-    newEntryDate = new Date().toISOString();
-  } else {
-    // Set to midnight UTC for date-only entries
-    const now = new Date();
-    now.setUTCHours(0, 0, 0, 0);
-    newEntryDate = now.toISOString();
-  }
+  // Use current date/time for the copy
+  const newEntryDate = new Date().toISOString();
 
   // Create new title
   const newTitle = originalEntry.title
     ? `Copy of ${originalEntry.title}`
     : 'Copy of Untitled';
 
-  // Create the copied entry (NOT saved to DB)
+  // Create the copied entry with ALL fields from original
   const entry: Entry = {
     entry_id,
     user_id: userId,
@@ -448,31 +413,29 @@ export async function copyEntry(
     tags: originalEntry.tags || [],
     mentions: originalEntry.mentions || [],
     stream_id: originalEntry.stream_id,
-    // Fresh GPS coordinates
-    entry_latitude: gpsCoords?.latitude || null,
-    entry_longitude: gpsCoords?.longitude || null,
-    location_radius: originalEntry.location_radius || null, // Copy from original, not GPS accuracy
-    // Keep the same location reference if set
+    // Copy all location fields from original
+    entry_latitude: originalEntry.entry_latitude,
+    entry_longitude: originalEntry.entry_longitude,
+    location_radius: originalEntry.location_radius,
     location_id: originalEntry.location_id,
-    // Copy location hierarchy from original entry
-    place_name: originalEntry.place_name || null,
-    address: originalEntry.address || null,
-    neighborhood: originalEntry.neighborhood || null,
-    postal_code: originalEntry.postal_code || null,
-    city: originalEntry.city || null,
-    subdivision: originalEntry.subdivision || null,
-    region: originalEntry.region || null,
-    country: originalEntry.country || null,
-    geocode_status: originalEntry.geocode_status || null,
+    place_name: originalEntry.place_name,
+    address: originalEntry.address,
+    neighborhood: originalEntry.neighborhood,
+    postal_code: originalEntry.postal_code,
+    city: originalEntry.city,
+    subdivision: originalEntry.subdivision,
+    region: originalEntry.region,
+    country: originalEntry.country,
+    geocode_status: originalEntry.geocode_status,
     // Copy status, type, and task-related fields
     status: originalEntry.status || 'none',
     type: originalEntry.type || null,
     due_date: originalEntry.due_date,
     completed_at: null, // New copy is not completed
     entry_date: newEntryDate,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    attachments: null, // Don't copy attachments
+    created_at: newEntryDate,
+    updated_at: newEntryDate,
+    attachments: null,
     // Copy priority, rating, but not pinned state
     priority: originalEntry.priority || 0,
     rating: originalEntry.rating || 0.00,
@@ -485,46 +448,44 @@ export async function copyEntry(
     base_version: 1,
     conflict_status: null,
     conflict_backup: null,
-    last_edited_by: null, // Will be set during sync if needed
+    last_edited_by: null,
     last_edited_device: getDeviceName(),
   };
 
-  // Copy photos from the original entry
-  const pendingPhotos = await copyPhotosForEntry(id, entry_id, userId);
+  // Save entry to database
+  await localDB.saveEntry(entry);
 
-  log.debug('Copying entry (in-memory)', {
+  // Copy photos from the original entry and save to DB
+  await copyPhotosForEntry(id, entry_id, userId);
+
+  log.info('Entry copied', {
     originalId: id,
     newId: entry_id,
-    hasTime,
-    hasGps: !!gpsCoords,
-    photoCount: pendingPhotos.length,
+    hasLocation: !!(originalEntry.entry_latitude || originalEntry.location_id),
   });
 
-  // DO NOT save to database - return unsaved data for EntryScreen
-  return {
-    entry,
-    pendingPhotos,
-    hasTime,
-  };
+  // Trigger sync in background
+  triggerPushSync();
+
+  // Return new entry ID for navigation
+  return entry_id;
 }
 
 /**
  * Copy photos from one entry to a new entry
- * Duplicates the actual photo files to new paths and returns PendingPhoto objects
+ * Duplicates the photo files and saves attachment records to DB
  */
 async function copyPhotosForEntry(
   originalEntryId: string,
   newEntryId: string,
   userId: string
-): Promise<PendingPhoto[]> {
-  const pendingPhotos: PendingPhoto[] = [];
-
+): Promise<void> {
   try {
     // Get photos from the original entry
     const originalPhotos = await localDB.getAttachmentsForEntry(originalEntryId);
 
     if (originalPhotos.length === 0) {
-      return pendingPhotos;
+      return;
     }
 
     log.debug('Copying photos', { originalEntryId, newEntryId, count: originalPhotos.length });
@@ -533,6 +494,7 @@ async function copyPhotosForEntry(
     const newDirPath = `${FileSystem.documentDirectory}photos/${userId}/${newEntryId}/`;
     await FileSystem.makeDirectoryAsync(newDirPath, { intermediates: true });
 
+    let copiedCount = 0;
     for (const photo of originalPhotos) {
       // Generate new photo ID
       const newPhotoId = generateUUID();
@@ -556,29 +518,32 @@ async function copyPhotosForEntry(
         to: newLocalPath,
       });
 
-      // Create pending photo object
-      const pendingPhoto: PendingPhoto = {
-        photoId: newPhotoId,
-        localPath: newLocalPath,
-        filePath: `${userId}/${newEntryId}/${newPhotoId}.jpg`,
-        mimeType: photo.mime_type || 'image/jpeg',
-        fileSize: photo.file_size || 0,
+      // Save attachment record to DB
+      await localDB.createAttachment({
+        attachment_id: newPhotoId,
+        entry_id: newEntryId,
+        user_id: userId,
+        file_path: `${userId}/${newEntryId}/${newPhotoId}.jpg`,
+        local_path: newLocalPath,
+        mime_type: photo.mime_type || 'image/jpeg',
+        file_size: photo.file_size || 0,
         width: photo.width || 0,
         height: photo.height || 0,
-        position: photo.position || pendingPhotos.length,
-      };
+        position: photo.position || copiedCount,
+        uploaded: false, // Needs to be uploaded
+      });
 
-      pendingPhotos.push(pendingPhoto);
+      copiedCount++;
       log.debug('Photo copied', { originalId: photo.photo_id, newId: newPhotoId });
     }
 
-    log.info('Photos copied successfully', { count: pendingPhotos.length });
+    if (copiedCount > 0) {
+      log.info('Photos copied successfully', { count: copiedCount });
+    }
   } catch (error) {
     log.error('Failed to copy photos', error);
     // Don't throw - copying photos is non-critical, entry can still be created
   }
-
-  return pendingPhotos;
 }
 
 // ============================================================================

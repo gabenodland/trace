@@ -539,7 +539,51 @@ export function useLocationPicker({
     onClose();
   }, [onSelect, onClose]);
 
-  // Handler: POI selected from list
+  // Handler: POI quick select - immediately saves to Location table and applies to entry
+  // Used when user clicks "Select" button on a POI in the list
+  const handlePOIQuickSelect = useCallback(async (poi: POIItem) => {
+    // Build location object from POI data
+    const poiLocation: LocationType = {
+      latitude: poi.latitude,
+      longitude: poi.longitude,
+      originalLatitude: poi.latitude,
+      originalLongitude: poi.longitude,
+      name: poi.name,
+      source: poi.source === 'foursquare' ? 'foursquare_poi' : poi.source === 'google' ? 'google_poi' : 'user_custom',
+      address: poi.address || null,
+      city: poi.city || null,
+      category: poi.category || null,
+      // These will be null - POIs don't have full geo data
+      region: null,
+      country: null,
+      postalCode: null,
+      neighborhood: null,
+      subdivision: null,
+      locationRadius: null,
+    };
+
+    try {
+      // Save to Location table
+      const locationInput = locationToCreateInput(poiLocation);
+      const savedLocation = await createLocation(locationInput);
+
+      // Apply location with location_id to entry
+      const finalLocation: LocationType = {
+        ...poiLocation,
+        location_id: savedLocation.location_id,
+      };
+
+      onSelect(finalLocation);
+      onClose();
+    } catch (error) {
+      console.error('Failed to save POI location:', error);
+      // Still apply the location even if save fails (just without location_id)
+      onSelect(poiLocation);
+      onClose();
+    }
+  }, [onSelect, onClose]);
+
+  // Handler: POI selected from list - goes to CreateLocationView for naming/editing
   const handlePOISelect = useCallback((poi: POIItem) => {
     const coords = {
       latitude: poi.latitude,
@@ -1076,6 +1120,7 @@ export function useLocationPicker({
     // Handlers
     handleSavedLocationSelect,
     handlePOISelect,
+    handlePOIQuickSelect,
     handleGooglePOIClick,
     handleRegionChangeComplete,
     handleMapPress,

@@ -82,6 +82,7 @@ interface LocationSelectViewProps {
 
   // Handlers
   handlePOISelect: (poi: POIItem) => void;
+  handlePOIQuickSelect: (poi: POIItem) => Promise<void>;
   handleSavedLocationSelect: (location: LocationEntity & { distance: number }) => void;
 
   // Keyboard
@@ -111,6 +112,7 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
   setIsSelectedLocationHighlighted,
   setReverseGeocodeRequest,
   handlePOISelect,
+  handlePOIQuickSelect,
   handleSavedLocationSelect,
   keyboardHeight = 0,
 }, ref) {
@@ -365,15 +367,16 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
   const hasItems = mergedItems.length > 0;
 
   // Handle item selection (Select button press)
+  // Quick-selects immediately save to Location table and apply to entry
   const handleItemSelect = (item: MergedItem) => {
     if (item.type === 'saved' && item.savedLocation) {
-      // Saved locations (My Places) add immediately to entry - no create screen
+      // Saved locations (My Places) add immediately to entry
       handleSavedLocationSelect(item.savedLocation);
     } else if (item.type === 'poi' && item.poi) {
-      // POI selections go to Create screen - no quickSelectMode (user needs to edit name/toggle save)
-      handlePOISelect(item.poi);
+      // POI quick select - saves to Location table and applies immediately
+      handlePOIQuickSelect(item.poi);
     } else if (item.type === 'google_poi' && item.googlePOI) {
-      // Google POI selections go to Create screen - no quickSelectMode
+      // Google POI quick select - saves to Location table and applies immediately
       const googlePoi: POIItem = {
         id: item.googlePOI.placeId,
         source: 'google',
@@ -382,7 +385,7 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
         longitude: item.googlePOI.longitude,
         address: item.googlePOI.address || undefined,
       };
-      handlePOISelect(googlePoi);
+      handlePOIQuickSelect(googlePoi);
     }
   };
 
