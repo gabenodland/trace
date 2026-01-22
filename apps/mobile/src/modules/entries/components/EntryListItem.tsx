@@ -22,6 +22,7 @@ interface EntryListItemProps {
   onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
+  onSelectOnMap?: (entryId: string) => void; // Select entry on map (MapScreen only)
   streamName?: string | null; // Stream name to display
   locationName?: string | null; // Location name to display
   displayMode?: EntryDisplayMode; // Display mode for content rendering
@@ -31,7 +32,7 @@ interface EntryListItemProps {
   attributeVisibility?: StreamAttributeVisibility;
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onStreamPress, onToggleComplete, onMove, onCopy, onDelete, onPin, streamName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle, attributeVisibility }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onStreamPress, onToggleComplete, onMove, onCopy, onDelete, onPin, onSelectOnMap, streamName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle, attributeVisibility }: EntryListItemProps) {
   const theme = useTheme();
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(0);
@@ -74,6 +75,11 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
   };
 
   const menuItems: DropdownMenuItem[] = [
+    // "Select on Map" only shown when callback provided (MapScreen)
+    ...(onSelectOnMap ? [{
+      label: "Select on Map",
+      onPress: () => onSelectOnMap(entry.entry_id),
+    }] : []),
     {
       label: entry.is_pinned ? "Unpin" : "Pin",
       onPress: () => {
@@ -154,6 +160,29 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             ]} numberOfLines={1}>
               {entry.title || getFirstLineOfText(entry.content)}
             </Text>
+            {/* Map Pin Button - only shown when onSelectOnMap is provided (MapScreen) */}
+            {onSelectOnMap && (
+              <TouchableOpacity
+                style={styles.mapPinButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onSelectOnMap(entry.entry_id);
+                }}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+                    stroke={theme.colors.text.tertiary}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Circle cx={12} cy={10} r={3} stroke={theme.colors.text.tertiary} strokeWidth={2} />
+                </Svg>
+              </TouchableOpacity>
+            )}
             {/* Menu Button - fixed width reserved area */}
             <TouchableOpacity
               style={styles.menuButton}
@@ -352,6 +381,30 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
             ]} numberOfLines={entry.title ? undefined : 1}>
               {entry.title || getFirstLineOfText(entry.content)}
             </Text>
+
+            {/* Map Pin Button - only shown when onSelectOnMap is provided (MapScreen) */}
+            {onSelectOnMap && (
+              <TouchableOpacity
+                style={styles.mapPinButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onSelectOnMap(entry.entry_id);
+                }}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+                    stroke={theme.colors.text.tertiary}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Circle cx={12} cy={10} r={3} stroke={theme.colors.text.tertiary} strokeWidth={2} />
+                </Svg>
+              </TouchableOpacity>
+            )}
 
             {/* Menu Button - fixed width reserved area */}
             <TouchableOpacity
@@ -683,6 +736,14 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     width: 36,
     height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: themeBase.spacing.xs,
+  },
+  mapPinButton: {
+    flexShrink: 0,
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: themeBase.spacing.xs,

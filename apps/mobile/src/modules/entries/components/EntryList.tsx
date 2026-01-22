@@ -28,6 +28,7 @@ interface EntryListProps {
   onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
+  onSelectOnMap?: (entryId: string) => void; // Select entry on map (MapScreen only)
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
   streams?: Stream[]; // Optional streams for displaying stream names
   locations?: Location[]; // Optional locations for displaying location names
@@ -36,7 +37,7 @@ interface EntryListProps {
   fullStreams?: FullStream[];
 }
 
-export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, ListHeaderComponent, streams, locations, displayMode, fullStreams }: EntryListProps) {
+export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, ListHeaderComponent, streams, locations, displayMode, fullStreams }: EntryListProps) {
   const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
@@ -75,6 +76,7 @@ export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPre
         onCopy={onCopy}
         onDelete={onDelete}
         onPin={onPin}
+        onSelectOnMap={onSelectOnMap}
         streamName={item.stream_id && streamMap ? streamMap[item.stream_id] : null}
         locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
         displayMode={displayMode}

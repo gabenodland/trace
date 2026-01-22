@@ -1,19 +1,26 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, Alert, PanResponder, Dimensions } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, PanResponder, Dimensions } from "react-native";
 import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useDrawer } from "../shared/contexts/DrawerContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
+import { useSettings } from "../shared/contexts/SettingsContext";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { TopBar } from "../components/layout/TopBar";
 import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
+import { SubBar, SubBarSelector } from "../components/layout/SubBar";
+import { EntryList } from "../modules/entries/components/EntryList";
+import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
+import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
+import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import Svg, { Path, Circle } from "react-native-svg";
-import { formatRelativeTime, type Entry } from "@trace/core";
+import type { Entry, EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
+import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, sortEntries } from "@trace/core";
 
 // Cluster entries that are close together
 interface EntryCluster {
@@ -54,6 +61,11 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
   // Color based on selection state
   const markerColor = isSelected ? "#ef4444" : "#3b82f6";
 
+  // Calculate marker size based on digit count to prevent clipping
+  // Android clips to square bounding box, so width and height must match
+  const digitCount = cluster.count.toString().length;
+  const markerSize = digitCount === 1 ? 36 : digitCount === 2 ? 44 : digitCount === 3 ? 52 : 64;
+
   return (
     <Marker
       coordinate={{
@@ -62,9 +74,14 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
       }}
       onPress={onPress}
       tracksViewChanges={shouldTrack}
+      anchor={{ x: 0.5, y: 0.5 }}
     >
       {cluster.count > 1 ? (
-        <View style={[styles.clusterMarker, isSelected && styles.clusterMarkerSelected]}>
+        <View style={[
+          styles.clusterMarker,
+          isSelected && styles.clusterMarkerSelected,
+          { width: markerSize, height: markerSize, borderRadius: markerSize / 2 }
+        ]}>
           <Text style={[styles.clusterText, { fontFamily: "Inter_700Bold" }]}>{cluster.count}</Text>
         </View>
       ) : (
@@ -99,6 +116,27 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
   } = useDrawer();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const { streams } = useStreams();
+
+  // Display/sort mode state
+  const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
+  const [showSortModeSelector, setShowSortModeSelector] = useState(false);
+
+  // Per-stream view preferences from settings (sort + display mode)
+  const { getStreamSortPreference, setStreamSortPreference } = useSettings();
+
+  // Use "map:" prefix for map-specific preferences
+  const viewPrefKey = selectedStreamId ? `map:${selectedStreamId}` : "map:all";
+  const streamViewPref = getStreamSortPreference(viewPrefKey);
+
+  const sortMode = streamViewPref.sortMode;
+  const orderMode = streamViewPref.sortOrder;
+  const showPinnedFirst = streamViewPref.showPinnedFirst;
+  const displayMode = streamViewPref.displayMode;
+
+  const setSortMode = (mode: EntrySortMode) => setStreamSortPreference(viewPrefKey, { sortMode: mode });
+  const setOrderMode = (order: EntrySortOrder) => setStreamSortPreference(viewPrefKey, { sortOrder: order });
+  const setShowPinnedFirst = (show: boolean) => setStreamSortPreference(viewPrefKey, { showPinnedFirst: show });
+  const setDisplayMode = (mode: EntryDisplayMode) => setStreamSortPreference(viewPrefKey, { displayMode: mode });
 
   // Screen width for swipe threshold calculation (1/3 of screen)
   const screenWidth = Dimensions.get("window").width;
@@ -152,7 +190,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
   // Parse selection into filter using shared helper
   const entryFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
 
-  const { entries: allEntriesFromHook, isLoading, isFetching } = useEntries(entryFilter);
+  const { entries: allEntriesFromHook, isLoading, isFetching, entryMutations } = useEntries(entryFilter);
 
   // Build breadcrumbs for header (matches EntryListScreen style)
   const breadcrumbs = useMemo((): BreadcrumbSegment[] => {
@@ -167,15 +205,12 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
     );
   }, [allEntriesFromHook]);
 
-  // Build location name map from locations hook data
-  const locationNames = useMemo(() => {
-    const nameMap: Record<string, string> = {};
-    if (locationsData) {
-      locationsData.forEach(loc => {
-        nameMap[loc.location_id] = loc.name;
-      });
-    }
-    return nameMap;
+  // Locations array for EntryList component
+  const locations = useMemo(() => {
+    return locationsData?.map(loc => ({
+      location_id: loc.location_id,
+      name: loc.name,
+    })) || [];
   }, [locationsData]);
 
   // Default region (Kansas City) - used if no persisted region
@@ -189,8 +224,10 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
   const [region, setRegion] = useState<Region>(persistedRegion || defaultRegion);
   const [visibleEntries, setVisibleEntries] = useState<Entry[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
+  const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
+  const [entryToMove, setEntryToMove] = useState<string | null>(null);
+  const [isMapExpanded, setIsMapExpanded] = useState(true); // true = full height (300), false = half height (150)
   const mapRef = useRef<MapView>(null);
-  const listRef = useRef<FlatList<Entry>>(null);
   const regionRef = useRef<Region>(persistedRegion || defaultRegion); // Track region without causing re-renders
   const [isMapReady, setIsMapReady] = useState(false);
   const previousStreamIdRef = useRef<string | null | undefined>(undefined); // Start undefined to detect first load
@@ -201,6 +238,24 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
 
   // entries is now the same as allEntries (filtering already done by hook)
   const entries = allEntries;
+
+  // Create stream lookup map for sorting
+  const streamMap = useMemo(() => {
+    return streams?.reduce((map, s) => {
+      map[s.stream_id] = s.name;
+      return map;
+    }, {} as Record<string, string>) || {};
+  }, [streams]);
+
+  // Sort visible entries based on user preference
+  const sortedVisibleEntries = useMemo(() => {
+    return sortEntries(visibleEntries, sortMode, streamMap, orderMode, showPinnedFirst);
+  }, [visibleEntries, sortMode, streamMap, orderMode, showPinnedFirst]);
+
+  // Display mode and sort mode labels for SubBar
+  const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Smashed';
+  const baseSortLabel = ENTRY_SORT_MODES.find(m => m.value === sortMode)?.label || 'Entry Date';
+  const sortModeLabel = orderMode === 'desc' ? `${baseSortLabel} ↓` : `${baseSortLabel} ↑`;
 
   // Register stream selection handler for drawer
   useEffect(() => {
@@ -458,15 +513,9 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
   // Handle cluster/marker press
   const handleClusterPress = (cluster: EntryCluster) => {
     if (cluster.count === 1) {
-      // Single entry - select it and scroll to it in the list
+      // Single entry - select it to highlight marker
       const entry = cluster.entries[0];
       setSelectedEntry(entry);
-
-      // Scroll to entry in list
-      const entryIndex = visibleEntries.findIndex(e => e.entry_id === entry.entry_id);
-      if (entryIndex >= 0 && listRef.current) {
-        listRef.current.scrollToIndex({ index: entryIndex, animated: true, viewPosition: 0.5 });
-      }
     } else {
       // Multiple entries - zoom to fit all entries in the cluster
       const bounds = calculateBounds(cluster.entries);
@@ -489,9 +538,15 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
     }
   };
 
-  // Handle entry item press - show preview on map
-  const handleEntryPress = (entry: Entry) => {
-    if (!entry.entry_latitude || !entry.entry_longitude) return;
+  // Handle entry press - navigate to edit screen (consistent with inbox/calendar)
+  const handleEntryPress = (entryId: string) => {
+    navigate("capture", { entryId });
+  };
+
+  // Handle "Select on Map" - highlight entry on map and zoom (via context menu)
+  const handleSelectOnMap = (entryId: string) => {
+    const entry = visibleEntries.find(e => e.entry_id === entryId);
+    if (!entry?.entry_latitude || !entry?.entry_longitude) return;
 
     // Set as selected entry to show red marker
     setSelectedEntry(entry);
@@ -505,46 +560,95 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
     }, 500);
   };
 
-  // Render entry item in list
-  const renderEntryItem = ({ item }: { item: Entry }) => {
-    const dateStr = formatRelativeTime(item.entry_date || item.created_at);
-    // Get location name from map, or show coordinates if no saved location
-    const locationName = item.location_id && locationNames[item.location_id]
-      ? locationNames[item.location_id]
-      : `${item.entry_latitude?.toFixed(4)}, ${item.entry_longitude?.toFixed(4)}`;
-    const isSelected = selectedEntry?.entry_id === item.entry_id;
+  // Handle move entry
+  const handleMoveEntry = (entryId: string) => {
+    setEntryToMove(entryId);
+    setShowMoveStreamPicker(true);
+  };
 
-    return (
-      <TouchableOpacity
-        style={[
-          styles.entryItem,
-          { borderBottomColor: theme.colors.border.light },
-          isSelected && styles.entryItemSelected,
-        ]}
-        onPress={() => handleEntryPress(item)}
-        onLongPress={() => navigate("capture", { entryId: item.entry_id })}
-        activeOpacity={0.7}
-      >
-        <View style={styles.entryContent}>
-          {item.title ? (
-            <Text style={[styles.entryTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]} numberOfLines={1}>{item.title}</Text>
-          ) : (
-            <Text style={[styles.entryPreview, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={2}>
-              {item.content?.replace(/<[^>]*>/g, '') || "No content"}
-            </Text>
-          )}
-          <View style={styles.entryMeta}>
-            <Text style={[styles.entryDate, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>{dateStr}</Text>
-            <Text style={[styles.entryLocation, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1}>{locationName}</Text>
-          </View>
-        </View>
-        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#ef4444" : theme.colors.text.tertiary} strokeWidth={2}>
-          <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-          <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      </TouchableOpacity>
+  const handleMoveStreamSelect = async (streamId: string | null, streamName: string | null) => {
+    if (!entryToMove) return;
+
+    try {
+      await entryMutations.updateEntry(entryToMove, {
+        stream_id: streamId,
+      });
+
+      setShowMoveStreamPicker(false);
+      setEntryToMove(null);
+    } catch (error) {
+      console.error("Failed to move entry:", error);
+      Alert.alert("Error", "Failed to move entry");
+    }
+  };
+
+  // Handle copy entry
+  const handleCopyEntry = async (entryId: string) => {
+    try {
+      const newEntryId = await entryMutations.copyEntry(entryId);
+      navigate("capture", { entryId: newEntryId });
+    } catch (error) {
+      console.error("Failed to copy entry:", error);
+      Alert.alert("Error", "Failed to copy entry");
+    }
+  };
+
+  // Handle delete entry
+  const handleDeleteEntry = (entryId: string) => {
+    Alert.alert(
+      "Delete Entry",
+      "Are you sure you want to delete this entry?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await entryMutations.deleteEntry(entryId);
+            } catch (error) {
+              console.error("Failed to delete entry:", error);
+              Alert.alert("Error", "Failed to delete entry");
+            }
+          },
+        },
+      ]
     );
   };
+
+  // Handle pin entry
+  const handlePinEntry = async (entryId: string, currentPinned: boolean) => {
+    try {
+      await entryMutations.updateEntry(entryId, {
+        is_pinned: !currentPinned,
+      });
+    } catch (error) {
+      console.error("Failed to pin/unpin entry:", error);
+      Alert.alert("Error", "Failed to pin/unpin entry");
+    }
+  };
+
+  // Handle tag press - filter by tag
+  const handleTagPress = (tag: string) => {
+    setSelectedStreamId(`tag:${tag}`);
+    setSelectedStreamName(`#${tag}`);
+  };
+
+  // Handle mention press - filter by mention
+  const handleMentionPress = (mention: string) => {
+    setSelectedStreamId(`mention:${mention}`);
+    setSelectedStreamName(`@${mention}`);
+  };
+
+  // Handle stream press - filter by stream
+  const handleStreamPress = (streamId: string | null, streamName: string) => {
+    setSelectedStreamId(streamId);
+    setSelectedStreamName(streamName);
+  };
+
+  // Get current stream of entry being moved
+  const entryToMoveData = entryToMove ? visibleEntries.find(e => e.entry_id === entryToMove) : null;
+  const entryToMoveStreamId = entryToMoveData?.stream_id || null;
 
   if (isLoading) {
     return (
@@ -583,7 +687,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
       />
 
       {/* Map */}
-      <View style={styles.mapContainer}>
+      <View style={[styles.mapContainer, { height: isMapExpanded ? 300 : 150 }]}>
         <MapView
           ref={mapRef}
           style={styles.map}
@@ -644,12 +748,39 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
 
       {/* Lower portion with swipe gesture for drawer */}
       <View style={styles.lowerSection} {...drawerPanResponder.panHandlers}>
-        {/* Entry count bar */}
+        {/* Entry count and map height toggle */}
         <View style={[styles.countBar, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
           <Text style={[styles.countBarText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>
             {visibleEntries.length} {visibleEntries.length === 1 ? "entry" : "entries"} in view
           </Text>
+          <TouchableOpacity
+            style={styles.mapToggleButton}
+            onPress={() => setIsMapExpanded(!isMapExpanded)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2.5}>
+              {isMapExpanded ? (
+                <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+              ) : (
+                <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              )}
+            </Svg>
+          </TouchableOpacity>
         </View>
+
+        {/* Display/Sort mode selectors */}
+        <SubBar>
+          <SubBarSelector
+            label="View"
+            value={displayModeLabel}
+            onPress={() => setShowDisplayModeSelector(true)}
+          />
+          <SubBarSelector
+            label="Sort"
+            value={sortModeLabel}
+            onPress={() => setShowSortModeSelector(true)}
+          />
+        </SubBar>
 
         {/* Entry List */}
         {entries.length === 0 ? (
@@ -662,31 +793,58 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
             <Text style={[styles.emptySubtext, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>Add GPS coordinates to your entries to see them on the map</Text>
           </View>
         ) : (
-          <FlatList
-            ref={listRef}
-            data={visibleEntries}
-            renderItem={renderEntryItem}
-            keyExtractor={item => item.entry_id}
-            style={[styles.entryList, { backgroundColor: theme.colors.background.primary }]}
-            contentContainerStyle={styles.entryListContent}
-            onScrollToIndexFailed={(info) => {
-              // Handle scroll failure gracefully
-              setTimeout(() => {
-                if (listRef.current && visibleEntries.length > info.index) {
-                  listRef.current.scrollToIndex({ index: info.index, animated: true });
-                }
-              }, 100);
-            }}
-            ListEmptyComponent={
-              <View style={styles.emptyListContainer}>
-                <Text style={[styles.emptyListText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>No entries in this area</Text>
-                <Text style={[styles.emptyListSubtext, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>Pan or zoom the map to see entries</Text>
-              </View>
-            }
-          />
+          <View style={[styles.entryList, { backgroundColor: theme.colors.background.primary }]}>
+            <EntryList
+              entries={sortedVisibleEntries}
+              isLoading={false}
+              onEntryPress={handleEntryPress}
+              onSelectOnMap={handleSelectOnMap}
+              onMove={handleMoveEntry}
+              onCopy={handleCopyEntry}
+              onDelete={handleDeleteEntry}
+              onPin={handlePinEntry}
+              onTagPress={handleTagPress}
+              onMentionPress={handleMentionPress}
+              onStreamPress={handleStreamPress}
+              streams={streams}
+              locations={locations}
+              displayMode={displayMode}
+              fullStreams={streams}
+            />
+          </View>
         )}
       </View>
 
+      {/* Move Stream Picker */}
+      <StreamPicker
+        visible={showMoveStreamPicker}
+        onClose={() => {
+          setShowMoveStreamPicker(false);
+          setEntryToMove(null);
+        }}
+        onSelect={handleMoveStreamSelect}
+        selectedStreamId={entryToMoveStreamId}
+      />
+
+      {/* Display Mode Selector */}
+      <DisplayModeSelector
+        visible={showDisplayModeSelector}
+        selectedMode={displayMode}
+        onSelect={setDisplayMode}
+        onClose={() => setShowDisplayModeSelector(false)}
+      />
+
+      {/* Sort Mode Selector */}
+      <SortModeSelector
+        visible={showSortModeSelector}
+        selectedMode={sortMode}
+        onSelect={setSortMode}
+        onClose={() => setShowSortModeSelector(false)}
+        sortOrder={orderMode}
+        onSortOrderChange={setOrderMode}
+        showPinnedFirst={showPinnedFirst}
+        onShowPinnedFirstChange={setShowPinnedFirst}
+      />
     </View>
   );
 }
@@ -708,8 +866,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   mapContainer: {
-    height: 300,
     position: "relative",
+    // Height is set dynamically via inline style based on isMapExpanded
   },
   map: {
     flex: 1,
@@ -747,9 +905,7 @@ const styles = StyleSheet.create({
   clusterMarker: {
     backgroundColor: "#3b82f6",
     borderRadius: 18,
-    minWidth: 36,
     height: 36,
-    paddingHorizontal: 8,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
@@ -759,6 +915,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+    // Width is set dynamically based on digit count to prevent clipping
   },
   clusterMarkerSelected: {
     backgroundColor: "#ef4444",
@@ -772,6 +929,9 @@ const styles = StyleSheet.create({
     // Container for single marker pin
   },
   countBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
@@ -780,48 +940,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     // Note: fontWeight removed - use fontFamily with weight variant instead
   },
+  mapToggleButton: {
+    padding: 4,
+  },
   entryList: {
-    flex: 1,
-  },
-  entryListContent: {
-    paddingBottom: 20,
-  },
-  entryItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-  },
-  entryItemSelected: {
-    backgroundColor: "#fef2f2",
-    borderLeftWidth: 3,
-    borderLeftColor: "#ef4444",
-  },
-  entryContent: {
-    flex: 1,
-    marginRight: 8,
-  },
-  entryTitle: {
-    fontSize: 15,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
-    marginBottom: 4,
-  },
-  entryPreview: {
-    fontSize: 14,
-    marginBottom: 4,
-    lineHeight: 20,
-  },
-  entryMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  entryDate: {
-    fontSize: 12,
-  },
-  entryLocation: {
-    fontSize: 12,
     flex: 1,
   },
   emptyContainer: {
@@ -839,17 +961,5 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     textAlign: "center",
-  },
-  emptyListContainer: {
-    padding: 40,
-    alignItems: "center",
-  },
-  emptyListText: {
-    fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
-    marginBottom: 4,
-  },
-  emptyListSubtext: {
-    fontSize: 14,
   },
 });
