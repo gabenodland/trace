@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated } from "react-native";
@@ -258,11 +258,31 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
   const mainViewScreens = ["inbox", "map", "calendar"];
   const isOnMainView = mainViewScreens.includes(activeTab);
 
-  // Debug logging for paint timing investigation
-  console.log(`🖼️ [AppContent] Render: activeTab=${activeTab}, isOnMainView=${isOnMainView}`);
+  // Track if sub-screen has been laid out (for z-order control)
+  // Once laid out, we flip z-order so main view is on top for swipe-back
+  const [subScreenReady, setSubScreenReady] = useState(false);
+
+  // Track the last main view for swipe-back navigation
+  // This remembers which main tab (inbox/map/calendar) the user was on
+  const [lastMainView, setLastMainView] = useState<string>("inbox");
+
+  // Update lastMainView when on a main view, reset subScreenReady
+  useEffect(() => {
+    if (isOnMainView) {
+      setSubScreenReady(false);
+      setLastMainView(activeTab);
+    }
+  }, [isOnMainView, activeTab]);
+
+  // Callback for when sub-screen layout completes
+  const handleSubScreenLayout = useCallback(() => {
+    if (!subScreenReady) {
+      setSubScreenReady(true);
+    }
+  }, [subScreenReady]);
 
   // Target main view for swipe-back (the screen we came from)
-  const targetMainView = screenMap[viewMode];
+  const targetMainView = lastMainView;
 
   // Stable callback for swipe-back navigation
   const handleSwipeBack = useCallback(() => {
@@ -271,15 +291,12 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
 
   // Swipe-back gesture - extracted to hook for cleaner code
   // Disabled when a fullscreen modal (like LocationPicker) is open
-  const { panHandlers, mainViewTranslateX, isSwipingBack } = useSwipeBackGesture({
+  const { panHandlers, mainViewTranslateX } = useSwipeBackGesture({
     isEnabled: !isOnMainView,
     onBack: handleSwipeBack,
     checkBeforeBack,
     isModalOpen,
   });
-
-  // Debug: Log what the Animated.View will render with
-  console.log(`🖼️ [AppContent] After hook: isSwipingBack=${isSwipingBack}`);
 
   // Keep main view screen ref in sync with viewMode
   useEffect(() => {
@@ -300,13 +317,17 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
       // On main view - show only the active one
       return activeTab === viewName;
     } else {
-      // On sub-screen - show only the target during swipe
-      return isSwipingBack && targetMainView === viewName;
+      // On sub-screen - ALWAYS show the target main view
+      // It's off-screen due to translateX, but keeping it visible (opacity: 1)
+      // ensures Android renders it and it's ready for instant swipe-back
+      return targetMainView === viewName;
     }
   };
 
-  // Render sub-screen if not on main view
-  const renderSubScreen = () => {
+  // Memoize sub-screen content to prevent re-renders during swipe gesture
+  const subScreenContent = useMemo(() => {
+    if (isOnMainView) return null;
+
     let content: React.ReactNode = null;
     let boundaryName = activeTab;
 
@@ -356,38 +377,26 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
         {content}
       </ErrorBoundary>
     );
-  };
+  }, [activeTab, navParams, targetMainView, navigate, isOnMainView]);
 
   return (
     <View
       style={[styles.appContainer, { backgroundColor: theme.colors.background.secondary }]}
       {...panHandlers}
     >
-      {/* Sub-screen layer - rendered FIRST when on sub-screen (bottom layer) */}
-      {!isOnMainView && (
-        <View style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary }]} pointerEvents={isSwipingBack ? "none" : "auto"}>
-          {renderSubScreen()}
-        </View>
-      )}
-
       {/* Main views layer - slides in from left during swipe-back */}
-      {/* When on main view: translateX = 0 (visible) */}
-      {/* When on sub-screen: translateX = -screenWidth (off-screen), slides to 0 during swipe */}
+      {/* Rendered FIRST (bottom layer) so sub-screen is always on top */}
       <Animated.View
         style={[
           styles.screenLayer,
           {
             backgroundColor: theme.colors.background.secondary,
             transform: [{ translateX: isOnMainView ? 0 : mainViewTranslateX }],
-            // Shadow on right edge when sliding in
-            shadowColor: "#000",
-            shadowOffset: { width: 4, height: 0 },
-            shadowOpacity: isSwipingBack ? 0.15 : 0,
-            shadowRadius: 8,
-            elevation: isSwipingBack ? 16 : 0,
+            // After sub-screen renders, put main view on top for swipe-back
+            zIndex: subScreenReady ? 2 : 0,
           },
         ]}
-        pointerEvents={isOnMainView ? "auto" : (isSwipingBack ? "auto" : "none")}
+        pointerEvents={isOnMainView ? "auto" : "none"}
       >
         <View
           style={[
@@ -426,6 +435,18 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
           </ErrorBoundary>
         </View>
       </Animated.View>
+
+      {/* Sub-screen layer - on top initially, then below main view after it's laid out */}
+      {/* zIndex 1 keeps it below main view (zIndex 2) after subScreenReady */}
+      {!isOnMainView && (
+        <View
+          style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary, zIndex: 1 }]}
+          pointerEvents="auto"
+          onLayout={handleSubScreenLayout}
+        >
+          {subScreenContent}
+        </View>
+      )}
 
       {/* Stream Drawer - renders as overlay */}
       <StreamDrawer />

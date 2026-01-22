@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { View, StyleSheet, Alert, PanResponder, Dimensions, Animated, Text } from "react-native";
+import { View, StyleSheet, Alert, PanResponder, Dimensions } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import * as Location from "expo-location";
 import type { EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
@@ -53,7 +53,6 @@ export function EntryListScreen() {
   // Screen width for swipe threshold calculation
   const screenWidth = Dimensions.get("window").width;
   const DRAWER_SWIPE_THRESHOLD = screenWidth / 3;
-  const MODE_SWIPE_THRESHOLD = screenWidth / 4;
 
   // Ref to hold current drawerControl - needed because PanResponder callbacks
   // capture values at creation time, so we need a ref to access current value
@@ -62,23 +61,6 @@ export function EntryListScreen() {
     drawerControlRef.current = drawerControl;
   }, [drawerControl]);
 
-  // Mode change panel animation state (always rendered, opacity controls visibility)
-  // With right: 0 positioning, translateX goes from PANEL_WIDTH (hidden) to 0 (visible)
-  const PANEL_WIDTH = 130;
-  const modePanelTranslateX = useRef(new Animated.Value(PANEL_WIDTH)).current;
-  const modePanelOpacity = useRef(new Animated.Value(0)).current;
-
-  // Track swipe direction for current gesture
-  const swipeDirectionRef = useRef<"left" | "right" | null>(null);
-
-  // Track highlighted mode index during swipe (for cycling through non-current modes)
-  // Index 0 = current mode (at top), indices 1-3 = other modes that cycle
-  const [highlightedModeIndex, setHighlightedModeIndex] = useState(1);
-  const highlightedModeIndexRef = useRef(1);
-
-  // Refs for values used inside PanResponder (to avoid stale closures)
-  const displayModeRef = useRef<EntryDisplayMode>("smashed");
-  const setDisplayModeRef = useRef<(mode: EntryDisplayMode) => void>(() => {});
   const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
   const [showSortModeSelector, setShowSortModeSelector] = useState(false);
   const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
@@ -104,168 +86,41 @@ export function EntryListScreen() {
   const setShowPinnedFirst = (show: boolean) => setStreamSortPreference(viewPrefKey, { showPinnedFirst: show });
   const setDisplayMode = (mode: EntryDisplayMode) => setStreamSortPreference(viewPrefKey, { displayMode: mode });
 
-  // Keep refs in sync with current values (for PanResponder callbacks)
-  // Assign directly during render instead of useEffect to avoid re-runs on function reference changes
-  displayModeRef.current = displayMode;
-  setDisplayModeRef.current = setDisplayMode;
-
-  // Reordered modes: current mode first, then the others in order
-  // This is for JSX rendering (uses state)
-  const reorderedModes = useMemo(() => {
-    const currentIdx = ENTRY_DISPLAY_MODES.findIndex((m) => m.value === displayMode);
-    const current = ENTRY_DISPLAY_MODES[currentIdx];
-    const others = ENTRY_DISPLAY_MODES.filter((_, i) => i !== currentIdx);
-    return [current, ...others];
-  }, [displayMode]);
-
-  // Get reordered modes for PanResponder (uses ref)
-  const getReorderedModes = () => {
-    const currentIdx = ENTRY_DISPLAY_MODES.findIndex((m) => m.value === displayModeRef.current);
-    const current = ENTRY_DISPLAY_MODES[currentIdx];
-    const others = ENTRY_DISPLAY_MODES.filter((_, i) => i !== currentIdx);
-    return [current, ...others];
-  };
-
-  // Reset mode panel to hidden position
-  // Highlight starts at 1 (first non-current mode) when panel reopens
-  const resetModePanel = () => {
-    Animated.parallel([
-      Animated.timing(modePanelTranslateX, {
-        toValue: PANEL_WIDTH,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-      Animated.timing(modePanelOpacity, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setHighlightedModeIndex(1);
-      highlightedModeIndexRef.current = 1;
-    });
-  };
-
-  // Combined swipe gesture handler:
-  // - Swipe RIGHT: opens drawer
-  // - Swipe LEFT: cycles display mode with panel showing all modes
-  const combinedPanResponder = useRef(
+  // Swipe gesture handler for opening drawer (swipe right)
+  const drawerPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onStartShouldSetPanResponderCapture: () => false,
-      // Capture horizontal swipes before FlatList
+      // Capture horizontal right swipes before FlatList
       onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
         const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
         const isSwipingRight = gestureState.dx > 20;
-        const isSwipingLeft = gestureState.dx < -20;
         const notInBackZone = evt.nativeEvent.pageX > 25;
-
-        if (isHorizontalSwipe && isSwipingRight && notInBackZone) {
-          swipeDirectionRef.current = "right";
-          return true;
-        }
-        if (isHorizontalSwipe && isSwipingLeft) {
-          swipeDirectionRef.current = "left";
-          return true;
-        }
-        return false;
+        return isHorizontalSwipe && isSwipingRight && notInBackZone;
       },
       onMoveShouldSetPanResponder: () => false,
       onPanResponderGrant: () => {
-        // No setup needed - panel is always rendered, animation values control visibility
+        // No setup needed
       },
       onPanResponderMove: (_, gestureState) => {
-        if (swipeDirectionRef.current === "right") {
-          // Drawer swipe
-          const control = drawerControlRef.current;
-          if (control && gestureState.dx > 0) {
-            control.setPosition(gestureState.dx);
-          }
-        } else if (swipeDirectionRef.current === "left") {
-          // Mode change swipe - panel slides in, cycling through non-current modes
-          const absDx = Math.abs(gestureState.dx);
-          const numOtherModes = ENTRY_DISPLAY_MODES.length - 1; // Exclude current
-
-          // Panel slides in quickly (first 40px)
-          const panelOpenDistance = 40;
-          const slideProgress = Math.min(1, absDx / panelOpenDistance);
-          const newX = PANEL_WIDTH * (1 - slideProgress);
-          modePanelTranslateX.setValue(newX);
-          modePanelOpacity.setValue(Math.min(1, slideProgress * 2));
-
-          // Mode selection starts AFTER panel is open + small buffer
-          // Sequence: Open(40px) → buffer(25px) → first(45px) → second(45px) → third(45px)
-          const modeStartOffset = 65;  // Panel open + buffer before first mode
-          const modeSegment = 45;      // Each mode gets 45px of swipe distance
-
-          const adjustedDx = Math.max(0, absDx - modeStartOffset);
-          const rawIndex = Math.floor(adjustedDx / modeSegment);
-          // Cycle through 1, 2, 3, 1, 2, 3... (never 0)
-          const newHighlightIndex = (rawIndex % numOtherModes) + 1;
-
-          if (newHighlightIndex !== highlightedModeIndexRef.current) {
-            highlightedModeIndexRef.current = newHighlightIndex;
-            setHighlightedModeIndex(newHighlightIndex);
-          }
+        const control = drawerControlRef.current;
+        if (control && gestureState.dx > 0) {
+          control.setPosition(gestureState.dx);
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (swipeDirectionRef.current === "right") {
-          // Drawer release
-          const control = drawerControlRef.current;
-          if (!control) return;
-          const shouldOpen = gestureState.dx > DRAWER_SWIPE_THRESHOLD || gestureState.vx > 0.5;
-          if (shouldOpen) {
-            control.animateOpen();
-          } else {
-            control.animateClose();
-          }
-        } else if (swipeDirectionRef.current === "left") {
-          // Mode change release - switch to highlighted mode if swiped far enough
-          const absDx = Math.abs(gestureState.dx);
-          // Must swipe past the buffer zone (65px) to commit a change
-          const shouldChange = absDx > 65;
-
-          if (shouldChange) {
-            // Get the highlighted mode from reordered list
-            // Index 0 = current, indices 1-3 = other modes
-            const modes = getReorderedModes();
-            const selectedMode = modes[highlightedModeIndexRef.current];
-
-            // Highlighted is always a non-current mode (index 1, 2, or 3), so always change
-            Animated.sequence([
-              Animated.parallel([
-                Animated.timing(modePanelTranslateX, {
-                  toValue: 0,
-                  duration: 100,
-                  useNativeDriver: true,
-                }),
-                Animated.timing(modePanelOpacity, {
-                  toValue: 1,
-                  duration: 100,
-                  useNativeDriver: true,
-                }),
-              ]),
-              Animated.delay(100),
-            ]).start(() => {
-              setDisplayModeRef.current(selectedMode.value);
-              resetModePanel();
-            });
-          } else {
-            // Didn't swipe far enough - just dismiss, stay on current mode
-            resetModePanel();
-          }
+        const control = drawerControlRef.current;
+        if (!control) return;
+        const shouldOpen = gestureState.dx > DRAWER_SWIPE_THRESHOLD || gestureState.vx > 0.5;
+        if (shouldOpen) {
+          control.animateOpen();
+        } else {
+          control.animateClose();
         }
-        swipeDirectionRef.current = null;
       },
       onPanResponderTerminate: () => {
-        if (swipeDirectionRef.current === "right") {
-          const control = drawerControlRef.current;
-          if (control) control.animateClose();
-        } else if (swipeDirectionRef.current === "left") {
-          resetModePanel();
-        }
-        swipeDirectionRef.current = null;
+        const control = drawerControlRef.current;
+        if (control) control.animateClose();
       },
     })
   ).current;
@@ -558,7 +413,7 @@ export function EntryListScreen() {
   const entryToMoveStreamId = entryToMoveData?.stream_id || null;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...combinedPanResponder.panHandlers}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...drawerPanResponder.panHandlers}>
       <TopBar
         onLeftMenuPress={openDrawer}
         breadcrumbs={breadcrumbs}
@@ -649,44 +504,6 @@ export function EntryListScreen() {
       />
 
       <FloatingActionButton onPress={handleAddEntry} />
-
-      {/* Mode change panel - current at top, other modes cycle below */}
-      <Animated.View
-        style={[
-          styles.modePanel,
-          {
-            transform: [{ translateX: modePanelTranslateX }],
-            opacity: modePanelOpacity,
-            backgroundColor: theme.colors.surface.elevated,
-          },
-        ]}
-        pointerEvents="none"
-      >
-        {reorderedModes.map((mode, index) => {
-          const isCurrent = index === 0; // First item is always current
-          const isHighlighted = index === highlightedModeIndex;
-          return (
-            <View
-              key={mode.value}
-              style={[
-                styles.modePanelItem,
-                isCurrent && styles.modePanelItemCurrent,
-                isHighlighted && { backgroundColor: theme.colors.functional.accent },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.modePanelText,
-                  { color: isHighlighted ? "#fff" : theme.colors.text.primary },
-                  isCurrent && { color: theme.colors.text.tertiary },
-                ]}
-              >
-                {isCurrent ? `${mode.label} ✓` : mode.label}
-              </Text>
-            </View>
-          );
-        })}
-      </Animated.View>
     </View>
   );
 }
@@ -694,40 +511,5 @@ export function EntryListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  modePanel: {
-    position: "absolute",
-    top: "20%",
-    right: 0,
-    width: 130,
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
-    paddingVertical: 6,
-    zIndex: 9999,
-    shadowColor: "#000",
-    shadowOffset: { width: -2, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 12,
-  },
-  modePanelItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 6,
-    marginHorizontal: 4,
-    marginVertical: 2,
-  },
-  modePanelItemCurrent: {
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(128,128,128,0.2)",
-    marginBottom: 4,
-    borderRadius: 0,
-  },
-  modePanelText: {
-    fontSize: 14,
-    fontWeight: "600",
   },
 });
