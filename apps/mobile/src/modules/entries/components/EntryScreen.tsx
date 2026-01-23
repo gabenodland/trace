@@ -146,6 +146,10 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   const showLocation = !currentStream || currentStream.entry_use_location !== false;
   const showPhotos = !currentStream || currentStream.entry_use_photos !== false;
 
+  // Stream data readiness - used by useGpsCapture to prevent race condition
+  // Ready if: no stream selected OR stream data is loaded
+  const streamReady = !formData.streamId || !!currentStream;
+
   // Unsupported flags - attribute not supported by stream BUT entry has a value
   // Used to show strikethrough in MetadataBar with option to remove
   const unsupportedStatus = !showStatus && formData.status !== "none";
@@ -348,6 +352,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   } = useGpsCapture({
     isEditing,
     captureGpsSetting: settings.captureGpsLocation,
+    streamReady,
+    locationEnabled: showLocation,
     currentLocationData: formData.locationData,
     onLocationChange: (location) => updateField("locationData", location),
     onBaselineUpdate: (locationData) => setBaseline({ ...formData, locationData }),

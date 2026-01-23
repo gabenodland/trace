@@ -23,6 +23,10 @@ export interface UseGpsCaptureOptions {
   isEditing: boolean;
   /** Whether GPS capture setting is enabled */
   captureGpsSetting: boolean;
+  /** Whether stream data is loaded (or no stream selected) - prevents race condition */
+  streamReady: boolean;
+  /** Whether location is enabled for the current stream */
+  locationEnabled: boolean;
   /** Current location data from form */
   currentLocationData: LocationType | null;
   /** Callback to update form location data */
@@ -64,6 +68,8 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
   const {
     isEditing,
     captureGpsSetting,
+    streamReady,
+    locationEnabled,
     currentLocationData,
     onLocationChange,
     onBaselineUpdate,
@@ -79,6 +85,9 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
 
   // Pending location data - holds captured GPS before user confirms with Save button
   const [pendingLocationData, setPendingLocationData] = useState<LocationType | null>(null);
+
+  // Track if auto-capture has been attempted (prevents double capture when deps change)
+  const hasAttemptedCapture = useRef(false);
 
   /**
    * Capture GPS coordinates (creates a dropped pin location)
@@ -183,7 +192,13 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
   captureGpsRef.current = captureGps;
 
   // Auto-capture GPS for new entries when setting is enabled
+  // Uses proper dependencies to handle race condition when streams are loading
   useEffect(() => {
+    // Guard: only attempt capture once
+    if (hasAttemptedCapture.current) {
+      return;
+    }
+
     // Only auto-capture GPS for new entries (not editing)
     if (isEditing) {
       return;
@@ -194,16 +209,28 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
       return;
     }
 
+    // Wait for stream data to be loaded before making decision
+    // This prevents capturing GPS before we know if stream allows it
+    if (!streamReady) {
+      return;
+    }
+
+    // Skip if location is not enabled for the current stream
+    if (!locationEnabled) {
+      return;
+    }
+
     // Skip if we already have location data
     if (currentLocationData) {
       return;
     }
 
+    // Mark that we've attempted capture (prevents re-running after deps change)
+    hasAttemptedCapture.current = true;
+
     // Use the ref to access the function - avoids closure issues
     captureGpsRef.current(false, false, true);
-    // Note: We intentionally only run this once on mount for new entries
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isEditing, captureGpsSetting, streamReady, locationEnabled, currentLocationData]);
 
   const clearPendingGps = useCallback(() => {
     setPendingLocationData(null);
