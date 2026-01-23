@@ -287,6 +287,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     priority: 0,
     rating: 0.00,
     is_pinned: false,
+    is_archived: false,
     local_only: data.local_only || 0,
     synced: 0,
     sync_action: 'create',
@@ -381,6 +382,19 @@ export async function deleteEntry(id: string): Promise<void> {
 }
 
 /**
+ * Archive/unarchive an entry (offline-first)
+ * Simply updates the is_archived flag
+ */
+export async function archiveEntry(id: string, archived: boolean): Promise<Entry> {
+  log.debug('Archiving entry', { entryId: id, archived });
+
+  // Update the is_archived field
+  const updated = await updateEntry(id, { is_archived: archived });
+
+  return updated;
+}
+
+/**
  * Copy an entry - creates a duplicate and saves it to DB immediately
  * Returns the new entry ID for navigation to EntryScreen
  */
@@ -436,10 +450,11 @@ export async function copyEntry(id: string): Promise<string> {
     created_at: newEntryDate,
     updated_at: newEntryDate,
     attachments: null,
-    // Copy priority, rating, but not pinned state
+    // Copy priority, rating, but not pinned or archived state
     priority: originalEntry.priority || 0,
     rating: originalEntry.rating || 0.00,
     is_pinned: false, // New copy is not pinned
+    is_archived: false, // New copy is not archived
     local_only: originalEntry.local_only || 0,
     synced: 0,
     sync_action: 'create',

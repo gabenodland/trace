@@ -169,3 +169,24 @@ export async function deleteEntry(id: string): Promise<void> {
 
   if (error) throw error;
 }
+
+/**
+ * Archive or unarchive an entry
+ */
+export async function archiveEntry(id: string, archived: boolean): Promise<Entry> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const { data, error } = await supabase
+    .from("entries")
+    .update({ is_archived: archived })
+    .eq("entry_id", id)
+    .eq("user_id", user.id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as unknown as Entry;
+}

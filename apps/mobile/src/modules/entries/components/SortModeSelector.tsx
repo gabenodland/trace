@@ -1,9 +1,16 @@
-import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
-import { useRef, useEffect } from 'react';
+/**
+ * SortModeSelector - Sort mode selection using bottom sheet
+ * Uses PickerBottomSheet for consistent presentation with other pickers
+ * Includes options for pinned first and sort order
+ */
+
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import type { EntrySortMode, EntrySortOrder } from '@trace/core';
 import { ENTRY_SORT_MODES } from '@trace/core';
-import Svg, { Path, Rect } from 'react-native-svg';
-import { theme } from '../../../shared/theme/theme';
+import Svg, { Path } from 'react-native-svg';
+import { PickerBottomSheet } from '../../../components/sheets';
+import { useTheme } from '../../../shared/contexts/ThemeContext';
+import { themeBase } from '../../../shared/theme/themeBase';
 
 interface SortModeSelectorProps {
   visible: boolean;
@@ -26,7 +33,7 @@ export function SortModeSelector({
   showPinnedFirst = false,
   onShowPinnedFirstChange,
 }: SortModeSelectorProps) {
-  const scrollViewRef = useRef<ScrollView>(null);
+  const theme = useTheme();
   const isDescending = sortOrder === 'desc';
 
   const handleSelect = (mode: EntrySortMode) => {
@@ -46,205 +53,155 @@ export function SortModeSelector({
     }
   };
 
-  // Scroll to selected item when modal opens
-  useEffect(() => {
-    if (visible && scrollViewRef.current) {
-      const selectedIndex = ENTRY_SORT_MODES.findIndex(m => m.value === selectedMode);
-      if (selectedIndex >= 0) {
-        // Each option is ~60px tall (16px padding top + 16px padding bottom + ~28px content)
-        const optionHeight = 60;
-        const offset = selectedIndex * optionHeight;
-        setTimeout(() => {
-          scrollViewRef.current?.scrollTo({ y: offset, animated: true });
-        }, 100);
-      }
-    }
-  }, [visible, selectedMode]);
-
   return (
-    <Modal
+    <PickerBottomSheet
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
+      onClose={onClose}
+      title="Sort By"
+      height="auto"
     >
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Sort By</Text>
-          </View>
-
-          {/* Show pinned entries first checkbox */}
-          {onShowPinnedFirstChange && (
-            <TouchableOpacity
-              style={styles.checkboxRow}
-              onPress={handleTogglePinnedFirst}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.checkbox, showPinnedFirst && styles.checkboxChecked]}>
-                {showPinnedFirst && (
-                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M5 13l4 4L19 7"
-                      stroke="#ffffff"
-                      strokeWidth={3}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
-                )}
-              </View>
-              <Text style={styles.checkboxLabel}>Show pinned entries first</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Descending checkbox */}
-          {onSortOrderChange && (
-            <TouchableOpacity
-              style={styles.checkboxRow}
-              onPress={handleToggleOrder}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.checkbox, isDescending && styles.checkboxChecked]}>
-                {isDescending && (
-                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M5 13l4 4L19 7"
-                      stroke="#ffffff"
-                      strokeWidth={3}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
-                )}
-              </View>
-              <Text style={styles.checkboxLabel}>Descending</Text>
-            </TouchableOpacity>
-          )}
-
-          <ScrollView ref={scrollViewRef} style={styles.scrollView} contentContainerStyle={styles.scrollViewContent}>
-            {ENTRY_SORT_MODES.map((mode) => {
-              const isSelected = mode.value === selectedMode;
-
-              return (
-                <TouchableOpacity
-                  key={mode.value}
-                  style={[styles.option, isSelected && styles.optionSelected]}
-                  onPress={() => handleSelect(mode.value)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.optionLabel, isSelected && styles.optionLabelSelected]}>
-                    {mode.label}
-                  </Text>
-
-                  {isSelected && (
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Toggle Options */}
+        {(onShowPinnedFirstChange || onSortOrderChange) && (
+          <View style={styles.togglesSection}>
+            {/* Show pinned entries first checkbox */}
+            {onShowPinnedFirstChange && (
+              <TouchableOpacity
+                style={[styles.checkboxRow, { backgroundColor: theme.colors.background.secondary }]}
+                onPress={handleTogglePinnedFirst}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.checkbox,
+                  { borderColor: theme.colors.border.dark },
+                  showPinnedFirst && { backgroundColor: theme.colors.interactive.primary, borderColor: theme.colors.interactive.primary }
+                ]}>
+                  {showPinnedFirst && (
+                    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
                       <Path
                         d="M5 13l4 4L19 7"
-                        stroke={theme.colors.text.primary}
-                        strokeWidth={2}
+                        stroke={theme.colors.background.primary}
+                        strokeWidth={3}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
                     </Svg>
                   )}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                </View>
+                <Text style={[styles.checkboxLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
+                  Show pinned entries first
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Descending checkbox */}
+            {onSortOrderChange && (
+              <TouchableOpacity
+                style={[styles.checkboxRow, { backgroundColor: theme.colors.background.secondary }]}
+                onPress={handleToggleOrder}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.checkbox,
+                  { borderColor: theme.colors.border.dark },
+                  isDescending && { backgroundColor: theme.colors.interactive.primary, borderColor: theme.colors.interactive.primary }
+                ]}>
+                  {isDescending && (
+                    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                      <Path
+                        d="M5 13l4 4L19 7"
+                        stroke={theme.colors.background.primary}
+                        strokeWidth={3}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </Svg>
+                  )}
+                </View>
+                <Text style={[styles.checkboxLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
+                  Descending (newest first)
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Sort Mode Options */}
+        <View style={styles.optionsContainer}>
+          {ENTRY_SORT_MODES.map((mode) => {
+            const isSelected = mode.value === selectedMode;
+
+            return (
+              <TouchableOpacity
+                key={mode.value}
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: theme.colors.background.secondary },
+                  isSelected && { backgroundColor: theme.colors.background.tertiary },
+                ]}
+                onPress={() => handleSelect(mode.value)}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.optionLabel,
+                  { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
+                  isSelected && { fontFamily: theme.typography.fontFamily.semibold }
+                ]}>
+                  {mode.label}
+                </Text>
+
+                {isSelected && (
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.interactive.primary} strokeWidth={2.5}>
+                    <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
-      </TouchableOpacity>
-    </Modal>
+      </ScrollView>
+    </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  container: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: '80%',
-    paddingBottom: 10,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-  },
   scrollView: {
     maxHeight: 400,
   },
-  scrollViewContent: {
-    paddingBottom: 10,
-  },
-  header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
+  togglesSection: {
+    gap: themeBase.spacing.sm,
+    marginBottom: themeBase.spacing.md,
   },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
+    padding: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
   },
   checkbox: {
     width: 20,
     height: 20,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#d1d5db',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-  },
-  checkboxChecked: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+    marginRight: themeBase.spacing.md,
   },
   checkboxLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
+    fontSize: themeBase.typography.fontSize.sm,
   },
-  option: {
+  optionsContainer: {
+    gap: themeBase.spacing.sm,
+  },
+  optionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  optionSelected: {
-    backgroundColor: '#f3f4f6',
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
   },
   optionLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#111827',
-  },
-  optionLabelSelected: {
-    color: '#111827',
-    fontWeight: '600',
+    fontSize: themeBase.typography.fontSize.base,
   },
 });

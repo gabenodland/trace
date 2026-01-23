@@ -372,6 +372,11 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
           value={useStatus}
           onValueChange={(value) => {
             setUseStatus(value);
+            // When status is disabled, clear the default status to prevent
+            // stale defaults from being applied to new entries
+            if (!value) {
+              setEntryDefaultStatus("none");
+            }
             markChanged();
           }}
           trackColor={{ false: "#d1d5db", true: "#3b82f6" }}

@@ -10,12 +10,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   type UserSettings,
   type StreamSortPreference,
+  type StreamViewFilter,
   DEFAULT_SETTINGS,
   SETTINGS_STORAGE_KEY,
   mergeWithDefaults,
   DEFAULT_SORT_MODE,
   DEFAULT_SORT_ORDER,
   DEFAULT_DISPLAY_MODE,
+  DEFAULT_STREAM_VIEW_FILTER,
 } from '@trace/core';
 
 // ============================================================================
@@ -30,6 +32,9 @@ interface SettingsContextValue {
   // Stream sort preference helpers
   getStreamSortPreference: (streamId: string | null) => StreamSortPreference;
   setStreamSortPreference: (streamId: string | null, pref: Partial<StreamSortPreference>) => void;
+  // Stream filter helpers (convenience wrappers)
+  getStreamFilter: (streamId: string | null) => StreamViewFilter;
+  setStreamFilter: (streamId: string | null, filter: Partial<StreamViewFilter>) => void;
 }
 
 // ============================================================================
@@ -111,6 +116,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     sortOrder: DEFAULT_SORT_ORDER,
     showPinnedFirst: false,
     displayMode: DEFAULT_DISPLAY_MODE,
+    filter: DEFAULT_STREAM_VIEW_FILTER,
   };
 
   // Get sort preference for a stream (or global default if streamId is null)
@@ -136,6 +142,21 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     }));
   }, []);
 
+  // Get filter for a stream (convenience wrapper)
+  const getStreamFilter = useCallback((streamId: string | null): StreamViewFilter => {
+    const pref = getStreamSortPreference(streamId);
+    return pref.filter ?? DEFAULT_STREAM_VIEW_FILTER;
+  }, [getStreamSortPreference]);
+
+  // Set filter for a stream (convenience wrapper)
+  const setStreamFilter = useCallback((streamId: string | null, filter: Partial<StreamViewFilter>) => {
+    const currentPref = getStreamSortPreference(streamId);
+    const currentFilter = currentPref.filter ?? DEFAULT_STREAM_VIEW_FILTER;
+    setStreamSortPreference(streamId, {
+      filter: { ...currentFilter, ...filter },
+    });
+  }, [getStreamSortPreference, setStreamSortPreference]);
+
   const value: SettingsContextValue = {
     settings,
     updateSettings,
@@ -143,6 +164,8 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     isLoaded,
     getStreamSortPreference,
     setStreamSortPreference,
+    getStreamFilter,
+    setStreamFilter,
   };
 
   return (

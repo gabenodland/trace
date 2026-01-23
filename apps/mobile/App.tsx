@@ -27,7 +27,9 @@ import { NavigationProvider, BeforeBackHandler, useNavigation } from "./src/shar
 import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
 import { ThemeProvider, useTheme } from "./src/shared/contexts/ThemeContext";
 import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/DrawerContext";
+import { SettingsDrawerProvider } from "./src/shared/contexts/SettingsDrawerContext";
 import { StreamDrawer } from "./src/components/drawer";
+import { SettingsDrawer } from "./src/components/drawer/SettingsDrawer";
 import { useSwipeBackGesture } from "./src/shared/hooks/useSwipeBackGesture";
 import { ErrorBoundary } from "./src/shared/components/ErrorBoundary";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
@@ -209,19 +211,21 @@ function AuthGate() {
   // User is authenticated - show main app with new navigation
   return (
     <DrawerProvider>
-      <NavigationProvider
-        navigate={handleNavigate}
-        setBeforeBackHandler={setBeforeBackHandler}
-        checkBeforeBack={checkBeforeBack}
-        isModalOpen={isModalOpen}
-        setIsModalOpen={setIsModalOpen}
-      >
-        <AppContent
-          activeTab={activeTab}
-          navParams={navParams}
-          setMainViewScreen={setMainViewScreen}
-        />
-      </NavigationProvider>
+      <SettingsDrawerProvider>
+        <NavigationProvider
+          navigate={handleNavigate}
+          setBeforeBackHandler={setBeforeBackHandler}
+          checkBeforeBack={checkBeforeBack}
+          isModalOpen={isModalOpen}
+          setIsModalOpen={setIsModalOpen}
+        >
+          <AppContent
+            activeTab={activeTab}
+            navParams={navParams}
+            setMainViewScreen={setMainViewScreen}
+          />
+        </NavigationProvider>
+      </SettingsDrawerProvider>
     </DrawerProvider>
   );
 }
@@ -448,8 +452,11 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
         </View>
       )}
 
-      {/* Stream Drawer - renders as overlay */}
+      {/* Stream Drawer - renders as overlay (left side) */}
       <StreamDrawer />
+
+      {/* Settings Drawer - renders as overlay (right side) */}
+      <SettingsDrawer />
 
       <ExpoStatusBar style={theme.isDark ? "light" : "dark"} />
     </View>

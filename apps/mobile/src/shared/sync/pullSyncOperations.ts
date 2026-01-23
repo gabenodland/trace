@@ -336,6 +336,7 @@ export async function pullEntries(
         priority: remoteEntry.priority || 0,
         rating: remoteEntry.rating || 0.00,
         is_pinned: remoteEntry.is_pinned || false,
+        is_archived: (remoteEntry as any).is_archived || false,
         local_only: 0,
         synced: 1,
         sync_action: null,

@@ -1,12 +1,12 @@
 import Svg, { Path, Circle } from "react-native-svg";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigation } from "../contexts/NavigationContext";
-import { useProfile } from "@trace/core";
+import { useMobileProfile } from "./useMobileProfile";
 
 export function useNavigationMenu() {
   const { user, signOut } = useAuth();
   const { navigate } = useNavigation();
-  const { profile } = useProfile(user?.id);
+  const { profile, isOffline } = useMobileProfile(user?.id);
 
   // Profile menu items - Account & Settings only
   // View modes (Entries, Map, Calendar) are now in the left drawer
@@ -65,5 +65,6 @@ export function useNavigationMenu() {
     displayName,
     avatarUrl: profile?.avatar_url || null,
     onProfilePress: handleProfilePress,
+    isOffline,
   };
 }

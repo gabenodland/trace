@@ -11,6 +11,7 @@ import {
   getEntry,
   updateEntry,
   deleteEntry,
+  archiveEntry,
   copyEntry,
   getUnsyncedCount,
   getEntryCounts,
@@ -167,6 +168,40 @@ function useDeleteEntryMutation() {
 }
 
 /**
+ * Internal: Mutation hook for archiving/unarchiving an entry
+ * Uses cache patching for smooth UI updates
+ */
+function useArchiveEntryMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
+      archiveEntry(id, archived),
+    onSuccess: (updatedEntry) => {
+      // Patch the single entry cache directly
+      queryClient.setQueryData(['entry', updatedEntry.entry_id], updatedEntry);
+
+      // Patch the entry in all entries list caches (smooth update, no flash)
+      queryClient.setQueriesData(
+        { queryKey: ['entries'] },
+        (oldData: Entry[] | undefined) => {
+          if (!oldData) return oldData;
+
+          const index = oldData.findIndex(e => e.entry_id === updatedEntry.entry_id);
+          if (index === -1) return oldData;
+
+          const newData = [...oldData];
+          newData[index] = updatedEntry;
+          return newData;
+        }
+      );
+
+      queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
+    },
+  });
+}
+
+/**
  * Internal: Mutation hook for copying an entry
  * Entry is saved to DB immediately, returns new entry ID
  */
@@ -203,6 +238,7 @@ export function useEntries(filter?: MobileEntryFilter) {
   const createMutation = useCreateEntryMutation();
   const updateMutation = useUpdateEntryMutation();
   const deleteMutation = useDeleteEntryMutation();
+  const archiveMutation = useArchiveEntryMutation();
   const copyMutation = useCopyEntryMutation();
 
   // Memoize entries to prevent new empty array reference on every render
@@ -227,6 +263,10 @@ export function useEntries(filter?: MobileEntryFilter) {
 
       deleteEntry: async (id: string) => {
         return deleteMutation.mutateAsync(id);
+      },
+
+      archiveEntry: async (id: string, archived: boolean) => {
+        return archiveMutation.mutateAsync({ id, archived });
       },
 
       copyEntry: async (id: string): Promise<string> => {

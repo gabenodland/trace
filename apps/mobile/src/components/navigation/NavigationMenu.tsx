@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
-import { ReactNode } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import Svg, { Path, Circle } from "react-native-svg";
 import { getDefaultAvatarUrl } from "@trace/core";
 import { useTheme } from "../../shared/contexts/ThemeContext";
@@ -25,12 +25,20 @@ interface NavigationMenuProps {
 
 export function NavigationMenu({ visible, onClose, menuItems, userEmail, displayName, avatarUrl, onProfilePress }: NavigationMenuProps) {
   const theme = useTheme();
+  const [avatarError, setAvatarError] = useState(false);
+
+  // Reset avatar error when avatarUrl changes
+  useEffect(() => {
+    setAvatarError(false);
+  }, [avatarUrl]);
 
   if (!visible) return null;
 
   // Get avatar URL - use actual avatar or generate default from display name
+  // Falls back to default if remote image fails to load (e.g., when offline)
   const effectiveDisplayName = displayName || userEmail || "User";
-  const effectiveAvatarUrl = avatarUrl || getDefaultAvatarUrl(effectiveDisplayName);
+  const defaultAvatar = getDefaultAvatarUrl(effectiveDisplayName);
+  const effectiveAvatarUrl = avatarError || !avatarUrl ? defaultAvatar : avatarUrl;
 
   return (
     <>
@@ -58,6 +66,7 @@ export function NavigationMenu({ visible, onClose, menuItems, userEmail, display
               <Image
                 source={{ uri: effectiveAvatarUrl }}
                 style={[styles.avatarImage, { backgroundColor: theme.colors.background.tertiary }]}
+                onError={() => setAvatarError(true)}
               />
             </TouchableOpacity>
             <View style={[styles.divider, { backgroundColor: theme.colors.border.light }]} />

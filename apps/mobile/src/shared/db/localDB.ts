@@ -97,6 +97,24 @@ class LocalDatabase {
       console.error('Migration error (priority/rating/is_pinned):', error);
     }
 
+    // Migration: Add is_archived column to entries table
+    try {
+      const archivedCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('entries') WHERE name = 'is_archived'`
+      );
+
+      if (!archivedCheck) {
+        console.log('📦 Running migration: Adding is_archived to entries table...');
+        await this.db.execAsync(`
+          ALTER TABLE entries ADD COLUMN is_archived INTEGER DEFAULT 0;
+        `);
+        await this.db.execAsync(`CREATE INDEX IF NOT EXISTS idx_entries_is_archived ON entries(is_archived)`);
+        console.log('✅ Migration complete: is_archived added to entries');
+      }
+    } catch (error) {
+      console.error('Migration error (is_archived):', error);
+    }
+
     // Migration: Add locations table if it doesn't exist (should be handled by CREATE TABLE IF NOT EXISTS, but just in case)
     try {
       const result = await this.db.getFirstAsync<{ name: string }>(
@@ -182,6 +200,7 @@ class LocalDatabase {
           priority INTEGER DEFAULT 0,
           rating REAL DEFAULT 0.00,
           is_pinned INTEGER DEFAULT 0,
+          is_archived INTEGER DEFAULT 0,
           local_only INTEGER DEFAULT 0,
           synced INTEGER DEFAULT 0,
           sync_action TEXT,
@@ -201,7 +220,7 @@ class LocalDatabase {
           'entry_id', 'user_id', 'title', 'content', 'tags', 'mentions', 'stream_id',
           'entry_date', 'entry_latitude', 'entry_longitude', 'location_radius', 'location_id',
           'status', 'due_date', 'completed_at', 'created_at', 'updated_at', 'deleted_at',
-          'priority', 'rating', 'is_pinned', 'local_only', 'synced', 'sync_action',
+          'priority', 'rating', 'is_pinned', 'is_archived', 'local_only', 'synced', 'sync_action',
           'sync_error', 'sync_retry_count', 'sync_last_attempt', 'version', 'base_version',
           'conflict_status', 'conflict_backup', 'last_edited_by', 'last_edited_device'
         ];
@@ -281,6 +300,7 @@ class LocalDatabase {
           priority INTEGER DEFAULT 0,
           rating REAL DEFAULT 0.00,
           is_pinned INTEGER DEFAULT 0,
+          is_archived INTEGER DEFAULT 0,
           local_only INTEGER DEFAULT 0,
           synced INTEGER DEFAULT 0,
           sync_action TEXT,
@@ -300,7 +320,7 @@ class LocalDatabase {
           'entry_id', 'user_id', 'title', 'content', 'tags', 'mentions', 'stream_id',
           'entry_date', 'entry_latitude', 'entry_longitude', 'location_radius', 'location_id',
           'status', 'due_date', 'completed_at', 'created_at', 'updated_at', 'deleted_at',
-          'priority', 'rating', 'is_pinned', 'local_only', 'synced', 'sync_action',
+          'priority', 'rating', 'is_pinned', 'is_archived', 'local_only', 'synced', 'sync_action',
           'sync_error', 'sync_retry_count', 'sync_last_attempt', 'version', 'base_version',
           'conflict_status', 'conflict_backup', 'last_edited_by', 'last_edited_device'
         ];
@@ -767,10 +787,11 @@ class LocalDatabase {
         updated_at INTEGER NOT NULL,  -- Unix timestamp
         deleted_at INTEGER,           -- Unix timestamp (soft delete)
 
-        -- Priority, rating, and pinning fields
+        -- Priority, rating, pinning, and archive fields
         priority INTEGER DEFAULT 0,   -- Integer priority level for sorting
         rating REAL DEFAULT 0.00,     -- Decimal rating from 0.00 to 5.00
         is_pinned INTEGER DEFAULT 0,  -- Boolean flag (0=false, 1=true) to pin entries
+        is_archived INTEGER DEFAULT 0, -- Boolean flag (0=false, 1=true) to archive entries
 
         -- Sync tracking fields
         local_only INTEGER DEFAULT 0,     -- 0 = sync enabled, 1 = local only
@@ -950,12 +971,12 @@ class LocalDatabase {
         geocode_status,
         status, type, due_date, completed_at, created_at, updated_at,
         deleted_at,
-        priority, rating, is_pinned,
+        priority, rating, is_pinned, is_archived,
         local_only, synced, sync_action,
         version, base_version,
         conflict_status, conflict_backup,
         last_edited_by, last_edited_device
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -988,6 +1009,7 @@ class LocalDatabase {
         entry.priority !== undefined ? entry.priority : 0,
         entry.rating !== undefined ? entry.rating : 0.00,
         entry.is_pinned ? 1 : 0,
+        entry.is_archived ? 1 : 0,
         entry.local_only !== undefined ? entry.local_only : 0,
         entry.synced !== undefined ? entry.synced : 0,
         entry.sync_action !== undefined ? entry.sync_action : 'create',
@@ -1258,7 +1280,7 @@ class LocalDatabase {
         city = ?, subdivision = ?, region = ?, country = ?,
         geocode_status = ?,
         status = ?, type = ?, due_date = ?, completed_at = ?,
-        priority = ?, rating = ?, is_pinned = ?,
+        priority = ?, rating = ?, is_pinned = ?, is_archived = ?,
         updated_at = ?, deleted_at = ?,
         local_only = ?, synced = ?, sync_action = ?,
         version = ?, base_version = ?,
@@ -1292,6 +1314,7 @@ class LocalDatabase {
         updated.priority !== undefined ? updated.priority : 0,
         updated.rating !== undefined ? updated.rating : 0.00,
         updated.is_pinned ? 1 : 0,
+        updated.is_archived ? 1 : 0,
         Date.parse(updated.updated_at),
         updated.deleted_at ? Date.parse(updated.deleted_at) : null,
         updated.local_only !== undefined ? updated.local_only : 0,
@@ -1490,6 +1513,7 @@ class LocalDatabase {
       priority: row.priority !== undefined ? row.priority : 0,
       rating: row.rating !== undefined ? row.rating : 0.00,
       is_pinned: row.is_pinned === 1,
+      is_archived: row.is_archived === 1,
       local_only: row.local_only,
       synced: row.synced,
       sync_action: row.sync_action,

@@ -151,6 +151,100 @@ A correct diagnosis leads to a simple fix. An incorrect diagnosis leads to compl
 
 ---
 
+## 🗄️ Supabase Database Migrations
+
+### Migration Workflow
+
+When adding new database columns or modifying the schema:
+
+**Step 1: Create Migration File**
+```bash
+# Create timestamped migration file in supabase/migrations/
+# Format: YYYYMMDDHHMMSS_description.sql
+# Example: 20260122000001_add_is_archived.sql
+```
+
+**Step 2: Write Migration SQL**
+```sql
+-- supabase/migrations/20260122000001_add_is_archived.sql
+ALTER TABLE entries ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX idx_entries_is_archived ON entries(is_archived);
+```
+
+**Step 3: Update TypeScript Types (Manual)**
+Since we don't use CLI-generated types, manually update:
+1. **`packages/core/src/shared/database.types.ts`** - Add field to `Row`, `Insert`, and `Update` types
+2. **`packages/core/src/modules/{module}/{Module}Types.ts`** - Add to interface if it has one
+
+**Step 4: Apply Migration**
+
+**Option A: Via Supabase CLI (Recommended - tracks migration history)**
+
+First, check if CLI is linked by running a dry-run:
+```bash
+cd /c/projects/trace
+npx supabase db push --dry-run
+```
+
+If you get an error like "Cannot find project ref", you need to link first:
+```bash
+# Step 1: Login to Supabase (opens browser for auth)
+npx supabase login
+
+# Step 2: Link to our project
+npx supabase link --project-ref lsszorssvkavegobmqic
+# It will ask for database password - use the one from Supabase dashboard
+# Settings → Database → Connection string → Password
+```
+
+Once linked, apply migrations:
+```bash
+# Check what will be pushed (dry run):
+npx supabase db push --dry-run
+# Shows: "Would push these migrations: • 20260122000001_add_is_archived.sql"
+
+# Apply migrations:
+npx supabase db push
+# Prompts: "Do you want to push these migrations? [Y/n]"
+# Press Y
+# Shows: "Applying migration 20260122000001_add_is_archived.sql..."
+# Shows: "Finished supabase db push."
+```
+
+The CLI automatically:
+- Tracks which migrations have been applied in `supabase_migrations` table
+- Only pushes new migrations that haven't been applied yet
+- Skips files that don't match the `<timestamp>_name.sql` pattern (like `initial_schema.sql`)
+
+**Option B: Via Supabase Dashboard (Quick one-off changes)**
+1. Go to https://supabase.com/dashboard/project/lsszorssvkavegobmqic/sql/new
+2. Copy/paste the migration SQL
+3. Click "Run"
+4. Verify in Table Editor that column was added
+
+Note: Dashboard method doesn't track migration history, so CLI won't know the migration was applied.
+
+**Step 5: Rebuild Core Package**
+```bash
+cd packages/core && npm run build
+```
+
+**Step 6: Update Mobile Code**
+- Add field to entry construction in `mobileEntryApi.ts` (`createEntry`, `copyEntry`)
+- Add field to sync mapping in `pullSyncOperations.ts` and `syncService.ts`
+
+### Common Issues
+
+**"Property X does not exist on type Entry"**
+- The `database.types.ts` file hasn't been updated
+- Or the core package hasn't been rebuilt after changes
+
+**Migration applied but mobile not seeing new field**
+- Sync service needs to map the new field from server responses
+- Check `pullSyncOperations.ts` and `syncService.ts` for entry construction
+
+---
+
 ## 📱 Android Build Configuration
 
 ### Dev Build vs Release APK

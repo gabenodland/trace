@@ -1,44 +1,31 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { View, StyleSheet, Alert, PanResponder, Dimensions } from "react-native";
-import Svg, { Path, Circle } from "react-native-svg";
-import * as Location from "expo-location";
-import type { EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
-import {
-  ENTRY_DISPLAY_MODES,
-  ENTRY_SORT_MODES,
-  sortEntries,
-  groupEntriesByStatus,
-  groupEntriesByType,
-  groupEntriesByStream,
-  groupEntriesByPriority,
-  groupEntriesByRating,
-  groupEntriesByDueDate,
-} from "@trace/core";
-import { useEntries, MobileEntryFilter } from "../modules/entries/mobileEntryHooks";
+import { useState, useEffect, useMemo } from "react";
+import { View, StyleSheet, BackHandler } from "react-native";
+import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES } from "@trace/core";
+import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useDrawer } from "../shared/contexts/DrawerContext";
+import { useAuth } from "../shared/contexts/AuthContext";
 import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
 import { useSettings } from "../shared/contexts/SettingsContext";
-import { useAuth } from "../shared/contexts/AuthContext";
 import { TopBar } from "../components/layout/TopBar";
 import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
-import { SubBar, SubBarSelector } from "../components/layout/SubBar";
+import { SubBarSettings } from "../components/layout/SubBar";
 import { SearchBar } from "../components/layout/SearchBar";
 import { EntryList } from "../modules/entries/components/EntryList";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
-import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
-import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { useTheme } from "../shared/contexts/ThemeContext";
+import { useSettingsDrawer } from "../shared/contexts/SettingsDrawerContext";
+import { useDrawerGestures, useFilteredEntries, useEntryActions, useBreadcrumbs } from "./hooks";
 
 export function EntryListScreen() {
   const { navigate } = useNavigation();
   const theme = useTheme();
+  const { isOffline } = useAuth();
   const { streams } = useStreams();
-  const { user } = useAuth();
   const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
   const {
     registerStreamHandler,
@@ -47,83 +34,33 @@ export function EntryListScreen() {
     setSelectedStreamId,
     setSelectedStreamName,
     openDrawer,
+    closeDrawer,
+    isOpen: isDrawerOpen,
     drawerControl,
   } = useDrawer();
 
-  // Screen width for swipe threshold calculation
-  const screenWidth = Dimensions.get("window").width;
-  const DRAWER_SWIPE_THRESHOLD = screenWidth / 3;
-
-  // Ref to hold current drawerControl - needed because PanResponder callbacks
-  // capture values at creation time, so we need a ref to access current value
-  const drawerControlRef = useRef(drawerControl);
-  useEffect(() => {
-    drawerControlRef.current = drawerControl;
-  }, [drawerControl]);
-
-  const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
-  const [showSortModeSelector, setShowSortModeSelector] = useState(false);
-  const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
-  const [entryToMove, setEntryToMove] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  // Per-stream view preferences from settings (sort + display mode)
-  const { getStreamSortPreference, setStreamSortPreference } = useSettings();
+
+  // Per-stream view preferences from settings (sort + display mode + filter)
+  const { getStreamSortPreference, getStreamFilter } = useSettings();
+  const { drawerControl: settingsDrawerControl, isOpen: isSettingsDrawerOpen, closeDrawer: closeSettingsDrawer } = useSettingsDrawer();
 
   // Get the key for the current stream's view preference
-  // Use the selectedStreamId as-is for special values ("all", "events", etc.)
-  // For null (unassigned), the helper uses "_global"
   const viewPrefKey = typeof selectedStreamId === 'string' ? selectedStreamId : null;
   const streamViewPref = getStreamSortPreference(viewPrefKey);
+  const streamFilter = getStreamFilter(viewPrefKey);
 
   const sortMode = streamViewPref.sortMode;
   const orderMode = streamViewPref.sortOrder;
   const showPinnedFirst = streamViewPref.showPinnedFirst;
   const displayMode = streamViewPref.displayMode;
 
-  const setSortMode = (mode: EntrySortMode) => setStreamSortPreference(viewPrefKey, { sortMode: mode });
-  const setOrderMode = (order: EntrySortOrder) => setStreamSortPreference(viewPrefKey, { sortOrder: order });
-  const setShowPinnedFirst = (show: boolean) => setStreamSortPreference(viewPrefKey, { showPinnedFirst: show });
-  const setDisplayMode = (mode: EntryDisplayMode) => setStreamSortPreference(viewPrefKey, { displayMode: mode });
-
-  // Swipe gesture handler for opening drawer (swipe right)
-  const drawerPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
-      // Capture horizontal right swipes before FlatList
-      onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
-        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
-        const isSwipingRight = gestureState.dx > 20;
-        const notInBackZone = evt.nativeEvent.pageX > 25;
-        return isHorizontalSwipe && isSwipingRight && notInBackZone;
-      },
-      onMoveShouldSetPanResponder: () => false,
-      onPanResponderGrant: () => {
-        // No setup needed
-      },
-      onPanResponderMove: (_, gestureState) => {
-        const control = drawerControlRef.current;
-        if (control && gestureState.dx > 0) {
-          control.setPosition(gestureState.dx);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const control = drawerControlRef.current;
-        if (!control) return;
-        const shouldOpen = gestureState.dx > DRAWER_SWIPE_THRESHOLD || gestureState.vx > 0.5;
-        if (shouldOpen) {
-          control.animateOpen();
-        } else {
-          control.animateClose();
-        }
-      },
-      onPanResponderTerminate: () => {
-        const control = drawerControlRef.current;
-        if (control) control.animateClose();
-      },
-    })
-  ).current;
+  // Drawer gesture handling
+  const { panHandlers } = useDrawerGestures({
+    drawerControl,
+    settingsDrawerControl,
+  });
 
   // Use hook for locations instead of direct localDB call
   const { data: locationsData } = useLocations();
@@ -139,154 +76,93 @@ export function EntryListScreen() {
     return () => registerStreamHandler(null);
   }, [registerStreamHandler, setSelectedStreamId, setSelectedStreamName]);
 
-  // Build breadcrumbs from selected stream (flat - no hierarchy)
-  const breadcrumbs = useMemo((): BreadcrumbSegment[] => {
-    // If a stream is selected - show only stream name (no Home >)
-    if (selectedStreamId && typeof selectedStreamId === 'string' && !selectedStreamId.startsWith("tag:") && !selectedStreamId.startsWith("mention:") && !selectedStreamId.startsWith("location:") && !selectedStreamId.startsWith("geo:") && selectedStreamId !== "all") {
-      const stream = streams.find(s => s.stream_id === selectedStreamId);
-      if (stream) {
-        return [{ id: stream.stream_id, label: stream.name }];
-      }
-    }
-
-    if (selectedStreamId === "all") {
-      return [{ id: "all", label: "All Entries" }];
-    } else if (selectedStreamId === null) {
-      return [{ id: null, label: "Unassigned" }];
-    } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith("tag:")) {
-      const tag = selectedStreamId.substring(4);
-      return [{ id: selectedStreamId, label: `#${tag}` }];
-    } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith("mention:")) {
-      const mention = selectedStreamId.substring(8);
-      return [{ id: selectedStreamId, label: `@${mention}` }];
-    } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith("location:")) {
-      return [
-        {
-          id: selectedStreamId,
-          label: selectedStreamName || "Location",
-          icon: (
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-              <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-              <Circle cx={12} cy={10} r={3} />
-            </Svg>
-          )
-        }
-      ];
-    } else if (typeof selectedStreamId === 'string' && selectedStreamId.startsWith("geo:")) {
-      // Geo hierarchy filter (country, region, city, place, none)
-      return [
-        {
-          id: selectedStreamId,
-          label: selectedStreamName || "Location",
-          icon: (
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-              <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-              <Circle cx={12} cy={10} r={3} />
-            </Svg>
-          )
-        }
-      ];
-    }
-
-    return [{ id: "all", label: "All Entries" }];
-  }, [selectedStreamId, selectedStreamName, streams]);
-
-  // Parse selection into filter using shared helper
-  const streamFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
-
-  const { entries, isLoading, entryMutations } = useEntries(streamFilter);
-
-  // Create stream map for sorting
-  const streamMap = useMemo(() => {
-    return streams.reduce((map, s) => {
-      map[s.stream_id] = s.name;
-      return map;
-    }, {} as Record<string, string>);
-  }, [streams]);
-
-  // Create stream by ID map for attribute visibility
-  const streamById = useMemo(() => {
-    return streams.reduce((map, stream) => {
-      map[stream.stream_id] = stream;
-      return map;
-    }, {} as Record<string, typeof streams[0]>);
-  }, [streams]);
-
-  const sortedEntries = useMemo(() => {
-    return sortEntries(entries, sortMode, streamMap, orderMode, showPinnedFirst);
-  }, [entries, sortMode, streamMap, orderMode, showPinnedFirst]);
-
-  // Compute sections when sorting by status, type, stream, priority, rating, or due date
-  const entrySections = useMemo((): EntrySection[] | undefined => {
-    if (sortMode === 'status') {
-      return groupEntriesByStatus(entries, orderMode, showPinnedFirst);
-    }
-    if (sortMode === 'type') {
-      return groupEntriesByType(entries, orderMode, showPinnedFirst);
-    }
-    if (sortMode === 'stream') {
-      return groupEntriesByStream(entries, streamMap, orderMode, showPinnedFirst);
-    }
-    if (sortMode === 'priority') {
-      return groupEntriesByPriority(entries, orderMode, showPinnedFirst);
-    }
-    if (sortMode === 'rating') {
-      return groupEntriesByRating(entries, orderMode, showPinnedFirst, streamById);
-    }
-    if (sortMode === 'due_date') {
-      return groupEntriesByDueDate(entries, orderMode, showPinnedFirst);
-    }
-    return undefined;
-  }, [entries, sortMode, streamMap, streamById, orderMode, showPinnedFirst]);
-
-  // Filter entries by search query (searches title and content)
-  const filteredEntries = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return sortedEntries;
-    }
-    const query = searchQuery.toLowerCase().trim();
-    return sortedEntries.filter(entry => {
-      // Search in title
-      if (entry.title?.toLowerCase().includes(query)) {
+  // Handle Android back button - close drawers if open, otherwise let app exit normally
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Close settings drawer if open
+      if (isSettingsDrawerOpen) {
+        closeSettingsDrawer();
         return true;
       }
-      // Search in content (strip HTML tags for plain text search)
-      const plainContent = entry.content.replace(/<[^>]*>/g, '').toLowerCase();
-      if (plainContent.includes(query)) {
+      // Close stream drawer if open
+      if (isDrawerOpen) {
+        closeDrawer();
         return true;
       }
-      return false;
+      return false; // Let Android handle back normally (exit app)
     });
-  }, [sortedEntries, searchQuery]);
+    return () => backHandler.remove();
+  }, [isDrawerOpen, closeDrawer, isSettingsDrawerOpen, closeSettingsDrawer]);
 
-  // Filter sections when there's a search query
-  const filteredSections = useMemo((): EntrySection[] | undefined => {
-    if (!entrySections) return undefined;
-    if (!searchQuery.trim()) return entrySections;
+  // Build breadcrumbs from selected stream (handles streams, @mentions, #tags, locations)
+  const breadcrumbs = useBreadcrumbs({
+    selectedStreamId,
+    selectedStreamName,
+    streams,
+    iconColor: theme.colors.text.primary,
+  });
 
-    const query = searchQuery.toLowerCase().trim();
-    return entrySections
-      .map(section => ({
-        ...section,
-        data: section.data.filter(entry => {
-          if (entry.title?.toLowerCase().includes(query)) return true;
-          const plainContent = entry.content.replace(/<[^>]*>/g, '').toLowerCase();
-          return plainContent.includes(query);
-        }),
-        count: 0, // Will be recalculated below
-      }))
-      .map(section => ({ ...section, count: section.data.length }))
-      .filter(section => section.data.length > 0);
-  }, [entrySections, searchQuery]);
+  // Parse selection into filter using shared helper (for API query)
+  const apiFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
+
+  const { entries, isLoading, entryMutations } = useEntries(apiFilter);
+
+  // Entry action handlers
+  const {
+    showMoveStreamPicker,
+    entryToMoveStreamId,
+    handleEntryPress,
+    handleMoveEntry,
+    handleMoveStreamSelect,
+    handleCloseMoveStreamPicker,
+    handleDeleteEntry,
+    handlePinEntry,
+    handleArchiveEntry,
+    handleCopyEntry,
+  } = useEntryActions({ entryMutations, navigate, entries });
+
+  // Use extracted filtering hook
+  const { sortedEntries, filteredEntries, filteredSections } = useFilteredEntries({
+    entries,
+    streams,
+    sortMode,
+    orderMode,
+    showPinnedFirst,
+    streamFilter,
+    searchQuery,
+  });
 
   // Get display labels
   const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Smashed';
   const baseSortLabel = ENTRY_SORT_MODES.find(m => m.value === sortMode)?.label || 'Entry Date';
-  const sortModeLabel = orderMode === 'desc' ? `${baseSortLabel} (desc)` : baseSortLabel;
+  const sortModeLabel = orderMode === 'desc' ? `${baseSortLabel} \u2193` : `${baseSortLabel} \u2191`;
 
-  const handleEntryPress = (entryId: string) => {
-    navigate("capture", { entryId });
+  // Compute filter label (shows when filters are active)
+  const getFilterLabel = () => {
+    const parts: string[] = [];
+    if (streamFilter.showArchived) parts.push("Archived");
+
+    // Status filter - only show if actually filtering (not when all selected)
+    if (streamFilter.statuses.length > 0) {
+      // Get allowed statuses for current stream (or all if viewing "All Entries")
+      const currentStream = typeof selectedStreamId === 'string' && !selectedStreamId.includes(':')
+        ? streams.find(s => s.stream_id === selectedStreamId)
+        : undefined;
+      const allowedStatuses = (currentStream?.entry_statuses ?? ALL_STATUSES.map(s => s.value)) as string[];
+      const validSelected = streamFilter.statuses.filter(s => allowedStatuses.includes(s));
+      const allSelected = validSelected.length === allowedStatuses.length;
+
+      // Only show label if not all statuses are selected
+      if (!allSelected) {
+        parts.push(`${validSelected.length} status`);
+      }
+    }
+
+    // Note: Private stream entries are auto-excluded in "All Entries" view (see mobileEntryHooks)
+    // No need to show label since it's automatic and not user-controllable
+    return parts.length > 0 ? parts.join(", ") : undefined;
   };
+  const filterLabel = getFilterLabel();
 
   const handleAddEntry = () => {
     let initialContent = "";
@@ -342,78 +218,8 @@ export function EntryListScreen() {
     }
   };
 
-  const handleMoveEntry = (entryId: string) => {
-    setEntryToMove(entryId);
-    setShowMoveStreamPicker(true);
-  };
-
-  const handleMoveStreamSelect = async (streamId: string | null, streamName: string | null) => {
-    if (!entryToMove) return;
-
-    try {
-      await entryMutations.updateEntry(entryToMove, {
-        stream_id: streamId,
-      });
-
-      setShowMoveStreamPicker(false);
-      setEntryToMove(null);
-    } catch (error) {
-      console.error("Failed to move entry:", error);
-      Alert.alert("Error", "Failed to move entry");
-    }
-  };
-
-  const handleDeleteEntry = (entryId: string) => {
-    Alert.alert(
-      "Delete Entry",
-      "Are you sure you want to delete this entry?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await entryMutations.deleteEntry(entryId);
-            } catch (error) {
-              console.error("Failed to delete entry:", error);
-              Alert.alert("Error", "Failed to delete entry");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handlePinEntry = async (entryId: string, currentPinned: boolean) => {
-    try {
-      await entryMutations.updateEntry(entryId, {
-        is_pinned: !currentPinned,
-      });
-    } catch (error) {
-      console.error("Failed to pin/unpin entry:", error);
-      Alert.alert("Error", "Failed to pin/unpin entry");
-    }
-  };
-
-  const handleCopyEntry = async (entryId: string) => {
-    try {
-      // Copy entry and save to DB, get new entry ID
-      const newEntryId = await entryMutations.copyEntry(entryId);
-      // Navigate to edit the new entry
-      navigate("capture", { entryId: newEntryId });
-    } catch (error) {
-      console.error("Failed to copy entry:", error);
-      Alert.alert("Error", "Failed to copy entry");
-    }
-  };
-
-  // Get current stream of entry being moved
-  const entryToMoveData = entryToMove ? entries.find(e => e.entry_id === entryToMove) : null;
-  const entryToMoveStreamId = entryToMoveData?.stream_id || null;
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...drawerPanResponder.panHandlers}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...panHandlers}>
       <TopBar
         onLeftMenuPress={openDrawer}
         breadcrumbs={breadcrumbs}
@@ -441,18 +247,14 @@ export function EntryListScreen() {
         />
       )}
 
-      <SubBar>
-        <SubBarSelector
-          label="View"
-          value={displayModeLabel}
-          onPress={() => setShowDisplayModeSelector(true)}
-        />
-        <SubBarSelector
-          label="Sort"
-          value={sortModeLabel}
-          onPress={() => setShowSortModeSelector(true)}
-        />
-      </SubBar>
+      <SubBarSettings
+        viewLabel={displayModeLabel}
+        sortLabel={sortModeLabel}
+        filterLabel={filterLabel}
+        entryCount={filteredEntries.length}
+        totalCount={sortedEntries.length}
+        isOffline={isOffline}
+      />
 
       <EntryList
         entries={filteredEntries}
@@ -466,39 +268,17 @@ export function EntryListScreen() {
         onCopy={handleCopyEntry}
         onDelete={handleDeleteEntry}
         onPin={handlePinEntry}
+        onArchive={handleArchiveEntry}
         streams={streams}
         locations={locations}
         displayMode={displayMode}
         fullStreams={streams}
       />
 
-      {/* Display Mode Selector */}
-      <DisplayModeSelector
-        visible={showDisplayModeSelector}
-        selectedMode={displayMode}
-        onSelect={setDisplayMode}
-        onClose={() => setShowDisplayModeSelector(false)}
-      />
-
-      {/* Sort Mode Selector */}
-      <SortModeSelector
-        visible={showSortModeSelector}
-        selectedMode={sortMode}
-        onSelect={setSortMode}
-        onClose={() => setShowSortModeSelector(false)}
-        sortOrder={orderMode}
-        onSortOrderChange={setOrderMode}
-        showPinnedFirst={showPinnedFirst}
-        onShowPinnedFirstChange={setShowPinnedFirst}
-      />
-
       {/* Move Stream Picker */}
       <StreamPicker
         visible={showMoveStreamPicker}
-        onClose={() => {
-          setShowMoveStreamPicker(false);
-          setEntryToMove(null);
-        }}
+        onClose={handleCloseMoveStreamPicker}
         onSelect={handleMoveStreamSelect}
         selectedStreamId={entryToMoveStreamId}
       />

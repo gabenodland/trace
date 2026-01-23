@@ -22,6 +22,7 @@ interface EntryListItemProps {
   onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
+  onArchive?: (entryId: string, currentArchived: boolean) => void; // Archive/unarchive entry
   onSelectOnMap?: (entryId: string) => void; // Select entry on map (MapScreen only)
   streamName?: string | null; // Stream name to display
   locationName?: string | null; // Location name to display
@@ -32,7 +33,7 @@ interface EntryListItemProps {
   attributeVisibility?: StreamAttributeVisibility;
 }
 
-export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onStreamPress, onToggleComplete, onMove, onCopy, onDelete, onPin, onSelectOnMap, streamName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle, attributeVisibility }: EntryListItemProps) {
+export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onStreamPress, onToggleComplete, onMove, onCopy, onDelete, onPin, onArchive, onSelectOnMap, streamName, locationName, displayMode = 'smashed', showMenu = false, onMenuToggle, attributeVisibility }: EntryListItemProps) {
   const theme = useTheme();
   const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(0);
@@ -104,6 +105,10 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
         }
       },
     },
+    ...(onArchive ? [{
+      label: entry.is_archived ? "Unarchive" : "Archive",
+      onPress: () => onArchive(entry.entry_id, entry.is_archived),
+    }] : []),
     {
       label: "Delete",
       onPress: () => {

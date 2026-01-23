@@ -199,6 +199,7 @@ class SyncService {
         priority: serverEntry.priority || 0,
         rating: serverEntry.rating || 0.00,
         is_pinned: serverEntry.is_pinned || false,
+        is_archived: (serverEntry as any).is_archived || false,
         local_only: 0,
         synced: 1,
         sync_action: null,
@@ -368,7 +369,17 @@ class SyncService {
 
   private async setupRealtimeSubscription(): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        const errorMessage = authError.message || String(authError);
+        // Network errors during auth are expected when reconnecting
+        if (errorMessage.includes('Network request failed') || errorMessage.includes('fetch')) {
+          log.debug('Auth check failed due to network (will retry)', { error: errorMessage });
+        } else {
+          log.warn('Auth check failed during realtime setup', { error: errorMessage });
+        }
+        throw authError;
+      }
       if (!user) {
         log.debug('Not authenticated, skipping realtime setup');
         return;
@@ -406,7 +417,7 @@ class SyncService {
               this.realtimeReconnectTimer = null;
             }
           } else if (status === 'CHANNEL_ERROR') {
-            const netState = await NetInfo.fetch();
+            const netState = await NetInfo.fetch().catch(() => ({ isConnected: false, isInternetReachable: false }));
             if (!netState.isConnected || !netState.isInternetReachable) {
               log.debug('Realtime subscription failed (expected - device is offline)');
             } else {
@@ -414,7 +425,7 @@ class SyncService {
               this.scheduleRealtimeReconnect();
             }
           } else if (status === 'TIMED_OUT') {
-            const netState = await NetInfo.fetch();
+            const netState = await NetInfo.fetch().catch(() => ({ isConnected: false, isInternetReachable: false }));
             if (!netState.isConnected || !netState.isInternetReachable) {
               log.debug('Realtime subscription timed out (expected - device is offline)');
             } else {
@@ -431,7 +442,13 @@ class SyncService {
           }
         });
     } catch (error) {
-      log.error('Failed to set up realtime subscription', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      // Distinguish between network errors (expected during reconnection) and other errors
+      if (errorMessage.includes('Network request failed') || errorMessage.includes('fetch')) {
+        log.debug('Realtime setup failed due to network (will retry)', { error: errorMessage });
+      } else {
+        log.error('Failed to set up realtime subscription', { error: errorMessage });
+      }
       this.scheduleRealtimeReconnect();
     }
   }
@@ -611,6 +628,7 @@ class SyncService {
       priority: payloadData.priority || 0,
       rating: payloadData.rating || 0.00,
       is_pinned: payloadData.is_pinned || false,
+      is_archived: payloadData.is_archived || false,
       local_only: 0,
       synced: 1,
       sync_action: null,
@@ -841,9 +859,26 @@ class SyncService {
       this.realtimeReconnectTimer = null;
     }
 
+    // Small delay to let network stabilize after reconnection
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Re-check network state after delay (connection may have dropped again)
+    const netState = await NetInfo.fetch().catch(() => ({ isConnected: false, isInternetReachable: false }));
+    if (!netState.isConnected || !netState.isInternetReachable) {
+      log.debug('Network not stable after reconnect delay, skipping');
+      return;
+    }
+
     if (!this.realtimeChannel) {
       log.info('Reconnecting realtime subscription...');
-      await this.setupRealtimeSubscription();
+      try {
+        await this.setupRealtimeSubscription();
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        log.warn('Failed to reconnect realtime subscription', { error: errorMessage });
+        // Schedule retry via normal reconnect flow
+        this.scheduleRealtimeReconnect();
+      }
     }
 
     if (this.isSyncing) {
@@ -854,7 +889,8 @@ class SyncService {
     try {
       await this.fullSync('app-foreground');
     } catch (error) {
-      log.error('Reconnect sync failed', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.error('Reconnect sync failed', { error: errorMessage });
     }
   }
 

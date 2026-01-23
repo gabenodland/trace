@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar, Image } from "react-native";
 import Svg, { Path, Line, Circle } from "react-native-svg";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavigationMenu, NavigationMenuItem } from "../navigation/NavigationMenu";
 import { Breadcrumb, BreadcrumbSegment } from "./Breadcrumb";
 import { useTheme, type ThemeContextValue } from "../../shared/contexts/ThemeContext";
@@ -61,6 +61,16 @@ export function TopBar({
 }: TopBarProps) {
   const theme = useTheme();
   const [showMenu, setShowMenu] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+
+  // Reset avatar error when avatarUrl changes
+  useEffect(() => {
+    setAvatarError(false);
+  }, [avatarUrl]);
+
+  // Determine effective avatar URL - use default if remote fails to load
+  const defaultAvatar = getDefaultAvatarUrl(displayName || userEmail || "User");
+  const effectiveAvatarUrl = avatarError || !avatarUrl ? defaultAvatar : avatarUrl;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
@@ -158,8 +168,9 @@ export function TopBar({
               activeOpacity={0.7}
             >
               <Image
-                source={{ uri: avatarUrl || getDefaultAvatarUrl(displayName || userEmail || "User") }}
+                source={{ uri: effectiveAvatarUrl }}
                 style={[styles.avatarImage, { backgroundColor: theme.colors.background.tertiary }]}
+                onError={() => setAvatarError(true)}
               />
             </TouchableOpacity>
 

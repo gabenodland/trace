@@ -397,7 +397,7 @@ export function LocationPicker({
                 toolbarEnabled={false}
                 // Hide POI labels on iOS since onPoiClick doesn't work with Apple Maps
                 // Users can still find POIs via the search/nearby list below
-                showsPointsOfInterest={Platform.OS === 'android'}
+                showsPointsOfInterests={Platform.OS === 'android'}
                 onPoiClick={Platform.OS === 'android' && picker.effectiveMode === 'select' && !picker.ui.showingDetails ? handlePoiClick : undefined}
                 onPanDrag={() => Keyboard.dismiss()}
               >
@@ -609,6 +609,7 @@ export function LocationPicker({
               setSelection={picker.setSelection}
               mapState={picker.mapState}
               mapRef={picker.mapRef}
+              isOffline={picker.isOffline}
               isLoadingSavedLocations={picker.isLoadingSavedLocations}
               savedLocations={picker.savedLocations}
               allSavedLocations={picker.allSavedLocations}

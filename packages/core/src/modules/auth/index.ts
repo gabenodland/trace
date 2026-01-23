@@ -6,5 +6,14 @@ export * from "./authHooks";
 export * from "./AuthTypes";
 export * from "./authHelpers";
 
-// Export specific API functions needed for OAuth integration
-export { signInWithGoogle, setSession, onAuthStateChange } from "./authApi";
+// Export API functions for auth operations
+// These are used by mobile AuthContext for offline-first auth
+export {
+  signInWithEmail,
+  signUpWithEmail,
+  signInWithGoogle,
+  signOut,
+  getSession,
+  setSession,
+  onAuthStateChange,
+} from "./authApi";

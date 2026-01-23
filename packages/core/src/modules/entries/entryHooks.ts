@@ -7,6 +7,7 @@ import {
   createEntry,
   updateEntry,
   deleteEntry,
+  archiveEntry,
 } from "./entryApi";
 import * as entryHelpers from "./entryHelpers";
 import { CreateEntryInput, EntryFilter } from "./EntryTypes";
@@ -80,6 +81,22 @@ function useDeleteEntryMutation() {
 }
 
 /**
+ * Internal: Mutation hook for archiving/unarchiving an entry
+ */
+function useArchiveEntryMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
+      archiveEntry(id, archived),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["entries"] });
+      queryClient.invalidateQueries({ queryKey: ["entry", data.entry_id] });
+    },
+  });
+}
+
+/**
  * SINGLE SOURCE OF TRUTH: Main hook for entry operations
  *
  * Use this hook in components to access entry data and operations.
@@ -90,6 +107,7 @@ export function useEntries(filter?: EntryFilter) {
   const createMutation = useCreateEntryMutation();
   const updateMutation = useUpdateEntryMutation();
   const deleteMutation = useDeleteEntryMutation();
+  const archiveMutation = useArchiveEntryMutation();
 
   return {
     // Data
@@ -109,6 +127,10 @@ export function useEntries(filter?: EntryFilter) {
 
       deleteEntry: async (id: string) => {
         return deleteMutation.mutateAsync(id);
+      },
+
+      archiveEntry: async (id: string, archived: boolean) => {
+        return archiveMutation.mutateAsync({ id, archived });
       },
     },
 

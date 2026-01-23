@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Session, User } from "./AuthTypes";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -10,6 +10,19 @@ import {
   onAuthStateChange,
 } from "./authApi";
 import * as authHelpers from "./authHelpers";
+
+// Timeout for initial session fetch (prevents hanging offline)
+const SESSION_TIMEOUT_MS = 5000;
+
+/**
+ * Helper to add timeout to a promise
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
 
 /**
  * Unified hook for auth - exposes auth state, mutations, and helpers
@@ -35,22 +48,51 @@ export function useAuthState(queryClient?: QueryClient) {
   const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Track if initial load is complete to avoid race conditions
+  const initialLoadCompleteRef = useRef(false);
+
   useEffect(() => {
-    // Get initial session
-    getSession()
-      .then(async (session) => {
+    let isMounted = true;
+
+    // Get initial session with timeout to handle offline scenarios
+    // Supabase getSession() should read from local storage (fast),
+    // but may hang if it tries network operations
+    const sessionPromise = getSession().catch((error) => {
+      console.log("[Auth] getSession error (may be offline):", error?.message || error);
+      return null;
+    });
+
+    withTimeout(sessionPromise, SESSION_TIMEOUT_MS, null)
+      .then((session) => {
+        if (!isMounted) return;
+
         setSessionState(session);
         setUserState(session?.user ?? null);
         setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
+        initialLoadCompleteRef.current = true;
+
+        if (session) {
+          console.log("[Auth] Session restored", { userId: session.user?.id });
+        } else {
+          console.log("[Auth] No session found (logged out or offline with no cache)");
+        }
       });
 
     // Listen to auth state changes
+    // Note: This may try to refresh tokens which can fail offline
     const {
       data: { subscription },
     } = onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+
+      // Only update state after initial load to avoid race conditions
+      // where auth change event arrives before getSession resolves
+      if (!initialLoadCompleteRef.current) {
+        console.log("[Auth] Ignoring auth change before initial load:", _event);
+        return;
+      }
+
+      console.log("[Auth] Auth state changed:", _event);
       setSessionState(session);
       setUserState(session?.user ?? null);
 
@@ -66,7 +108,10 @@ export function useAuthState(queryClient?: QueryClient) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [queryClient]);
 
   // Mutation functions wrapped for easier use

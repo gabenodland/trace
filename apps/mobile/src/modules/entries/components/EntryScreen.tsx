@@ -716,8 +716,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       }
     }
 
-    // Apply default status if stream has one
-    if (selectedStream.entry_default_status && selectedStream.entry_default_status !== "none") {
+    // Apply default status if stream has status enabled and a default set
+    if (selectedStream.entry_use_status && selectedStream.entry_default_status && selectedStream.entry_default_status !== "none") {
       updateField("status", selectedStream.entry_default_status);
     }
   }, [isEditing, streams, initialStreamId, formData.title, formData.content, updateField]);

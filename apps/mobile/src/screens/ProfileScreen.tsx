@@ -30,11 +30,11 @@ import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { useSync } from "../shared/sync";
 import { createScopedLogger } from "../shared/utils/logger";
 import {
-  useProfile,
   validateName,
   validateUsername,
   type AvatarImageInput,
 } from "@trace/core";
+import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { AvatarPicker, UsernameInput } from "../modules/profile/components";
 import type { AvatarImageData } from "../modules/profile/components/AvatarPicker";
 import { useTheme } from "../shared/contexts/ThemeContext";
@@ -47,8 +47,8 @@ export function ProfileScreen() {
   const { sync } = useSync();
   const theme = useTheme();
 
-  // Profile data - pass user.id to ensure mutations work even before profile loads
-  const { profile, isLoading, error, profileMutations } = useProfile(user?.id);
+  // Profile data with offline support - pass user.id to ensure mutations work even before profile loads
+  const { profile, isLoading, error, profileMutations, isOffline } = useMobileProfile(user?.id);
 
   // Local form state
   const [name, setName] = useState("");
@@ -239,6 +239,30 @@ export function ProfileScreen() {
 
   // Handle sign out
   const handleSignOut = async () => {
+    // Warn when offline
+    if (isOffline) {
+      Alert.alert(
+        "You're Offline",
+        "Your changes won't be synced until you're online. Sign out anyway?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Sign Out",
+            style: "destructive",
+            onPress: async () => {
+              setIsSigningOut(true);
+              try {
+                await signOut();
+              } finally {
+                setIsSigningOut(false);
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     try {
       setIsSigningOut(true);
       log.info("Syncing before sign out");
@@ -286,7 +310,38 @@ export function ProfileScreen() {
     );
   }
 
-  // Error state
+  // Offline with no cached profile
+  if (isOffline && !profile && !isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
+        <SecondaryHeader title="Profile" />
+        <View style={styles.errorContainer}>
+          <Svg
+            width={48}
+            height={48}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={theme.colors.text.tertiary}
+            strokeWidth={1.5}
+          >
+            <Path d="M1 1l22 22" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M10.71 5.05A16 16 0 0 1 22.58 9" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M8.53 16.11a6 6 0 0 1 6.95 0" strokeLinecap="round" strokeLinejoin="round" />
+            <Line x1="12" y1="20" x2="12.01" y2="20" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+          <Text style={[styles.errorText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold, marginTop: 16 }]}>You're Offline</Text>
+          <Text style={[styles.errorDetail, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+            Connect to the internet to view your profile
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Error state (online error)
   if (error && !profile) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
@@ -308,8 +363,31 @@ export function ProfileScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+          {/* Offline Banner */}
+          {isOffline && profile && (
+            <View style={styles.offlineBanner}>
+              <Svg
+                width={16}
+                height={16}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth={2}
+              >
+                <Path d="M1 1l22 22" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M8.53 16.11a6 6 0 0 1 6.95 0" strokeLinecap="round" strokeLinejoin="round" />
+                <Line x1="12" y1="20" x2="12.01" y2="20" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={[styles.offlineBannerText, { fontFamily: theme.typography.fontFamily.medium }]}>
+                Offline - Viewing cached profile
+              </Text>
+            </View>
+          )}
+
           {/* Profile Completion Banner */}
-          {profile && !profile.profile_complete && (
+          {profile && !profile.profile_complete && !isOffline && (
             <View style={[styles.completionBanner, { backgroundColor: theme.colors.functional.accentLight }]}>
               <Svg
                 width={20}
@@ -337,6 +415,7 @@ export function ProfileScreen() {
               onAvatarRemoved={handleAvatarRemoved}
               isUploading={profileMutations.isUploadingAvatar}
               size={120}
+              disabled={isOffline}
             />
           </View>
 
@@ -346,7 +425,15 @@ export function ProfileScreen() {
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>Display Name</Text>
               <TextInput
-                style={[styles.textInput, { backgroundColor: theme.colors.background.secondary, borderColor: theme.colors.border.light, color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: isOffline ? theme.colors.background.tertiary : theme.colors.background.secondary,
+                    borderColor: theme.colors.border.light,
+                    color: isOffline ? theme.colors.text.secondary : theme.colors.text.primary,
+                    fontFamily: theme.typography.fontFamily.regular,
+                  },
+                ]}
                 value={name}
                 onChangeText={handleNameChange}
                 onBlur={handleNameBlur}
@@ -354,6 +441,7 @@ export function ProfileScreen() {
                 placeholderTextColor={theme.colors.text.tertiary}
                 autoComplete="name"
                 maxLength={50}
+                editable={!isOffline}
               />
             </View>
 
@@ -364,6 +452,7 @@ export function ProfileScreen() {
               onCheckAvailability={handleCheckUsername}
               onBlur={handleUsernameBlur}
               currentUsername={profile?.username}
+              disabled={isOffline}
             />
 
             {/* Email (read-only) */}
@@ -493,6 +582,19 @@ const styles = StyleSheet.create({
   errorDetail: {
     fontSize: 14,
     textAlign: "center",
+  },
+  offlineBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f59e0b",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  offlineBannerText: {
+    color: "#ffffff",
+    fontSize: 13,
   },
   completionBanner: {
     flexDirection: "row",

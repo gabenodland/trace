@@ -30,6 +30,7 @@ import {
   type LocationEntity,
   type MapboxReverseGeocodeResponse,
 } from '@trace/core';
+import { useAuth } from '../../../../../shared/contexts/AuthContext';
 import { useLocationsWithCounts, useUpdateLocationDetails } from '../../../mobileLocationHooks';
 import { createLocation } from '../../../mobileLocationApi';
 import {
@@ -110,6 +111,9 @@ export function useLocationPicker({
   onSelect,
   onClose,
 }: UseLocationPickerProps) {
+  // Offline status - skip network calls when offline
+  const { isOffline } = useAuth();
+
   // Internal mode override - allows switching from view to select
   const [modeOverride, setModeOverride] = useState<LocationPickerMode | null>(null);
   const effectiveMode: LocationPickerMode = modeOverride ?? propMode;
@@ -423,8 +427,9 @@ export function useLocationPicker({
   } | null>(null);
 
   // Calculate the current request based on map state
+  // Skip API call when offline - only saved locations will show
   const currentNearbyRequest = useMemo(() => {
-    if (ui.showingDetails || !mapState.markerPosition || ui.searchQuery.length > 0) {
+    if (isOffline || ui.showingDetails || !mapState.markerPosition || ui.searchQuery.length > 0) {
       return null;
     }
     const radius = calculateSearchRadius(mapState.region);
@@ -434,7 +439,7 @@ export function useLocationPicker({
       radius,
       limit: 50
     };
-  }, [ui.showingDetails, mapState.markerPosition?.latitude, mapState.markerPosition?.longitude, mapState.region?.longitudeDelta, mapState.region?.latitude, ui.searchQuery.length, calculateSearchRadius]);
+  }, [isOffline, ui.showingDetails, mapState.markerPosition?.latitude, mapState.markerPosition?.longitude, mapState.region?.longitudeDelta, mapState.region?.latitude, ui.searchQuery.length, calculateSearchRadius]);
 
   // Lock the request when preview marker appears, unlock when it clears
   useEffect(() => {
@@ -455,12 +460,13 @@ export function useLocationPicker({
   // Fetch autocomplete results via core hook (Foursquare)
   // Use markerPosition (the "Selected Point") as search center, not map region
   // This prevents re-querying when user pans to look at results
-  // Skip API call when star button is active (saved-only search mode)
+  // Skip API call when star button is active (saved-only search mode) or when offline
   const searchRequest = useMemo(() => {
+    if (isOffline) return null; // Skip API when offline
     return !ui.showingDetails && ui.searchQuery.length >= 2 && mapState.markerPosition && activeListTab !== 'saved'
       ? { query: ui.searchQuery, latitude: mapState.markerPosition.latitude, longitude: mapState.markerPosition.longitude }
       : null;
-  }, [ui.showingDetails, ui.searchQuery, mapState.markerPosition?.latitude, mapState.markerPosition?.longitude, activeListTab]);
+  }, [isOffline, ui.showingDetails, ui.searchQuery, mapState.markerPosition?.latitude, mapState.markerPosition?.longitude, activeListTab]);
 
   const { data: searchResults, isLoading: searchLoading } = useLocationAutocomplete(searchRequest);
 
@@ -1062,6 +1068,9 @@ export function useLocationPicker({
     // Mode
     effectiveMode,
     setModeOverride,
+
+    // Offline status
+    isOffline,
 
     // Selection
     selection,

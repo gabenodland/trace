@@ -81,14 +81,34 @@ export const IMAGE_QUALITY_PRESETS: Record<ImageQuality, { maxWidth: number | nu
 import type { EntrySortMode, EntrySortOrder, EntryDisplayMode } from '../entries/EntryDisplayTypes';
 
 /**
- * View preferences for a single stream (sort + display)
+ * View preferences for a single stream (sort + display + filter)
  */
 export interface StreamSortPreference {
   sortMode: EntrySortMode;
   sortOrder: EntrySortOrder;
   showPinnedFirst: boolean;
   displayMode: EntryDisplayMode;
+  filter?: StreamViewFilter; // Optional UI-level filter (defaults applied if missing)
 }
+
+/**
+ * UI-level filter preferences for entry lists (client-side filtering)
+ * Note: This is separate from EntryFilter in EntryTypes.ts which is for API queries
+ */
+export interface StreamViewFilter {
+  showArchived: boolean;      // Show archived entries (default: false)
+  statuses: string[];         // Empty = show all statuses
+  showPrivateNotes: boolean;  // Show private notes (default: true)
+}
+
+/**
+ * Default filter settings
+ */
+export const DEFAULT_STREAM_VIEW_FILTER: StreamViewFilter = {
+  showArchived: false,
+  statuses: [],
+  showPrivateNotes: true,
+};
 
 // ============================================================================
 // THEME SETTINGS

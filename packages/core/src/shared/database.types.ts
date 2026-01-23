@@ -88,6 +88,7 @@ export type Database = {
           entry_id: string
           entry_latitude: number | null
           entry_longitude: number | null
+          is_archived: boolean
           is_pinned: boolean
           last_edited_by: string | null
           last_edited_device: string | null
@@ -127,6 +128,7 @@ export type Database = {
           entry_id?: string
           entry_latitude?: number | null
           entry_longitude?: number | null
+          is_archived?: boolean
           is_pinned?: boolean
           last_edited_by?: string | null
           last_edited_device?: string | null
@@ -166,6 +168,7 @@ export type Database = {
           entry_id?: string
           entry_latitude?: number | null
           entry_longitude?: number | null
+          is_archived?: boolean
           is_pinned?: boolean
           last_edited_by?: string | null
           last_edited_device?: string | null

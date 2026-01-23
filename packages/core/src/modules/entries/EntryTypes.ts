@@ -113,6 +113,7 @@ export interface Entry {
   priority: number; // Integer priority level for sorting (default: 0)
   rating: number; // Decimal rating from 0.00 to 5.00 (default: 0.00)
   is_pinned: boolean; // Boolean flag to pin important entries (default: false)
+  is_archived: boolean; // Boolean flag to archive entries (default: false)
   // Sync tracking fields (mobile only)
   local_only?: number; // 0 = sync enabled, 1 = local only
   synced?: number; // 0 = needs sync, 1 = synced
@@ -184,6 +185,7 @@ export interface UpdateEntryInput {
   priority?: number;
   rating?: number;
   is_pinned?: boolean;
+  is_archived?: boolean;
 }
 
 export interface EntryFilter {

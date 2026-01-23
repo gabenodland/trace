@@ -53,6 +53,9 @@ interface LocationSelectViewProps {
   mapState: MapState;
   mapRef: React.RefObject<MapView | null>;
 
+  // Offline status
+  isOffline?: boolean;
+
   // Loading States
   isLoadingSavedLocations: boolean;
 
@@ -98,6 +101,7 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
   setSelection,
   mapState,
   mapRef,
+  isOffline = false,
   isLoadingSavedLocations,
   savedLocations,
   allSavedLocations,
@@ -164,7 +168,11 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
 
   // Get address lines for "Currently Selected" row - returns separate lines for display
   const getAddressLines = (): { line1: string; line2?: string } => {
+    // When offline and loading, just show coordinates (can't fetch address)
     if (selection.isLoadingDetails) {
+      if (isOffline && mapState.markerPosition) {
+        return { line1: `${mapState.markerPosition.latitude.toFixed(6)}, ${mapState.markerPosition.longitude.toFixed(6)}` };
+      }
       return { line1: 'Loading address...' };
     }
 
@@ -457,7 +465,7 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
           </View>
           <TextInput
             style={[styles.searchInput, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}
-            placeholder="Search places..."
+            placeholder={isOffline ? "Search saved places..." : "Search places..."}
             placeholderTextColor={dynamicTheme.colors.text.tertiary}
             value={ui.searchQuery}
             onChangeText={(text) => setUI(prev => ({ ...prev, searchQuery: text }))}
@@ -495,6 +503,32 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Offline Banner */}
+      {isOffline && (
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#f59e0b',
+          paddingVertical: 6,
+          paddingHorizontal: 12,
+          marginHorizontal: 12,
+          marginTop: 8,
+          borderRadius: 6,
+          gap: 6,
+        }}>
+          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
+            <Path d="M1 1l22 22" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M8.53 16.11a6 6 0 0 1 6.95 0" strokeLinecap="round" strokeLinejoin="round" />
+            <Circle cx={12} cy={20} r={0.5} fill="#ffffff" stroke="none" />
+          </Svg>
+          <Text style={{ color: '#ffffff', fontSize: 12, fontFamily: dynamicTheme.typography.fontFamily.medium }}>
+            Offline - Showing saved locations only
+          </Text>
+        </View>
+      )}
 
       {/* Results List */}
       <ScrollView
