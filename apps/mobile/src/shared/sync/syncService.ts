@@ -10,8 +10,7 @@
  */
 
 import { localDB } from '../db/localDB';
-import { supabase } from '@trace/core/src/shared/supabase';
-import { Entry } from '@trace/core';
+import { supabase, Entry } from '@trace/core';
 import NetInfo from '@react-native-community/netinfo';
 import { AppState, AppStateStatus } from 'react-native';
 import type { QueryClient } from '@tanstack/react-query';

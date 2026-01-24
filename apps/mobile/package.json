@@ -11,7 +11,8 @@
     "prebuild": "expo prebuild && node scripts/addDebugAppId.js",
     "prebuild:android": "expo prebuild --platform android && node scripts/addDebugAppId.js",
     "prebuild:ios": "expo prebuild --platform ios",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "build:release": "node scripts/incrementBuildNumber.js && npm run prebuild:android && cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",

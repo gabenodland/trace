@@ -15,7 +15,8 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase, IMAGE_QUALITY_PRESETS } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
-import { triggerPushSync } from '../../shared/sync';
+// Import directly from syncApi to avoid circular dependency through sync/index.ts
+import { triggerPushSync } from '../../shared/sync/syncApi';
 import { createScopedLogger } from '../../shared/utils/logger';
 import type { CompressedAttachment, ImageQuality } from '@trace/core';
 

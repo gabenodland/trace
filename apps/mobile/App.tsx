@@ -1,7 +1,10 @@
+// Initialize core FIRST - before any other @trace/core imports
+import "./src/config/initializeCore";
+
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated } from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated, Linking as RNLinking, Modal, TouchableOpacity } from "react-native";
 import { useFonts } from "expo-font";
 // Theme fonts - all loaded upfront, user selects independently of theme
 import { MavenPro_400Regular, MavenPro_500Medium, MavenPro_600SemiBold, MavenPro_700Bold } from "@expo-google-fonts/maven-pro";
@@ -47,6 +50,7 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { localDB } from "./src/shared/db/localDB";
 import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
+import { checkAppVersion, logAppSession, VersionStatus } from "./src/config/appVersionService";
 
 // Create a query client
 const queryClient = new QueryClient({
@@ -68,11 +72,15 @@ const queryClient = new QueryClient({
  * - No history stack needed
  */
 function AuthGate() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const [showSignUp, setShowSignUp] = useState(false);
   const [activeTab, setActiveTab] = useState("inbox");
   const [navParams, setNavParams] = useState<Record<string, any>>({});
   const [dbInitialized, setDbInitialized] = useState(false);
+
+  // Version check state
+  const [versionStatus, setVersionStatus] = useState<VersionStatus | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
 
   // Before back handler for screens to intercept back navigation
   const beforeBackHandlerRef = useRef<BeforeBackHandler | null>(null);
@@ -189,6 +197,23 @@ function AuthGate() {
     return () => backHandler.remove();
   }, [isAuthenticated, isOnMainView]);
 
+  // Check app version on startup
+  useEffect(() => {
+    checkAppVersion().then((status) => {
+      setVersionStatus(status);
+      if (status.status === 'force_update' || status.status === 'update_available') {
+        setShowUpdateModal(true);
+      }
+    });
+  }, []);
+
+  // Log session when user authenticates
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      logAppSession(user.id);
+    }
+  }, [isAuthenticated, user?.id]);
+
   // Show loading spinner while checking auth state
   if (isLoading) {
     return (
@@ -208,25 +233,69 @@ function AuthGate() {
     return <LoginScreen onSwitchToSignUp={() => setShowSignUp(true)} />;
   }
 
+  // Handle update button press
+  const handleUpdatePress = () => {
+    if (versionStatus && versionStatus.status !== 'ok' && versionStatus.status !== 'error') {
+      RNLinking.openURL(versionStatus.url);
+    }
+  };
+
   // User is authenticated - show main app with new navigation
   return (
-    <DrawerProvider>
-      <SettingsDrawerProvider>
-        <NavigationProvider
-          navigate={handleNavigate}
-          setBeforeBackHandler={setBeforeBackHandler}
-          checkBeforeBack={checkBeforeBack}
-          isModalOpen={isModalOpen}
-          setIsModalOpen={setIsModalOpen}
-        >
-          <AppContent
-            activeTab={activeTab}
-            navParams={navParams}
-            setMainViewScreen={setMainViewScreen}
-          />
-        </NavigationProvider>
-      </SettingsDrawerProvider>
-    </DrawerProvider>
+    <>
+      <DrawerProvider>
+        <SettingsDrawerProvider>
+          <NavigationProvider
+            navigate={handleNavigate}
+            setBeforeBackHandler={setBeforeBackHandler}
+            checkBeforeBack={checkBeforeBack}
+            isModalOpen={isModalOpen}
+            setIsModalOpen={setIsModalOpen}
+          >
+            <AppContent
+              activeTab={activeTab}
+              navParams={navParams}
+              setMainViewScreen={setMainViewScreen}
+            />
+          </NavigationProvider>
+        </SettingsDrawerProvider>
+      </DrawerProvider>
+
+      {/* Update Modal */}
+      <Modal
+        visible={showUpdateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          // Only allow closing for non-force updates
+          if (versionStatus?.status === 'update_available') {
+            setShowUpdateModal(false);
+          }
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {versionStatus?.status === 'force_update' ? 'Update Required' : 'Update Available'}
+            </Text>
+            <Text style={styles.modalMessage}>
+              {versionStatus?.status !== 'ok' && versionStatus?.status !== 'error' && versionStatus?.message}
+            </Text>
+            <TouchableOpacity style={styles.updateButton} onPress={handleUpdatePress}>
+              <Text style={styles.updateButtonText}>Update Now</Text>
+            </TouchableOpacity>
+            {versionStatus?.status === 'update_available' && (
+              <TouchableOpacity
+                style={styles.laterButton}
+                onPress={() => setShowUpdateModal(false)}
+              >
+                <Text style={styles.laterButtonText}>Later</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -650,5 +719,54 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: "#666",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 24,
+    width: "100%",
+    maxWidth: 320,
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#111",
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  updateButton: {
+    backgroundColor: "#007AFF",
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    width: "100%",
+    alignItems: "center",
+  },
+  updateButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  laterButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+  },
+  laterButtonText: {
+    color: "#666",
+    fontSize: 16,
   },
 });

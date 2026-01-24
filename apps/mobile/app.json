@@ -18,9 +18,6 @@
       "bundleIdentifier": "com.trace.app",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Trace uses your location to add context to your captured entries."
-      },
-      "config": {
-        "googleMapsApiKey": "AIzaSyDm9vuCSwQqZu4dbBsQ0sqk0CdSaxvozEE"
       }
     },
     "android": {
@@ -36,12 +33,7 @@
         "ACCESS_FINE_LOCATION"
       ],
       "softwareKeyboardLayoutMode": "resize",
-      "userInterfaceStyle": "light",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyDm9vuCSwQqZu4dbBsQ0sqk0CdSaxvozEE"
-        }
-      }
+      "userInterfaceStyle": "light"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -55,12 +47,6 @@
         }
       ],
       "expo-sqlite",
-      [
-        "react-native-maps",
-        {
-          "googleMapsApiKey": "AIzaSyDm9vuCSwQqZu4dbBsQ0sqk0CdSaxvozEE"
-        }
-      ],
       "./plugins/withNetworkSecurityConfig",
       "./plugins/withReleaseSigning"
     ]

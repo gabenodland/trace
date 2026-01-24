@@ -6,8 +6,7 @@
  */
 
 import { localDB } from '../db/localDB';
-import { supabase } from '@trace/core/src/shared/supabase';
-import { Entry, LocationEntity, isCompletedStatus, ALL_STATUSES, EntryStatus } from '@trace/core';
+import { supabase, Entry, LocationEntity, isCompletedStatus, ALL_STATUSES, EntryStatus } from '@trace/core';
 import { uploadAttachmentToSupabase } from '../../modules/attachments/mobileAttachmentApi';
 import { createScopedLogger } from '../utils/logger';
 import { getDeviceName } from '../../modules/entries/mobileEntryApi';

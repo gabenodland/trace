@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_config: {
+        Row: {
+          key: string
+          value: Json
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          value: Json
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          value?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      app_sessions: {
+        Row: {
+          user_id: string
+          app_version: string
+          build_number: string | null
+          platform: string
+          os_version: string | null
+          device_model: string | null
+          last_seen_at: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          app_version: string
+          build_number?: string | null
+          platform: string
+          os_version?: string | null
+          device_model?: string | null
+          last_seen_at?: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          app_version?: string
+          build_number?: string | null
+          platform?: string
+          os_version?: string | null
+          device_model?: string | null
+          last_seen_at?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attachments: {
         Row: {
           attachment_id: string

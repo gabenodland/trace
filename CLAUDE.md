@@ -355,6 +355,95 @@ npm run dev    # or: expo start --tunnel
 
 ---
 
+## 📦 App Versioning
+
+### Semantic Versioning (SemVer)
+
+We use **Semantic Versioning**: `MAJOR.MINOR.PATCH`
+
+| Component | When to Increment | Example |
+|-----------|-------------------|---------|
+| **MAJOR** | Breaking changes, major rewrites | 1.0.0 → 2.0.0 |
+| **MINOR** | New features (backwards compatible) | 1.0.0 → 1.1.0 |
+| **PATCH** | Bug fixes, small tweaks | 1.0.0 → 1.0.1 |
+
+**Version is incremented manually** when releasing meaningful updates.
+
+### Build Numbers
+
+Build numbers are **separate from version** and auto-increment on every release build:
+
+| Platform | Field | Store Requirement |
+|----------|-------|-------------------|
+| iOS | `buildNumber` | Must increment every App Store upload |
+| Android | `versionCode` | Must increment every Play Store upload |
+
+Build numbers track iterations (1, 2, 3...) regardless of version changes.
+
+### How It Works
+
+1. **Version** is stored in `app.config.js` (manual updates)
+2. **Build number** is stored in `apps/mobile/build-number.json` (auto-incremented)
+3. The `scripts/incrementBuildNumber.js` script bumps build number before release builds
+4. `app.config.js` reads from `build-number.json` dynamically
+
+### Build Commands
+
+```bash
+# From apps/mobile directory:
+
+# Dev build (does NOT increment build number)
+npm run android
+
+# Release build (auto-increments build number)
+npm run build:release
+# This runs: incrementBuildNumber.js → prebuild → gradlew assembleRelease
+
+# Manual version bump (edit app.config.js)
+# version: '1.0.0' → '1.1.0'
+```
+
+### Version Display
+
+Version and build number are displayed in **Settings > About** section at the bottom.
+
+Uses `appVersionService.ts`:
+- `getAppVersion()` - Returns version from expo-constants
+- `getBuildNumber()` - Returns platform-specific build number
+
+### Server-Side Version Tracking
+
+Two database tables support version management:
+
+**`app_config`** - Stores version requirements:
+```json
+{
+  "minimum_version": "1.0.0",
+  "latest_version": "1.0.0",
+  "update_url_ios": "https://apps.apple.com/...",
+  "update_url_android": "https://play.google.com/..."
+}
+```
+
+**`app_sessions`** - Tracks user sessions with version info:
+- `app_version`, `build_number`, `platform`, `device_model`, `last_seen_at`
+
+This enables:
+- Force updates for critical fixes (version < minimum_version)
+- Soft update prompts (version < latest_version)
+- Analytics on version adoption
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `app.config.js` | Version and build number config |
+| `build-number.json` | Stores current build number |
+| `scripts/incrementBuildNumber.js` | Auto-increments build number |
+| `src/config/appVersionService.ts` | Version checking and session logging |
+
+---
+
 ## 🎯 Project Overview
 
 Trace is a cross-platform monorepo application (mobile/web) with shared business logic. The architecture is designed for:

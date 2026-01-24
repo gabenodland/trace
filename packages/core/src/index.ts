@@ -14,4 +14,6 @@ export * from "./modules/settings";
 export * from "./shared/types";
 export * from "./shared/database.types";
 export * from "./shared/constants";
-export { supabase, initializeSupabase } from "./shared/supabase";
+export { supabase, getSupabase } from "./shared/supabase";
+export { configureCore, isCoreConfigured } from "./shared/config";
+export type { CoreConfig } from "./shared/config";

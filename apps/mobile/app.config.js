@@ -1,3 +1,18 @@
+// Read build number from build-number.json
+const fs = require('fs');
+const path = require('path');
+
+let buildNumber = 1;
+try {
+  const buildNumberPath = path.join(__dirname, 'build-number.json');
+  if (fs.existsSync(buildNumberPath)) {
+    const data = JSON.parse(fs.readFileSync(buildNumberPath, 'utf8'));
+    buildNumber = data.buildNumber || 1;
+  }
+} catch (err) {
+  console.warn('Could not read build-number.json, using default:', err.message);
+}
+
 module.exports = {
   expo: {
     name: 'Trace',
@@ -16,6 +31,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.trace.app',
+      buildNumber: String(buildNumber),
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           'Trace uses your location to add context to your captured entries.',
@@ -26,6 +42,9 @@ module.exports = {
         NSPhotoLibraryAddUsageDescription:
           'Trace saves photos to your library.',
       },
+      config: {
+        googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY_IOS,
+      },
     },
     android: {
       adaptiveIcon: {
@@ -33,18 +52,26 @@ module.exports = {
         backgroundColor: '#ffffff',
       },
       package: 'com.trace.app',
+      versionCode: buildNumber,
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
       softwareKeyboardLayoutMode: 'resize',
       config: {
         googleMaps: {
-          apiKey: 'AIzaSyDm9vuCSwQqZu4dbBsQ0sqk0CdSaxvozEE',
+          apiKey: process.env.GOOGLE_MAPS_API_KEY_ANDROID,
         },
       },
     },
     web: {
       favicon: './assets/favicon.png',
+    },
+    // Expose environment variables to the app via Constants.expoConfig.extra
+    extra: {
+      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
+      supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      mapboxAccessToken: process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN,
+      foursquareApiKey: process.env.EXPO_PUBLIC_FOURSQUARE_API_KEY,
     },
     plugins: [
       'expo-web-browser',

@@ -16,7 +16,8 @@ import { localDB } from '../../shared/db/localDB';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as FileSystem from 'expo-file-system/legacy';
-import { triggerPushSync, refreshEntryFromServer } from '../../shared/sync';
+// Import directly from syncApi to avoid circular dependency through sync/index.ts
+import { triggerPushSync, refreshEntryFromServer } from '../../shared/sync/syncApi';
 import { createScopedLogger } from '../../shared/utils/logger';
 
 const log = createScopedLogger('EntryApi');

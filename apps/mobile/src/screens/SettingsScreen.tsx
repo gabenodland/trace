@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from "react-native";
 import { useState } from "react";
 import Svg, { Path } from "react-native-svg";
+import { getAppVersion, getBuildNumber } from "../config/appVersionService";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
@@ -164,6 +165,13 @@ export function SettingsScreen() {
             </View>
           </TouchableOpacity>
         </View>
+
+        {/* About Section */}
+        <View style={styles.aboutSection}>
+          <Text style={[styles.aboutText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+            Trace v{getAppVersion()} (build {getBuildNumber() || '1'})
+          </Text>
+        </View>
       </ScrollView>
 
       {/* Unit System Selector */}
@@ -246,5 +254,13 @@ const styles = StyleSheet.create({
   },
   settingValueText: {
     fontSize: 14,
+  },
+  aboutSection: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingBottom: 40,
+  },
+  aboutText: {
+    fontSize: 13,
   },
 });

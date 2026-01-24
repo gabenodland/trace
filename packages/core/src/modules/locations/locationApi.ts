@@ -15,15 +15,13 @@ import type {
   GeocodeCache,
   POICache,
 } from './LocationTypes';
-import config from '../../../config.json';
-
-// ============================================================================
-// CONFIGURATION
-// ============================================================================
-
-// Configuration from package-level config.json - easy to find and modify
-const mapboxAccessToken: string = config.mapbox.accessToken;
-const foursquareApiKey: string = config.foursquare.apiKey;
+import {
+  getMapboxConfig,
+  getFoursquareConfig,
+  getFoursquareProxyUrl,
+  getSupabaseConfig,
+} from '../../shared/config';
+import { getSupabase } from '../../shared/supabase';
 
 // ============================================================================
 // IN-MEMORY CACHE
@@ -79,6 +77,20 @@ function clearExpiredCache() {
 setInterval(clearExpiredCache, 60 * 60 * 1000);
 
 // ============================================================================
+// HELPER: Get auth token for proxy calls
+// ============================================================================
+
+async function getAuthToken(): Promise<string | null> {
+  try {
+    const supabase = getSupabase();
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================================
 // MAPBOX GEOCODING API
 // ============================================================================
 
@@ -91,8 +103,11 @@ setInterval(clearExpiredCache, 60 * 60 * 1000);
 export async function reverseGeocode(
   request: ReverseGeocodeRequest
 ): Promise<MapboxReverseGeocodeResponse> {
+  const mapboxConfig = getMapboxConfig();
+  const mapboxAccessToken = mapboxConfig?.accessToken;
+
   if (!mapboxAccessToken) {
-    throw new Error('Mapbox access token not configured. Check config.json.');
+    throw new Error('Mapbox access token not configured. Call configureCore() with mapbox.accessToken.');
   }
 
   const { latitude, longitude } = request;
@@ -108,8 +123,6 @@ export async function reverseGeocode(
   const url = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json`);
   url.searchParams.set('access_token', mapboxAccessToken);
   url.searchParams.set('types', 'poi,address,neighborhood,postcode,place,district,region,country');
-  // Remove limit parameter to get all geographic levels (address, city, region, country, etc.)
-  // url.searchParams.set('limit', '1');
 
   const response = await fetch(url.toString());
 
@@ -133,64 +146,55 @@ export async function reverseGeocode(
 }
 
 // ============================================================================
-// FOURSQUARE PLACES API
+// FOURSQUARE PLACES API (Updated for 2025 API Migration)
+// New host: places-api.foursquare.com
+// New auth: Bearer token with service key
+// Version header: X-Places-Api-Version required
 // ============================================================================
+
+// Foursquare API version (date-based versioning)
+const FOURSQUARE_API_VERSION = '2025-06-17';
 
 /**
  * Search nearby POIs using Foursquare Places API
- * Uses cache to reduce API calls
+ * Uses cache to reduce API calls.
+ * Supports both direct API (mobile) and proxy (web) modes.
  *
  * @internal Not exported - use hooks
  */
 export async function searchNearbyPOIs(
   request: NearbyPOIRequest
 ): Promise<FoursquareNearbyResponse> {
-  console.log('[LocationAPI] searchNearbyPOIs called with:', request);
-
-  if (!foursquareApiKey) {
-    console.error('[LocationAPI] ❌ Foursquare API key not configured!');
-    throw new Error('Foursquare API key not configured. Check config.json.');
-  }
-
   const { latitude, longitude, radius = 500, limit = 50 } = request;
 
   // Check cache first
   const cacheKey = poiCacheKey(latitude, longitude, radius);
   const cached = poiCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    console.log('[LocationAPI] ✅ Using cached POI data for:', cacheKey);
     return cached.response;
   }
 
-  // Make API request - Use new Places API endpoint
-  // Note: Premium fields (stats, popularity, rating) require paid tier - using default fields only
-  const url = `https://places-api.foursquare.com/places/search?ll=${latitude},${longitude}&sort=DISTANCE&radius=${radius}&limit=${limit}`;
+  // Determine if we should use proxy or direct API
+  const proxyUrl = getFoursquareProxyUrl();
+  const foursquareConfig = getFoursquareConfig();
+  const foursquareApiKey = foursquareConfig?.apiKey;
 
-  console.log('[LocationAPI] 🌐 Fetching nearby POIs from Foursquare...');
-  console.log('[LocationAPI] URL:', url);
-  console.log('[LocationAPI] API Key (first 10 chars):', foursquareApiKey.substring(0, 10) + '...');
+  let data: FoursquareNearbyResponse;
 
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${foursquareApiKey}`,
-      'Accept': 'application/json',
-      'X-Places-Api-Version': '2025-06-17',
-    },
-  });
-
-  console.log('[LocationAPI] Response status:', response.status, response.statusText);
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({ message: response.statusText })) as { message?: string };
-    throw new Error(`Foursquare API error: ${errorBody.message || response.statusText}`);
-  }
-
-  const data = await response.json() as FoursquareNearbyResponse;
-
-  console.log('[LocationAPI] ✅ Received', data.results?.length || 0, 'POIs from Foursquare');
-  if (data.results && data.results.length > 0) {
-    console.log('[LocationAPI] First POI name:', data.results[0].name);
-    console.log('[LocationAPI] First POI full object:', JSON.stringify(data.results[0], null, 2));
+  if (proxyUrl) {
+    // Use proxy (web) - key stays server-side
+    data = await fetchViaProxy(
+      proxyUrl,
+      `/places/search?ll=${latitude},${longitude}&sort=DISTANCE&radius=${radius}&limit=${limit}`
+    );
+  } else if (foursquareApiKey) {
+    // Direct API call (mobile) - using new places-api.foursquare.com host
+    data = await fetchFoursquareDirect(
+      `https://places-api.foursquare.com/places/search?ll=${latitude},${longitude}&sort=DISTANCE&radius=${radius}&limit=${limit}`,
+      foursquareApiKey
+    );
+  } else {
+    throw new Error('Foursquare not configured. Provide either foursquare.apiKey or foursquareProxyUrl.');
   }
 
   // Cache the result
@@ -201,8 +205,6 @@ export async function searchNearbyPOIs(
     timestamp: now,
     expiresAt: now + POI_CACHE_DURATION,
   });
-
-  console.log('[LocationAPI] Cached POI data for:', cacheKey);
 
   return data;
 }
@@ -215,49 +217,89 @@ export async function searchNearbyPOIs(
 export async function autocompleteLocation(
   request: LocationAutocompleteRequest
 ): Promise<FoursquareAutocompleteResponse> {
-  console.log('[LocationAPI] autocompleteLocation called with:', request);
-
-  if (!foursquareApiKey) {
-    console.error('[LocationAPI] ❌ Foursquare API key not configured!');
-    throw new Error('Foursquare API key not configured. Check config.json.');
-  }
-
   const { query, latitude, longitude, limit = 20 } = request;
 
-  // Normalize query to lowercase for consistent results (Foursquare may rank exact case matches higher)
+  // Normalize query
   const normalizedQuery = query.toLowerCase().trim();
 
-  // Build URL with query parameters - matching Location Builder autocomplete params
-  let url = `https://places-api.foursquare.com/autocomplete?query=${encodeURIComponent(normalizedQuery)}&limit=${limit}&radius=50000`;
-
+  // Build endpoint (new format without /v3 prefix)
+  let endpoint = `/autocomplete?query=${encodeURIComponent(normalizedQuery)}&limit=${limit}&radius=50000`;
   if (latitude !== undefined && longitude !== undefined) {
-    url += `&ll=${latitude},${longitude}`;
+    endpoint += `&ll=${latitude},${longitude}`;
   }
 
-  console.log('[LocationAPI] 🔍 Searching for:', query);
-  console.log('[LocationAPI] URL:', url);
+  // Determine if we should use proxy or direct API
+  const proxyUrl = getFoursquareProxyUrl();
+  const foursquareConfig = getFoursquareConfig();
+  const foursquareApiKey = foursquareConfig?.apiKey;
 
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${foursquareApiKey}`,
-      'Accept': 'application/json',
-      'X-Places-Api-Version': '2025-06-17',
-    },
-  });
+  let data: FoursquareAutocompleteResponse;
 
-  console.log('[LocationAPI] Response status:', response.status, response.statusText);
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({ message: response.statusText })) as { message?: string };
-    console.error('[LocationAPI] ❌ API error:', errorBody);
-    throw new Error(`Foursquare API error: ${errorBody.message || response.statusText}`);
-  }
-
-  const data = await response.json() as FoursquareAutocompleteResponse;
-  console.log('[LocationAPI] ✅ Received', data.results?.length || 0, 'autocomplete results');
-  if (data.results && data.results.length > 0) {
-    console.log('[LocationAPI] First result:', data.results[0].name);
+  if (proxyUrl) {
+    data = await fetchViaProxy(proxyUrl, endpoint);
+  } else if (foursquareApiKey) {
+    data = await fetchFoursquareDirect(
+      `https://places-api.foursquare.com${endpoint}`,
+      foursquareApiKey
+    );
+  } else {
+    throw new Error('Foursquare not configured. Provide either foursquare.apiKey or foursquareProxyUrl.');
   }
 
   return data;
+}
+
+// ============================================================================
+// INTERNAL HELPERS
+// ============================================================================
+
+/**
+ * Fetch from Foursquare directly (mobile with service key)
+ * Updated for 2025 API migration:
+ * - Uses Bearer token auth instead of raw API key
+ * - Requires X-Places-Api-Version header
+ */
+async function fetchFoursquareDirect(url: string, apiKey: string): Promise<any> {
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Accept': 'application/json',
+      'X-Places-Api-Version': FOURSQUARE_API_VERSION,
+    },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ message: response.statusText })) as { message?: string };
+    throw new Error(`Foursquare API error: ${errorBody.message || response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetch via Supabase Edge Function proxy (web)
+ */
+async function fetchViaProxy(proxyUrl: string, endpoint: string): Promise<any> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required for location services');
+  }
+
+  const { anonKey } = getSupabaseConfig();
+  const fullUrl = `${proxyUrl}?endpoint=${encodeURIComponent(endpoint)}`;
+
+  const response = await fetch(fullUrl, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'apikey': anonKey,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ message: response.statusText })) as { message?: string };
+    throw new Error(`Foursquare proxy error: ${errorBody.message || response.statusText}`);
+  }
+
+  return response.json();
 }

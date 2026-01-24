@@ -1,374 +1,451 @@
-# Trace Mobile App - Sitemap & Navigation Architecture
+# Trace Mobile App - Navigation Sitemap
 
-## Core Concept: Primary vs Secondary Screens
+This document provides a comprehensive map of all screens, navigation flows, and data dependencies in the Trace mobile app. It is designed for AI consumption and development reference.
 
-**Primary Screens** = The "home base" - 3 modes of viewing your content:
-- **Entry List** (default) - Text/card view of entries
-- **Map** - Geographic view of entries
-- **Calendar** - Date-based view of entries
+## Navigation Architecture
 
-**Secondary Screens** = Detail/settings pages accessed from Primary:
-- Entry (view/edit)
-- Profile, Settings, Database Info
-- Streams (manage), Stream Properties
-- Locations (manage)
+Trace uses a custom navigation system (not React Navigation) implemented via:
+- **NavigationContext** - Provides `navigate(screen, params?)` function
+- **DrawerContext** - Manages view mode (list/map/calendar) and stream selection
+- **App.tsx** - Central routing logic via `handleNavigate` and screen rendering
 
-**Key Behavior:**
-- Primary screens remember their state (which stream, filters, etc.)
-- `[←]` on Secondary always returns to **last Primary screen**
-- Switching stream/map/calendar updates what "Primary" means
-- Example: Coffee stream → Settings → `[←]` = back to Coffee stream
+### Key Concepts
 
----
-
-## Screen Inventory
-
-### Authentication (Unauthenticated)
-```
-Login Screen
-Sign Up Screen
-```
-
-### Primary Screens (3 view modes)
-```
-Entry List     - Text/card view, filtered by stream (HOME BASE)
-Map            - Geographic view of entries
-Calendar       - Date-based view of entries
-```
-
-### Secondary Screens
-```
-Entry Screen (capture)    - View/edit single entry
-Profile Screen            - User profile settings
-Settings Screen           - App settings
-Database Info Screen      - Debug/sync info
-Locations Screen          - Manage saved locations
-Streams Screen            - Manage streams list
-Stream Properties Screen  - Edit single stream (nested under Streams)
-```
-
----
-
-## Current Navigation Elements
-
-| Element | Location | Purpose | Issues |
-|---------|----------|---------|--------|
-| Left Hamburger | TopBar left | Opens stream drawer | New, works |
-| Breadcrumb | TopBar center | Shows current stream | Has dropdown arrow |
-| Breadcrumb Dropdown | TopBar | Opens EntryNavigator modal | Heavy, does too much |
-| Search Icon | TopBar right | Toggle search bar | Works |
-| Right Hamburger | TopBar right | Opens NavigationMenu | Cluttered, unclear purpose |
-| SubBar | Below TopBar | View/Sort selectors | Only on Entry List |
-| FAB | Bottom right | New entry | Only on Entry List |
-
----
-
-## Proposed Navigation Architecture
-
-### Level 0: App Shell
-```
-┌─────────────────────────────────────────────────────────┐
-│                      [TopBar]                           │
-│  [Menu]  [Title/Breadcrumb]              [Search] [👤]  │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│                    [Screen Content]                     │
-│                                                         │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-                                                    [FAB]
-```
-
-### Level 1: Primary Navigation (Left Drawer)
-Purpose: **Content Navigation** - What am I viewing? How am I viewing it?
-
-```
-┌──────────────────────────┐
-│  VIEW MODE               │
-│                          │
-│  List                  * │  ← Current mode highlighted
-│  Map                     │
-│  Calendar                │
-│  ─────────────────────── │
-│  STREAMS                 │
-│                          │
-│  All Entries         142 │
-│  Unassigned            8 │
-│  ─────────────────────── │
-│  Work                  34 │
-│  Personal              56 │
-│  Health                12 │
-│  ...                      │
-│                          │
-└──────────────────────────┘
-```
-
-**Behavior:**
-- Tapping Map/Calendar switches to that Primary mode (remembers current stream)
-- Tapping a stream filters the current view mode
-- Example: On Map + Coffee stream → tap "Work" → Map + Work stream
-
-### Level 2: Profile Menu (Top Right Avatar)
-Purpose: **Account & Settings** - Who am I? App config?
-
-```
-                    ┌──────────────────────────┐
-                    │  Gabriel              👤 │
-                    │  ─────────────────────── │
-                    │  Profile                 │
-                    │  Streams (manage)        │
-                    │  Locations (manage)      │
-                    │  Settings                │
-                    │  Database Info           │
-                    │  ─────────────────────── │
-                    │  Sign Out                │
-                    └──────────────────────────┘
-```
-
-**Behavior:**
-- Tapping any item closes menu and navigates to that Secondary screen
-- `[←]` on any of these returns to last Primary screen
-
----
-
-## Screen-by-Screen Header Specification
-
-### Entry List Screen (Home)
-```
-┌─────────────────────────────────────────────────────────┐
-│  [≡]  All Entries  (142)                    [🔍]  [👤] │
-├─────────────────────────────────────────────────────────┤
-│  View: Cards          Sort: Date (desc)                 │
-├─────────────────────────────────────────────────────────┤
-```
-- Left: Drawer toggle (hamburger)
-- Center: Current stream name + count (tappable? -> drawer)
-- Right: Search + Profile avatar
-
-### Entry Screen (View/Edit)
-```
-┌─────────────────────────────────────────────────────────┐
-│  [←]  Entry Title                           [Save/Edit] │
-├─────────────────────────────────────────────────────────┤
-```
-- Left: Back arrow (returns to Entry List)
-- Center: Entry title or "New Entry"
-- Right: Action button (Edit/Save/Delete)
-
-### Calendar Screen
-```
-┌─────────────────────────────────────────────────────────┐
-│  [≡]  Calendar                              [🔍]  [👤]  │
-├─────────────────────────────────────────────────────────┤
-```
-- Left: Drawer toggle
-- Center: "Calendar" title
-- Right: Search + Profile
-
-### Locations Screen
-```
-┌─────────────────────────────────────────────────────────┐
-│  [≡]  Locations                             [🔍]  [👤]  │
-├─────────────────────────────────────────────────────────┤
-```
-
-### Map Screen
-```
-┌─────────────────────────────────────────────────────────┐
-│  [≡]  Map                                   [🔍]  [👤]  │
-├─────────────────────────────────────────────────────────┤
-```
-
-### Profile Screen
-```
-┌─────────────────────────────────────────────────────────┐
-│  [←]  Profile                                           │
-├─────────────────────────────────────────────────────────┤
-```
-- Left: Back arrow
-- Center: "Profile" title
-- Right: None (or Save if editing)
-
-### Settings Screen
-```
-┌─────────────────────────────────────────────────────────┐
-│  [←]  Settings                                          │
-├─────────────────────────────────────────────────────────┤
-```
-
-### Streams Screen (Manage)
-```
-┌─────────────────────────────────────────────────────────┐
-│  [←]  Streams                                      [+]  │
-├─────────────────────────────────────────────────────────┤
-```
-- Left: Back arrow
-- Center: "Streams" title
-- Right: Add new stream button
-
-### Stream Properties Screen
-```
-┌─────────────────────────────────────────────────────────┐
-│  [←]  Edit Stream                              [Save]   │
-├─────────────────────────────────────────────────────────┤
-```
-
-### Database Info Screen
-```
-┌─────────────────────────────────────────────────────────┐
-│  [←]  Database Info                                     │
-├─────────────────────────────────────────────────────────┤
-```
-
----
-
-## Screen Classification
-
-### Primary Screens (Show Drawer + Profile)
-These are "top-level" views accessible from the drawer:
-- Entry List
-- Calendar
-- Locations
-- Map
-
-**Header Pattern:** `[≡] Title [🔍] [👤]`
-
-### Secondary Screens (Show Back + Action)
-These are "detail" views navigated to from primary screens:
-- Entry Screen
-- Profile
-- Settings
-- Database Info
-- Streams (manage)
-- Stream Properties
-
-**Header Pattern:** `[←] Title [Action?]`
+1. **Main View Screens** (`inbox`, `map`, `calendar`) - Stay mounted for instant switching
+2. **Sub-Screens** - Mount/unmount as needed, back always returns to last main view
+3. **Swipe-back gesture** - iOS-style gesture returns to main view from any sub-screen
+4. **Drawers** - Left drawer for stream selection, right drawer for settings access
 
 ---
 
 ## Navigation Flow Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                              PRIMARY SCREENS                            │
-│                         (The "Home Base" - 3 modes)                     │
-│                                                                         │
-│   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐            │
-│   │ Entry List  │ ←──► │    Map      │ ←──► │  Calendar   │            │
-│   │ (default)   │      │             │      │             │            │
-│   └──────┬──────┘      └──────┬──────┘      └──────┬──────┘            │
-│          │                    │                    │                    │
-│          └────────────────────┼────────────────────┘                    │
-│                               │                                         │
-│                    All filtered by current STREAM                       │
-└───────────────────────────────┼─────────────────────────────────────────┘
-                                │
-                                │ navigate to detail/settings
-                                ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           SECONDARY SCREENS                             │
-│                                                                         │
-│   Simple (flat back to Primary):                                        │
-│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │
-│   │   Entry     │  │   Profile   │  │  Settings   │  │  DB Info    │   │
-│   │   [←]       │  │   [←]       │  │   [←]       │  │   [←]       │   │
-│   └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘   │
-│                                                                         │
-│   Nested (management flows):                                            │
-│   ┌─────────────┐      ┌─────────────────────┐                         │
-│   │  Streams    │ ───► │  Stream Properties  │                         │
-│   │  [←]        │      │  [←] back to list   │                         │
-│   └─────────────┘      └─────────────────────┘                         │
-│                                                                         │
-│   ┌─────────────┐      ┌─────────────────────┐                         │
-│   │  Locations  │ ───► │  Location Details   │  (future)               │
-│   │  [←]        │      │  [←] back to list   │                         │
-│   └─────────────┘      └─────────────────────┘                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+```mermaid
+flowchart TB
+    subgraph Auth["Authentication (Unauthenticated)"]
+        Login[LoginScreen]
+        SignUp[SignUpScreen]
+        Login <--> SignUp
+    end
 
-## Nested Flow Behavior (Streams → Stream Properties)
+    subgraph Main["Main Views (Authenticated)"]
+        Inbox[EntryListScreen<br/>route: inbox]
+        Map[MapScreen<br/>route: map]
+        Calendar[CalendarScreen<br/>route: calendar]
+    end
 
-**Question:** When on Stream Properties, where does `[←]` go?
+    subgraph Sub["Sub-Screens"]
+        Entry[EntryScreen<br/>route: capture]
+        Profile[ProfileScreen<br/>route: profile]
+        Settings[SettingsScreen<br/>route: settings]
+        Debug[DatabaseInfoScreen<br/>route: debug]
+        Locations[LocationsScreen<br/>route: locations]
+        Streams[StreamsScreen<br/>route: streams]
+        StreamProps[StreamPropertiesScreen<br/>route: stream-properties]
+    end
 
-**Answer:** Back to Streams list (linear flow within management context).
+    subgraph Drawers["Overlay Drawers"]
+        LeftDrawer[StreamDrawer<br/>View mode + Stream selection]
+        RightDrawer[SettingsDrawer<br/>Menu items]
+    end
 
-```
-Primary (Coffee)
-    │
-    ▼ Profile Menu → Streams
-┌─────────────────────────────────────────┐
-│  MANAGEMENT CONTEXT                     │
-│                                         │
-│  Streams List ──► Stream Properties     │
-│      [←]              [←]               │
-│       │                │                │
-│       │                └── back to Streams List
-│       │
-│       └── back to Primary (Coffee)
-│
-└─────────────────────────────────────────┘
-```
+    Auth --> |auth success| Main
 
-**Header for Stream Properties:**
+    Inbox <-.-> |Left Drawer| LeftDrawer
+    Map <-.-> |Left Drawer| LeftDrawer
+    Calendar <-.-> |Left Drawer| LeftDrawer
+
+    Inbox <-.-> |Right Drawer| RightDrawer
+    Map <-.-> |Right Drawer| RightDrawer
+    Calendar <-.-> |Right Drawer| RightDrawer
+
+    Main --> |navigate| Sub
+    Sub --> |back/swipe| Main
+
+    Streams --> StreamProps
+    StreamProps --> Streams
 ```
-┌─────────────────────────────────────────────────────────┐
-│  [←]  Coffee Stream                            [Save]   │
-├─────────────────────────────────────────────────────────┤
-```
-- `[←]` returns to Streams list
-- Title shows stream name (no breadcrumb trail needed)
-- Action area shows Save button
 
 ---
 
-## Action Items
+## Screen Hierarchy
 
-### Phase 1: Enhance Left Drawer
-- [ ] Add "VIEW MODE" section at top (List, Map, Calendar)
-- [ ] Keep "STREAMS" section with All/Unassigned + stream list
-- [ ] Track current view mode in DrawerContext
-- [ ] Switching view mode navigates to that Primary screen
-- [ ] Switching stream filters current view mode
+```mermaid
+graph TD
+    App[App.tsx] --> AuthGate
+    AuthGate --> |unauthenticated| AuthScreens
+    AuthGate --> |authenticated| AppContent
 
-### Phase 2: Replace Hamburger with Profile Avatar
-- [ ] Remove right hamburger icon from TopBar
-- [ ] Add profile avatar/icon in its place
-- [ ] Avatar tap opens ProfileMenu (dropdown)
+    AuthScreens --> LoginScreen
+    AuthScreens --> SignUpScreen
 
-### Phase 3: Refactor Profile Menu Content
-- [ ] Profile
-- [ ] Streams (manage)
-- [ ] Locations (manage)
-- [ ] Settings
-- [ ] Database Info
-- [ ] Sign Out
-- [ ] Remove: Entries, Map, Calendar (now in drawer)
+    AppContent --> MainViews
+    AppContent --> SubScreens
+    AppContent --> Drawers
 
-### Phase 4: Standardize Headers
-- [ ] Primary screens: `[≡] Title (count) [🔍] [👤]`
-- [ ] Secondary screens: `[←] Title [Action?]`
-- [ ] Nested screens (Stream Props): `[←]` goes to parent list
+    MainViews --> EntryListScreen
+    MainViews --> MapScreen
+    MainViews --> CalendarScreen
 
-### Phase 5: Update All Screens
-- [ ] Entry List: Primary header (already done)
-- [ ] Map: Primary header + drawer integration
-- [ ] Calendar: Primary header + drawer integration
-- [ ] Entry: Secondary header (back + save/edit)
-- [ ] Profile: Secondary header (back)
-- [ ] Settings: Secondary header (back)
-- [ ] Streams: Secondary header (back + add)
-- [ ] Stream Properties: Secondary header (back + save)
-- [ ] Locations: Secondary header (back + add?)
-- [ ] Database Info: Secondary header (back)
+    SubScreens --> EntryScreen
+    SubScreens --> ProfileScreen
+    SubScreens --> SettingsScreen
+    SubScreens --> DatabaseInfoScreen
+    SubScreens --> LocationsScreen
+    SubScreens --> StreamsScreen
+    SubScreens --> StreamPropertiesScreen
+
+    Drawers --> StreamDrawer
+    Drawers --> SettingsDrawer
+```
 
 ---
 
-## Design Principles
+## Screen Reference
 
-1. **Clear hierarchy**: Drawer = content nav, Profile = account/settings
-2. **Consistent headers**: Same pattern for same screen type
-3. **Minimal taps**: One tap to switch streams, one tap to access settings
-4. **No duplication**: Each nav item lives in exactly one place
-5. **Discoverable**: Profile avatar is universally understood
-6. **Clean**: No emoji icons, simple text, generous whitespace
+### Authentication Screens
+
+#### LoginScreen
+| Property | Value |
+|----------|-------|
+| **Route** | N/A (controlled by `showSignUp` state in AuthGate) |
+| **File** | `apps/mobile/src/modules/auth/screens/LoginScreen.tsx` |
+| **Props** | `onSwitchToSignUp: () => void` |
+| **Hooks** | `useAuth` |
+| **Description** | Email/password login with Google OAuth option |
+
+#### SignUpScreen
+| Property | Value |
+|----------|-------|
+| **Route** | N/A (controlled by `showSignUp` state in AuthGate) |
+| **File** | `apps/mobile/src/modules/auth/screens/SignUpScreen.tsx` |
+| **Props** | `onSwitchToLogin: () => void` |
+| **Hooks** | `useAuth` |
+| **Description** | New user registration with email confirmation |
+
+---
+
+### Main View Screens
+
+These screens stay mounted for instant switching via the left drawer.
+
+#### EntryListScreen
+| Property | Value |
+|----------|-------|
+| **Route** | `inbox` |
+| **File** | `apps/mobile/src/screens/EntryListScreen.tsx` |
+| **Props** | None |
+| **Hooks** | `useNavigation`, `useTheme`, `useAuth`, `useStreams`, `useEntries`, `useLocations`, `useDrawer`, `useSettings`, `useSettingsDrawer`, `useNavigationMenu` |
+| **Description** | Default view showing entries as cards/list. Supports filtering by stream, search, sort modes, and display modes. |
+| **Navigates To** | `capture` (entry creation/editing) |
+| **Features** | FAB for new entry, swipe actions, stream picker modal |
+
+#### MapScreen
+| Property | Value |
+|----------|-------|
+| **Route** | `map` |
+| **File** | `apps/mobile/src/screens/MapScreen.tsx` |
+| **Props** | `isVisible?: boolean` (default: true) |
+| **Hooks** | `useNavigation`, `useTheme`, `useDrawer`, `useNavigationMenu`, `useSettings`, `useStreams`, `useEntries`, `useLocations` |
+| **Description** | Geographic view showing entries with GPS coordinates on a map with clustering |
+| **Navigates To** | `capture` (entry editing) |
+| **Features** | Cluster markers, fit-all button, current location button, entry list below map |
+
+#### CalendarScreen
+| Property | Value |
+|----------|-------|
+| **Route** | `calendar` |
+| **File** | `apps/mobile/src/screens/CalendarScreen.tsx` |
+| **Props** | None |
+| **Hooks** | `useNavigation`, `useTheme`, `useDrawer`, `useNavigationMenu`, `useEntries`, `useStreams`, `usePersistedState` |
+| **Description** | Date-based view with day/month/year zoom levels |
+| **Navigates To** | `capture` (entry creation with date), `inbox` (filtered by tag/mention) |
+| **Features** | Three zoom levels, date field selector (entry_date, updated_at, due_date), FAB for new entry |
+
+---
+
+### Sub-Screens
+
+Sub-screens mount on demand. Back navigation (hardware button or swipe) returns to the last main view.
+
+#### EntryScreen
+| Property | Value |
+|----------|-------|
+| **Route** | `capture` |
+| **File** | `apps/mobile/src/modules/entries/components/EntryScreen.tsx` |
+| **Props** | See below |
+| **Hooks** | `useNavigation`, `useTheme`, `useEntries`, `useStreams`, `useLocations`, various custom hooks |
+| **Description** | View/edit single entry with rich editor, attachments, location, ratings, etc. |
+| **Navigates To** | Back to previous main view |
+
+**EntryScreen Props:**
+```typescript
+interface EntryScreenProps {
+  entryId?: string;           // Edit mode: existing entry ID
+  initialStreamId?: string | null;  // Pre-select stream for new entry
+  initialStreamName?: string; // Display name for pre-selected stream
+  initialContent?: string;    // Pre-fill content (e.g., #tag or @mention)
+  initialDate?: string;       // Pre-fill entry date (from calendar)
+}
+```
+
+#### ProfileScreen
+| Property | Value |
+|----------|-------|
+| **Route** | `profile` |
+| **File** | `apps/mobile/src/screens/ProfileScreen.tsx` |
+| **Props** | None |
+| **Hooks** | `useNavigation`, `useTheme`, `useAuth` |
+| **Description** | User profile settings, display name, avatar |
+
+#### SettingsScreen
+| Property | Value |
+|----------|-------|
+| **Route** | `settings` |
+| **File** | `apps/mobile/src/screens/SettingsScreen.tsx` |
+| **Props** | None |
+| **Hooks** | `useSettings`, `useTheme` |
+| **Description** | App settings including GPS capture, theme, font, units, image quality |
+| **Contains Modals** | `UnitSystemSelector`, `ImageQualitySelector`, `ThemeSelector`, `FontSelector` |
+
+#### DatabaseInfoScreen
+| Property | Value |
+|----------|-------|
+| **Route** | `debug` |
+| **File** | `apps/mobile/src/screens/DatabaseInfoScreen.tsx` |
+| **Props** | None |
+| **Hooks** | `useNavigation`, `useSync` |
+| **Description** | Debug screen showing SQLite database contents, sync status, cloud comparison |
+| **Features** | Tabbed interface (Status, Entries, Streams, Locations, Attachments, Logs), sync actions, cleanup tools |
+
+#### LocationsScreen
+| Property | Value |
+|----------|-------|
+| **Route** | `locations` |
+| **File** | `apps/mobile/src/screens/LocationsScreen.tsx` |
+| **Props** | None |
+| **Hooks** | `useNavigation`, `useTheme`, `useLocationsWithCounts` |
+| **Description** | Hierarchical location browser (country > region > city > neighborhood > place) |
+| **Navigates To** | `inbox` with `returnStreamId: location:{id}` filter |
+
+#### StreamsScreen
+| Property | Value |
+|----------|-------|
+| **Route** | `streams` |
+| **File** | `apps/mobile/src/screens/StreamsScreen.tsx` |
+| **Props** | None |
+| **Hooks** | `useNavigation`, `useTheme`, `useStreams` |
+| **Description** | Manage streams list with search, create, delete |
+| **Navigates To** | `stream-properties` (edit/create), `inbox` (filter by stream) |
+
+#### StreamPropertiesScreen
+| Property | Value |
+|----------|-------|
+| **Route** | `stream-properties` |
+| **File** | `apps/mobile/src/screens/StreamPropertiesScreen.tsx` |
+| **Props** | See below |
+| **Hooks** | `useNavigation`, `useTheme`, `useStreams` |
+| **Description** | Edit stream settings: name, features, templates, privacy |
+| **Navigates To** | `streams` on save/back |
+
+**StreamPropertiesScreen Props:**
+```typescript
+interface StreamPropertiesScreenProps {
+  streamId: string | null;  // null = create mode, string = edit mode
+}
+```
+
+**Contains Modal Components:**
+- `StatusConfigModal` - Configure entry statuses for stream
+- `TypeConfigModal` - Configure entry types for stream
+- `RatingConfigModal` - Configure rating type (stars, numbers, etc.)
+- `TemplateHelpModal` - Help for template variables
+- `TemplateEditorModal` - Full-screen template editor
+
+---
+
+## Modal Components
+
+These modals appear within screens but are not separate routes:
+
+| Modal | Location | Purpose |
+|-------|----------|---------|
+| `StreamPicker` | EntryListScreen, MapScreen | Select stream for move operation |
+| `DisplayModeSelector` | MapScreen, CalendarScreen | Choose entry display mode |
+| `SortModeSelector` | MapScreen, CalendarScreen | Choose sort mode and order |
+| `UnitSystemSelector` | SettingsScreen | Metric/Imperial selection |
+| `ImageQualitySelector` | SettingsScreen | Photo compression level |
+| `ThemeSelector` | SettingsScreen | App color scheme |
+| `FontSelector` | SettingsScreen | App typeface |
+| `StatusConfigModal` | StreamPropertiesScreen | Configure stream statuses |
+| `TypeConfigModal` | StreamPropertiesScreen | Configure stream types |
+| `RatingConfigModal` | StreamPropertiesScreen | Configure rating type |
+| `TemplateHelpModal` | StreamPropertiesScreen | Template variable reference |
+| `TemplateEditorModal` | StreamPropertiesScreen | Content template editor |
+| `AddStreamModal` | StreamDrawer | Quick-create new stream |
+
+---
+
+## Route Reference Table
+
+| Route | Screen | Description | Params |
+|-------|--------|-------------|--------|
+| `inbox` | EntryListScreen | Default entry list | `returnStreamId?`, `returnStreamName?` |
+| `map` | MapScreen | Map view | None |
+| `calendar` | CalendarScreen | Calendar view | None |
+| `capture` | EntryScreen | Entry detail/edit | `entryId?`, `initialStreamId?`, `initialStreamName?`, `initialContent?`, `initialDate?` |
+| `profile` | ProfileScreen | User profile | None |
+| `settings` | SettingsScreen | App settings | None |
+| `debug` | DatabaseInfoScreen | Debug info | None |
+| `locations` | LocationsScreen | Location browser | None |
+| `streams` | StreamsScreen | Stream management | None |
+| `stream-properties` | StreamPropertiesScreen | Edit stream | `streamId` (null for create) |
+
+---
+
+## File Locations Summary
+
+```
+apps/mobile/
+├── App.tsx                              # Main routing and screen rendering
+├── src/
+│   ├── modules/
+│   │   ├── auth/
+│   │   │   └── screens/
+│   │   │       ├── LoginScreen.tsx
+│   │   │       └── SignUpScreen.tsx
+│   │   ├── entries/
+│   │   │   └── components/
+│   │   │       └── EntryScreen.tsx
+│   │   └── streams/
+│   │       └── components/
+│   │           ├── StatusConfigModal.tsx
+│   │           ├── TypeConfigModal.tsx
+│   │           ├── RatingConfigModal.tsx
+│   │           ├── TemplateHelpModal.tsx
+│   │           ├── TemplateEditorModal.tsx
+│   │           └── AddStreamModal.tsx
+│   ├── screens/
+│   │   ├── EntryListScreen.tsx
+│   │   ├── MapScreen.tsx
+│   │   ├── CalendarScreen.tsx
+│   │   ├── ProfileScreen.tsx
+│   │   ├── SettingsScreen.tsx
+│   │   ├── DatabaseInfoScreen.tsx
+│   │   ├── LocationsScreen.tsx
+│   │   ├── StreamsScreen.tsx
+│   │   └── StreamPropertiesScreen.tsx
+│   ├── shared/
+│   │   └── contexts/
+│   │       ├── NavigationContext.tsx    # navigate() function provider
+│   │       ├── DrawerContext.tsx        # View mode and stream selection
+│   │       ├── SettingsDrawerContext.tsx
+│   │       ├── AuthContext.tsx
+│   │       ├── ThemeContext.tsx
+│   │       └── SettingsContext.tsx
+│   └── components/
+│       └── drawer/
+│           ├── StreamDrawer.tsx         # Left drawer
+│           └── SettingsDrawer.tsx       # Right drawer
+```
+
+---
+
+## Navigation Patterns
+
+### Opening an Entry
+```typescript
+// From list/map/calendar to edit existing entry
+navigate("capture", { entryId: "uuid-here" });
+
+// Create new entry in specific stream
+navigate("capture", {
+  initialStreamId: "stream-uuid",
+  initialStreamName: "Stream Name",
+});
+
+// Create new entry with pre-filled content (e.g., from tag filter)
+navigate("capture", {
+  initialContent: "#tagname ",
+});
+
+// Create new entry with specific date (from calendar)
+navigate("capture", {
+  initialDate: "2024-01-15",
+});
+```
+
+### Filtering Entries
+```typescript
+// Filter by stream
+navigate("inbox", {
+  returnStreamId: "stream-uuid",
+  returnStreamName: "Stream Name",
+});
+
+// Filter by tag
+setSelectedStreamId("tag:tagname");
+setSelectedStreamName("#tagname");
+
+// Filter by mention
+setSelectedStreamId("mention:personname");
+setSelectedStreamName("@personname");
+
+// Filter by location
+navigate("inbox", {
+  returnStreamId: "location:location-uuid",
+  returnStreamName: "Location Name",
+});
+```
+
+### Stream Management
+```typescript
+// Edit existing stream
+navigate("stream-properties", { streamId: "stream-uuid" });
+
+// Create new stream
+navigate("stream-properties", { streamId: null });
+```
+
+---
+
+## Context Dependencies
+
+| Context | Primary Use | Screens Using It |
+|---------|-------------|------------------|
+| `NavigationContext` | `navigate()` function | All screens |
+| `DrawerContext` | View mode, stream selection | Main views, EntryScreen |
+| `AuthContext` | User auth state, sign out | LoginScreen, main views |
+| `ThemeContext` | Colors, typography, shadows | All screens |
+| `SettingsContext` | User preferences | SettingsScreen, main views |
+| `SettingsDrawerContext` | Right drawer control | Main views |
+
+---
+
+## Data Flow
+
+### Entry Data
+```
+useEntries(filter) → entries, isLoading, entryMutations
+                   ↓
+Filter Types:
+- streamId: string | null (specific stream or unassigned)
+- tag: string (filter by #tag)
+- mention: string (filter by @mention)
+- location: string (filter by location_id)
+```
+
+### Stream Data
+```
+useStreams() → streams, isLoading, streamMutations
+            ↓
+Used for: stream picker, entry metadata, filtering
+```
+
+### Location Data
+```
+useLocations() → locations data
+useLocationsWithCounts() → locations with entry_count
+                        ↓
+Used for: LocationsScreen, entry location picker, map view
+```

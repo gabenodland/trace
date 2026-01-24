@@ -21,10 +21,9 @@ import {
   getNoLocationCount,
   MobileEntryFilter,
 } from './mobileEntryApi';
-import { CreateEntryInput, Entry } from '@trace/core';
+import { CreateEntryInput, Entry, buildLocationTree, type LocationTreeNode } from '@trace/core';
+// Import entryHelpers as namespace for filtering utilities
 import * as entryHelpers from '@trace/core/src/modules/entries/entryHelpers';
-import { buildLocationTree } from '@trace/core/src/modules/entries/entryHelpers';
-import type { LocationTreeNode } from '@trace/core/src/modules/entries/EntryTypes';
 
 // Re-export types for consumers
 export type { MobileEntryFilter } from './mobileEntryApi';

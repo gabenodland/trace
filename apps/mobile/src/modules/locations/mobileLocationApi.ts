@@ -12,7 +12,8 @@
 
 import { LocationEntity, CreateLocationInput } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
-import { triggerPushSync } from '../../shared/sync';
+// Import directly from syncApi to avoid circular dependency through sync/index.ts
+import { triggerPushSync } from '../../shared/sync/syncApi';
 import { createScopedLogger } from '../../shared/utils/logger';
 
 const log = createScopedLogger('LocationApi');
