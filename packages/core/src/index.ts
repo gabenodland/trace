@@ -9,11 +9,13 @@ export * from "./modules/entries";
 export * from "./modules/attachments";
 export * from "./modules/locations";
 export * from "./modules/settings";
+export * from "./modules/subscriptions";
 
 // Shared utilities
 export * from "./shared/types";
 export * from "./shared/database.types";
 export * from "./shared/constants";
+export * from "./shared/featureGates";
 export { supabase, getSupabase } from "./shared/supabase";
 export { configureCore, isCoreConfigured } from "./shared/config";
 export type { CoreConfig } from "./shared/config";

@@ -13,6 +13,7 @@ export const synthwaveLightTheme: Theme = {
   name: 'Synthwave Sunset',
   description: 'Outrun Sunset',
   isDark: false,
+  isPro: true,
 
   colors: {
     background: {

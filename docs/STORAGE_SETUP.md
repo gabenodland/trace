@@ -6,7 +6,7 @@ The photos storage bucket needs to be created manually in the Supabase Dashboard
 
 ### Steps:
 
-1. Go to https://supabase.com/dashboard/project/tglbkxndemrhofspwiyn/storage/buckets
+1. Go to https://supabase.com/dashboard/project/lsszorssvkavegobmqic/storage/buckets
 
 2. Click "New bucket"
 

@@ -1,6 +1,12 @@
 // Supabase Edge Function: Foursquare Places API Proxy
 // Keeps the Foursquare API key server-side for security
 // Used by web app; mobile can call directly or use this proxy
+//
+// Updated for 2025 Foursquare API migration:
+// - New host: places-api.foursquare.com (was api.foursquare.com)
+// - No /v3 prefix on endpoints
+// - Bearer token auth
+// - X-Places-Api-Version header required
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -9,6 +15,9 @@ const FOURSQUARE_API_KEY = Deno.env.get("FOURSQUARE_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
+// Foursquare API version (date-based versioning)
+const FOURSQUARE_API_VERSION = "2025-06-17";
+
 // CORS headers - adjust origin for production
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*", // TODO: Restrict to your domains in production
@@ -16,10 +25,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey, x-client-info",
 };
 
-// Whitelist of allowed Foursquare endpoints
+// Whitelist of allowed Foursquare endpoints (no /v3 prefix in new API)
 const ALLOWED_ENDPOINTS = [
-  "/v3/places/search",
-  "/v3/autocomplete",
+  "/places/search",
+  "/autocomplete",
 ];
 
 serve(async (req: Request) => {
@@ -71,8 +80,8 @@ serve(async (req: Request) => {
       );
     }
 
-    // Build Foursquare URL with query params
-    const foursquareUrl = new URL(`https://api.foursquare.com${endpoint}`);
+    // Build Foursquare URL with query params (new host: places-api.foursquare.com)
+    const foursquareUrl = new URL(`https://places-api.foursquare.com${endpoint}`);
 
     // Forward query params (except 'endpoint')
     url.searchParams.forEach((value, key) => {
@@ -89,12 +98,13 @@ serve(async (req: Request) => {
       );
     }
 
-    // Call Foursquare API
+    // Call Foursquare API (2025 migration: Bearer auth + version header)
     const foursquareResponse = await fetch(foursquareUrl.toString(), {
       method: "GET",
       headers: {
-        "Authorization": FOURSQUARE_API_KEY,
+        "Authorization": `Bearer ${FOURSQUARE_API_KEY}`,
         "Accept": "application/json",
+        "X-Places-Api-Version": FOURSQUARE_API_VERSION,
       },
     });
 

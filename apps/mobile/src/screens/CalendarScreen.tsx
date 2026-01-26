@@ -21,7 +21,8 @@ import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useDrawer } from "../shared/contexts/DrawerContext";
-import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
+import { useAuth } from "../shared/contexts/AuthContext";
+import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { usePersistedState } from "../shared/hooks/usePersistedState";
 import { TopBar } from "../components/layout/TopBar";
 import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
@@ -86,7 +87,12 @@ export function CalendarScreen() {
     setCalendarZoom,
     drawerControl,
   } = useDrawer();
-  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
+  const { user } = useAuth();
+  const { profile } = useMobileProfile(user?.id);
+
+  // Avatar data for TopBar
+  const displayName = profile?.name || (profile?.username ? `@${profile.username}` : null) || user?.email || null;
+  const avatarUrl = profile?.avatar_url || null;
 
   // Screen width for swipe threshold calculation (1/3 of screen)
   const screenWidth = Dimensions.get("window").width;
@@ -838,11 +844,10 @@ export function CalendarScreen() {
         onBreadcrumbPress={openDrawer}
         onLeftMenuPress={openDrawer}
         badge={entries.length}
-        menuItems={menuItems}
-        userEmail={userEmail}
+        showAvatar
         displayName={displayName}
         avatarUrl={avatarUrl}
-        onProfilePress={onProfilePress}
+        onAvatarPress={() => navigate("account")}
       />
 
       {/* SubBar with date field selector */}

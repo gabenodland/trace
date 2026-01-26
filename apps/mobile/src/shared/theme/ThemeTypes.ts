@@ -126,6 +126,9 @@ export interface Theme {
   // Whether this is a dark theme (affects status bar, etc.)
   isDark: boolean;
 
+  // Whether this theme requires Pro subscription (default: false = free)
+  isPro?: boolean;
+
   // Color palette
   colors: ThemeColors;
 
@@ -143,6 +146,7 @@ export interface ThemeOption {
   id: string;
   name: string;
   description?: string;
+  isPro?: boolean;
   preview: {
     background: string;
     text: string;

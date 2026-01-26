@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Platform,
+  Linking,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { validateSignupForm, ERROR_MESSAGES, INFO_MESSAGES, SUCCESS_MESSAGES } from "@trace/core";
@@ -143,6 +144,23 @@ export default function SignUpScreen({ onSwitchToLogin }: SignUpScreenProps) {
               </View>
             </TouchableOpacity>
 
+            <Text style={styles.legalText}>
+              By continuing, you agree to our{" "}
+              <Text
+                style={styles.legalLink}
+                onPress={() => Linking.openURL("https://www.mindjig.com/terms.html")}
+              >
+                Terms of Service
+              </Text>
+              {" "}and{" "}
+              <Text
+                style={styles.legalLink}
+                onPress={() => Linking.openURL("https://www.mindjig.com/privacy.html")}
+              >
+                Privacy Policy
+              </Text>
+            </Text>
+
             <TouchableOpacity style={styles.linkButton} onPress={onSwitchToLogin}>
               <Text style={styles.linkText}>
                 Already have an account? <Text style={styles.linkTextBold}>Sign In</Text>
@@ -242,5 +260,18 @@ const styles = StyleSheet.create({
   linkTextBold: {
     color: "#007AFF",
     fontWeight: "600",
+  },
+  legalText: {
+    textAlign: "center",
+    color: "#999",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+  },
+  legalLink: {
+    color: "#007AFF",
+    textDecorationLine: "underline",
   },
 });

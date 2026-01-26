@@ -335,8 +335,13 @@ export type Database = {
           avatar_url: string | null
           created_at: string | null
           id: string
+          is_dev_mode: boolean
           name: string
           profile_complete: boolean | null
+          subscription_expires_at: string | null
+          subscription_platform: string | null
+          subscription_product_id: string | null
+          subscription_tier: string
           updated_at: string | null
           username: string
         }
@@ -344,8 +349,13 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           id: string
+          is_dev_mode?: boolean
           name: string
           profile_complete?: boolean | null
+          subscription_expires_at?: string | null
+          subscription_platform?: string | null
+          subscription_product_id?: string | null
+          subscription_tier?: string
           updated_at?: string | null
           username: string
         }
@@ -353,12 +363,79 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           id?: string
+          is_dev_mode?: boolean
           name?: string
           profile_complete?: boolean | null
+          subscription_expires_at?: string | null
+          subscription_platform?: string | null
+          subscription_product_id?: string | null
+          subscription_tier?: string
           updated_at?: string | null
           username?: string
         }
         Relationships: []
+      }
+      subscription_receipts: {
+        Row: {
+          receipt_id: string
+          user_id: string
+          platform: string
+          product_id: string
+          store_transaction_id: string
+          store_original_transaction_id: string | null
+          purchase_date: string
+          expires_date: string | null
+          is_trial: boolean
+          is_intro_offer: boolean
+          cancellation_date: string | null
+          receipt_data: string | null
+          validation_response: Record<string, unknown> | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          receipt_id?: string
+          user_id: string
+          platform: string
+          product_id: string
+          store_transaction_id: string
+          store_original_transaction_id?: string | null
+          purchase_date: string
+          expires_date?: string | null
+          is_trial?: boolean
+          is_intro_offer?: boolean
+          cancellation_date?: string | null
+          receipt_data?: string | null
+          validation_response?: Record<string, unknown> | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          receipt_id?: string
+          user_id?: string
+          platform?: string
+          product_id?: string
+          store_transaction_id?: string
+          store_original_transaction_id?: string | null
+          purchase_date?: string
+          expires_date?: string | null
+          is_trial?: boolean
+          is_intro_offer?: boolean
+          cancellation_date?: string | null
+          receipt_data?: string | null
+          validation_response?: Record<string, unknown> | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_receipts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       streams: {
         Row: {

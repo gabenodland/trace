@@ -12,6 +12,7 @@ export const modernTheme: Theme = {
   name: 'Modern',
   description: 'Clean and contemporary',
   isDark: false,
+  isPro: true,
 
   colors: {
     background: {

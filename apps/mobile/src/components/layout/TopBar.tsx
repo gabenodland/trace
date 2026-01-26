@@ -1,9 +1,8 @@
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar, Image } from "react-native";
 import Svg, { Path, Line, Circle } from "react-native-svg";
-import { useState, useEffect } from "react";
-import { NavigationMenu, NavigationMenuItem } from "../navigation/NavigationMenu";
+import { useEffect, useState } from "react";
 import { Breadcrumb, BreadcrumbSegment } from "./Breadcrumb";
-import { useTheme, type ThemeContextValue } from "../../shared/contexts/ThemeContext";
+import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
 import { getDefaultAvatarUrl } from "@trace/core";
 
@@ -32,12 +31,11 @@ interface TopBarProps {
   onSearchPress?: () => void;
   isSearchActive?: boolean;
 
-  // Hamburger menu (customizable menu items)
-  menuItems?: NavigationMenuItem[];
-  userEmail?: string;
-  displayName?: string | null;
+  // Avatar/Account button - navigates to account screen
+  showAvatar?: boolean;
   avatarUrl?: string | null;
-  onProfilePress?: () => void;
+  displayName?: string | null;
+  onAvatarPress?: () => void;
 }
 
 export function TopBar({
@@ -53,14 +51,12 @@ export function TopBar({
   onLeftMenuPress,
   onSearchPress,
   isSearchActive = false,
-  menuItems = [],
-  userEmail,
-  displayName,
+  showAvatar = false,
   avatarUrl,
-  onProfilePress,
+  displayName,
+  onAvatarPress,
 }: TopBarProps) {
   const theme = useTheme();
-  const [showMenu, setShowMenu] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
   // Reset avatar error when avatarUrl changes
@@ -69,7 +65,7 @@ export function TopBar({
   }, [avatarUrl]);
 
   // Determine effective avatar URL - use default if remote fails to load
-  const defaultAvatar = getDefaultAvatarUrl(displayName || userEmail || "User");
+  const defaultAvatar = getDefaultAvatarUrl(displayName || "User");
   const effectiveAvatarUrl = avatarError || !avatarUrl ? defaultAvatar : avatarUrl;
 
   return (
@@ -159,31 +155,19 @@ export function TopBar({
           </TouchableOpacity>
         )}
 
-        {/* Profile Avatar Menu */}
-        {menuItems.length > 0 && (
-          <View style={styles.menuContainer}>
-            <TouchableOpacity
-              style={styles.avatarButton}
-              onPress={() => setShowMenu(!showMenu)}
-              activeOpacity={0.7}
-            >
-              <Image
-                source={{ uri: effectiveAvatarUrl }}
-                style={[styles.avatarImage, { backgroundColor: theme.colors.background.tertiary }]}
-                onError={() => setAvatarError(true)}
-              />
-            </TouchableOpacity>
-
-            <NavigationMenu
-              visible={showMenu}
-              onClose={() => setShowMenu(false)}
-              menuItems={menuItems}
-              userEmail={userEmail}
-              displayName={displayName}
-              avatarUrl={avatarUrl}
-              onProfilePress={onProfilePress}
+        {/* Profile Avatar - navigates to Account screen */}
+        {showAvatar && onAvatarPress && (
+          <TouchableOpacity
+            style={styles.avatarButton}
+            onPress={onAvatarPress}
+            activeOpacity={0.7}
+          >
+            <Image
+              source={{ uri: effectiveAvatarUrl }}
+              style={[styles.avatarImage, { backgroundColor: theme.colors.background.tertiary }]}
+              onError={() => setAvatarError(true)}
             />
-          </View>
+          </TouchableOpacity>
         )}
       </View>
     </View>
@@ -249,9 +233,6 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: themeBase.spacing.sm,
-  },
-  menuContainer: {
-    position: "relative",
   },
   avatarButton: {
     padding: 2,

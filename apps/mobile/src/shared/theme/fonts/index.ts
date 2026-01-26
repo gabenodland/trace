@@ -14,6 +14,8 @@ export interface FontDefinition {
   id: string;
   name: string;
   description?: string;
+  /** Whether this font requires Pro subscription (default: false = free) */
+  isPro?: boolean;
   fontFamily: ThemeTypography['fontFamily'];
   webFontFamily: string;
   webFontUrl: string;
@@ -26,6 +28,7 @@ export interface FontOption {
   id: string;
   name: string;
   description?: string;
+  isPro?: boolean;
   /** Sample text font family (regular weight) for preview */
   previewFont: string;
 }
@@ -79,6 +82,7 @@ export const fonts: FontDefinition[] = [
     id: 'poppins',
     name: 'Poppins',
     description: 'Geometric modern',
+    isPro: true,
     fontFamily: {
       regular: 'Poppins_400Regular',
       medium: 'Poppins_500Medium',
@@ -92,6 +96,7 @@ export const fonts: FontDefinition[] = [
     id: 'nunito',
     name: 'Nunito',
     description: 'Rounded and friendly',
+    isPro: true,
     fontFamily: {
       regular: 'Nunito_400Regular',
       medium: 'Nunito_500Medium',
@@ -105,6 +110,7 @@ export const fonts: FontDefinition[] = [
     id: 'montserrat',
     name: 'Montserrat',
     description: 'Bold geometric',
+    isPro: true,
     fontFamily: {
       regular: 'Montserrat_400Regular',
       medium: 'Montserrat_500Medium',
@@ -118,6 +124,7 @@ export const fonts: FontDefinition[] = [
     id: 'raleway',
     name: 'Raleway',
     description: 'Elegant thin',
+    isPro: true,
     fontFamily: {
       regular: 'Raleway_400Regular',
       medium: 'Raleway_500Medium',
@@ -131,6 +138,7 @@ export const fonts: FontDefinition[] = [
     id: 'maven',
     name: 'Maven Pro',
     description: 'Friendly curves',
+    isPro: true,
     fontFamily: {
       regular: 'MavenPro_400Regular',
       medium: 'MavenPro_500Medium',
@@ -144,6 +152,7 @@ export const fonts: FontDefinition[] = [
     id: 'atkinson',
     name: 'Atkinson Hyperlegible',
     description: 'High readability',
+    isPro: true,
     fontFamily: {
       regular: 'AtkinsonHyperlegible_400Regular',
       medium: 'AtkinsonHyperlegible_400Regular',
@@ -158,6 +167,7 @@ export const fonts: FontDefinition[] = [
     id: 'lora',
     name: 'Lora',
     description: 'Classic serif',
+    isPro: true,
     fontFamily: {
       regular: 'Lora_400Regular',
       medium: 'Lora_500Medium',
@@ -171,6 +181,7 @@ export const fonts: FontDefinition[] = [
     id: 'newsreader',
     name: 'Newsreader',
     description: 'Editorial serif',
+    isPro: true,
     fontFamily: {
       regular: 'Newsreader_400Regular',
       medium: 'Newsreader_500Medium',
@@ -185,6 +196,7 @@ export const fonts: FontDefinition[] = [
     id: 'jetbrains',
     name: 'JetBrains Mono',
     description: 'Developer monospace',
+    isPro: true,
     fontFamily: {
       regular: 'JetBrainsMono_400Regular',
       medium: 'JetBrainsMono_500Medium',
@@ -199,6 +211,7 @@ export const fonts: FontDefinition[] = [
     id: 'oxanium',
     name: 'Oxanium',
     description: 'Synthwave futuristic',
+    isPro: true,
     fontFamily: {
       regular: 'Oxanium_400Regular',
       medium: 'Oxanium_500Medium',
@@ -212,6 +225,7 @@ export const fonts: FontDefinition[] = [
     id: 'play',
     name: 'Play',
     description: '80s gaming',
+    isPro: true,
     fontFamily: {
       regular: 'Play_400Regular',
       medium: 'Play_400Regular',
@@ -225,6 +239,7 @@ export const fonts: FontDefinition[] = [
     id: 'exo2',
     name: 'Exo 2',
     description: 'Sci-fi geometric',
+    isPro: true,
     fontFamily: {
       regular: 'Exo2_400Regular',
       medium: 'Exo2_500Medium',
@@ -266,6 +281,7 @@ export function getFontOptions(): FontOption[] {
     id: font.id,
     name: font.name,
     description: font.description,
+    isPro: font.isPro,
     previewFont: font.fontFamily.regular,
   }));
 }

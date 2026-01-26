@@ -14,6 +14,12 @@ export interface Profile {
   profile_complete: boolean;
   created_at: string;
   updated_at: string;
+  // Subscription fields
+  subscription_tier: string;
+  subscription_expires_at: string | null;
+  subscription_platform: string | null;
+  subscription_product_id: string | null;
+  is_dev_mode: boolean;
 }
 
 /**
@@ -24,6 +30,12 @@ export interface ProfileUpdate {
   username?: string;
   avatar_url?: string | null;
   profile_complete?: boolean;
+  // Subscription fields (mainly for admin/dev mode toggling)
+  subscription_tier?: string;
+  subscription_expires_at?: string | null;
+  subscription_platform?: string | null;
+  subscription_product_id?: string | null;
+  is_dev_mode?: boolean;
 }
 
 /**

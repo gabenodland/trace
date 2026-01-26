@@ -11,6 +11,7 @@ export const techGreenTheme: Theme = {
   name: 'Tech Green',
   description: 'Matrix vibes',
   isDark: true,
+  isPro: true,
 
   colors: {
     background: {

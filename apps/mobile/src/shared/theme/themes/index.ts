@@ -63,6 +63,7 @@ export function getThemeOptions(): ThemeOption[] {
     id: theme.id,
     name: theme.name,
     description: theme.description,
+    isPro: theme.isPro,
     preview: {
       background: theme.colors.background.primary,
       text: theme.colors.text.primary,

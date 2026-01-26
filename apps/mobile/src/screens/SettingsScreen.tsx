@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking } from "react-native";
 import { useState } from "react";
 import Svg, { Path } from "react-native-svg";
 import { getAppVersion, getBuildNumber } from "../config/appVersionService";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { useTheme } from "../shared/contexts/ThemeContext";
+import { useNavigation } from "../shared/contexts/NavigationContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { UnitSystemSelector } from "../components/settings/UnitSystemSelector";
 import { ImageQualitySelector } from "../components/settings/ImageQualitySelector";
@@ -16,6 +17,7 @@ import { getFontOptions } from "../shared/theme/fonts";
 export function SettingsScreen() {
   const { settings, updateSettings } = useSettings();
   const theme = useTheme();
+  const { navigate } = useNavigation();
 
   const [showUnitSelector, setShowUnitSelector] = useState(false);
   const [showImageQualitySelector, setShowImageQualitySelector] = useState(false);
@@ -166,12 +168,99 @@ export function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* About Section */}
-        <View style={styles.aboutSection}>
-          <Text style={[styles.aboutText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
-            Trace v{getAppVersion()} (build {getBuildNumber() || '1'})
-          </Text>
+        {/* Legal Section */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Legal</Text>
+
+          {/* Privacy Policy */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+            onPress={() => Linking.openURL('https://www.mindjig.com/privacy.html')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Privacy Policy</Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"
+                  stroke={theme.colors.text.tertiary}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </TouchableOpacity>
+
+          {/* Terms of Service */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
+            onPress={() => Linking.openURL('https://www.mindjig.com/terms.html')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Terms of Service</Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"
+                  stroke={theme.colors.text.tertiary}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </TouchableOpacity>
         </View>
+
+        {/* About Section */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>About</Text>
+
+          {/* Database Info */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+            onPress={() => navigate("debug")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Database Info</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                View sync status and database statistics
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M9 18l6-6-6-6"
+                  stroke={theme.colors.text.tertiary}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </TouchableOpacity>
+
+          {/* Version Info */}
+          <View style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Version</Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Text style={[styles.settingValueText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                {getAppVersion()} ({getBuildNumber() || '1'})
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Bottom padding */}
+        <View style={{ height: 20 }} />
       </ScrollView>
 
       {/* Unit System Selector */}

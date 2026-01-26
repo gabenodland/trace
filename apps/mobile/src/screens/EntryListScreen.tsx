@@ -8,7 +8,7 @@ import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useDrawer } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
-import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
+import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { TopBar } from "../components/layout/TopBar";
 import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
@@ -24,9 +24,13 @@ import { useDrawerGestures, useFilteredEntries, useEntryActions, useBreadcrumbs 
 export function EntryListScreen() {
   const { navigate } = useNavigation();
   const theme = useTheme();
-  const { isOffline } = useAuth();
+  const { user, isOffline } = useAuth();
   const { streams } = useStreams();
-  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
+  const { profile } = useMobileProfile(user?.id);
+
+  // Avatar data for TopBar
+  const displayName = profile?.name || (profile?.username ? `@${profile.username}` : null) || user?.email || null;
+  const avatarUrl = profile?.avatar_url || null;
   const {
     registerStreamHandler,
     selectedStreamId,
@@ -225,11 +229,10 @@ export function EntryListScreen() {
         breadcrumbs={breadcrumbs}
         onBreadcrumbPress={handleBreadcrumbPress}
         badge={filteredEntries.length}
-        menuItems={menuItems}
-        userEmail={userEmail}
+        showAvatar
         displayName={displayName}
         avatarUrl={avatarUrl}
-        onProfilePress={onProfilePress}
+        onAvatarPress={() => navigate("account")}
         onSearchPress={() => setIsSearchOpen(!isSearchOpen)}
         isSearchActive={isSearchOpen}
       />

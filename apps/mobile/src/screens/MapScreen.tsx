@@ -4,7 +4,8 @@ import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useDrawer } from "../shared/contexts/DrawerContext";
-import { useNavigationMenu } from "../shared/hooks/useNavigationMenu";
+import { useAuth } from "../shared/contexts/AuthContext";
+import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
@@ -114,8 +115,13 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
     setMapRegion: persistRegion,
     drawerControl,
   } = useDrawer();
-  const { menuItems, userEmail, displayName, avatarUrl, onProfilePress } = useNavigationMenu();
+  const { user } = useAuth();
+  const { profile } = useMobileProfile(user?.id);
   const { streams } = useStreams();
+
+  // Avatar data for TopBar
+  const displayName = profile?.name || (profile?.username ? `@${profile.username}` : null) || user?.email || null;
+  const avatarUrl = profile?.avatar_url || null;
 
   // Display/sort mode state
   const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
@@ -658,11 +664,10 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
           breadcrumbs={breadcrumbs}
           onBreadcrumbPress={() => {}}
           badge={0}
-          menuItems={menuItems}
-          userEmail={userEmail}
+          showAvatar
           displayName={displayName}
           avatarUrl={avatarUrl}
-          onProfilePress={onProfilePress}
+          onAvatarPress={() => navigate("account")}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.text.tertiary} />
@@ -679,11 +684,10 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
         breadcrumbs={breadcrumbs}
         onBreadcrumbPress={() => {}}
         badge={entries.length}
-        menuItems={menuItems}
-        userEmail={userEmail}
+        showAvatar
         displayName={displayName}
         avatarUrl={avatarUrl}
-        onProfilePress={onProfilePress}
+        onAvatarPress={() => navigate("account")}
       />
 
       {/* Map */}

@@ -41,12 +41,14 @@ import { EntryScreen } from "./src/modules/entries/components/EntryScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { AccountScreen } from "./src/screens/AccountScreen";
 import { DatabaseInfoScreen } from "./src/screens/DatabaseInfoScreen";
 import { LocationsScreen } from "./src/screens/LocationsScreen";
 import { MapScreen } from "./src/screens/MapScreen";
 import { StreamsScreen } from "./src/screens/StreamsScreen";
 import { StreamPropertiesScreen } from "./src/screens/StreamPropertiesScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { SubscriptionScreen } from "./src/screens/SubscriptionScreen";
 import { localDB } from "./src/shared/db/localDB";
 import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
@@ -417,6 +419,10 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
           />
         );
         break;
+      case "account":
+        boundaryName = "AccountScreen";
+        content = <AccountScreen />;
+        break;
       case "profile":
         boundaryName = "ProfileScreen";
         content = <ProfileScreen />;
@@ -440,6 +446,10 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
       case "stream-properties":
         boundaryName = "StreamPropertiesScreen";
         content = <StreamPropertiesScreen streamId={navParams.streamId} />;
+        break;
+      case "subscription":
+        boundaryName = "SubscriptionScreen";
+        content = <SubscriptionScreen />;
         break;
       default:
         return null;

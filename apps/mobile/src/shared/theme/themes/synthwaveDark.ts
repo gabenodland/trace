@@ -13,6 +13,7 @@ export const synthwaveDarkTheme: Theme = {
   name: 'Synthwave Night',
   description: 'Night drive 1985',
   isDark: true,
+  isPro: true,
 
   colors: {
     background: {

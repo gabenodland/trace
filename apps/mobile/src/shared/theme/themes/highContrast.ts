@@ -12,6 +12,7 @@ export const highContrastTheme: Theme = {
   name: 'High Contrast',
   description: 'Maximum readability',
   isDark: false,
+  isPro: true,
 
   colors: {
     background: {

@@ -30,7 +30,7 @@ module.exports = {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.trace.app',
+      bundleIdentifier: 'com.mindjig.trace',
       buildNumber: String(buildNumber),
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
@@ -51,7 +51,7 @@ module.exports = {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#ffffff',
       },
-      package: 'com.trace.app',
+      package: 'com.mindjig.trace',
       versionCode: buildNumber,
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,

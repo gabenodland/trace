@@ -2,12 +2,15 @@
  * Font Selector - Modal for choosing app font
  *
  * Shows available fonts with sample text preview.
+ * Pro fonts are gated - free users see them but can't select.
  */
 
-import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, ScrollView, Alert } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { getFontOptions } from '../../shared/theme/fonts';
 import { useTheme } from '../../shared/contexts/ThemeContext';
+import { useNavigation } from '../../shared/contexts/NavigationContext';
+import { useSubscription } from '../../shared/hooks/useSubscription';
 
 interface FontSelectorProps {
   visible: boolean;
@@ -23,9 +26,27 @@ export function FontSelector({
   onClose,
 }: FontSelectorProps) {
   const theme = useTheme();
+  const { navigate } = useNavigation();
+  const { isPro } = useSubscription();
   const fontOptions = getFontOptions();
 
-  const handleSelect = (fontId: string) => {
+  const handleSelect = (fontId: string, isProFont: boolean) => {
+    // If it's a Pro font and user doesn't have Pro, show upgrade prompt
+    if (isProFont && !isPro) {
+      Alert.alert(
+        'Pro Font',
+        'This font is available with a Pro subscription. Upgrade to unlock all fonts.',
+        [
+          { text: 'Maybe Later', style: 'cancel' },
+          { text: 'Learn More', onPress: () => {
+            onClose();
+            navigate('subscription');
+          }},
+        ]
+      );
+      return;
+    }
+
     onSelect(fontId);
     onClose();
   };
@@ -54,46 +75,78 @@ export function FontSelector({
           contentContainerStyle={styles.optionsList}
           showsVerticalScrollIndicator={true}
         >
-          {fontOptions.map((option) => (
-            <TouchableOpacity
-              key={option.id}
-              style={[
-                styles.optionItem,
-                { backgroundColor: theme.colors.background.primary },
-                selectedFont === option.id && [styles.optionItemSelected, { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight }],
-              ]}
-              onPress={() => handleSelect(option.id)}
-              activeOpacity={0.7}
-            >
-              {/* Font preview */}
-              <View style={styles.previewContainer}>
-                <Text style={[styles.previewText, { fontFamily: option.previewFont, color: theme.colors.text.primary }]}>
-                  Aa
-                </Text>
-              </View>
+          {fontOptions.map((option) => {
+            const isLocked = option.isPro && !isPro;
+            const isSelected = selectedFont === option.id;
 
-              {/* Label and description */}
-              <View style={styles.optionContent}>
-                <Text style={[
-                  styles.optionLabel,
-                  { color: theme.colors.text.primary, fontFamily: option.previewFont },
-                  selectedFont === option.id && { color: theme.colors.functional.accent },
-                ]}>
-                  {option.name}
-                </Text>
-                {option.description && (
-                  <Text style={[styles.optionDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{option.description}</Text>
-                )}
-              </View>
+            return (
+              <TouchableOpacity
+                key={option.id}
+                style={[
+                  styles.optionItem,
+                  { backgroundColor: theme.colors.background.primary },
+                  isSelected && [styles.optionItemSelected, { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight }],
+                  isLocked && styles.optionItemLocked,
+                ]}
+                onPress={() => handleSelect(option.id, !!option.isPro)}
+                activeOpacity={0.7}
+              >
+                {/* Font preview */}
+                <View style={[styles.previewContainer, isLocked && styles.previewContainerLocked]}>
+                  <Text style={[
+                    styles.previewText,
+                    { fontFamily: option.previewFont, color: theme.colors.text.primary },
+                    isLocked && { color: theme.colors.text.secondary },
+                  ]}>
+                    Aa
+                  </Text>
+                </View>
 
-              {/* Checkmark */}
-              {selectedFont === option.id && (
-                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.accent} strokeWidth={2}>
-                  <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              )}
-            </TouchableOpacity>
-          ))}
+                {/* Label, description, and Pro badge */}
+                <View style={styles.optionContent}>
+                  <View style={styles.labelRow}>
+                    <Text style={[
+                      styles.optionLabel,
+                      { color: theme.colors.text.primary, fontFamily: option.previewFont },
+                      isSelected && { color: theme.colors.functional.accent },
+                      isLocked && { color: theme.colors.text.secondary },
+                    ]}>
+                      {option.name}
+                    </Text>
+                    {option.isPro && (
+                      <View style={[
+                        styles.proBadge,
+                        { backgroundColor: isPro ? theme.colors.functional.accent : theme.colors.text.tertiary }
+                      ]}>
+                        <Text style={[styles.proBadgeText, { fontFamily: theme.typography.fontFamily.semibold }]}>PRO</Text>
+                      </View>
+                    )}
+                  </View>
+                  {option.description && (
+                    <Text style={[
+                      styles.optionDescription,
+                      { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular },
+                      isLocked && { color: theme.colors.text.tertiary },
+                    ]}>
+                      {option.description}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Checkmark or Lock icon */}
+                {isSelected ? (
+                  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.accent} strokeWidth={2}>
+                    <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                ) : isLocked ? (
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
+                    <Path d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z" strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M7 11V7a5 5 0 0110 0v4" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -138,6 +191,9 @@ const styles = StyleSheet.create({
   optionItemSelected: {
     // borderColor and backgroundColor set inline with theme
   },
+  optionItemLocked: {
+    opacity: 0.8,
+  },
   previewContainer: {
     width: 48,
     height: 48,
@@ -146,6 +202,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  previewContainerLocked: {
+    opacity: 0.7,
+  },
   previewText: {
     fontSize: 24,
   },
@@ -153,10 +212,25 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
   optionLabel: {
     fontSize: 16,
     // Note: fontWeight removed - use fontFamily with weight variant instead
-    marginBottom: 2,
+  },
+  proBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  proBadgeText: {
+    fontSize: 10,
+    color: '#ffffff',
+    letterSpacing: 0.5,
   },
   optionDescription: {
     fontSize: 14,
