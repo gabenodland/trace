@@ -12,7 +12,6 @@ import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { TopBar } from "../components/layout/TopBar";
-import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
 import { SubBar, SubBarSelector } from "../components/layout/SubBar";
 import { EntryList } from "../modules/entries/components/EntryList";
 import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
@@ -198,10 +197,8 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
 
   const { entries: allEntriesFromHook, isLoading, isFetching, entryMutations } = useEntries(entryFilter);
 
-  // Build breadcrumbs for header (matches EntryListScreen style)
-  const breadcrumbs = useMemo((): BreadcrumbSegment[] => {
-    return [{ id: selectedStreamId || "all", label: selectedStreamName }];
-  }, [selectedStreamId, selectedStreamName]);
+  // Title for TopBar
+  const title = selectedStreamName;
   const { data: locationsData } = useLocations();
 
   // Filter entries to only those with GPS coordinates
@@ -660,10 +657,10 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <TopBar
-          onLeftMenuPress={openDrawer}
-          breadcrumbs={breadcrumbs}
-          onBreadcrumbPress={() => {}}
+          title={title}
           badge={0}
+          onTitlePress={openDrawer}
+          showDropdownArrow
           showAvatar
           displayName={displayName}
           avatarUrl={avatarUrl}
@@ -680,10 +677,10 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       <TopBar
-        onLeftMenuPress={openDrawer}
-        breadcrumbs={breadcrumbs}
-        onBreadcrumbPress={() => {}}
+        title={title}
         badge={entries.length}
+        onTitlePress={openDrawer}
+        showDropdownArrow
         showAvatar
         displayName={displayName}
         avatarUrl={avatarUrl}

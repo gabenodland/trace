@@ -25,7 +25,6 @@ import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { usePersistedState } from "../shared/hooks/usePersistedState";
 import { TopBar } from "../components/layout/TopBar";
-import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
 import { EntryListContent } from "../modules/entries/components/EntryListContent";
 import { EntryListHeader, StickyEntryListHeader } from "../modules/entries/components/EntryListHeader";
 import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
@@ -222,10 +221,8 @@ export function CalendarScreen() {
   // Parse selection into filter using shared helper
   const entryFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
 
-  // Build breadcrumbs for header
-  const breadcrumbs = useMemo((): BreadcrumbSegment[] => {
-    return [{ id: selectedStreamId || "all", label: selectedStreamName }];
-  }, [selectedStreamId, selectedStreamName]);
+  // Title for TopBar
+  const title = selectedStreamName;
 
   // Data hooks
   const { entries } = useEntries(entryFilter);
@@ -840,10 +837,10 @@ export function CalendarScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...drawerPanResponder.panHandlers}>
       <TopBar
-        breadcrumbs={breadcrumbs}
-        onBreadcrumbPress={openDrawer}
-        onLeftMenuPress={openDrawer}
+        title={title}
         badge={entries.length}
+        onTitlePress={openDrawer}
+        showDropdownArrow
         showAvatar
         displayName={displayName}
         avatarUrl={avatarUrl}

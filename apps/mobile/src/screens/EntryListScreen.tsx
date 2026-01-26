@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { View, StyleSheet, BackHandler } from "react-native";
+import Svg, { Path, Circle } from "react-native-svg";
 import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES } from "@trace/core";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
@@ -11,7 +12,6 @@ import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { TopBar } from "../components/layout/TopBar";
-import type { BreadcrumbSegment } from "../components/layout/Breadcrumb";
 import { SubBarSettings } from "../components/layout/SubBar";
 import { SearchBar } from "../components/layout/SearchBar";
 import { EntryList } from "../modules/entries/components/EntryList";
@@ -19,7 +19,7 @@ import { FloatingActionButton } from "../components/buttons/FloatingActionButton
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useSettingsDrawer } from "../shared/contexts/SettingsDrawerContext";
-import { useDrawerGestures, useFilteredEntries, useEntryActions, useBreadcrumbs } from "./hooks";
+import { useDrawerGestures, useFilteredEntries, useEntryActions } from "./hooks";
 
 export function EntryListScreen() {
   const { navigate } = useNavigation();
@@ -33,6 +33,7 @@ export function EntryListScreen() {
   const avatarUrl = profile?.avatar_url || null;
   const {
     registerStreamHandler,
+    registerStreamLongPressHandler,
     selectedStreamId,
     selectedStreamName,
     setSelectedStreamId,
@@ -80,6 +81,17 @@ export function EntryListScreen() {
     return () => registerStreamHandler(null);
   }, [registerStreamHandler, setSelectedStreamId, setSelectedStreamName]);
 
+  // Handler for long-press on stream in drawer (navigate to stream settings)
+  const handleStreamLongPress = useCallback((streamId: string) => {
+    navigate("stream-properties", { streamId, returnTo: "inbox" });
+  }, [navigate]);
+
+  // Register long-press handler for drawer
+  useEffect(() => {
+    registerStreamLongPressHandler(handleStreamLongPress);
+    return () => registerStreamLongPressHandler(null);
+  }, [registerStreamLongPressHandler, handleStreamLongPress]);
+
   // Handle Android back button - close drawers if open, otherwise let app exit normally
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -98,13 +110,28 @@ export function EntryListScreen() {
     return () => backHandler.remove();
   }, [isDrawerOpen, closeDrawer, isSettingsDrawerOpen, closeSettingsDrawer]);
 
-  // Build breadcrumbs from selected stream (handles streams, @mentions, #tags, locations)
-  const breadcrumbs = useBreadcrumbs({
-    selectedStreamId,
-    selectedStreamName,
-    streams,
-    iconColor: theme.colors.text.primary,
-  });
+  // Compute title and icon for TopBar based on current selection
+  const { title, titleIcon } = useMemo(() => {
+    // Location filter - show pin icon
+    if (typeof selectedStreamId === 'string' &&
+        (selectedStreamId.startsWith("location:") || selectedStreamId.startsWith("geo:"))) {
+      return {
+        title: selectedStreamName || "Location",
+        titleIcon: (
+          <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
+            <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
+            <Circle cx={12} cy={10} r={3} />
+          </Svg>
+        ),
+      };
+    }
+
+    // For streams, tags, mentions, all entries, unassigned - just use the name
+    return {
+      title: selectedStreamName,
+      titleIcon: null,
+    };
+  }, [selectedStreamId, selectedStreamName, theme.colors.text.primary]);
 
   // Parse selection into filter using shared helper (for API query)
   const apiFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
@@ -209,26 +236,15 @@ export function EntryListScreen() {
     setSelectedStreamName(streamName);
   };
 
-  const handleBreadcrumbPress = (segment: BreadcrumbSegment) => {
-    if (segment.id === "all") {
-      setSelectedStreamId("all");
-      setSelectedStreamName("Home");
-    } else if (segment.id === null) {
-      setSelectedStreamId(null);
-      setSelectedStreamName("Unassigned");
-    } else if (typeof segment.id === 'string') {
-      setSelectedStreamId(segment.id);
-      setSelectedStreamName(segment.label);
-    }
-  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...panHandlers}>
       <TopBar
-        onLeftMenuPress={openDrawer}
-        breadcrumbs={breadcrumbs}
-        onBreadcrumbPress={handleBreadcrumbPress}
+        title={title}
+        titleIcon={titleIcon}
         badge={filteredEntries.length}
+        onTitlePress={openDrawer}
+        showDropdownArrow
         showAvatar
         displayName={displayName}
         avatarUrl={avatarUrl}

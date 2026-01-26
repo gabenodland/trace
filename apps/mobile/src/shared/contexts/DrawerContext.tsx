@@ -17,6 +17,7 @@ import type { Region } from "react-native-maps";
 export type ViewMode = "list" | "map" | "calendar";
 
 type StreamSelectHandler = ((streamId: string | null, streamName: string) => void) | null;
+type StreamLongPressHandler = ((streamId: string) => void) | null;
 type ViewModeChangeHandler = ((mode: ViewMode) => void) | null;
 
 /** Calendar zoom levels */
@@ -48,6 +49,11 @@ interface DrawerContextValue {
   onStreamSelect: StreamSelectHandler;
   /** Register a stream selection handler */
   registerStreamHandler: (handler: StreamSelectHandler) => void;
+
+  /** Long-press handler for editing streams */
+  onStreamLongPress: StreamLongPressHandler;
+  /** Register a stream long-press handler */
+  registerStreamLongPressHandler: (handler: StreamLongPressHandler) => void;
 
   /** Currently selected stream ID (for highlighting) */
   selectedStreamId: string | null;
@@ -96,6 +102,7 @@ interface DrawerProviderProps {
 export function DrawerProvider({ children }: DrawerProviderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [onStreamSelect, setOnStreamSelect] = useState<StreamSelectHandler>(null);
+  const [onStreamLongPress, setOnStreamLongPress] = useState<StreamLongPressHandler>(null);
   const [selectedStreamId, setSelectedStreamId] = useState<string | null>("all");
   const [selectedStreamName, setSelectedStreamName] = useState<string>("All Entries");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -112,6 +119,7 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
   // Use refs to track current values for comparison in registration functions
   const drawerControlRef = useRef<DrawerControl | null>(null);
   const streamHandlerRef = useRef<StreamSelectHandler>(null);
+  const streamLongPressHandlerRef = useRef<StreamLongPressHandler>(null);
   const viewModeHandlerRef = useRef<ViewModeChangeHandler>(null);
 
   const registerDrawerControl = useCallback((control: DrawerControl | null) => {
@@ -142,6 +150,14 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
     }
   }, []);
 
+  const registerStreamLongPressHandler = useCallback((handler: StreamLongPressHandler) => {
+    // Only update if actually different to prevent re-render loops
+    if (streamLongPressHandlerRef.current !== handler) {
+      streamLongPressHandlerRef.current = handler;
+      setOnStreamLongPress(() => handler);
+    }
+  }, []);
+
   const registerViewModeHandler = useCallback((handler: ViewModeChangeHandler) => {
     // Only update if actually different to prevent re-render loops
     if (viewModeHandlerRef.current !== handler) {
@@ -159,6 +175,8 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
         toggleDrawer,
         onStreamSelect,
         registerStreamHandler,
+        onStreamLongPress,
+        registerStreamLongPressHandler,
         selectedStreamId,
         selectedStreamName,
         setSelectedStreamId,

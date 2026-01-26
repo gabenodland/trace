@@ -14,6 +14,7 @@ interface StreamDrawerItemProps {
   stream: Stream;
   isSelected: boolean;
   onPress: () => void;
+  onLongPress?: () => void;  // Long-press to edit stream
   // Optional drawer-specific colors (falls back to theme defaults)
   textColor?: string;
   textColorSecondary?: string;
@@ -24,6 +25,7 @@ export const StreamDrawerItem = React.memo(function StreamDrawerItem({
   stream,
   isSelected,
   onPress,
+  onLongPress,
   textColor,
   textColorSecondary,
   textColorTertiary,
@@ -37,6 +39,7 @@ export const StreamDrawerItem = React.memo(function StreamDrawerItem({
     <TouchableOpacity
       style={[styles.item, isSelected && { backgroundColor: theme.colors.background.tertiary }]}
       onPress={onPress}
+      onLongPress={onLongPress}
       activeOpacity={0.6}
       delayPressIn={0}
     >

@@ -1,7 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar, Image } from "react-native";
 import Svg, { Path, Line, Circle } from "react-native-svg";
-import { useEffect, useState } from "react";
-import { Breadcrumb, BreadcrumbSegment } from "./Breadcrumb";
+import { useEffect, useState, ReactNode } from "react";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
 import { getDefaultAvatarUrl } from "@trace/core";
@@ -9,13 +8,10 @@ import { getDefaultAvatarUrl } from "@trace/core";
 interface TopBarProps {
   // Title mode (for list screens)
   title?: string;
+  titleIcon?: ReactNode;  // Optional icon before title (stream icon, location pin, etc.)
   badge?: number;
   onTitlePress?: () => void;
   showDropdownArrow?: boolean;
-
-  // Breadcrumb mode (for hierarchical navigation)
-  breadcrumbs?: BreadcrumbSegment[];
-  onBreadcrumbPress?: (segment: BreadcrumbSegment) => void;
 
   // Custom content mode (for editing screens)
   children?: React.ReactNode;
@@ -24,8 +20,8 @@ interface TopBarProps {
   showBackButton?: boolean;
   onBackPress?: () => void;
 
-  // Left hamburger menu (drawer toggle)
-  onLeftMenuPress?: () => void;
+  // Settings button (gear icon) - for stream management
+  onSettingsPress?: () => void;
 
   // Search button
   onSearchPress?: () => void;
@@ -40,15 +36,14 @@ interface TopBarProps {
 
 export function TopBar({
   title,
+  titleIcon,
   badge,
   onTitlePress,
   showDropdownArrow = false,
-  breadcrumbs,
-  onBreadcrumbPress,
   children,
   showBackButton = false,
   onBackPress,
-  onLeftMenuPress,
+  onSettingsPress,
   onSearchPress,
   isSearchActive = false,
   showAvatar = false,
@@ -70,21 +65,6 @@ export function TopBar({
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
-      {/* Left Hamburger Menu (Drawer Toggle) */}
-      {onLeftMenuPress && (
-        <TouchableOpacity
-          style={styles.leftMenuButton}
-          onPress={onLeftMenuPress}
-          activeOpacity={0.7}
-        >
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-            <Line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
-            <Line x1="3" y1="12" x2="21" y2="12" strokeLinecap="round" />
-            <Line x1="3" y1="18" x2="21" y2="18" strokeLinecap="round" />
-          </Svg>
-        </TouchableOpacity>
-      )}
-
       {/* Back Button - Hidden for minimalist design */}
       {false && showBackButton && onBackPress && (
         <TouchableOpacity
@@ -98,26 +78,15 @@ export function TopBar({
         </TouchableOpacity>
       )}
 
-      {/* Breadcrumb Mode */}
-      {breadcrumbs && onBreadcrumbPress && (
-        <View style={styles.breadcrumbContainer}>
-          <Breadcrumb
-            segments={breadcrumbs}
-            onSegmentPress={onBreadcrumbPress}
-            badge={badge}
-            theme={theme}
-          />
-        </View>
-      )}
-
-      {/* Title Mode */}
-      {!breadcrumbs && title && (
+      {/* Title Mode - Clickable stream/filter selector */}
+      {title && (
         <TouchableOpacity
           style={styles.titleContainer}
           onPress={onTitlePress}
           disabled={!onTitlePress}
           activeOpacity={onTitlePress ? 0.7 : 1}
         >
+          {titleIcon && <View style={styles.titleIcon}>{titleIcon}</View>}
           <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{title}</Text>
           {badge !== undefined && (
             <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
@@ -125,15 +94,15 @@ export function TopBar({
             </View>
           )}
           {showDropdownArrow && (
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2} style={styles.dropdownArrow}>
-              <Path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2.5} style={styles.dropdownArrow}>
+              <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           )}
         </TouchableOpacity>
       )}
 
       {/* Custom Content Mode */}
-      {!breadcrumbs && children && (
+      {!title && children && (
         <View style={styles.customContent}>
           {children}
         </View>
@@ -141,6 +110,20 @@ export function TopBar({
 
       {/* Right side buttons */}
       <View style={styles.rightButtons}>
+        {/* Settings Button (gear icon) - for stream management */}
+        {onSettingsPress && (
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={onSettingsPress}
+            activeOpacity={0.7}
+          >
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
+              <Circle cx={12} cy={12} r={3} />
+              <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+        )}
+
         {/* Search Button */}
         {onSearchPress && (
           <TouchableOpacity
@@ -184,22 +167,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  leftMenuButton: {
-    padding: themeBase.spacing.sm,
-    marginRight: themeBase.spacing.sm,
-  },
   backButton: {
     padding: themeBase.spacing.sm,
     marginRight: themeBase.spacing.sm,
-  },
-  breadcrumbContainer: {
-    flex: 1,
   },
   titleContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: themeBase.spacing.sm,
     flex: 1,
+  },
+  titleIcon: {
+    marginRight: 2,
   },
   title: {
     fontSize: 28,

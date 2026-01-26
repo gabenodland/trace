@@ -36,14 +36,16 @@ type TabType = "features" | "template" | "general";
 
 interface StreamPropertiesScreenProps {
   streamId: string | null;
+  returnTo?: string;  // Where to navigate on back (default: "streams")
 }
 
-export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps) {
+export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: StreamPropertiesScreenProps) {
   const { navigate } = useNavigation();
   const theme = useTheme();
   const { streams, streamMutations } = useStreams();
 
   const isCreateMode = streamId === null;
+  const backDestination = returnTo as "streams" | "inbox";
   const stream = isCreateMode ? null : streams.find((s) => s.stream_id === streamId);
 
   // Screen title
@@ -193,7 +195,7 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
         // Create new stream
         await streamMutations.createStream(name.trim());
         showSnackbar("Stream created");
-        navigate("streams");
+        navigate(backDestination);
       } else if (stream) {
         // Update existing stream
         const updates: UpdateStreamInput = {
@@ -268,12 +270,12 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
           {
             text: "Discard",
             style: "destructive",
-            onPress: () => navigate("streams"),
+            onPress: () => navigate(backDestination),
           },
         ]
       );
     } else {
-      navigate("streams");
+      navigate(backDestination);
     }
   };
 
@@ -281,12 +283,12 @@ export function StreamPropertiesScreen({ streamId }: StreamPropertiesScreenProps
   if (!isCreateMode && !stream) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
-        <SecondaryHeader title="Not Found" onBack={() => navigate("streams")} />
+        <SecondaryHeader title="Not Found" onBack={() => navigate(backDestination)} />
         <View style={styles.emptyContainer}>
           <Text style={[styles.emptyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Stream not found</Text>
           <TouchableOpacity
             style={[styles.backButtonContainer, { backgroundColor: theme.colors.functional.accent }]}
-            onPress={() => navigate("streams")}
+            onPress={() => navigate(backDestination)}
             activeOpacity={0.7}
           >
             <Text style={[styles.backButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Back to Streams</Text>

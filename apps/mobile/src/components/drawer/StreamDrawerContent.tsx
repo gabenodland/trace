@@ -234,6 +234,7 @@ export function StreamDrawerContent() {
   const {
     closeDrawer,
     onStreamSelect,
+    onStreamLongPress,
     selectedStreamId,
     setSelectedStreamId,
     setSelectedStreamName,
@@ -306,6 +307,17 @@ export function StreamDrawerContent() {
       closeDrawer();
     },
     [onStreamSelect, closeDrawer, setSelectedStreamId, setSelectedStreamName]
+  );
+
+  // Handle long-press on stream (edit stream)
+  const handleStreamLongPress = useCallback(
+    (streamId: string) => {
+      closeDrawer();
+      if (onStreamLongPress) {
+        onStreamLongPress(streamId);
+      }
+    },
+    [onStreamLongPress, closeDrawer]
   );
 
   // Handle geo location selection (hierarchical)
@@ -449,6 +461,7 @@ export function StreamDrawerContent() {
                 stream={stream}
                 isSelected={selectedStreamId === stream.stream_id}
                 onPress={() => handleStreamSelect(stream.stream_id, stream.name)}
+                onLongPress={() => handleStreamLongPress(stream.stream_id)}
                 textColor={drawerTextPrimary}
                 textColorSecondary={drawerTextSecondary}
                 textColorTertiary={drawerTextTertiary}
