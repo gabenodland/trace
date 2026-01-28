@@ -2777,6 +2777,37 @@ class LocalDatabase {
     return attachments;
   }
 
+  /**
+   * Get attachment counts per entry (for filtering)
+   * Returns a map of entry_id -> attachment count
+   */
+  async getEntryAttachmentCounts(): Promise<Record<string, number>> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    let query = `
+      SELECT entry_id, COUNT(*) as count
+      FROM attachments
+      WHERE (sync_action IS NULL OR sync_action != 'delete')
+    `;
+    const params: any[] = [];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    query += ' GROUP BY entry_id';
+
+    const rows = await this.db.getAllAsync<{ entry_id: string; count: number }>(query, params);
+
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      counts[row.entry_id] = row.count;
+    }
+    return counts;
+  }
+
   // ========================================
   // UTILITY OPERATIONS
   // ========================================

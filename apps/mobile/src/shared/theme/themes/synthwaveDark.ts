@@ -61,6 +61,14 @@ export const synthwaveDarkTheme: Theme = {
       cancelled: '#FF6B6B',    // Neon coral - cancelled
     },
 
+    priority: {
+      urgent: '#FF6B6B',       // Neon coral - highest priority
+      high: '#FF2E97',         // Hot pink - high priority
+      medium: '#FFBE0B',       // Neon yellow - medium priority
+      low: '#00D4FF',          // Electric cyan - low priority
+      none: '#B8A8C8',         // Lavender - no priority
+    },
+
     surface: {
       overlay: '#1E1A2E',      // Deep purple for drawers
       elevated: '#262036',     // Elevated purple for menus

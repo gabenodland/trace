@@ -5,6 +5,7 @@ import { getStreamAttributeVisibility } from "@trace/core";
 import { EntryListItem } from "./EntryListItem";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../shared/theme/themeBase";
+import { FAB_CLEARANCE } from "../../../components/layout/BottomNavBar";
 
 interface Stream {
   stream_id: string;
@@ -197,7 +198,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   listContent: {
-    padding: 16,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16 + FAB_CLEARANCE,
   },
   sectionHeader: {
     flexDirection: "row",

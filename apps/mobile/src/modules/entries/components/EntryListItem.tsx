@@ -1,8 +1,8 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Path, Circle, Line } from "react-native-svg";
-import type { Entry, EntryStatus, StreamAttributeVisibility, EntryDisplayMode } from "@trace/core";
-import { formatEntryDateTime, formatEntryDateOnly, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor, formatRatingDisplay, getFormattedContent, getDisplayModeLines, getFirstLineOfText, getLocationLabel, hasLocationLabel } from "@trace/core";
+import type { Entry, EntryStatus, StreamAttributeVisibility, EntryDisplayMode, PriorityCategory } from "@trace/core";
+import { formatEntryDateTime, formatEntryDateOnly, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, isCompletedStatus, getStatusLabel, getStatusColor, formatRatingDisplay, getFormattedContent, getDisplayModeLines, getFirstLineOfText, getLocationLabel, hasLocationLabel, getPriorityInfo } from "@trace/core";
 import { HtmlRenderer } from "../helpers/htmlRenderer";
 import { WebViewHtmlRenderer } from "../helpers/webViewHtmlRenderer";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
@@ -287,15 +287,16 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               </View>
             )}
             {/* Priority Badge - only show if stream supports priority */}
-            {showPriority && (entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
-              <View style={[styles.priorityBadge, { backgroundColor: theme.colors.background.tertiary }]}>
-                <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
-                  <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.secondary} />
-                  <Path d="M5 3h13l-4 5 4 5H5z" />
-                </Svg>
-                <Text style={[styles.priorityText, { color: theme.colors.text.tertiary }]}>{entry.priority}</Text>
-              </View>
-            )}
+            {showPriority && (entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (() => {
+              const priorityInfo = getPriorityInfo(entry.priority);
+              const priorityColor = theme.colors.priority[priorityInfo?.category as PriorityCategory || 'none'];
+              return (
+                <View style={[styles.priorityBadge, { backgroundColor: priorityColor + '20' }]}>
+                  <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
+                  <Text style={[styles.priorityText, { color: priorityColor }]}>{priorityInfo?.label || `P${entry.priority}`}</Text>
+                </View>
+              );
+            })()}
             {/* Rating Badge - only show if stream supports rating */}
             {showRating && (entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
               <View style={[styles.ratingBadge, { backgroundColor: theme.colors.background.tertiary }]}>
@@ -625,15 +626,16 @@ export function EntryListItem({ entry, onPress, onTagPress, onMentionPress, onSt
               )}
 
               {/* Priority Badge - only show if stream supports priority */}
-              {showPriority && (entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (
-                <View style={[styles.priorityBadge, { backgroundColor: theme.colors.background.tertiary }]}>
-                  <Svg width={10} height={10} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
-                    <Path d="M5 3v18" strokeWidth="2" stroke={theme.colors.text.secondary} />
-                    <Path d="M5 3h13l-4 5 4 5H5z" />
-                  </Svg>
-                  <Text style={[styles.priorityText, { color: theme.colors.text.tertiary }]}>{entry.priority}</Text>
-                </View>
-              )}
+              {showPriority && (entry.priority !== null && entry.priority !== undefined && entry.priority > 0) && (() => {
+                const priorityInfo = getPriorityInfo(entry.priority);
+                const priorityColor = theme.colors.priority[priorityInfo?.category as PriorityCategory || 'none'];
+                return (
+                  <View style={[styles.priorityBadge, { backgroundColor: priorityColor + '20' }]}>
+                    <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
+                    <Text style={[styles.priorityText, { color: priorityColor }]}>{priorityInfo?.label || `P${entry.priority}`}</Text>
+                  </View>
+                );
+              })()}
 
               {/* Rating Badge - only show if stream supports rating */}
               {showRating && (entry.rating !== null && entry.rating !== undefined && entry.rating > 0) && (
@@ -914,6 +916,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: themeBase.spacing.sm,
     paddingVertical: themeBase.spacing.xs - 2,
     borderRadius: themeBase.borderRadius.full,
+  },
+  priorityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   priorityText: {
     fontSize: themeBase.typography.fontSize.xs,

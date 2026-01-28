@@ -351,6 +351,14 @@ export async function getAttachmentsForEntry(entryId: string): Promise<any[]> {
 }
 
 /**
+ * Get attachment counts per entry (for filtering by "has photos")
+ * Returns a map of entry_id -> attachment count
+ */
+export async function getEntryAttachmentCounts(): Promise<Record<string, number>> {
+  return await localDB.getEntryAttachmentCounts();
+}
+
+/**
  * Delete attachment completely (database entry + local file)
  */
 export async function deleteAttachment(attachmentId: string): Promise<void> {

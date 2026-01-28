@@ -61,6 +61,15 @@ export interface ThemeColors {
     cancelled: string;    // Cancelled (red-ish)
   };
 
+  // Priority colors (semantic priority levels)
+  priority: {
+    urgent: string;       // Highest priority (typically red)
+    high: string;         // High priority (typically orange)
+    medium: string;       // Medium priority (typically yellow)
+    low: string;          // Low priority (typically blue)
+    none: string;         // No priority set (typically gray)
+  };
+
   // Surface colors (overlays, drawers, menus)
   surface: {
     overlay: string;      // Drawers, side panels, menus

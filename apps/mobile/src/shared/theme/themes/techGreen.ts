@@ -59,6 +59,14 @@ export const techGreenTheme: Theme = {
       cancelled: '#F85149',    // Bright red - cancelled
     },
 
+    priority: {
+      urgent: '#F85149',       // Bright red - highest priority
+      high: '#F0883E',         // Bright orange - high priority
+      medium: '#D29922',       // Bright yellow - medium priority
+      low: '#58A6FF',          // Bright cyan - low priority
+      none: '#8B949E',         // Gray - no priority
+    },
+
     surface: {
       overlay: '#161B22',      // Slightly lighter for drawers
       elevated: '#21262D',     // Card bg for menus

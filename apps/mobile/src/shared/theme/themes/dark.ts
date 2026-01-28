@@ -58,6 +58,14 @@ export const darkTheme: Theme = {
       cancelled: '#F87171',    // Light red - cancelled
     },
 
+    priority: {
+      urgent: '#F87171',       // Light red - highest priority
+      high: '#FB923C',         // Light orange - high priority
+      medium: '#FCD34D',       // Light yellow - medium priority
+      low: '#60A5FA',          // Light blue - low priority
+      none: '#9CA3AF',         // Gray - no priority
+    },
+
     surface: {
       overlay: '#1F2937',      // Slightly lighter than bg
       elevated: '#374151',     // Even lighter for menus

@@ -61,6 +61,14 @@ export const synthwaveLightTheme: Theme = {
       cancelled: '#FF6B8A',    // Coral pink - soft warning
     },
 
+    priority: {
+      urgent: '#FF6B8A',       // Coral pink - highest priority
+      high: '#FF69B4',         // Hot pink - high priority
+      medium: '#FFB347',       // Pastel orange - medium priority
+      low: '#7B68EE',          // Medium slate blue - low priority
+      none: '#9B6B8A',         // Mauve - no priority
+    },
+
     surface: {
       overlay: '#E8D4F0',      // Pastel purple for drawers
       elevated: '#FFF5F8',     // Blush pink for menus

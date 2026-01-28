@@ -4,7 +4,7 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "dev": "expo start --tunnel",
+    "dev": "expo start --tunnel --clear",
     "android": "npm run prebuild:android && expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",

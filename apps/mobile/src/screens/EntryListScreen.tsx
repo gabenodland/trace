@@ -4,10 +4,11 @@ import Svg, { Path, Circle } from "react-native-svg";
 import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES } from "@trace/core";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
+import { useAttachmentCounts } from "../modules/attachments/mobileAttachmentHooks";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
-import { useDrawer } from "../shared/contexts/DrawerContext";
+import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
@@ -15,7 +16,7 @@ import { TopBar } from "../components/layout/TopBar";
 import { SubBarSettings } from "../components/layout/SubBar";
 import { SearchBar } from "../components/layout/SearchBar";
 import { EntryList } from "../modules/entries/components/EntryList";
-import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
+import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useSettingsDrawer } from "../shared/contexts/SettingsDrawerContext";
@@ -42,6 +43,8 @@ export function EntryListScreen() {
     closeDrawer,
     isOpen: isDrawerOpen,
     drawerControl,
+    viewMode,
+    setViewMode,
   } = useDrawer();
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -137,6 +140,7 @@ export function EntryListScreen() {
   const apiFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
 
   const { entries, isLoading, entryMutations } = useEntries(apiFilter);
+  const { attachmentCounts } = useAttachmentCounts();
 
   // Entry action handlers
   const {
@@ -161,6 +165,7 @@ export function EntryListScreen() {
     showPinnedFirst,
     streamFilter,
     searchQuery,
+    attachmentCounts,
   });
 
   // Get display labels
@@ -236,6 +241,17 @@ export function EntryListScreen() {
     setSelectedStreamName(streamName);
   };
 
+  // Handle view mode changes from bottom nav bar
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    if (mode === "map") {
+      navigate("map");
+    } else if (mode === "calendar") {
+      navigate("calendar");
+    }
+    // "list" mode - already here, no navigation needed
+  }, [setViewMode, navigate]);
+
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...panHandlers}>
@@ -245,10 +261,6 @@ export function EntryListScreen() {
         badge={filteredEntries.length}
         onTitlePress={openDrawer}
         showDropdownArrow
-        showAvatar
-        displayName={displayName}
-        avatarUrl={avatarUrl}
-        onAvatarPress={() => navigate("account")}
         onSearchPress={() => setIsSearchOpen(!isSearchOpen)}
         isSearchActive={isSearchOpen}
       />
@@ -302,7 +314,14 @@ export function EntryListScreen() {
         selectedStreamId={entryToMoveStreamId}
       />
 
-      <FloatingActionButton onPress={handleAddEntry} />
+      <BottomNavBar
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+        onAddPress={handleAddEntry}
+        onAccountPress={() => navigate("account")}
+        avatarUrl={avatarUrl}
+        displayName={displayName}
+      />
     </View>
   );
 }

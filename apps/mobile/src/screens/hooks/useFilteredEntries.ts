@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from 'react';
-import type { Entry, EntrySection, EntrySortMode, EntrySortOrder, Stream } from '@trace/core';
+import type { Entry, EntrySection, EntrySortMode, EntrySortOrder, Stream, StreamViewFilter, DueDatePreset } from '@trace/core';
 import {
   sortEntries,
   groupEntriesByStatus,
@@ -13,11 +13,101 @@ import {
   groupEntriesByPriority,
   groupEntriesByRating,
   groupEntriesByDueDate,
+  extractAttachmentIds,
 } from '@trace/core';
 
-interface StreamFilter {
-  showArchived: boolean;
-  statuses: string[];
+/**
+ * Check if a date matches a due date preset
+ */
+function matchesDueDatePreset(dueDate: string | null, preset: DueDatePreset, customStart: string | null, customEnd: string | null): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  switch (preset) {
+    case 'all':
+      return true;
+
+    case 'overdue':
+      if (!dueDate) return false;
+      return new Date(dueDate) < today;
+
+    case 'today': {
+      if (!dueDate) return false;
+      const due = new Date(dueDate);
+      due.setHours(0, 0, 0, 0);
+      return due.getTime() === today.getTime();
+    }
+
+    case 'this_week': {
+      if (!dueDate) return false;
+      const due = new Date(dueDate);
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - today.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      return due >= weekStart && due <= weekEnd;
+    }
+
+    case 'next_week': {
+      if (!dueDate) return false;
+      const due = new Date(dueDate);
+      const nextWeekStart = new Date(today);
+      nextWeekStart.setDate(today.getDate() + (7 - today.getDay()));
+      const nextWeekEnd = new Date(nextWeekStart);
+      nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
+      nextWeekEnd.setHours(23, 59, 59, 999);
+      return due >= nextWeekStart && due <= nextWeekEnd;
+    }
+
+    case 'has_due_date':
+      return dueDate !== null;
+
+    case 'no_due_date':
+      return dueDate === null;
+
+    case 'custom': {
+      if (!customStart && !customEnd) return true;
+      if (!dueDate) return false;
+      const due = new Date(dueDate);
+      if (customStart && due < new Date(customStart)) return false;
+      if (customEnd && due > new Date(customEnd)) return false;
+      return true;
+    }
+
+    default:
+      return true;
+  }
+}
+
+/**
+ * Check if entry date falls within range
+ */
+function matchesEntryDateRange(entryDate: string | null, startDate: string | null, endDate: string | null): boolean {
+  if (!startDate && !endDate) return true;
+  if (!entryDate) return !startDate && !endDate; // No entry date: only match if no filter
+
+  const date = new Date(entryDate);
+
+  if (startDate && date < new Date(startDate)) return false;
+  if (endDate && date > new Date(endDate)) return false;
+
+  return true;
+}
+
+/**
+ * Check if entry has photos using pre-loaded attachment counts
+ * Falls back to checking content for attachment references (legacy)
+ */
+function entryHasPhotos(entry: Entry, attachmentCounts: Record<string, number>): boolean {
+  // First check the attachment counts map (preferred - accurate)
+  const count = attachmentCounts[entry.entry_id];
+  if (count !== undefined) {
+    return count > 0;
+  }
+  // Fallback: check content for attachment references (legacy entries)
+  const attachmentIds = extractAttachmentIds(entry.content);
+  return attachmentIds.length > 0;
 }
 
 interface UseFilteredEntriesOptions {
@@ -26,8 +116,9 @@ interface UseFilteredEntriesOptions {
   sortMode: EntrySortMode;
   orderMode: EntrySortOrder;
   showPinnedFirst: boolean;
-  streamFilter: StreamFilter;
+  streamFilter: StreamViewFilter;
   searchQuery: string;
+  attachmentCounts?: Record<string, number>;
 }
 
 export function useFilteredEntries({
@@ -38,6 +129,7 @@ export function useFilteredEntries({
   showPinnedFirst,
   streamFilter,
   searchQuery,
+  attachmentCounts = {},
 }: UseFilteredEntriesOptions) {
   // Create stream map for sorting
   const streamMap = useMemo(() => {
@@ -83,18 +175,63 @@ export function useFilteredEntries({
     return undefined;
   }, [entries, sortMode, streamMap, streamById, orderMode, showPinnedFirst]);
 
-  // Filter entries by settings drawer filter + search query
-  const filteredEntries = useMemo(() => {
-    // First apply settings drawer filters
-    let result = sortedEntries.filter(entry => {
+  // Filter function that applies all settings drawer filters
+  const applyFilters = useMemo(() => {
+    return (entry: Entry): boolean => {
       // Archive filter (default: hide archived)
       if (!streamFilter.showArchived && entry.is_archived) return false;
 
       // Status filter (empty = show all)
       if (streamFilter.statuses.length > 0 && !streamFilter.statuses.includes(entry.status)) return false;
 
+      // Priority filter (empty = show all)
+      if (streamFilter.priorities.length > 0) {
+        // Check if entry's priority matches any selected priority
+        // entry.priority is the numeric value (0-4)
+        if (!streamFilter.priorities.includes(entry.priority as 0 | 1 | 2 | 3 | 4)) return false;
+      }
+
+      // Type filter (empty = show all)
+      if (streamFilter.types.length > 0) {
+        // entry.type is null or string
+        if (entry.type === null || !streamFilter.types.includes(entry.type)) return false;
+      }
+
+      // Rating filter (null = no filter)
+      // Rating is stored as 0-10 (normalized)
+      if (streamFilter.ratingMin !== null) {
+        // For rating 0, only exclude if min is set and rating is exactly 0 (unrated)
+        if (entry.rating < streamFilter.ratingMin) return false;
+      }
+      if (streamFilter.ratingMax !== null) {
+        if (entry.rating > streamFilter.ratingMax) return false;
+      }
+
+      // Photos filter (null = show all)
+      if (streamFilter.hasPhotos !== null) {
+        const hasPhotos = entryHasPhotos(entry, attachmentCounts);
+        if (streamFilter.hasPhotos && !hasPhotos) return false;
+        if (!streamFilter.hasPhotos && hasPhotos) return false;
+      }
+
+      // Due date filter
+      if (!matchesDueDatePreset(entry.due_date, streamFilter.dueDatePreset, streamFilter.dueDateStart, streamFilter.dueDateEnd)) {
+        return false;
+      }
+
+      // Entry date filter
+      if (!matchesEntryDateRange(entry.entry_date, streamFilter.entryDateStart, streamFilter.entryDateEnd)) {
+        return false;
+      }
+
       return true;
-    });
+    };
+  }, [streamFilter, attachmentCounts]);
+
+  // Filter entries by settings drawer filter + search query
+  const filteredEntries = useMemo(() => {
+    // First apply settings drawer filters
+    let result = sortedEntries.filter(applyFilters);
 
     // Then apply search query filter
     if (searchQuery.trim()) {
@@ -114,7 +251,7 @@ export function useFilteredEntries({
     }
 
     return result;
-  }, [sortedEntries, searchQuery, streamFilter]);
+  }, [sortedEntries, searchQuery, applyFilters]);
 
   // Filter sections by settings drawer filter + search query
   const filteredSections = useMemo((): EntrySection[] | undefined => {
@@ -123,8 +260,7 @@ export function useFilteredEntries({
     // Filter function that applies both settings filter and search query
     const filterEntry = (entry: Entry) => {
       // Apply settings drawer filters
-      if (!streamFilter.showArchived && entry.is_archived) return false;
-      if (streamFilter.statuses.length > 0 && !streamFilter.statuses.includes(entry.status)) return false;
+      if (!applyFilters(entry)) return false;
 
       // Apply search query filter
       if (searchQuery.trim()) {
@@ -145,7 +281,7 @@ export function useFilteredEntries({
       }))
       .map(section => ({ ...section, count: section.data.length }))
       .filter(section => section.data.length > 0);
-  }, [entrySections, searchQuery, streamFilter]);
+  }, [entrySections, searchQuery, applyFilters]);
 
   return {
     sortedEntries,

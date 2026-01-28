@@ -60,6 +60,14 @@ export const modernTheme: Theme = {
       cancelled: '#947272',    // Muted mauve - cancelled
     },
 
+    priority: {
+      urgent: '#947272',       // Muted mauve - highest priority
+      high: '#9A8478',         // Muted taupe - high priority
+      medium: '#A39171',       // Muted khaki - medium priority
+      low: '#6B7F99',          // Muted slate-blue - low priority
+      none: '#94A3B8',         // Slate-400 - no priority
+    },
+
     surface: {
       overlay: '#F1F5F9',      // Cool slate for drawers
       elevated: '#FFFFFF',     // White for menus

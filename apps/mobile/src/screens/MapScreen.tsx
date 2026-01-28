@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Pan
 import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useNavigation } from "../shared/contexts/NavigationContext";
-import { useDrawer } from "../shared/contexts/DrawerContext";
+import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
@@ -17,6 +17,7 @@ import { EntryList } from "../modules/entries/components/EntryList";
 import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
 import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
+import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import Svg, { Path, Circle } from "react-native-svg";
 import type { Entry, EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
@@ -113,6 +114,8 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
     mapRegion: persistedRegion,
     setMapRegion: persistRegion,
     drawerControl,
+    viewMode,
+    setViewMode,
   } = useDrawer();
   const { user } = useAuth();
   const { profile } = useMobileProfile(user?.id);
@@ -649,6 +652,17 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
     setSelectedStreamName(streamName);
   };
 
+  // Handle view mode changes from bottom nav bar
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    if (mode === "list") {
+      navigate("inbox");
+    } else if (mode === "calendar") {
+      navigate("calendar");
+    }
+    // "map" mode - already here, no navigation needed
+  }, [setViewMode, navigate]);
+
   // Get current stream of entry being moved
   const entryToMoveData = entryToMove ? visibleEntries.find(e => e.entry_id === entryToMove) : null;
   const entryToMoveStreamId = entryToMoveData?.stream_id || null;
@@ -661,15 +675,19 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
           badge={0}
           onTitlePress={openDrawer}
           showDropdownArrow
-          showAvatar
-          displayName={displayName}
-          avatarUrl={avatarUrl}
-          onAvatarPress={() => navigate("account")}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.text.tertiary} />
           <Text style={[styles.loadingText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>Loading entries...</Text>
         </View>
+        <BottomNavBar
+          viewMode={viewMode}
+          onViewModeChange={handleViewModeChange}
+          onAddPress={() => navigate("capture")}
+          onAccountPress={() => navigate("account")}
+          avatarUrl={avatarUrl}
+          displayName={displayName}
+        />
       </View>
     );
   }
@@ -681,10 +699,6 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
         badge={entries.length}
         onTitlePress={openDrawer}
         showDropdownArrow
-        showAvatar
-        displayName={displayName}
-        avatarUrl={avatarUrl}
-        onAvatarPress={() => navigate("account")}
       />
 
       {/* Map */}
@@ -845,6 +859,15 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
         onSortOrderChange={setOrderMode}
         showPinnedFirst={showPinnedFirst}
         onShowPinnedFirstChange={setShowPinnedFirst}
+      />
+
+      <BottomNavBar
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+        onAddPress={() => navigate("capture")}
+        onAccountPress={() => navigate("account")}
+        avatarUrl={avatarUrl}
+        displayName={displayName}
       />
     </View>
   );

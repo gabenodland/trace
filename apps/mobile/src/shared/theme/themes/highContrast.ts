@@ -60,6 +60,14 @@ export const highContrastTheme: Theme = {
       cancelled: '#CC0000',    // Pure red - cancelled
     },
 
+    priority: {
+      urgent: '#CC0000',       // Pure red - highest priority
+      high: '#CC6600',         // Pure orange - high priority
+      medium: '#CCAA00',       // Pure yellow - medium priority
+      low: '#0000CC',          // Pure blue - low priority
+      none: '#525252',         // Dark gray - no priority
+    },
+
     surface: {
       overlay: '#F5F5F5',      // Light gray for drawers
       elevated: '#FFFFFF',     // White for menus

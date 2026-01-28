@@ -36,6 +36,8 @@ export function useAttachments(entryId: string | null) {
       if (entryId) {
         queryClient.invalidateQueries({ queryKey: mobileAttachmentKeys.forEntry(entryId) });
       }
+      // Invalidate counts for filter refresh
+      queryClient.invalidateQueries({ queryKey: ['attachmentCounts'] });
     },
   });
 
@@ -45,6 +47,8 @@ export function useAttachments(entryId: string | null) {
       if (entryId) {
         queryClient.invalidateQueries({ queryKey: mobileAttachmentKeys.forEntry(entryId) });
       }
+      // Invalidate counts for filter refresh
+      queryClient.invalidateQueries({ queryKey: ['attachmentCounts'] });
     },
   });
 
@@ -60,5 +64,23 @@ export function useAttachments(entryId: string | null) {
       isCreating: createMutation.isPending,
       isDeleting: deleteMutation.isPending,
     },
+  };
+}
+
+/**
+ * Hook to get attachment counts per entry (for filtering by "has photos")
+ * Returns a map of entry_id -> attachment count
+ */
+export function useAttachmentCounts() {
+  const attachmentCountsQuery = useQuery({
+    queryKey: ['attachmentCounts'],
+    queryFn: attachmentApi.getEntryAttachmentCounts,
+    staleTime: 30 * 1000, // 30 seconds
+  });
+
+  return {
+    attachmentCounts: attachmentCountsQuery.data || {},
+    isLoading: attachmentCountsQuery.isLoading,
+    error: attachmentCountsQuery.error,
   };
 }

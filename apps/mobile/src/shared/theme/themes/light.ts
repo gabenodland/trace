@@ -59,6 +59,14 @@ export const lightTheme: Theme = {
       cancelled: '#EF4444',    // Red - cancelled
     },
 
+    priority: {
+      urgent: '#EF4444',       // Red - highest priority
+      high: '#F97316',         // Orange - high priority
+      medium: '#EAB308',       // Yellow - medium priority
+      low: '#3B82F6',          // Blue - low priority
+      none: '#9CA3AF',         // Gray - no priority
+    },
+
     surface: {
       overlay: '#F9FAFB',      // Light gray for drawers
       elevated: '#FFFFFF',     // White for menus/dropdowns

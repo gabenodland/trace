@@ -1,11 +1,13 @@
 /**
- * PriorityPicker - Priority slider/button picker component
+ * PriorityPicker - Priority level picker using named levels
  * Uses PickerBottomSheet for consistent bottom sheet presentation
+ *
+ * Priority levels: Urgent (4), High (3), Medium (2), Low (1), None (0)
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import Slider from "@react-native-community/slider";
-import { PickerBottomSheet, RemoveIcon } from "../../../../components/sheets";
+import { ALL_PRIORITIES, type PriorityLevel, type PriorityCategory } from "@trace/core";
+import { PickerBottomSheet } from "../../../../components/sheets";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
 
@@ -24,201 +26,164 @@ export function PriorityPicker({
   onPriorityChange,
   onSnackbar,
 }: PriorityPickerProps) {
-  const dynamicTheme = useTheme();
+  const theme = useTheme();
 
-  const handleDone = () => {
-    if (priority > 0) {
-      onSnackbar(`Priority set to ${priority}`);
+  // Get color for a priority category from theme
+  const getPriorityColor = (category: PriorityCategory): string => {
+    return theme.colors.priority[category];
+  };
+
+  const handleSelect = (value: PriorityLevel) => {
+    const info = ALL_PRIORITIES.find(p => p.value === value);
+    onPriorityChange(value);
+    if (value > 0 && info) {
+      onSnackbar(`Priority set to ${info.label}`);
+    } else {
+      onSnackbar("Priority removed");
     }
     onClose();
   };
 
-  const handleRemove = () => {
-    onPriorityChange(0);
-    onSnackbar("Priority removed");
-    onClose();
-  };
+  // Find current priority info
+  const currentPriority = ALL_PRIORITIES.find(p => p.value === priority) || ALL_PRIORITIES[4]; // Default to "None"
 
   return (
     <PickerBottomSheet
       visible={visible}
       onClose={onClose}
       title="Set Priority"
-      primaryAction={{
-        label: "Done",
-        onPress: handleDone,
-      }}
-      secondaryAction={
-        priority > 0
-          ? {
-              label: "Remove",
-              variant: "danger",
-              icon: <RemoveIcon color={dynamicTheme.colors.functional.overdue} />,
-              onPress: handleRemove,
-            }
-          : undefined
-      }
+      height="auto"
     >
       {/* Current Priority Display */}
-      <View style={styles.display}>
-        <Text
+      <View style={styles.currentDisplay}>
+        <View
           style={[
-            styles.displayValue,
-            {
-              fontFamily: dynamicTheme.typography.fontFamily.bold,
-              color: dynamicTheme.colors.text.primary,
-            },
+            styles.currentIndicator,
+            { backgroundColor: getPriorityColor(currentPriority.category) },
           ]}
-        >
-          {priority || 0}
-        </Text>
-      </View>
-
-      {/* Priority Slider */}
-      <View style={styles.sliderContainer}>
-        <Text
-          style={[
-            styles.sliderLabel,
-            {
-              fontFamily: dynamicTheme.typography.fontFamily.medium,
-              color: dynamicTheme.colors.text.secondary,
-            },
-          ]}
-        >
-          1
-        </Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={100}
-          step={1}
-          value={priority || 1}
-          onValueChange={(value) => onPriorityChange(Math.round(value))}
-          minimumTrackTintColor={dynamicTheme.colors.functional.accent}
-          maximumTrackTintColor={dynamicTheme.colors.border.medium}
-          thumbTintColor={dynamicTheme.colors.functional.accent}
         />
         <Text
           style={[
-            styles.sliderLabel,
+            styles.currentLabel,
             {
-              fontFamily: dynamicTheme.typography.fontFamily.medium,
-              color: dynamicTheme.colors.text.secondary,
+              fontFamily: theme.typography.fontFamily.semibold,
+              color: theme.colors.text.primary,
             },
           ]}
         >
-          100
+          {currentPriority.label}
         </Text>
       </View>
 
-      {/* Quick Set Buttons - Row 1: 1-10 */}
-      <View style={styles.quickButtonRow}>
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
-          <TouchableOpacity
-            key={value}
-            style={[
-              styles.quickButton,
-              { backgroundColor: dynamicTheme.colors.background.secondary },
-              priority === value && {
-                backgroundColor: dynamicTheme.colors.functional.accent,
-              },
-            ]}
-            onPress={() => onPriorityChange(value)}
-          >
-            <Text
+      {/* Priority Options */}
+      <View style={styles.optionsContainer}>
+        {ALL_PRIORITIES.map((priorityInfo) => {
+          const isSelected = priority === priorityInfo.value;
+          const color = getPriorityColor(priorityInfo.category);
+
+          return (
+            <TouchableOpacity
+              key={priorityInfo.value}
               style={[
-                styles.quickButtonText,
-                {
-                  fontFamily: dynamicTheme.typography.fontFamily.medium,
-                  color: dynamicTheme.colors.text.primary,
-                },
-                priority === value && {
-                  color: dynamicTheme.colors.background.primary,
-                  fontFamily: dynamicTheme.typography.fontFamily.semibold,
+                styles.option,
+                { backgroundColor: theme.colors.background.secondary },
+                isSelected && {
+                  backgroundColor: color + '20', // 20% opacity
+                  borderColor: color,
+                  borderWidth: 2,
                 },
               ]}
+              onPress={() => handleSelect(priorityInfo.value)}
+              activeOpacity={0.7}
             >
-              {value}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <View
+                style={[
+                  styles.optionIndicator,
+                  { backgroundColor: color },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.optionLabel,
+                  {
+                    fontFamily: isSelected
+                      ? theme.typography.fontFamily.semibold
+                      : theme.typography.fontFamily.medium,
+                    color: isSelected ? color : theme.colors.text.primary,
+                  },
+                ]}
+              >
+                {priorityInfo.label}
+              </Text>
+              {isSelected && (
+                <View style={styles.checkmark}>
+                  <Text
+                    style={[
+                      styles.checkmarkText,
+                      { color: color },
+                    ]}
+                  >
+                    ✓
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      {/* Quick Set Buttons - Row 2: 20, 30, etc */}
-      <View style={styles.quickButtonRow}>
-        {[20, 30, 40, 50, 60, 70, 80, 90, 100].map((value) => (
-          <TouchableOpacity
-            key={value}
-            style={[
-              styles.quickButton,
-              { backgroundColor: dynamicTheme.colors.background.secondary },
-              priority === value && {
-                backgroundColor: dynamicTheme.colors.functional.accent,
-              },
-            ]}
-            onPress={() => onPriorityChange(value)}
-          >
-            <Text
-              style={[
-                styles.quickButtonText,
-                {
-                  fontFamily: dynamicTheme.typography.fontFamily.medium,
-                  color: dynamicTheme.colors.text.primary,
-                },
-                priority === value && {
-                  color: dynamicTheme.colors.background.primary,
-                  fontFamily: dynamicTheme.typography.fontFamily.semibold,
-                },
-              ]}
-            >
-              {value}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* Bottom padding */}
+      <View style={{ height: themeBase.spacing.md }} />
     </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  display: {
+  currentDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: themeBase.spacing.lg,
+    gap: themeBase.spacing.sm,
+  },
+  currentIndicator: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  currentLabel: {
+    fontSize: themeBase.typography.fontSize.xl,
+  },
+  optionsContainer: {
+    gap: themeBase.spacing.sm,
+  },
+  option: {
+    flexDirection: "row",
     alignItems: "center",
     paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.md,
+    borderWidth: 0,
+    borderColor: "transparent",
   },
-  displayValue: {
-    fontSize: 48,
+  optionIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: themeBase.spacing.md,
   },
-  sliderContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: themeBase.spacing.sm,
-    marginBottom: themeBase.spacing.md,
-  },
-  slider: {
+  optionLabel: {
+    fontSize: themeBase.typography.fontSize.base,
     flex: 1,
-    height: 40,
-    marginHorizontal: themeBase.spacing.sm,
   },
-  sliderLabel: {
-    fontSize: 14,
-    width: 30,
-    textAlign: "center",
-  },
-  quickButtonRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: themeBase.spacing.xs,
-    marginBottom: themeBase.spacing.sm,
-  },
-  quickButton: {
-    minWidth: 32,
-    paddingVertical: themeBase.spacing.sm,
-    paddingHorizontal: themeBase.spacing.sm,
-    borderRadius: themeBase.borderRadius.sm,
+  checkmark: {
+    width: 24,
+    height: 24,
     alignItems: "center",
+    justifyContent: "center",
   },
-  quickButtonText: {
-    fontSize: 14,
+  checkmarkText: {
+    fontSize: 18,
+    fontWeight: "bold",
   },
 });

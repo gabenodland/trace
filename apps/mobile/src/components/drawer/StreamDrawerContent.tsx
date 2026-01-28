@@ -1,15 +1,15 @@
 /**
  * StreamDrawerContent
  *
- * Content for the drawer - view mode selector, streams list, locations.
+ * Content for the drawer - streams list, locations, tags, mentions.
  * Collapsible sections: STREAMS (expanded by default), LOCATIONS (collapsed by default).
- * Clean, minimal design with generous spacing.
+ * View mode switching has moved to the BottomNavBar.
  */
 
 import { useState, useCallback, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
-import Svg, { Path, Rect, Circle } from "react-native-svg";
-import { useDrawer, type ViewMode } from "../../shared/contexts/DrawerContext";
+import Svg, { Path } from "react-native-svg";
+import { useDrawer } from "../../shared/contexts/DrawerContext";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
 import { useStreams } from "../../modules/streams/mobileStreamHooks";
@@ -17,44 +17,6 @@ import { useEntryCounts, useTags, useMentions, useLocationHierarchy } from "../.
 import { StreamDrawerItem, QuickFilterItem } from "./StreamDrawerItem";
 import type { Stream } from "@trace/core";
 import type { LocationTreeNode } from "@trace/core/src/modules/entries/EntryTypes";
-
-/** View mode option for the selector */
-interface ViewModeOption {
-  mode: ViewMode;
-  label: string;
-  icon: (color: string) => React.ReactNode;
-}
-
-const VIEW_MODES: ViewModeOption[] = [
-  {
-    mode: "list",
-    label: "List",
-    icon: (color: string) => (
-      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
-        <Path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    ),
-  },
-  {
-    mode: "map",
-    label: "Map",
-    icon: (color: string) => (
-      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
-        <Path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4zM8 2v16M16 6v16" strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    ),
-  },
-  {
-    mode: "calendar",
-    label: "Calendar",
-    icon: (color: string) => (
-      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
-        <Rect x={3} y={4} width={18} height={18} rx={2} ry={2} />
-        <Path d="M16 2v4M8 2v4M3 10h18" strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    ),
-  },
-];
 
 /** Indentation per level in the location tree (pixels) */
 const LOCATION_INDENT_PER_LEVEL = 16;
@@ -238,9 +200,6 @@ export function StreamDrawerContent() {
     selectedStreamId,
     setSelectedStreamId,
     setSelectedStreamName,
-    viewMode,
-    setViewMode,
-    onViewModeChange,
   } = useDrawer();
   const { streams } = useStreams();
   const { data: entryCounts } = useEntryCounts();
@@ -283,18 +242,6 @@ export function StreamDrawerContent() {
         count: m.count,
       }));
   }, [mentions]);
-
-  // Handle view mode change
-  const handleViewModeChange = useCallback(
-    (mode: ViewMode) => {
-      setViewMode(mode);
-      if (onViewModeChange) {
-        onViewModeChange(mode);
-      }
-      closeDrawer();
-    },
-    [setViewMode, onViewModeChange, closeDrawer]
-  );
 
   // Handle stream selection
   const handleStreamSelect = useCallback(
@@ -367,41 +314,6 @@ export function StreamDrawerContent() {
 
   return (
     <View style={styles.container}>
-      {/* View Mode Section - Fixed with shadow */}
-      <View style={[styles.viewSectionWrapper, { backgroundColor: theme.colors.surface.overlay, borderBottomColor: theme.colors.border.light }]}>
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>VIEW</Text>
-          <View style={styles.viewModeList}>
-            {VIEW_MODES.map((option) => (
-              <TouchableOpacity
-                key={option.mode}
-                style={[
-                  styles.viewModeItem,
-                  { backgroundColor: theme.colors.background.secondary },
-                  viewMode === option.mode && { backgroundColor: theme.colors.background.tertiary },
-                ]}
-                onPress={() => handleViewModeChange(option.mode)}
-                activeOpacity={0.6}
-                delayPressIn={0}
-              >
-                {option.icon(
-                  viewMode === option.mode
-                    ? drawerTextPrimary
-                    : drawerTextTertiary
-                )}
-                <Text style={[
-                  styles.viewModeLabel,
-                  { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.medium },
-                  viewMode === option.mode && { fontFamily: theme.typography.fontFamily.semibold, color: drawerTextPrimary },
-                ]}>
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </View>
-
       {/* Scrollable content */}
       <ScrollView
         style={styles.scrollContent}
@@ -640,16 +552,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  viewSectionWrapper: {
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    zIndex: 1,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingTop: 0,
-    paddingBottom: 6,
-  },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -673,24 +575,6 @@ const styles = StyleSheet.create({
   },
   chevronExpanded: {
     transform: [{ rotate: "90deg" }],
-  },
-  viewModeList: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  viewModeItem: {
-    flex: 1,
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    borderRadius: 8,
-  },
-  viewModeLabel: {
-    fontSize: 13,
-    fontWeight: "500",
   },
   scrollContent: {
     flex: 1,

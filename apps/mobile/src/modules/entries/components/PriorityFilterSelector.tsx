@@ -1,53 +1,39 @@
 /**
- * StatusFilterSelector - Multi-select status filter using bottom sheet
+ * PriorityFilterSelector - Multi-select priority filter using bottom sheet
  * Uses PickerBottomSheet for consistent presentation with other pickers
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { ALL_STATUSES, type EntryStatus } from '@trace/core';
+import { ALL_PRIORITIES, type PriorityLevel, type PriorityCategory } from '@trace/core';
 import Svg, { Path } from 'react-native-svg';
 import { PickerBottomSheet } from '../../../components/sheets';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
 
-interface StatusFilterSelectorProps {
+interface PriorityFilterSelectorProps {
   visible: boolean;
-  selectedStatuses: string[];
-  onSelect: (statuses: string[]) => void;
+  selectedPriorities: PriorityLevel[];
+  onSelect: (priorities: PriorityLevel[]) => void;
   onClose: () => void;
-  /** Statuses available for filtering. If not provided, shows all statuses. */
-  allowedStatuses?: string[];
 }
 
-export function StatusFilterSelector({
+export function PriorityFilterSelector({
   visible,
-  selectedStatuses,
+  selectedPriorities,
   onSelect,
   onClose,
-  allowedStatuses,
-}: StatusFilterSelectorProps) {
+}: PriorityFilterSelectorProps) {
   const theme = useTheme();
 
-  // Filter to only show allowed statuses
-  const availableStatuses = allowedStatuses
-    ? ALL_STATUSES.filter(s => allowedStatuses.includes(s.value))
-    : ALL_STATUSES;
+  const allSelected = selectedPriorities.length === ALL_PRIORITIES.length;
+  const noneSelected = selectedPriorities.length === 0;
 
-  // Filter selected statuses to only include ones that are actually available
-  // This handles cases where user switches streams and has stale selections
-  const availableStatusValues = availableStatuses.map(s => s.value) as string[];
-  const validSelectedStatuses = selectedStatuses.filter(s => availableStatusValues.includes(s));
-
-  const allSelected = validSelectedStatuses.length === availableStatuses.length;
-  const noneSelected = validSelectedStatuses.length === 0;
-
-  const handleToggleStatus = (status: EntryStatus) => {
-    const isSelected = validSelectedStatuses.includes(status);
+  const handleTogglePriority = (priority: PriorityLevel) => {
+    const isSelected = selectedPriorities.includes(priority);
     if (isSelected) {
-      // Remove from valid selections only
-      onSelect(validSelectedStatuses.filter(s => s !== status));
+      onSelect(selectedPriorities.filter(p => p !== priority));
     } else {
-      onSelect([...validSelectedStatuses, status]);
+      onSelect([...selectedPriorities, priority]);
     }
   };
 
@@ -57,7 +43,7 @@ export function StatusFilterSelector({
       onSelect([]);
     } else {
       // If none or some selected, select all
-      onSelect(availableStatuses.map(s => s.value));
+      onSelect(ALL_PRIORITIES.map(p => p.value));
     }
   };
 
@@ -65,15 +51,15 @@ export function StatusFilterSelector({
     <PickerBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Status Filter"
+      title="Priority Filter"
       height="auto"
     >
       {/* Header row with hint text and Select All checkbox */}
       <View style={styles.headerRow}>
         <Text style={[styles.hint, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
           {noneSelected
-            ? "Showing all statuses"
-            : `Showing ${validSelectedStatuses.length} of ${availableStatuses.length}`}
+            ? "Showing all priorities"
+            : `Showing ${selectedPriorities.length} of ${ALL_PRIORITIES.length}`}
         </Text>
         <TouchableOpacity style={styles.selectAllRow} onPress={handleToggleAll} activeOpacity={0.7}>
           <Text style={[styles.selectAllLabel, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>
@@ -101,28 +87,29 @@ export function StatusFilterSelector({
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.optionsContainer}>
-          {availableStatuses.map((status) => {
-            const isSelected = validSelectedStatuses.includes(status.value);
+          {ALL_PRIORITIES.map((priority) => {
+            const isSelected = selectedPriorities.includes(priority.value);
+            const priorityColor = theme.colors.priority[priority.category as PriorityCategory];
 
             return (
               <TouchableOpacity
-                key={status.value}
+                key={priority.value}
                 style={[
                   styles.optionButton,
                   { backgroundColor: theme.colors.background.secondary },
                   isSelected && { backgroundColor: theme.colors.background.tertiary },
                 ]}
-                onPress={() => handleToggleStatus(status.value)}
+                onPress={() => handleTogglePriority(priority.value)}
                 activeOpacity={0.7}
               >
                 <View style={styles.optionContent}>
-                  <View style={[styles.statusDot, { backgroundColor: status.color }]} />
+                  <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
                   <Text style={[
                     styles.optionLabel,
                     { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
                     isSelected && { fontFamily: theme.typography.fontFamily.semibold }
                   ]}>
-                    {status.label}
+                    {priority.label}
                   </Text>
                 </View>
 
@@ -189,7 +176,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  statusDot: {
+  priorityDot: {
     width: 10,
     height: 10,
     borderRadius: 5,

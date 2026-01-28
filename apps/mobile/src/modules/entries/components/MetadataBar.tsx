@@ -8,7 +8,7 @@ import Svg, { Path, Circle, Line } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { styles } from "./EntryScreen.styles";
 import { StatusIcon } from "../../../shared/components/StatusIcon";
-import { getStatusLabel, isLegacyType, formatRatingDisplay, decimalToStars, getLocationLabel, hasLocationLabel, type Location as LocationType, type EntryStatus, type RatingType } from "@trace/core";
+import { getStatusLabel, isLegacyType, formatRatingDisplay, decimalToStars, getLocationLabel, hasLocationLabel, getPriorityInfo, type Location as LocationType, type EntryStatus, type RatingType, type PriorityCategory } from "@trace/core";
 
 interface MetadataBarProps {
   // Form data
@@ -392,30 +392,36 @@ export function MetadataBar({
       )}
 
       {/* Priority - show if supported OR unsupported with value */}
-      {(showPriority || unsupportedPriority) && priority > 0 && (
-        <>
-          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
-          <TouchableOpacity
-            style={styles.metadataLink}
-            onPress={() => handlePress(onPriorityPress, true)}
-          >
-            <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill={unsupportedPriority ? "#9ca3af" : theme.colors.text.primary} stroke="none">
-                <Path d="M5 3v18" strokeWidth="2" stroke={unsupportedPriority ? "#9ca3af" : theme.colors.text.primary} />
-                <Path d="M5 3h13l-4 5 4 5H5z" />
-              </Svg>
-              <Text style={[
-                styles.metadataText,
-                styles.metadataTextActive,
-                { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
-                unsupportedPriority && styles.metadataTextUnsupported
-              ]} numberOfLines={1} ellipsizeMode="tail">
-                P{priority}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </>
-      )}
+      {(showPriority || unsupportedPriority) && priority > 0 && (() => {
+        const priorityInfo = getPriorityInfo(priority);
+        const priorityColor = unsupportedPriority
+          ? "#9ca3af"
+          : theme.colors.priority[priorityInfo?.category as PriorityCategory || 'none'];
+        return (
+          <>
+            <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
+            <TouchableOpacity
+              style={styles.metadataLink}
+              onPress={() => handlePress(onPriorityPress, true)}
+            >
+              <View style={styles.metadataLinkContent}>
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill={priorityColor} stroke="none">
+                  <Path d="M5 3v18" strokeWidth="2" stroke={priorityColor} />
+                  <Path d="M5 3h13l-4 5 4 5H5z" />
+                </Svg>
+                <Text style={[
+                  styles.metadataText,
+                  styles.metadataTextActive,
+                  { color: priorityColor, fontFamily: theme.typography.fontFamily.medium },
+                  unsupportedPriority && styles.metadataTextUnsupported
+                ]} numberOfLines={1} ellipsizeMode="tail">
+                  {priorityInfo?.label || `P${priority}`}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </>
+        );
+      })()}
 
       {/* Priority placeholder - show if stream assigned AND supported but not set */}
       {streamName && showPriority && !unsupportedPriority && priority === 0 && (

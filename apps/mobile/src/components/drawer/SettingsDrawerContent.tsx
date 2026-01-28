@@ -17,14 +17,25 @@ import {
   ENTRY_DISPLAY_MODES,
   ENTRY_SORT_MODES,
   ALL_STATUSES,
+  ALL_PRIORITIES,
+  DUE_DATE_PRESETS,
+  getPriorityLabel,
   type EntryDisplayMode,
   type EntrySortMode,
   type EntrySortOrder,
+  type PriorityLevel,
+  type DueDatePreset,
+  type PhotosFilter,
 } from "@trace/core";
 import { useStream } from "../../modules/streams/mobileStreamHooks";
 import { DisplayModeSelector } from "../../modules/entries/components/DisplayModeSelector";
 import { SortModeSelector } from "../../modules/entries/components/SortModeSelector";
 import { StatusFilterSelector } from "../../modules/entries/components/StatusFilterSelector";
+import { PriorityFilterSelector } from "../../modules/entries/components/PriorityFilterSelector";
+import { TypeFilterSelector } from "../../modules/entries/components/TypeFilterSelector";
+import { RatingFilterSelector } from "../../modules/entries/components/RatingFilterSelector";
+import { DueDateFilterSelector } from "../../modules/entries/components/DueDateFilterSelector";
+import { EntryDateRangeSelector } from "../../modules/entries/components/EntryDateRangeSelector";
 
 export function SettingsDrawerContent() {
   const theme = useTheme();
@@ -41,18 +52,38 @@ export function SettingsDrawerContent() {
   const currentPref = getStreamSortPreference(selectedStreamId);
   const currentFilter = getStreamFilter(selectedStreamId);
 
-  // Get stream data for status filtering
+  // Get stream data for filter visibility
   const { stream } = useStream(selectedStreamId ?? null);
+  const isAllEntriesView = !selectedStreamId;
+
   // When viewing a specific stream, only show its allowed statuses
   // When viewing "All Entries", show all statuses (undefined = all)
   const allowedStatuses = selectedStreamId && stream?.entry_statuses
     ? stream.entry_statuses
     : undefined;
 
+  // Determine which filters to show based on stream settings
+  // In "All Entries" view, show all filters except Type
+  const showStatusFilter = isAllEntriesView || stream?.entry_use_status !== false;
+  const showPriorityFilter = isAllEntriesView || stream?.entry_use_priority === true;
+  const showTypeFilter = !isAllEntriesView && stream?.entry_use_type === true && (stream?.entry_types?.length ?? 0) > 0;
+  const showRatingFilter = isAllEntriesView || stream?.entry_use_rating === true;
+  const showPhotosFilter = isAllEntriesView || stream?.entry_use_photos !== false;
+  const showDueDateFilter = isAllEntriesView || stream?.entry_use_duedates === true;
+  const showEntryDateFilter = true; // Always show
+
+  // Get rating type for display
+  const ratingType = stream?.entry_rating_type || 'decimal_whole';
+
   // Modal visibility state
   const [displayModalVisible, setDisplayModalVisible] = useState(false);
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [priorityModalVisible, setPriorityModalVisible] = useState(false);
+  const [typeModalVisible, setTypeModalVisible] = useState(false);
+  const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  const [dueDateModalVisible, setDueDateModalVisible] = useState(false);
+  const [entryDateModalVisible, setEntryDateModalVisible] = useState(false);
 
   // Update display mode
   const handleDisplayModeChange = (mode: EntryDisplayMode) => {
@@ -84,6 +115,36 @@ export function SettingsDrawerContent() {
     setStreamFilter(selectedStreamId, { statuses });
   };
 
+  // Update priority filter
+  const handlePriorityFilterChange = (priorities: PriorityLevel[]) => {
+    setStreamFilter(selectedStreamId, { priorities });
+  };
+
+  // Update type filter
+  const handleTypeFilterChange = (types: string[]) => {
+    setStreamFilter(selectedStreamId, { types });
+  };
+
+  // Update rating filter
+  const handleRatingFilterChange = (ratingMin: number | null, ratingMax: number | null) => {
+    setStreamFilter(selectedStreamId, { ratingMin, ratingMax });
+  };
+
+  // Update photos filter (three-state toggle)
+  const handlePhotosFilterChange = (hasPhotos: PhotosFilter) => {
+    setStreamFilter(selectedStreamId, { hasPhotos });
+  };
+
+  // Update due date filter
+  const handleDueDateFilterChange = (dueDatePreset: DueDatePreset, dueDateStart: string | null, dueDateEnd: string | null) => {
+    setStreamFilter(selectedStreamId, { dueDatePreset, dueDateStart, dueDateEnd });
+  };
+
+  // Update entry date filter
+  const handleEntryDateFilterChange = (entryDateStart: string | null, entryDateEnd: string | null) => {
+    setStreamFilter(selectedStreamId, { entryDateStart, entryDateEnd });
+  };
+
   // Get display values for selectors
   const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === currentPref.displayMode)?.label || "Title Only";
   const sortModeLabel = ENTRY_SORT_MODES.find(m => m.value === currentPref.sortMode)?.label || "Date";
@@ -97,6 +158,71 @@ export function SettingsDrawerContent() {
   const statusFilterLabel = validSelectedStatuses.length === 0 || allStatusesSelected
     ? "All statuses"
     : `${validSelectedStatuses.length} selected`;
+
+  // Priority filter label
+  const allPrioritiesSelected = currentFilter.priorities.length === ALL_PRIORITIES.length;
+  const priorityFilterLabel = currentFilter.priorities.length === 0 || allPrioritiesSelected
+    ? "All priorities"
+    : currentFilter.priorities.length === 1
+      ? getPriorityLabel(currentFilter.priorities[0])
+      : `${currentFilter.priorities.length} selected`;
+  const isPriorityFiltering = currentFilter.priorities.length > 0 && !allPrioritiesSelected;
+
+  // Type filter label
+  const availableTypes = stream?.entry_types ?? [];
+  const validSelectedTypes = currentFilter.types.filter(t => availableTypes.includes(t));
+  const allTypesSelected = validSelectedTypes.length === availableTypes.length;
+  const typeFilterLabel = validSelectedTypes.length === 0 || allTypesSelected
+    ? "All types"
+    : validSelectedTypes.length === 1
+      ? validSelectedTypes[0]
+      : `${validSelectedTypes.length} selected`;
+  const isTypeFiltering = validSelectedTypes.length > 0 && !allTypesSelected;
+
+  // Rating filter label
+  const getRatingLabel = (): string => {
+    const { ratingMin, ratingMax } = currentFilter;
+    if (ratingMin === null && ratingMax === null) return "All ratings";
+    if (ratingType === 'stars') {
+      const minStars = ratingMin !== null ? ratingMin / 2 : null;
+      const maxStars = ratingMax !== null ? ratingMax / 2 : null;
+      if (minStars !== null && maxStars !== null) return `${'★'.repeat(minStars)} - ${'★'.repeat(maxStars)}`;
+      if (minStars !== null) return `≥ ${'★'.repeat(minStars)}`;
+      if (maxStars !== null) return `≤ ${'★'.repeat(maxStars)}`;
+    }
+    if (ratingMin !== null && ratingMax !== null) return `${ratingMin} - ${ratingMax}`;
+    if (ratingMin !== null) return `≥ ${ratingMin}`;
+    if (ratingMax !== null) return `≤ ${ratingMax}`;
+    return "All ratings";
+  };
+  const ratingFilterLabel = getRatingLabel();
+  const isRatingFiltering = currentFilter.ratingMin !== null || currentFilter.ratingMax !== null;
+
+  // Photos filter label
+  const getPhotosLabel = (): string => {
+    if (currentFilter.hasPhotos === null) return "All";
+    return currentFilter.hasPhotos ? "With photos" : "Without photos";
+  };
+  const photosFilterLabel = getPhotosLabel();
+  const isPhotosFiltering = currentFilter.hasPhotos !== null;
+
+  // Due date filter label
+  const dueDatePresetInfo = DUE_DATE_PRESETS.find(p => p.value === currentFilter.dueDatePreset);
+  const dueDateFilterLabel = dueDatePresetInfo?.label || "All";
+  const isDueDateFiltering = currentFilter.dueDatePreset !== 'all';
+
+  // Entry date filter label
+  const getEntryDateLabel = (): string => {
+    const { entryDateStart, entryDateEnd } = currentFilter;
+    if (!entryDateStart && !entryDateEnd) return "All dates";
+    const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    if (entryDateStart && entryDateEnd) return `${formatDate(entryDateStart)} - ${formatDate(entryDateEnd)}`;
+    if (entryDateStart) return `After ${formatDate(entryDateStart)}`;
+    if (entryDateEnd) return `Before ${formatDate(entryDateEnd)}`;
+    return "All dates";
+  };
+  const entryDateFilterLabel = getEntryDateLabel();
+  const isEntryDateFiltering = currentFilter.entryDateStart !== null || currentFilter.entryDateEnd !== null;
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -190,34 +316,252 @@ export function SettingsDrawerContent() {
       </View>
 
       {/* Status Filter Row */}
-      <TouchableOpacity
-        style={styles.settingRow}
-        onPress={() => setStatusModalVisible(true)}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.settingLabel, { color: drawerTextPrimary, fontFamily: theme.typography.fontFamily.medium }]}>
-          Status
-        </Text>
-        <View style={styles.settingValueContainer}>
-          <Text style={[
-            styles.settingValue,
-            // Only highlight if filtering (not when all selected or none selected)
-            { color: validSelectedStatuses.length > 0 && !allStatusesSelected ? theme.colors.interactive.primary : drawerTextSecondary },
-            { fontFamily: theme.typography.fontFamily.regular }
-          ]}>
-            {statusFilterLabel}
+      {showStatusFilter && (
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => setStatusModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.settingLabel, { color: drawerTextPrimary, fontFamily: theme.typography.fontFamily.medium }]}>
+            Status
           </Text>
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={styles.chevron}>
-            <Path
-              d="M6 9l6 6 6-6"
-              stroke={drawerTextTertiary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <View style={styles.settingValueContainer}>
+            <Text style={[
+              styles.settingValue,
+              { color: validSelectedStatuses.length > 0 && !allStatusesSelected ? theme.colors.interactive.primary : drawerTextSecondary },
+              { fontFamily: theme.typography.fontFamily.regular }
+            ]}>
+              {statusFilterLabel}
+            </Text>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={styles.chevron}>
+              <Path
+                d="M6 9l6 6 6-6"
+                stroke={drawerTextTertiary}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Priority Filter Row */}
+      {showPriorityFilter && (
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => setPriorityModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.settingLabel, { color: drawerTextPrimary, fontFamily: theme.typography.fontFamily.medium }]}>
+            Priority
+          </Text>
+          <View style={styles.settingValueContainer}>
+            <Text style={[
+              styles.settingValue,
+              { color: isPriorityFiltering ? theme.colors.interactive.primary : drawerTextSecondary },
+              { fontFamily: theme.typography.fontFamily.regular }
+            ]}>
+              {priorityFilterLabel}
+            </Text>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={styles.chevron}>
+              <Path
+                d="M6 9l6 6 6-6"
+                stroke={drawerTextTertiary}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Type Filter Row */}
+      {showTypeFilter && (
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => setTypeModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.settingLabel, { color: drawerTextPrimary, fontFamily: theme.typography.fontFamily.medium }]}>
+            Type
+          </Text>
+          <View style={styles.settingValueContainer}>
+            <Text style={[
+              styles.settingValue,
+              { color: isTypeFiltering ? theme.colors.interactive.primary : drawerTextSecondary },
+              { fontFamily: theme.typography.fontFamily.regular }
+            ]}>
+              {typeFilterLabel}
+            </Text>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={styles.chevron}>
+              <Path
+                d="M6 9l6 6 6-6"
+                stroke={drawerTextTertiary}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Rating Filter Row */}
+      {showRatingFilter && (
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => setRatingModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.settingLabel, { color: drawerTextPrimary, fontFamily: theme.typography.fontFamily.medium }]}>
+            Rating
+          </Text>
+          <View style={styles.settingValueContainer}>
+            <Text style={[
+              styles.settingValue,
+              { color: isRatingFiltering ? theme.colors.interactive.primary : drawerTextSecondary },
+              { fontFamily: theme.typography.fontFamily.regular }
+            ]}>
+              {ratingFilterLabel}
+            </Text>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={styles.chevron}>
+              <Path
+                d="M6 9l6 6 6-6"
+                stroke={drawerTextTertiary}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Photos Filter Row - Three state toggle */}
+      {showPhotosFilter && (
+        <View style={styles.settingRow}>
+          <Text style={[styles.settingLabel, { color: drawerTextPrimary, fontFamily: theme.typography.fontFamily.medium }]}>
+            Photos
+          </Text>
+          <View style={styles.segmentedControl}>
+            <TouchableOpacity
+              style={[
+                styles.segmentButton,
+                { backgroundColor: theme.colors.background.secondary },
+                currentFilter.hasPhotos === null && { backgroundColor: theme.colors.interactive.primary },
+              ]}
+              onPress={() => handlePhotosFilterChange(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.segmentText,
+                { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular },
+                currentFilter.hasPhotos === null && { color: theme.colors.background.primary, fontFamily: theme.typography.fontFamily.semibold },
+              ]}>
+                All
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.segmentButton,
+                { backgroundColor: theme.colors.background.secondary },
+                currentFilter.hasPhotos === true && { backgroundColor: theme.colors.interactive.primary },
+              ]}
+              onPress={() => handlePhotosFilterChange(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.segmentText,
+                { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular },
+                currentFilter.hasPhotos === true && { color: theme.colors.background.primary, fontFamily: theme.typography.fontFamily.semibold },
+              ]}>
+                With
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.segmentButton,
+                { backgroundColor: theme.colors.background.secondary },
+                currentFilter.hasPhotos === false && { backgroundColor: theme.colors.interactive.primary },
+              ]}
+              onPress={() => handlePhotosFilterChange(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.segmentText,
+                { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular },
+                currentFilter.hasPhotos === false && { color: theme.colors.background.primary, fontFamily: theme.typography.fontFamily.semibold },
+              ]}>
+                Without
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </TouchableOpacity>
+      )}
+
+      {/* Due Date Filter Row */}
+      {showDueDateFilter && (
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => setDueDateModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.settingLabel, { color: drawerTextPrimary, fontFamily: theme.typography.fontFamily.medium }]}>
+            Due Date
+          </Text>
+          <View style={styles.settingValueContainer}>
+            <Text style={[
+              styles.settingValue,
+              { color: isDueDateFiltering ? theme.colors.interactive.primary : drawerTextSecondary },
+              { fontFamily: theme.typography.fontFamily.regular }
+            ]}>
+              {dueDateFilterLabel}
+            </Text>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={styles.chevron}>
+              <Path
+                d="M6 9l6 6 6-6"
+                stroke={drawerTextTertiary}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Entry Date Filter Row */}
+      {showEntryDateFilter && (
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => setEntryDateModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.settingLabel, { color: drawerTextPrimary, fontFamily: theme.typography.fontFamily.medium }]}>
+            Entry Date
+          </Text>
+          <View style={styles.settingValueContainer}>
+            <Text style={[
+              styles.settingValue,
+              { color: isEntryDateFiltering ? theme.colors.interactive.primary : drawerTextSecondary },
+              { fontFamily: theme.typography.fontFamily.regular }
+            ]}>
+              {entryDateFilterLabel}
+            </Text>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={styles.chevron}>
+              <Path
+                d="M6 9l6 6 6-6"
+                stroke={drawerTextTertiary}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Bottom padding */}
       <View style={{ height: 40 }} />
@@ -247,6 +591,47 @@ export function SettingsDrawerContent() {
         onSelect={handleStatusFilterChange}
         onClose={() => setStatusModalVisible(false)}
         allowedStatuses={allowedStatuses}
+      />
+
+      <PriorityFilterSelector
+        visible={priorityModalVisible}
+        selectedPriorities={currentFilter.priorities}
+        onSelect={handlePriorityFilterChange}
+        onClose={() => setPriorityModalVisible(false)}
+      />
+
+      <TypeFilterSelector
+        visible={typeModalVisible}
+        selectedTypes={currentFilter.types}
+        availableTypes={availableTypes}
+        onSelect={handleTypeFilterChange}
+        onClose={() => setTypeModalVisible(false)}
+      />
+
+      <RatingFilterSelector
+        visible={ratingModalVisible}
+        ratingMin={currentFilter.ratingMin}
+        ratingMax={currentFilter.ratingMax}
+        ratingType={ratingType}
+        onSelect={handleRatingFilterChange}
+        onClose={() => setRatingModalVisible(false)}
+      />
+
+      <DueDateFilterSelector
+        visible={dueDateModalVisible}
+        preset={currentFilter.dueDatePreset}
+        customStart={currentFilter.dueDateStart}
+        customEnd={currentFilter.dueDateEnd}
+        onSelect={handleDueDateFilterChange}
+        onClose={() => setDueDateModalVisible(false)}
+      />
+
+      <EntryDateRangeSelector
+        visible={entryDateModalVisible}
+        startDate={currentFilter.entryDateStart}
+        endDate={currentFilter.entryDateEnd}
+        onSelect={handleEntryDateFilterChange}
+        onClose={() => setEntryDateModalVisible(false)}
       />
     </ScrollView>
   );
@@ -308,5 +693,17 @@ const styles = StyleSheet.create({
   },
   toggleLabel: {
     fontSize: themeBase.typography.fontSize.base,
+  },
+  segmentedControl: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  segmentButton: {
+    paddingVertical: themeBase.spacing.xs,
+    paddingHorizontal: themeBase.spacing.sm,
+    borderRadius: themeBase.borderRadius.sm,
+  },
+  segmentText: {
+    fontSize: themeBase.typography.fontSize.xs,
   },
 });

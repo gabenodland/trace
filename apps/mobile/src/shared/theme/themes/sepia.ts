@@ -58,6 +58,14 @@ export const sepiaTheme: Theme = {
       cancelled: '#B85450',    // Muted brick red - cancelled
     },
 
+    priority: {
+      urgent: '#B85450',       // Muted brick red - highest priority
+      high: '#C4784A',         // Burnt sienna - high priority
+      medium: '#C9A227',       // Mustard - medium priority
+      low: '#7B9EBF',          // Dusty blue - low priority
+      none: '#8B7D6B',         // Brown-gray - no priority
+    },
+
     surface: {
       overlay: '#EDE4D9',      // Warm tan for drawers
       elevated: '#F7F0E8',     // Light tan for menus

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder, Dimensions } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import type { Entry, EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
@@ -20,14 +20,14 @@ import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
-import { useDrawer } from "../shared/contexts/DrawerContext";
+import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { usePersistedState } from "../shared/hooks/usePersistedState";
 import { TopBar } from "../components/layout/TopBar";
 import { EntryListContent } from "../modules/entries/components/EntryListContent";
 import { EntryListHeader, StickyEntryListHeader } from "../modules/entries/components/EntryListHeader";
-import { FloatingActionButton } from "../components/buttons/FloatingActionButton";
+import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
 import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
 import { useTheme } from "../shared/contexts/ThemeContext";
@@ -85,6 +85,8 @@ export function CalendarScreen() {
     calendarZoom,
     setCalendarZoom,
     drawerControl,
+    viewMode,
+    setViewMode,
   } = useDrawer();
   const { user } = useAuth();
   const { profile } = useMobileProfile(user?.id);
@@ -424,6 +426,17 @@ export function CalendarScreen() {
     }
     navigate("capture", { initialDate: dateToUse });
   };
+
+  // Handle view mode changes from bottom nav bar
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    if (mode === "list") {
+      navigate("inbox");
+    } else if (mode === "map") {
+      navigate("map");
+    }
+    // "calendar" mode - already here, no navigation needed
+  }, [setViewMode, navigate]);
 
   // Calendar generation
   const today = new Date();
@@ -841,10 +854,6 @@ export function CalendarScreen() {
         badge={entries.length}
         onTitlePress={openDrawer}
         showDropdownArrow
-        showAvatar
-        displayName={displayName}
-        avatarUrl={avatarUrl}
-        onAvatarPress={() => navigate("account")}
       />
 
       {/* SubBar with date field selector */}
@@ -980,7 +989,14 @@ export function CalendarScreen() {
       {zoomLevel === "month" && renderMonthView()}
       {zoomLevel === "year" && renderYearView()}
 
-      <FloatingActionButton onPress={handleAddEntry} />
+      <BottomNavBar
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+        onAddPress={handleAddEntry}
+        onAccountPress={() => navigate("account")}
+        avatarUrl={avatarUrl}
+        displayName={displayName}
+      />
     </View>
   );
 }
