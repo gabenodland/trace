@@ -1070,89 +1070,94 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    let query = 'SELECT * FROM entries WHERE 1=1';
+    // Include photo_count as a subquery for filtering (avoids separate attachmentCounts query)
+    let query = `SELECT e.*,
+      (SELECT COUNT(*) FROM attachments a
+       WHERE a.entry_id = e.entry_id
+       AND (a.sync_action IS NULL OR a.sync_action != 'delete')) as photo_count
+      FROM entries e WHERE 1=1`;
     const params: any[] = [];
 
     if (this.currentUserId) {
-      query += ' AND user_id = ?';
+      query += ' AND e.user_id = ?';
       params.push(this.currentUserId);
     }
 
     if (!filter?.includeDeleted) {
-      query += ' AND deleted_at IS NULL';
+      query += ' AND e.deleted_at IS NULL';
     }
 
     if (filter) {
       if (filter.stream_id !== undefined) {
         if (filter.stream_id === null) {
-          query += ' AND stream_id IS NULL';
+          query += ' AND e.stream_id IS NULL';
         } else {
-          query += ' AND stream_id = ?';
+          query += ' AND e.stream_id = ?';
           params.push(filter.stream_id);
         }
       }
 
       if (filter.status) {
-        query += ' AND status = ?';
+        query += ' AND e.status = ?';
         params.push(filter.status);
       }
 
       if (filter.tag) {
-        query += ' AND tags LIKE ?';
+        query += ' AND e.tags LIKE ?';
         params.push(`%"${filter.tag.toLowerCase()}"%`);
       }
 
       if (filter.mention) {
-        query += ' AND mentions LIKE ?';
+        query += ' AND e.mentions LIKE ?';
         params.push(`%"${filter.mention.toLowerCase()}"%`);
       }
 
       if (filter.location_id) {
-        query += ' AND location_id = ?';
+        query += ' AND e.location_id = ?';
         params.push(filter.location_id);
       }
 
       // Location hierarchy filters
       if (filter.filter_country) {
-        query += ' AND country = ?';
+        query += ' AND e.country = ?';
         params.push(filter.filter_country);
       }
 
       if (filter.filter_region) {
-        query += ' AND region = ?';
+        query += ' AND e.region = ?';
         params.push(filter.filter_region);
       }
 
       if (filter.filter_city) {
-        query += ' AND city = ?';
+        query += ' AND e.city = ?';
         params.push(filter.filter_city);
       }
 
       if (filter.filter_neighborhood) {
-        query += ' AND neighborhood = ?';
+        query += ' AND e.neighborhood = ?';
         params.push(filter.filter_neighborhood);
       }
 
       if (filter.filter_place_name) {
-        query += ' AND place_name = ?';
+        query += ' AND e.place_name = ?';
         params.push(filter.filter_place_name);
       }
 
       // Filter for entries with no location data
       if (filter.filter_no_location) {
-        query += ' AND country IS NULL AND region IS NULL AND city IS NULL AND neighborhood IS NULL AND place_name IS NULL AND entry_latitude IS NULL';
+        query += ' AND e.country IS NULL AND e.region IS NULL AND e.city IS NULL AND e.neighborhood IS NULL AND e.place_name IS NULL AND e.entry_latitude IS NULL';
       }
 
       // Privacy filtering - exclude entries from private streams
       // Only applies when NOT viewing a specific stream (i.e., viewing "All Entries")
       if (filter.excludePrivateStreams) {
-        query += ` AND (stream_id IS NULL OR stream_id NOT IN (
+        query += ` AND (e.stream_id IS NULL OR e.stream_id NOT IN (
           SELECT stream_id FROM streams WHERE is_private = 1 AND (sync_action IS NULL OR sync_action != 'delete')
         ))`;
       }
     }
 
-    query += ' ORDER BY updated_at DESC';
+    query += ' ORDER BY e.updated_at DESC';
 
     const rows = await this.db.getAllAsync<any>(query, params);
 
@@ -1525,6 +1530,8 @@ class LocalDatabase {
       conflict_backup: row.conflict_backup || null,
       last_edited_by: row.last_edited_by || null,
       last_edited_device: row.last_edited_device || null,
+      // Computed field for photo filtering (may be undefined if not queried with subquery)
+      photo_count: row.photo_count !== undefined ? row.photo_count : undefined,
     } as Entry;
   }
 

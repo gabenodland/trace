@@ -25,6 +25,8 @@ interface PickerBottomSheetProps {
   visible: boolean;
   onClose: () => void;
   title: string;
+  /** Optional subtitle shown below title (e.g., "125 of 348 entries") */
+  subtitle?: string;
   children: React.ReactNode;
   /** Height preset - defaults to "auto" */
   height?: SheetHeight;
@@ -40,6 +42,7 @@ export function PickerBottomSheet({
   visible,
   onClose,
   title,
+  subtitle,
   children,
   height = "auto",
   primaryAction,
@@ -62,17 +65,32 @@ export function PickerBottomSheet({
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text
-            style={[
-              styles.title,
-              {
-                fontFamily: dynamicTheme.typography.fontFamily.semibold,
-                color: dynamicTheme.colors.text.primary,
-              },
-            ]}
-          >
-            {title}
-          </Text>
+          <View style={styles.titleContainer}>
+            <Text
+              style={[
+                styles.title,
+                {
+                  fontFamily: dynamicTheme.typography.fontFamily.semibold,
+                  color: dynamicTheme.colors.text.primary,
+                },
+              ]}
+            >
+              {title}
+            </Text>
+            {subtitle && (
+              <Text
+                style={[
+                  styles.subtitle,
+                  {
+                    fontFamily: dynamicTheme.typography.fontFamily.medium,
+                    color: dynamicTheme.colors.interactive.primary,
+                  },
+                ]}
+              >
+                {subtitle}
+              </Text>
+            )}
+          </View>
           <TouchableOpacity
             style={styles.closeButton}
             onPress={onClose}
@@ -191,8 +209,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: themeBase.spacing.md,
   },
+  titleContainer: {
+    flexDirection: "column",
+  },
   title: {
     fontSize: 18,
+  },
+  subtitle: {
+    fontSize: themeBase.typography.fontSize.sm,
+    marginTop: 2,
   },
   closeButton: {
     padding: 4,

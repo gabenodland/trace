@@ -20,4 +20,7 @@ config.resolver.nodeModulesPaths = [
 // Force Metro to resolve these packages from workspace root to avoid duplicates
 config.resolver.disableHierarchicalLookup = true;
 
+// Ensure .ts and .tsx extensions are resolved (for packages that ship TypeScript source)
+config.resolver.sourceExts = [...(config.resolver.sourceExts || []), 'ts', 'tsx'];
+
 module.exports = config;

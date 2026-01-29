@@ -1,9 +1,13 @@
 /**
  * useFilteredEntries - Handles entry filtering and section computation
  * Extracts filtering logic from EntryListScreen
+ *
+ * Uses useDeferredValue to prevent UI lag when clicking filters rapidly.
+ * The filter state updates instantly for UI feedback, while the expensive
+ * filtering computation runs with lower priority.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useDeferredValue } from 'react';
 import type { Entry, EntrySection, EntrySortMode, EntrySortOrder, Stream, StreamViewFilter, DueDatePreset } from '@trace/core';
 import {
   sortEntries,
@@ -96,14 +100,14 @@ function matchesEntryDateRange(entryDate: string | null, startDate: string | nul
 }
 
 /**
- * Check if entry has photos using pre-loaded attachment counts
- * Falls back to checking content for attachment references (legacy)
+ * Check if entry has photos using the photo_count field
+ * photo_count is calculated via SQL subquery when entries are fetched
+ * Falls back to checking content for attachment references (legacy entries without photo_count)
  */
-function entryHasPhotos(entry: Entry, attachmentCounts: Record<string, number>): boolean {
-  // First check the attachment counts map (preferred - accurate)
-  const count = attachmentCounts[entry.entry_id];
-  if (count !== undefined) {
-    return count > 0;
+function entryHasPhotos(entry: Entry): boolean {
+  // Use photo_count from entry (calculated in SQL query)
+  if (entry.photo_count !== undefined) {
+    return entry.photo_count > 0;
   }
   // Fallback: check content for attachment references (legacy entries)
   const attachmentIds = extractAttachmentIds(entry.content);
@@ -118,7 +122,6 @@ interface UseFilteredEntriesOptions {
   showPinnedFirst: boolean;
   streamFilter: StreamViewFilter;
   searchQuery: string;
-  attachmentCounts?: Record<string, number>;
 }
 
 export function useFilteredEntries({
@@ -129,8 +132,12 @@ export function useFilteredEntries({
   showPinnedFirst,
   streamFilter,
   searchQuery,
-  attachmentCounts = {},
 }: UseFilteredEntriesOptions) {
+  // Defer the filter value so UI updates instantly, filtering catches up
+  // This prevents lag when rapidly clicking filter checkboxes
+  const deferredFilter = useDeferredValue(streamFilter);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
   // Create stream map for sorting
   const streamMap = useMemo(() => {
     return streams.reduce((map, s) => {
@@ -176,66 +183,68 @@ export function useFilteredEntries({
   }, [entries, sortMode, streamMap, streamById, orderMode, showPinnedFirst]);
 
   // Filter function that applies all settings drawer filters
+  // Uses deferredFilter so UI updates instantly, filtering catches up
   const applyFilters = useMemo(() => {
     return (entry: Entry): boolean => {
       // Archive filter (default: hide archived)
-      if (!streamFilter.showArchived && entry.is_archived) return false;
+      if (!deferredFilter.showArchived && entry.is_archived) return false;
 
       // Status filter (empty = show all)
-      if (streamFilter.statuses.length > 0 && !streamFilter.statuses.includes(entry.status)) return false;
+      if (deferredFilter.statuses.length > 0 && !deferredFilter.statuses.includes(entry.status)) return false;
 
       // Priority filter (empty = show all)
-      if (streamFilter.priorities.length > 0) {
+      if (deferredFilter.priorities.length > 0) {
         // Check if entry's priority matches any selected priority
         // entry.priority is the numeric value (0-4)
-        if (!streamFilter.priorities.includes(entry.priority as 0 | 1 | 2 | 3 | 4)) return false;
+        if (!deferredFilter.priorities.includes(entry.priority as 0 | 1 | 2 | 3 | 4)) return false;
       }
 
       // Type filter (empty = show all)
-      if (streamFilter.types.length > 0) {
+      if (deferredFilter.types.length > 0) {
         // entry.type is null or string
-        if (entry.type === null || !streamFilter.types.includes(entry.type)) return false;
+        if (entry.type === null || !deferredFilter.types.includes(entry.type)) return false;
       }
 
       // Rating filter (null = no filter)
       // Rating is stored as 0-10 (normalized)
-      if (streamFilter.ratingMin !== null) {
+      if (deferredFilter.ratingMin !== null) {
         // For rating 0, only exclude if min is set and rating is exactly 0 (unrated)
-        if (entry.rating < streamFilter.ratingMin) return false;
+        if (entry.rating < deferredFilter.ratingMin) return false;
       }
-      if (streamFilter.ratingMax !== null) {
-        if (entry.rating > streamFilter.ratingMax) return false;
+      if (deferredFilter.ratingMax !== null) {
+        if (entry.rating > deferredFilter.ratingMax) return false;
       }
 
       // Photos filter (null = show all)
-      if (streamFilter.hasPhotos !== null) {
-        const hasPhotos = entryHasPhotos(entry, attachmentCounts);
-        if (streamFilter.hasPhotos && !hasPhotos) return false;
-        if (!streamFilter.hasPhotos && hasPhotos) return false;
+      if (deferredFilter.hasPhotos !== null) {
+        const hasPhotos = entryHasPhotos(entry);
+        if (deferredFilter.hasPhotos && !hasPhotos) return false;
+        if (!deferredFilter.hasPhotos && hasPhotos) return false;
       }
 
       // Due date filter
-      if (!matchesDueDatePreset(entry.due_date, streamFilter.dueDatePreset, streamFilter.dueDateStart, streamFilter.dueDateEnd)) {
+      if (!matchesDueDatePreset(entry.due_date, deferredFilter.dueDatePreset, deferredFilter.dueDateStart, deferredFilter.dueDateEnd)) {
         return false;
       }
 
       // Entry date filter
-      if (!matchesEntryDateRange(entry.entry_date, streamFilter.entryDateStart, streamFilter.entryDateEnd)) {
+      if (!matchesEntryDateRange(entry.entry_date, deferredFilter.entryDateStart, deferredFilter.entryDateEnd)) {
         return false;
       }
 
       return true;
     };
-  }, [streamFilter, attachmentCounts]);
+  }, [deferredFilter]);
 
   // Filter entries by settings drawer filter + search query
+  // Uses deferred values so UI updates instantly, filtering catches up
   const filteredEntries = useMemo(() => {
     // First apply settings drawer filters
     let result = sortedEntries.filter(applyFilters);
 
     // Then apply search query filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
+    if (deferredSearchQuery.trim()) {
+      const query = deferredSearchQuery.toLowerCase().trim();
       result = result.filter(entry => {
         // Search in title
         if (entry.title?.toLowerCase().includes(query)) {
@@ -251,9 +260,10 @@ export function useFilteredEntries({
     }
 
     return result;
-  }, [sortedEntries, searchQuery, applyFilters]);
+  }, [sortedEntries, deferredSearchQuery, applyFilters]);
 
   // Filter sections by settings drawer filter + search query
+  // Uses deferred values so UI updates instantly, filtering catches up
   const filteredSections = useMemo((): EntrySection[] | undefined => {
     if (!entrySections) return undefined;
 
@@ -263,8 +273,8 @@ export function useFilteredEntries({
       if (!applyFilters(entry)) return false;
 
       // Apply search query filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
+      if (deferredSearchQuery.trim()) {
+        const query = deferredSearchQuery.toLowerCase().trim();
         if (entry.title?.toLowerCase().includes(query)) return true;
         const plainContent = entry.content.replace(/<[^>]*>/g, '').toLowerCase();
         return plainContent.includes(query);
@@ -281,7 +291,7 @@ export function useFilteredEntries({
       }))
       .map(section => ({ ...section, count: section.data.length }))
       .filter(section => section.data.length > 0);
-  }, [entrySections, searchQuery, applyFilters]);
+  }, [entrySections, deferredSearchQuery, applyFilters]);
 
   return {
     sortedEntries,

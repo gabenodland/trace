@@ -1,5 +1,5 @@
 import { View, Text, FlatList, SectionList, StyleSheet, ActivityIndicator } from "react-native";
-import { useState } from "react";
+import { useState, useRef, forwardRef, useImperativeHandle } from "react";
 import type { Entry, Stream as FullStream, EntrySection, EntryDisplayMode } from "@trace/core";
 import { getStreamAttributeVisibility } from "@trace/core";
 import { EntryListItem } from "./EntryListItem";
@@ -37,11 +37,58 @@ interface EntryListProps {
   displayMode?: EntryDisplayMode; // Display mode for entry items
   /** Full stream objects for attribute visibility determination */
   fullStreams?: FullStream[];
+  /** Entry count for header display (filtered count) */
+  entryCount?: number;
+  /** Total count for header display (unfiltered count) */
+  totalCount?: number;
 }
 
-export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, onArchive, ListHeaderComponent, streams, locations, displayMode, fullStreams }: EntryListProps) {
+/** Methods exposed via ref */
+export interface EntryListRef {
+  scrollToTop: () => void;
+}
+
+export const EntryList = forwardRef<EntryListRef, EntryListProps>(function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, onArchive, ListHeaderComponent, streams, locations, displayMode, fullStreams, entryCount, totalCount }, ref) {
   const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
+  const flatListRef = useRef<FlatList<Entry>>(null);
+  const sectionListRef = useRef<SectionList<Entry, EntrySection>>(null);
+
+  // Expose scrollToTop method via ref
+  useImperativeHandle(ref, () => ({
+    scrollToTop: () => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      sectionListRef.current?.scrollToLocation({ sectionIndex: 0, itemIndex: 0, animated: true });
+    },
+  }), []);
+
+  // Build count header that scrolls with list
+  const isFiltering = totalCount !== undefined && entryCount !== undefined && entryCount !== totalCount;
+  const countLabel = isFiltering
+    ? `${entryCount} of ${totalCount} entries`
+    : entryCount !== undefined
+      ? `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'}`
+      : undefined;
+
+  const CountHeader = countLabel ? (
+    <View style={styles.countHeader}>
+      <Text style={[
+        styles.countHeaderText,
+        { color: isFiltering ? theme.colors.interactive.primary : theme.colors.text.secondary },
+        { fontFamily: theme.typography.fontFamily.medium }
+      ]}>
+        {countLabel}
+      </Text>
+    </View>
+  ) : null;
+
+  // Combine external ListHeaderComponent with count header
+  const CombinedHeader = ListHeaderComponent || CountHeader ? (
+    <>
+      {ListHeaderComponent}
+      {CountHeader}
+    </>
+  ) : null;
 
   // Create a lookup map for streams
   const streamMap = streams?.reduce((map, s) => {
@@ -118,12 +165,13 @@ export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPre
   if (sections && sections.length > 0) {
     return (
       <SectionList
+        ref={sectionListRef}
         sections={sections}
         keyExtractor={(item) => item.entry_id}
         renderItem={({ item }) => renderEntryItem(item)}
         renderSectionHeader={renderSectionHeader}
         contentContainerStyle={styles.listContent}
-        ListHeaderComponent={ListHeaderComponent}
+        ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>No entries</Text>
@@ -136,14 +184,15 @@ export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPre
   }
 
   // If we have a header component, always render FlatList (even with no entries)
-  if (ListHeaderComponent) {
+  if (CombinedHeader) {
     return (
       <FlatList
+        ref={flatListRef}
         data={entries}
         keyExtractor={(item) => item.entry_id}
         renderItem={({ item }) => renderEntryItem(item)}
         contentContainerStyle={styles.listContent}
-        ListHeaderComponent={ListHeaderComponent}
+        ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>No entries for this date</Text>
@@ -167,15 +216,16 @@ export function EntryList({ entries, sections, isLoading, onEntryPress, onTagPre
 
   return (
     <FlatList
+      ref={flatListRef}
       data={entries}
       keyExtractor={(item) => item.entry_id}
       renderItem={({ item }) => renderEntryItem(item)}
       contentContainerStyle={styles.listContent}
-      ListHeaderComponent={ListHeaderComponent}
+      ListHeaderComponent={CombinedHeader}
       removeClippedSubviews={false}
     />
   );
-}
+});
 
 const styles = StyleSheet.create({
   centerContainer: {
@@ -223,5 +273,11 @@ const styles = StyleSheet.create({
   sectionCountText: {
     fontSize: themeBase.typography.fontSize.xs,
     fontWeight: themeBase.typography.fontWeight.medium,
+  },
+  countHeader: {
+    paddingBottom: themeBase.spacing.sm,
+  },
+  countHeaderText: {
+    fontSize: themeBase.typography.fontSize.sm,
   },
 });

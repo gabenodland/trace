@@ -7,3 +7,4 @@ export * from './SettingsTypes';
 
 // Helpers
 export * from './settingsHelpers';
+export * from './filterHelpers';

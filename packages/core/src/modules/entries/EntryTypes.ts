@@ -126,6 +126,8 @@ export interface Entry {
   conflict_backup?: string | null; // JSON backup of losing version when conflict detected
   last_edited_by?: string | null; // User email who last edited
   last_edited_device?: string | null; // Device name that last edited
+  // Computed field for filtering (not in database, calculated on fetch)
+  photo_count?: number; // Number of attachments for this entry
 }
 
 export interface CreateEntryInput {

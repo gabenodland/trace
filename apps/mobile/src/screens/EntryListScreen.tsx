@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { View, StyleSheet, BackHandler } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
-import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES } from "@trace/core";
+import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES, getActiveFilterInfo } from "@trace/core";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
-import { useAttachmentCounts } from "../modules/attachments/mobileAttachmentHooks";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigation } from "../shared/contexts/NavigationContext";
@@ -13,13 +12,16 @@ import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { TopBar } from "../components/layout/TopBar";
-import { SubBarSettings } from "../components/layout/SubBar";
+import { SubBarFilters } from "../components/layout/SubBar";
 import { SearchBar } from "../components/layout/SearchBar";
-import { EntryList } from "../modules/entries/components/EntryList";
+import { FilterBottomSheet } from "../components/sheets";
+import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
+import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
+import type { EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
+import { EntryList, type EntryListRef } from "../modules/entries/components/EntryList";
 import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { useTheme } from "../shared/contexts/ThemeContext";
-import { useSettingsDrawer } from "../shared/contexts/SettingsDrawerContext";
 import { useDrawerGestures, useFilteredEntries, useEntryActions } from "./hooks";
 
 export function EntryListScreen() {
@@ -50,9 +52,16 @@ export function EntryListScreen() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Modal visibility state for view/sort/filter
+  const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
+  const [showSortModeSelector, setShowSortModeSelector] = useState(false);
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
+
+  // Ref for scrolling list to top after filter apply
+  const entryListRef = useRef<EntryListRef>(null);
+
   // Per-stream view preferences from settings (sort + display mode + filter)
-  const { getStreamSortPreference, getStreamFilter } = useSettings();
-  const { drawerControl: settingsDrawerControl, isOpen: isSettingsDrawerOpen, closeDrawer: closeSettingsDrawer } = useSettingsDrawer();
+  const { getStreamSortPreference, setStreamSortPreference, getStreamFilter, resetStreamFilter } = useSettings();
 
   // Get the key for the current stream's view preference
   const viewPrefKey = typeof selectedStreamId === 'string' ? selectedStreamId : null;
@@ -67,7 +76,6 @@ export function EntryListScreen() {
   // Drawer gesture handling
   const { panHandlers } = useDrawerGestures({
     drawerControl,
-    settingsDrawerControl,
   });
 
   // Use hook for locations instead of direct localDB call
@@ -95,14 +103,9 @@ export function EntryListScreen() {
     return () => registerStreamLongPressHandler(null);
   }, [registerStreamLongPressHandler, handleStreamLongPress]);
 
-  // Handle Android back button - close drawers if open, otherwise let app exit normally
+  // Handle Android back button - close drawer if open, otherwise let app exit normally
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Close settings drawer if open
-      if (isSettingsDrawerOpen) {
-        closeSettingsDrawer();
-        return true;
-      }
       // Close stream drawer if open
       if (isDrawerOpen) {
         closeDrawer();
@@ -111,7 +114,7 @@ export function EntryListScreen() {
       return false; // Let Android handle back normally (exit app)
     });
     return () => backHandler.remove();
-  }, [isDrawerOpen, closeDrawer, isSettingsDrawerOpen, closeSettingsDrawer]);
+  }, [isDrawerOpen, closeDrawer]);
 
   // Compute title and icon for TopBar based on current selection
   const { title, titleIcon } = useMemo(() => {
@@ -140,7 +143,6 @@ export function EntryListScreen() {
   const apiFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
 
   const { entries, isLoading, entryMutations } = useEntries(apiFilter);
-  const { attachmentCounts } = useAttachmentCounts();
 
   // Entry action handlers
   const {
@@ -165,7 +167,6 @@ export function EntryListScreen() {
     showPinnedFirst,
     streamFilter,
     searchQuery,
-    attachmentCounts,
   });
 
   // Get display labels
@@ -173,32 +174,41 @@ export function EntryListScreen() {
   const baseSortLabel = ENTRY_SORT_MODES.find(m => m.value === sortMode)?.label || 'Entry Date';
   const sortModeLabel = orderMode === 'desc' ? `${baseSortLabel} \u2193` : `${baseSortLabel} \u2191`;
 
-  // Compute filter label (shows when filters are active)
-  const getFilterLabel = () => {
-    const parts: string[] = [];
-    if (streamFilter.showArchived) parts.push("Archived");
 
-    // Status filter - only show if actually filtering (not when all selected)
-    if (streamFilter.statuses.length > 0) {
-      // Get allowed statuses for current stream (or all if viewing "All Entries")
-      const currentStream = typeof selectedStreamId === 'string' && !selectedStreamId.includes(':')
-        ? streams.find(s => s.stream_id === selectedStreamId)
-        : undefined;
-      const allowedStatuses = (currentStream?.entry_statuses ?? ALL_STATUSES.map(s => s.value)) as string[];
-      const validSelected = streamFilter.statuses.filter(s => allowedStatuses.includes(s));
-      const allSelected = validSelected.length === allowedStatuses.length;
+  // Check if any filters are active and count them (for filter button indicator)
+  const { hasActiveFilters, activeFilterCount } = useMemo(() => {
+    // Get current stream for available statuses/types
+    const currentStream = typeof selectedStreamId === 'string' && !selectedStreamId.includes(':')
+      ? streams?.find(s => s.stream_id === selectedStreamId)
+      : undefined;
 
-      // Only show label if not all statuses are selected
-      if (!allSelected) {
-        parts.push(`${validSelected.length} status`);
-      }
-    }
+    const filterInfo = getActiveFilterInfo(streamFilter, {
+      availableStatuses: (currentStream?.entry_statuses ?? ALL_STATUSES.map(s => s.value)) as string[],
+      availableTypes: currentStream?.entry_types ?? [],
+    });
 
-    // Note: Private stream entries are auto-excluded in "All Entries" view (see mobileEntryHooks)
-    // No need to show label since it's automatic and not user-controllable
-    return parts.length > 0 ? parts.join(", ") : undefined;
-  };
-  const filterLabel = getFilterLabel();
+    return {
+      hasActiveFilters: filterInfo.hasActiveFilters,
+      activeFilterCount: filterInfo.activeCount,
+    };
+  }, [streamFilter, selectedStreamId, streams]);
+
+  // Handlers for display mode and sort mode changes
+  const handleDisplayModeChange = useCallback((mode: EntryDisplayMode) => {
+    setStreamSortPreference(viewPrefKey, { displayMode: mode });
+  }, [setStreamSortPreference, viewPrefKey]);
+
+  const handleSortModeChange = useCallback((mode: EntrySortMode) => {
+    setStreamSortPreference(viewPrefKey, { sortMode: mode });
+  }, [setStreamSortPreference, viewPrefKey]);
+
+  const handleSortOrderChange = useCallback((order: EntrySortOrder) => {
+    setStreamSortPreference(viewPrefKey, { sortOrder: order });
+  }, [setStreamSortPreference, viewPrefKey]);
+
+  const handleShowPinnedFirstChange = useCallback((value: boolean) => {
+    setStreamSortPreference(viewPrefKey, { showPinnedFirst: value });
+  }, [setStreamSortPreference, viewPrefKey]);
 
   const handleAddEntry = () => {
     let initialContent = "";
@@ -252,13 +262,17 @@ export function EntryListScreen() {
     // "list" mode - already here, no navigation needed
   }, [setViewMode, navigate]);
 
+  // Handle filter apply - scroll list to top
+  const handleFilterApply = useCallback(() => {
+    entryListRef.current?.scrollToTop();
+  }, []);
+
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...panHandlers}>
       <TopBar
         title={title}
         titleIcon={titleIcon}
-        badge={filteredEntries.length}
         onTitlePress={openDrawer}
         showDropdownArrow
         onSearchPress={() => setIsSearchOpen(!isSearchOpen)}
@@ -278,16 +292,19 @@ export function EntryListScreen() {
         />
       )}
 
-      <SubBarSettings
+      <SubBarFilters
         viewLabel={displayModeLabel}
         sortLabel={sortModeLabel}
-        filterLabel={filterLabel}
-        entryCount={filteredEntries.length}
-        totalCount={sortedEntries.length}
+        onViewPress={() => setShowDisplayModeSelector(true)}
+        onSortPress={() => setShowSortModeSelector(true)}
+        onFilterPress={() => setShowFilterSheet(true)}
+        isFiltering={hasActiveFilters}
+        filterCount={activeFilterCount}
         isOffline={isOffline}
       />
 
       <EntryList
+        ref={entryListRef}
         entries={filteredEntries}
         sections={filteredSections}
         isLoading={isLoading}
@@ -304,6 +321,8 @@ export function EntryListScreen() {
         locations={locations}
         displayMode={displayMode}
         fullStreams={streams}
+        entryCount={filteredEntries.length}
+        totalCount={sortedEntries.length}
       />
 
       {/* Move Stream Picker */}
@@ -312,6 +331,34 @@ export function EntryListScreen() {
         onClose={handleCloseMoveStreamPicker}
         onSelect={handleMoveStreamSelect}
         selectedStreamId={entryToMoveStreamId}
+      />
+
+      {/* Display Mode Selector */}
+      <DisplayModeSelector
+        visible={showDisplayModeSelector}
+        selectedMode={displayMode}
+        onSelect={handleDisplayModeChange}
+        onClose={() => setShowDisplayModeSelector(false)}
+      />
+
+      {/* Sort Mode Selector */}
+      <SortModeSelector
+        visible={showSortModeSelector}
+        selectedMode={sortMode}
+        onSelect={handleSortModeChange}
+        onClose={() => setShowSortModeSelector(false)}
+        sortOrder={orderMode}
+        onSortOrderChange={handleSortOrderChange}
+        showPinnedFirst={showPinnedFirst}
+        onShowPinnedFirstChange={handleShowPinnedFirstChange}
+      />
+
+      {/* Filter Bottom Sheet */}
+      <FilterBottomSheet
+        visible={showFilterSheet}
+        onClose={() => setShowFilterSheet(false)}
+        onApply={handleFilterApply}
+        entries={sortedEntries}
       />
 
       <BottomNavBar

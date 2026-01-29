@@ -5,7 +5,7 @@
  * All settings are stored as a single JSON object for efficient persistence.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   type UserSettings,
@@ -19,6 +19,9 @@ import {
   DEFAULT_DISPLAY_MODE,
   DEFAULT_STREAM_VIEW_FILTER,
 } from '@trace/core';
+
+// Debounce delay for saving settings (ms)
+const SAVE_DEBOUNCE_MS = 500;
 
 // ============================================================================
 // CONTEXT TYPES
@@ -35,6 +38,7 @@ interface SettingsContextValue {
   // Stream filter helpers (convenience wrappers)
   getStreamFilter: (streamId: string | null) => StreamViewFilter;
   setStreamFilter: (streamId: string | null, filter: Partial<StreamViewFilter>) => void;
+  resetStreamFilter: (streamId: string | null) => void;
 }
 
 // ============================================================================
@@ -54,6 +58,7 @@ interface SettingsProviderProps {
 export function SettingsProvider({ children }: SettingsProviderProps) {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [isLoaded, setIsLoaded] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load settings from AsyncStorage on mount
   useEffect(() => {
@@ -81,20 +86,31 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     loadSettings();
   }, []);
 
-  // Save settings to AsyncStorage whenever they change (after initial load)
+  // Save settings to AsyncStorage with debounce (prevents lag when clicking rapidly)
   useEffect(() => {
     if (!isLoaded) return;
 
-    async function saveSettings() {
+    // Clear any pending save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Debounce the save - UI updates instantly, storage write is batched
+    saveTimeoutRef.current = setTimeout(async () => {
       try {
         await AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-        console.log('[SettingsContext] Saved settings');
+        console.log('[SettingsContext] Saved settings (debounced)');
       } catch (error) {
         console.error('[SettingsContext] Error saving settings:', error);
       }
-    }
+    }, SAVE_DEBOUNCE_MS);
 
-    saveSettings();
+    // Cleanup on unmount or before next effect
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [settings, isLoaded]);
 
   // Update one or more settings
@@ -157,6 +173,13 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     });
   }, [getStreamSortPreference, setStreamSortPreference]);
 
+  // Reset filter for a stream to defaults
+  const resetStreamFilter = useCallback((streamId: string | null) => {
+    setStreamSortPreference(streamId, {
+      filter: DEFAULT_STREAM_VIEW_FILTER,
+    });
+  }, [setStreamSortPreference]);
+
   const value: SettingsContextValue = {
     settings,
     updateSettings,
@@ -166,6 +189,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     setStreamSortPreference,
     getStreamFilter,
     setStreamFilter,
+    resetStreamFilter,
   };
 
   return (
