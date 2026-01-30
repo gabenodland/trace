@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated, Dimensions, StatusBar, PanResponder } from "react-native";
+import Svg, { Path, Circle } from "react-native-svg";
 import { extractTagsAndMentions, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate } from "@trace/core";
 import { createLocation } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
@@ -11,7 +12,7 @@ import { useDrawer } from "../../../shared/contexts/DrawerContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { useAuth } from "../../../shared/contexts/AuthContext";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
-import { RichTextEditor } from "../../../components/editor/RichTextEditor";
+import { PellRichTextEditor } from "../../../components/editor/PellRichTextEditor";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
@@ -24,10 +25,17 @@ import { usePhotoTracking } from "./hooks/usePhotoTracking";
 import { useVersionConflict } from "./hooks/useVersionConflict";
 import { useAutoGeocode } from "./hooks/useAutoGeocode";
 import { styles } from "./EntryScreen.styles";
-import { MetadataBar } from "./MetadataBar";
+import { MetadataPills } from "./MetadataPills";
 import { EditorToolbar } from "./EditorToolbar";
 import { EntryHeader } from "./EntryHeader";
 import { EntryPickers, type ActivePicker } from "./EntryPickers";
+import { ScrollDebugOverlay } from "../../../components/debug/ScrollDebugOverlay";
+
+// Enable debug overlay for development
+const SHOW_DEBUG_OVERLAY = false;
+
+// POC: Enable title-as-first-line mode
+const TITLE_AS_FIRST_LINE = true;
 
 interface EntryScreenProps {
   entryId?: string | null;
@@ -86,6 +94,107 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   // Separate state for save indicator - tracks both manual and autosave (isSubmitting only tracks manual)
   const [isSaving, setIsSaving] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Store initial editor content for dirty comparison (set when form is ready)
+  const initialEditorContent = useRef<string | null>(null);
+
+  // Track actual header height for scroll calculations (measured via onLayout)
+  const [headerHeight, setHeaderHeight] = useState(90); // Default to style height
+  const headerHeightMeasured = useRef(90); // Store measured height for animations
+
+  // Collapsing header state
+  // When user scrolls down past threshold, header collapses
+  // Pull down at top reveals it again (like pull-to-refresh)
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const headerAnimValue = useRef(new Animated.Value(1)).current; // 1 = visible, 0 = collapsed
+  const lastScrollY = useRef(0);
+  const scrollDirection = useRef<'up' | 'down' | null>(null);
+  const pullStartY = useRef<number | null>(null); // For pull-to-reveal gesture
+
+  // Collapse header with animation
+  const collapseHeader = useCallback(() => {
+    if (headerCollapsed) return;
+    console.log('[HEADER] Collapsing header');
+    setHeaderCollapsed(true);
+    Animated.timing(headerAnimValue, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false, // Can't use native driver for height
+    }).start();
+  }, [headerCollapsed, headerAnimValue]);
+
+  // Expand header with animation
+  const expandHeader = useCallback(() => {
+    if (!headerCollapsed) return;
+    console.log('[HEADER] Expanding header');
+    // Record expand time to prevent immediate collapse from layout-induced scroll
+    lastExpandTime.current = Date.now();
+    // Reset lastScrollY to prevent false delta after layout change
+    lastScrollY.current = 0;
+    // Reset editor scroll to top when drawer opens
+    editorRef.current?.resetInternalScroll?.();
+    setHeaderCollapsed(false);
+    Animated.timing(headerAnimValue, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [headerCollapsed, headerAnimValue]);
+
+  // Track pull-to-reveal gesture
+  // State machine: SCROLLING -> READY_FOR_DRAWER (at top) -> pulling -> EXPAND
+  const isReadyForDrawer = useRef(false);
+  const pullDistance = useRef(0);
+  const lastExpandTime = useRef(0); // Cooldown to prevent collapse after expand
+  const EXPAND_COOLDOWN_MS = 300; // Ignore collapse-triggering scrolls for 300ms after expand
+
+  // PanResponder for pull-to-reveal gesture
+  // Simple threshold-based: pull down past threshold to expand
+  const PULL_THRESHOLD = 60; // Pixels to pull before expanding
+  const panResponder = useMemo(() => PanResponder.create({
+    // Only capture when we're ready for drawer (at top with collapsed header)
+    onStartShouldSetPanResponder: () => isReadyForDrawer.current && headerCollapsed,
+    onMoveShouldSetPanResponder: (_, gestureState) => {
+      // Capture if pulling down (dy > 0) while ready for drawer
+      return isReadyForDrawer.current && headerCollapsed && gestureState.dy > 5;
+    },
+    onPanResponderGrant: () => {
+      console.log('👆 [PULL] Gesture started');
+      pullDistance.current = 0;
+    },
+    onPanResponderMove: (_, gestureState) => {
+      // Track pull distance
+      if (gestureState.dy > 0) {
+        pullDistance.current = gestureState.dy;
+      }
+    },
+    onPanResponderRelease: () => {
+      console.log(`👆 [PULL] Released at ${Math.round(pullDistance.current)}px`);
+
+      // Expand if pulled past threshold
+      if (pullDistance.current >= PULL_THRESHOLD) {
+        console.log('🔼 [PULL] Expanding header');
+        expandHeader();
+        isReadyForDrawer.current = false;
+      }
+      pullDistance.current = 0;
+    },
+    onPanResponderTerminate: () => {
+      pullDistance.current = 0;
+    },
+  }), [headerCollapsed, expandHeader]);
+
+  // Debug overlay state
+  const [debugData, setDebugData] = useState({
+    scrollOffset: 0,
+    cursorY: 0,
+    hasCursorPosition: false,
+    lastCursorUpdate: 0,
+    keyboardHeight: 0,
+    editorTop: 0,
+    editorHeight: 0,
+    visibleTop: 90, // Updated when header measures
+    visibleBottom: Dimensions.get('window').height - 80,
+  });
 
   // Consolidated picker visibility state - only one picker can be open at a time
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
@@ -106,11 +215,19 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const [isTitleFocused, setIsTitleFocused] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
+  // POC: Track if cursor is in the title line (first line of editor)
+  const [isTitleLineFocused, setIsTitleLineFocused] = useState(false);
   const snackbarOpacity = useRef(new Animated.Value(0)).current;
   const editorRef = useRef<any>(null);
   const titleInputRef = useRef<TextInput>(null);
   const photoCaptureRef = useRef<PhotoCaptureRef>(null);
+  const editorContainerRef = useRef<View>(null);
+  const cursorYRef = useRef<number>(0); // Cursor Y position within editor content (for debug)
+  const hasCursorPositionRef = useRef<boolean>(false); // Has editor reported a cursor position? (for debug)
+  const lastCursorUpdateRef = useRef<number>(0); // When was cursor position last updated? (for debug)
+  const scrollOffsetRef = useRef<number>(0); // Current scroll position of editor WebView
   const isInitialLoad = useRef(true); // Track if this is first load
+  const prevEditorHeightRef = useRef<number>(0); // Track previous editor height
   const [baselinePhotoCount, setBaselinePhotoCount] = useState<number | null>(null); // Baseline for dirty tracking (null = not yet initialized)
   const [photosCollapsed, setPhotosCollapsed] = useState(false); // Start expanded
   // For new entries, generate a temp ID. For editing, use the existing entryId.
@@ -175,15 +292,26 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   // Full-screen edit mode (hides all metadata, shows only formData.title + body + toolbar)
   const [isFullScreen, setIsFullScreen] = useState(false);
 
-  // Combined dirty state: hook's isDirty + photo count comparison for existing entries
-  // For editing existing entries, photos are saved directly to LocalDB (not pendingPhotos),
-  // so we need to compare photoCount against the baseline stored as state
+  // Check if editor content has changed from initial (point-in-time comparison)
+  // Returns true if content differs, false if same or not yet initialized
+  const hasEditorContentChanged = useCallback((): boolean => {
+    if (initialEditorContent.current === null) return false;
+    try {
+      const currentContent = editorRef.current?.getHTML?.();
+      if (typeof currentContent !== 'string') return false;
+      return currentContent !== initialEditorContent.current;
+    } catch (e) {
+      return false;
+    }
+  }, []);
+
+  // Combined dirty state: hook's isDirty + photo count comparison
+  // Editor content is checked on-demand via hasEditorContentChanged()
   const isFormDirty = useMemo(() => {
-    // If hook says dirty, it's dirty
+    // If hook says dirty (title, stream, date, etc. changed), it's dirty
     if (isDirty) return true;
 
     // For editing existing entries, check if photo count changed from baseline
-    // Only compare if baseline has been initialized (not null)
     if (isEditing && baselinePhotoCount !== null && photoCount !== baselinePhotoCount) {
       return true;
     }
@@ -201,13 +329,16 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     }
   }, []);
 
-  // Memoized check for actual content (for autosave: don't save empty new entries)
-  const hasContent = useMemo(() =>
-    formData.title.trim() !== '' ||
-    formData.content.replace(/<[^>]*>/g, '').trim() !== '' ||
-    formData.pendingPhotos.length > 0,
-    [formData.title, formData.content, formData.pendingPhotos.length]
-  );
+  // Check for actual content (for autosave: don't save empty new entries)
+  // Not memoized because we need to check editor content directly (formData.content may not be in sync)
+  const hasContent = useCallback(() => {
+    if (formData.title.trim() !== '') return true;
+    if (formData.pendingPhotos.length > 0) return true;
+    // Check editor content directly since we don't sync to formData on every keystroke
+    const editorContent = editorRef.current?.getHTML?.();
+    const content = typeof editorContent === 'string' ? editorContent : formData.content;
+    return content.replace(/<[^>]*>/g, '').trim() !== '';
+  }, [formData.title, formData.content, formData.pendingPhotos.length]);
 
   // Autosave callback ref - updated on each render but doesn't cause re-renders
   const handleAutosaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
@@ -217,12 +348,12 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     await handleAutosaveRef.current();
   }, []); // Empty deps - ref access is stable
 
-  // AUTOSAVE: Uses extracted hook for debounced saving
-  // Triggers 2s after last change, only when dirty and in edit mode
-  useAutosave({
+  // AUTOSAVE: Debounced autosave triggered by editor onChange
+  // When editor content changes, starts a 1.5 second debounce timer before saving
+  // Returns hasPendingChanges for immediate dirty indicator (orange dot)
+  const { onContentChange, hasPendingChanges, markSaveComplete } = useAutosave({
     isEditMode,
     isEditing,
-    isFormDirty,
     isFormReady,
     isSubmitting,
     isSaving,
@@ -237,16 +368,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       // For NEW entries: check if there's actual user content worth saving
       // (title, text, or photos - not just metadata like stream/GPS)
       // If no user content, just discard and proceed with back
-      if (!isEditing) {
-        const editorContent = editorRef.current?.getHTML?.() ?? formData.content ?? '';
-        const hasUserContent =
-          formData.title.trim().length > 0 ||
-          (typeof editorContent === 'string' && editorContent.replace(/<[^>]*>/g, '').trim().length > 0) ||
-          formData.pendingPhotos.length > 0;
-
-        if (!hasUserContent) {
-          return true; // Proceed with back, no save
-        }
+      if (!isEditing && !hasContent()) {
+        return true; // Proceed with back, no save
       }
 
       // Check if there are unsaved changes
@@ -266,35 +389,28 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     return () => {
       setBeforeBackHandler(null);
     };
-  }, [formData.title, formData.content, formData.streamId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode, isEditing]);
+  }, [formData.title, formData.content, formData.streamId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode, isEditing, hasContent, hasEditorContentChanged]);
 
   // Check if there are unsaved changes - combines edit mode check with dirty tracking
-  // Also checks editor content directly to handle race condition where user types
-  // and quickly hits back before RichTextEditor's polling syncs to formData
+  // Editor content is compared at check time (not continuously tracked)
   const hasUnsavedChanges = (): boolean => {
-    console.log('🔍 [hasUnsavedChanges] Checking...', { isEditMode, isFormDirty });
-
     // If not in edit mode, no changes are possible
     if (!isEditMode) {
-      console.log('🔍 [hasUnsavedChanges] Not in edit mode, returning false');
       return false;
     }
 
-    // First check the hook's dirty state (covers title, date, stream, etc.)
+    // Check form fields (title, stream, date, etc.)
     if (isFormDirty) {
-      console.log('🔍 [hasUnsavedChanges] isFormDirty=true, returning true');
+      console.log('🔍 [hasUnsavedChanges] isFormDirty=true');
       return true;
     }
 
-    // Also check if editor content differs from formData (race condition fix)
-    // This catches the case where user typed but polling hasn't synced yet
-    const editorContent = editorRef.current?.getHTML?.();
-    if (typeof editorContent === 'string' && editorContent !== formData.content) {
-      console.log('🔍 [hasUnsavedChanges] Editor content differs from formData, returning true');
+    // Check editor content (point-in-time comparison)
+    if (hasEditorContentChanged()) {
+      console.log('🔍 [hasUnsavedChanges] editor content changed');
       return true;
     }
 
-    console.log('🔍 [hasUnsavedChanges] No changes detected, returning false');
     return false;
   };
 
@@ -306,18 +422,10 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     // For NEW entries: check if there's actual user content worth saving
     // (title, text, or photos - not just metadata like stream/GPS)
     // If no user content, just discard and go back
-    if (!isEditing) {
-      const editorContent = editorRef.current?.getHTML?.() ?? formData.content ?? '';
-      const hasUserContent =
-        formData.title.trim().length > 0 ||
-        (typeof editorContent === 'string' && editorContent.replace(/<[^>]*>/g, '').trim().length > 0) ||
-        formData.pendingPhotos.length > 0;
-
-      if (!hasUserContent) {
-        console.log('⬅️ [handleBack] New entry with no user content, discarding');
-        navigateBack();
-        return;
-      }
+    if (!isEditing && !hasContent()) {
+      console.log('⬅️ [handleBack] New entry with no user content, discarding');
+      navigateBack();
+      return;
     }
 
     if (!hasUnsavedChanges()) {
@@ -334,8 +442,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     });
   };
 
-  // Enter edit mode - RichTextEditor handles focus automatically
-  // when editor receives focus while in read-only UI mode
+  // Enter edit mode - editor is already focused from the tap that triggered this
+  // Cursor is already at tap position, so we just update the UI state (show toolbar, etc.)
   const enterEditMode = useCallback(() => {
     setIsEditMode(true);
   }, []);
@@ -496,6 +604,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     // This prevents any dirty state since baseline === formData
     setBaseline(newFormData);
     setBaselinePhotoCount(photoCount);
+    // Reset initial editor content for dirty comparison
+    initialEditorContent.current = entry.content || '';
 
     // Then update form to same data
     updateMultipleFields(newFormData);
@@ -620,12 +730,16 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   }, [entry, isEditing, streams, setBaseline, updateMultipleFields, isFormReady]);
 
   // Called when RichTextEditor is ready with its actual content (possibly normalized)
-  // This syncs formData AND baseline to the editor's real content if normalization changed it
+  // This sets the initial content for dirty comparison and syncs baseline if needed
   const handleEditorReady = useCallback((editorContent: string) => {
-    if (!isEditing || !isFormReady) return;
+    // Always set initial editor content for dirty comparison
+    if (initialEditorContent.current === null) {
+      initialEditorContent.current = editorContent;
+      console.log('📝 [handleEditorReady] Set initial editor content', { len: editorContent?.length });
+    }
 
-    // Only sync if editor normalized the content differently
-    if (formData.content !== editorContent) {
+    // For editing existing entries, sync formData if editor normalized the content
+    if (isEditing && isFormReady && formData.content !== editorContent) {
       console.log('📝 [handleEditorReady] Editor normalized content, syncing baseline', {
         formContentLen: formData.content?.length,
         editorContentLen: editorContent?.length,
@@ -635,6 +749,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       // Also update baseline so this doesn't mark as dirty
       const syncedData = { ...formData, content: editorContent };
       setBaseline(syncedData);
+      // Update initial content to match normalized
+      initialEditorContent.current = editorContent;
     }
   }, [isEditing, isFormReady, formData, setBaseline, updateField]);
 
@@ -728,29 +844,133 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     }
   }, [isEditing, streams, initialStreamId, formData.title, formData.content, updateField]);
 
-  // Keyboard listeners
+  // Handle scroll for collapsing header
+  // Collapse IMMEDIATELY when scrolling down, enter ready mode at top
+  const handleScrollForHeader = useCallback((scrollY: number) => {
+    const delta = scrollY - lastScrollY.current;
+    const timeSinceExpand = Date.now() - lastExpandTime.current;
+    const inCooldown = timeSinceExpand < EXPAND_COOLDOWN_MS;
+
+    // Log every scroll event for debugging
+    console.log(`[SCROLL] scrollY=${Math.round(scrollY)} delta=${Math.round(delta)} collapsed=${headerCollapsed} ready=${isReadyForDrawer.current} cooldown=${inCooldown}`);
+
+    // During cooldown after expand, ignore scroll events that would collapse
+    // This prevents the layout-induced scroll from immediately collapsing the header
+    if (inCooldown && !headerCollapsed) {
+      console.log(`[SCROLL] In cooldown (${timeSinceExpand}ms since expand), ignoring`);
+      lastScrollY.current = scrollY;
+      return;
+    }
+
+    // Detect scroll direction - use small threshold to filter noise
+    if (delta > 2) {
+      scrollDirection.current = 'down';
+      console.log('[SCROLL] Direction: DOWN');
+    } else if (delta < -2) {
+      scrollDirection.current = 'up';
+      console.log('[SCROLL] Direction: UP');
+    }
+
+    // Collapse header IMMEDIATELY when user starts scrolling down
+    if (scrollY > 5 && scrollDirection.current === 'down' && !headerCollapsed) {
+      console.log('🔽 [HEADER] COLLAPSING - scrollY:', Math.round(scrollY), 'delta:', Math.round(delta));
+      collapseHeader();
+      isReadyForDrawer.current = false;
+      pullDistance.current = 0;
+    }
+
+    // Enter "ready for drawer" mode when we reach the top
+    if (scrollY <= 2 && headerCollapsed && !isReadyForDrawer.current) {
+      console.log('🎯 [HEADER] READY FOR DRAWER - reached top, scrollY:', Math.round(scrollY));
+      console.log('🎯 [HEADER] Pull down to expand! PanResponder will track finger movement.');
+      isReadyForDrawer.current = true;
+      pullDistance.current = 0;
+    }
+
+    // Exit "ready for drawer" mode if we scroll away from top
+    if (scrollY > 10 && isReadyForDrawer.current) {
+      console.log('❌ [HEADER] Left top - exiting ready mode. scrollY:', Math.round(scrollY));
+      isReadyForDrawer.current = false;
+      pullDistance.current = 0;
+    }
+
+    lastScrollY.current = scrollY;
+  }, [headerCollapsed, collapseHeader]);
+
+  // Handle cursor position from editor - used for header collapse and debug
+  // Scroll position is also reported via this callback (as raw scrollY)
+  const handleCursorPosition = useCallback((cursorY: number) => {
+    cursorYRef.current = cursorY;
+    hasCursorPositionRef.current = true;
+    lastCursorUpdateRef.current = Date.now();
+    scrollOffsetRef.current = cursorY;
+
+    // Debug: log scroll position to verify events are being received
+    console.log('[SCROLL] Position:', Math.round(cursorY), 'delta:', Math.round(cursorY - lastScrollY.current));
+
+    // Use cursor/scroll position to drive header collapse
+    // cursorY includes scroll offset, so high values = scrolled down
+    handleScrollForHeader(cursorY);
+
+    // Update debug overlay
+    if (SHOW_DEBUG_OVERLAY) {
+      setDebugData(prev => ({
+        ...prev,
+        cursorY,
+        scrollOffset: cursorY,
+        hasCursorPosition: true,
+        lastCursorUpdate: Date.now(),
+      }));
+    }
+  }, [handleScrollForHeader]);
+
+  // Combined onChange handler - just trigger autosave
+  const handleEditorChange = useCallback(() => {
+    onContentChange();
+  }, [onContentChange]);
+
+  // Handle editor height changes - just track for layout
+  const handleEditorHeightChange = useCallback((newHeight: number) => {
+    prevEditorHeightRef.current = newHeight;
+  }, []);
+
+  // Keyboard listeners - just track keyboard height for layout
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
+        const kbHeight = e.endCoordinates.height;
+        const screenHeight = Dimensions.get('window').height;
+        setKeyboardHeight(kbHeight);
 
-        // Scroll cursor into view when keyboard appears
-        // Use a longer delay to ensure edit mode transition is complete
-        // IMPORTANT: Only scroll if:
-        // 1. Title is NOT focused - scrollToCursor calls editor.focus() which would steal focus
-        // 2. No picker is open - picker inputs (like search) need to keep their focus
-        if (editorRef.current && !titleInputRef.current?.isFocused() && !activePicker) {
-          setTimeout(() => {
-            editorRef.current?.scrollToCursor();
-          }, 300);
+        // Update debug overlay
+        if (SHOW_DEBUG_OVERLAY) {
+          setDebugData(prev => ({
+            ...prev,
+            keyboardHeight: kbHeight,
+            visibleBottom: screenHeight - kbHeight - 80,
+          }));
         }
       }
     );
     const keyboardDidHideListener = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
       () => {
+        const screenHeight = Dimensions.get('window').height;
         setKeyboardHeight(0);
+
+        // Update debug overlay
+        if (SHOW_DEBUG_OVERLAY) {
+          setDebugData(prev => ({
+            ...prev,
+            keyboardHeight: 0,
+            visibleBottom: screenHeight - 80,
+          }));
+        }
+
+        // Reset cursor position tracking for next edit session
+        hasCursorPositionRef.current = false;
+        cursorYRef.current = 0;
       }
     );
 
@@ -758,7 +978,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
-  }, [isEditMode, activePicker]); // Re-register when edit mode or picker changes
+  }, []);
 
   // Save handler
   // isAutosave: when true, don't set isSubmitting to keep inputs editable (seamless background save)
@@ -816,6 +1036,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
                   // Update known version to current
                   updateKnownVersion(currentVersion);
                   markClean();
+                  // Reset initial editor content for dirty comparison
+                  initialEditorContent.current = entry.content || '';
                   setBaselinePhotoCount(photoCount);
                   showSnackbar('Discarded your changes, loaded latest version');
                   resolve();
@@ -1090,6 +1312,20 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
 
       // For all saves (new and existing): stay on screen
       markClean(); // Mark form as clean after successful save
+      markSaveComplete(); // Clear autosave pending state (triggers green check in header)
+      // Reset initial editor content to current for dirty comparison
+      const savedContent = editorRef.current?.getHTML?.();
+      if (typeof savedContent === 'string') {
+        initialEditorContent.current = savedContent;
+        // Update formData.content and baseline to match what was saved
+        // This prevents isDirty from returning true immediately after save
+        const updatedFormData = { ...formData, content: savedContent };
+        updateField("content", savedContent);
+        setBaseline(updatedFormData);
+      } else {
+        // No editor content available, just update baseline with current formData
+        setBaseline(formData);
+      }
       setBaselinePhotoCount(photoCount); // Update photo baseline
       // Update known version - we just created a new version with this save
       // This prevents false conflict detection on subsequent saves
@@ -1323,143 +1559,152 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
-      {/* Header Bar with Back/Date/Save buttons */}
-      <EntryHeader
-        isEditMode={isEditMode}
-        isFullScreen={isFullScreen}
-        isSubmitting={isSubmitting}
-        isSaving={isSaving}
-        isEditing={isEditing}
-        isDirty={isFormDirty}
-        title={formData.title}
-        entryDate={formData.entryDate}
-        includeTime={formData.includeTime}
-        onTitleChange={(text) => updateField("title", text)}
-        onBack={handleBack}
-        onDatePress={() => setActivePicker('entryDate')}
-        onTimePress={() => setActivePicker('time')}
-        onAddTime={() => {
-          updateField("includeTime", true);
-          const date = new Date(formData.entryDate);
-          date.setMilliseconds(0);
-          updateField("entryDate", date.toISOString());
+      {/* Header Bar with Back/Date/Save buttons - Animated for collapse */}
+      <Animated.View
+        style={{
+          height: headerAnimValue.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, headerHeightMeasured.current],
+          }),
+          overflow: 'hidden',
         }}
-        onAttributesPress={() => setActivePicker('attributes')}
-        enterEditMode={enterEditMode}
-        editorRef={editorRef}
-      />
-
-      {/* Metadata Bar - Only shows SET values (hidden in full-screen mode) */}
-      {!isFullScreen && (
-        <MetadataBar
-          streamName={formData.streamName}
-          locationData={formData.locationData}
-          status={formData.status}
-          type={formData.type}
-          dueDate={formData.dueDate}
-          rating={formData.rating}
-          priority={formData.priority}
-          photoCount={photoCount}
-          photosCollapsed={photosCollapsed}
-          showLocation={showLocation}
-          showStatus={showStatus}
-          showType={showType}
-          showDueDate={showDueDate}
-          showRating={showRating}
-          showPriority={showPriority}
-          showPhotos={showPhotos}
-          unsupportedStatus={unsupportedStatus}
-          unsupportedType={unsupportedType}
-          unsupportedDueDate={unsupportedDueDate}
-          unsupportedRating={unsupportedRating}
-          unsupportedPriority={unsupportedPriority}
-          unsupportedLocation={unsupportedLocation}
-          availableTypes={currentStream?.entry_types ?? []}
-          ratingType={currentStream?.entry_rating_type || 'stars'}
+      >
+        <EntryHeader
           isEditMode={isEditMode}
+          isFullScreen={isFullScreen}
+          isSubmitting={isSubmitting}
+          isSaving={isSaving}
+          isEditing={isEditing}
+          isDirty={isFormDirty || hasPendingChanges}
+          title={formData.title}
+          entryDate={formData.entryDate}
+          includeTime={formData.includeTime}
+          onTitleChange={(text) => updateField("title", text)}
+          onBack={handleBack}
+          onDatePress={() => setActivePicker('entryDate')}
+          onTimePress={() => setActivePicker('time')}
+          onAddTime={() => {
+            updateField("includeTime", true);
+            const date = new Date(formData.entryDate);
+            date.setMilliseconds(0);
+            updateField("entryDate", date.toISOString());
+          }}
+          onAttributesPress={() => setActivePicker('attributes')}
           enterEditMode={enterEditMode}
-          onStreamPress={() => setActivePicker(activePicker === 'stream' ? null : 'stream')}
-          onLocationPress={() => unsupportedLocation ? setActivePicker('unsupportedLocation') : setActivePicker(activePicker === 'location' ? null : 'location')}
-          onStatusPress={() => unsupportedStatus ? setActivePicker('unsupportedStatus') : setActivePicker(activePicker === 'status' ? null : 'status')}
-          onTypePress={() => unsupportedType ? setActivePicker('unsupportedType') : setActivePicker(activePicker === 'type' ? null : 'type')}
-          onDueDatePress={() => unsupportedDueDate ? setActivePicker('unsupportedDueDate') : setActivePicker(activePicker === 'dueDate' ? null : 'dueDate')}
-          onRatingPress={() => unsupportedRating ? setActivePicker('unsupportedRating') : setActivePicker('rating')}
-          onPriorityPress={() => unsupportedPriority ? setActivePicker('unsupportedPriority') : setActivePicker('priority')}
-          onPhotosPress={() => setPhotosCollapsed(false)}
+          onHeightChange={(height) => {
+            console.log('[HEADER] Height measured:', height);
+            headerHeightMeasured.current = height;
+            setHeaderHeight(height);
+            setDebugData(prev => ({ ...prev, visibleTop: headerCollapsed ? 0 : height }));
+          }}
           editorRef={editorRef}
         />
-      )}
+      </Animated.View>
 
-      {/* Title Row - Full width below metadata (hidden in fullscreen - formData.title shows in header) */}
-      {!isFullScreen && (
-        <View style={styles.titleRow}>
-          {shouldCollapse ? (
-            <TouchableOpacity
-              style={styles.titleCollapsed}
-              onPress={() => {
-                if (isEditMode) {
-                  setIsTitleExpanded(true);
-                  setTimeout(() => titleInputRef.current?.focus(), 100);
-                } else {
-                  enterEditMode();
-                  setIsTitleExpanded(true);
-                  setTimeout(() => titleInputRef.current?.focus(), 100);
-                }
-              }}
-            >
-              <Text style={[styles.titlePlaceholder, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]}>
-                {isEditMode ? "Add Title" : "Untitled"}
-              </Text>
-            </TouchableOpacity>
-          ) : !isEditMode ? (
-            // View mode: use Text in TouchableOpacity (TextInput with editable=false doesn't capture taps)
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={handleTitlePress}
-              style={styles.titleTouchable}
-            >
-              <Text style={[styles.titleText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>
-                {formData.title || "Title"}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            // Edit mode: direct TextInput for keyboard interaction
-            <TextInput
-              ref={titleInputRef}
-              value={formData.title}
-              onChangeText={(text) => updateField("title", text.replace(/\n/g, ' '))}
-              placeholder={isTitleFocused ? "" : "Add Title"}
-              placeholderTextColor={theme.colors.text.disabled}
-              style={[styles.titleInputFullWidth, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}
-              editable={!isSubmitting}
-              multiline={true}
-              blurOnSubmit={true}
-              returnKeyType="done"
-              onFocus={() => {
-                setIsTitleFocused(true);
-                setIsTitleExpanded(true);
-                // Clear any pending body focus - title is being focused instead
-                editorRef.current?.clearPendingFocus?.();
-                // Also blur the editor to ensure keyboard shows for title, not body
-                editorRef.current?.blur?.();
-              }}
-              onBlur={() => setIsTitleFocused(false)}
-              onPressIn={handleTitlePress}
-            />
-          )}
+      {/* Minimal header when collapsed - tap chevron to expand */}
+      {headerCollapsed && (
+        <View
+          style={{
+            // Same safe area padding as full header (from EntryScreen.styles.ts titleBar)
+            paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 8,
+            paddingBottom: 4,
+            backgroundColor: theme.colors.background.secondary,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border.light,
+          }}
+        >
+          {/* Back button */}
+          <TouchableOpacity
+            onPress={handleBack}
+            style={{ padding: 8 }}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
+              <Path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+
+          {/* Center - chevron down to expand */}
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 8,
+            }}
+            onPress={expandHeader}
+            activeOpacity={0.7}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
+              <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+
+          {/* Menu button */}
+          <TouchableOpacity
+            style={{ padding: 8 }}
+            onPress={() => setActivePicker('attributes')}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+              <Circle cx={12} cy={5} r={2} />
+              <Circle cx={12} cy={12} r={2} />
+              <Circle cx={12} cy={19} r={2} />
+            </Svg>
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* Content Area */}
-      <View style={[
-        styles.contentContainer,
-        // Dynamic padding to account for bottom bar height (~60px)
-        isEditMode ? { paddingBottom: 60 } : { paddingBottom: 0 },
-        keyboardHeight > 0 && { paddingBottom: keyboardHeight + 80 }
-      ]}>
+      {/* Drawer - metadata, photos, title */}
+      {!isFullScreen && (
+        <Animated.View
+          style={{
+            overflow: 'hidden',
+            backgroundColor: theme.colors.background.secondary,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border.light,
+            // Animate height based on header collapse state
+            maxHeight: headerAnimValue.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 500], // Max drawer height when expanded
+            }),
+            opacity: headerAnimValue,
+          }}
+        >
+          {/* Metadata Pills - Horizontal scrollable pills */}
+          <MetadataPills
+            streamName={formData.streamName}
+            locationData={formData.locationData}
+            status={formData.status}
+            type={formData.type}
+            dueDate={formData.dueDate}
+            rating={formData.rating}
+            priority={formData.priority}
+            photoCount={photoCount}
+            showLocation={showLocation}
+            showStatus={showStatus}
+            showType={showType}
+            showDueDate={showDueDate}
+            showRating={showRating}
+            showPriority={showPriority}
+            showPhotos={showPhotos}
+            unsupportedStatus={unsupportedStatus}
+            unsupportedType={unsupportedType}
+            unsupportedDueDate={unsupportedDueDate}
+            unsupportedRating={unsupportedRating}
+            unsupportedPriority={unsupportedPriority}
+            unsupportedLocation={unsupportedLocation}
+            availableTypes={currentStream?.entry_types ?? []}
+            ratingType={currentStream?.entry_rating_type || 'stars'}
+            onStreamPress={() => setActivePicker(activePicker === 'stream' ? null : 'stream')}
+            onLocationPress={() => unsupportedLocation ? setActivePicker('unsupportedLocation') : setActivePicker(activePicker === 'location' ? null : 'location')}
+            onAttributesPress={() => setActivePicker('attributeGrid')}
+            onPhotosPress={() => setPhotosCollapsed(false)}
+          />
 
-        {/* Photo Gallery (hidden in full-screen mode) */}
-        {!isFullScreen && (
+          {/* Photo Gallery - above title */}
           <PhotoGallery
             entryId={effectiveEntryId || tempEntryId}
             refreshKey={photoCount + externalRefreshKey}
@@ -1474,24 +1719,111 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
               photoCaptureRef.current?.openMenu();
             }}
           />
-        )}
 
-        {/* Editor */}
-        <View style={[
-          styles.editorContainer,
-          isFullScreen && styles.fullScreenEditor
-        ]}>
-          <RichTextEditor
-            ref={editorRef}
-            value={formData.content}
-            onChange={(text) => updateField("content", text)}
-            placeholder="What's on your mind? Use #tags and @mentions..."
-            editable={isEditMode}
-            onPress={enterEditMode}
-            onReady={handleEditorReady}
-          />
-        </View>
+          {/* Title Row - Full width below photos */}
+          <View style={styles.titleRow}>
+            {shouldCollapse ? (
+              <TouchableOpacity
+                style={styles.titleCollapsed}
+                onPress={() => {
+                  if (isEditMode) {
+                    setIsTitleExpanded(true);
+                    setTimeout(() => titleInputRef.current?.focus(), 100);
+                  } else {
+                    enterEditMode();
+                    setIsTitleExpanded(true);
+                    setTimeout(() => titleInputRef.current?.focus(), 100);
+                  }
+                }}
+              >
+                <Text style={[styles.titlePlaceholder, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]}>
+                  {isEditMode ? "Add Title" : "Untitled"}
+                </Text>
+              </TouchableOpacity>
+            ) : !isEditMode ? (
+              // View mode: use Text in TouchableOpacity (TextInput with editable=false doesn't capture taps)
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleTitlePress}
+                style={styles.titleTouchable}
+              >
+                <Text style={[styles.titleText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>
+                  {formData.title || "Title"}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              // Edit mode: direct TextInput for keyboard interaction
+              <TextInput
+                ref={titleInputRef}
+                value={formData.title}
+                onChangeText={(text) => updateField("title", text.replace(/\n/g, ' '))}
+                placeholder={isTitleFocused ? "" : "Add Title"}
+                placeholderTextColor={theme.colors.text.disabled}
+                style={[styles.titleInputFullWidth, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}
+                editable={!isSubmitting}
+                multiline={true}
+                blurOnSubmit={true}
+                returnKeyType="done"
+                onFocus={() => {
+                  setIsTitleFocused(true);
+                  setIsTitleExpanded(true);
+                  // Clear any pending body focus - title is being focused instead
+                  editorRef.current?.clearPendingFocus?.();
+                  // Also blur the editor to ensure keyboard shows for title, not body
+                  editorRef.current?.blur?.();
+                }}
+                onBlur={() => setIsTitleFocused(false)}
+                onPressIn={handleTitlePress}
+              />
+            )}
+          </View>
 
+        </Animated.View>
+      )}
+
+      {/* Editor - fills remaining space, handles its own scrolling */}
+      {/* paddingBottom accounts for toolbar overlay (edit mode) and keyboard */}
+      {/* PanResponder captures pull gesture when at top to expand collapsed header */}
+      <View
+        ref={editorContainerRef}
+        {...panResponder.panHandlers}
+        style={[
+          styles.editorContainerFlex,
+          isFullScreen && styles.fullScreenEditor,
+          {
+            // Toolbar height (~60px) + keyboard height when visible
+            // In view mode, no padding needed (no toolbar)
+            paddingBottom: isEditMode ? (60 + keyboardHeight) : 0,
+          },
+        ]}
+        onLayout={() => {
+          // Re-measure editor position when layout changes
+          if (SHOW_DEBUG_OVERLAY && editorContainerRef.current) {
+            editorContainerRef.current.measureInWindow((x, editorTop, width, editorHeight) => {
+              setDebugData(prev => ({ ...prev, editorTop, editorHeight }));
+            });
+          }
+        }}
+      >
+        <PellRichTextEditor
+          ref={editorRef}
+          value={formData.content}
+          placeholder={TITLE_AS_FIRST_LINE ? "Title" : "What's on your mind? Use #tags and @mentions..."}
+          editable={isEditMode}
+          onPress={enterEditMode}
+          onReady={handleEditorReady}
+          onChange={handleEditorChange}
+          onHeightChange={handleEditorHeightChange}
+          onCursorPosition={handleCursorPosition}
+          minHeight={300}
+          fillHeight={true}
+          // POC: Title as first line
+          titleAsFirstLine={TITLE_AS_FIRST_LINE}
+          onTitleFocusChange={(focused) => {
+            console.log('[ENTRY] Title line focus:', focused);
+            setIsTitleLineFocused(focused);
+          }}
+        />
       </View>
 
       {/* Bottom Bar - only shown when in edit mode */}
@@ -1538,6 +1870,71 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         onMultiplePhotosSelected={handleMultiplePhotosSelected}
         onSnackbar={showSnackbar}
       />
+
+      {/* Debug Overlay */}
+      {SHOW_DEBUG_OVERLAY && (
+        <>
+          {/* Red debug lines showing visible range boundaries */}
+          <View style={{
+            position: 'absolute',
+            top: debugData.visibleTop,
+            left: 0,
+            right: 0,
+            height: 2,
+            backgroundColor: 'red',
+            zIndex: 9998,
+          }} />
+          <View style={{
+            position: 'absolute',
+            top: debugData.visibleBottom,
+            left: 0,
+            right: 0,
+            height: 2,
+            backgroundColor: 'red',
+            zIndex: 9998,
+          }} />
+          <ScrollDebugOverlay
+            data={debugData}
+            visible={isEditMode}
+            onScrollToTop={() => {
+              console.log('[DEBUG] Scroll to top button pressed');
+              // Reset editor WebView scroll to top and expand drawer
+              scrollOffsetRef.current = 0;
+              editorRef.current?.resetInternalScroll?.();
+              expandHeader();
+            }}
+            onResetEditorScroll={() => {
+              console.log('[DEBUG] Reset editor scroll button pressed');
+              // Only reset the internal WebView scroll, not parent ScrollView
+              editorRef.current?.resetInternalScroll?.();
+            }}
+            onLogStats={() => {
+              // Measure editor position fresh
+              editorContainerRef.current?.measureInWindow((x, editorTop, width, editorHeight) => {
+                const cursorY = cursorYRef.current;
+                const cursorAge = Date.now() - lastCursorUpdateRef.current;
+                const cursorAgeStr = cursorAge > 1000 ? `${(cursorAge / 1000).toFixed(1)}s` : `${cursorAge}ms`;
+
+                // On Android, measureInWindow gives window coords but our View uses screen coords
+                // Add status bar height to align coordinate systems
+                const statusBarH = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
+                const cursorScreen = editorTop + cursorY + statusBarH;
+
+                const visTop = headerHeight;
+                const screenHeight = Dimensions.get('window').height;
+                const visBottom = keyboardHeight > 0 ? screenHeight - keyboardHeight - 80 : screenHeight - 80;
+                const inRange = cursorScreen >= visTop && cursorScreen <= visBottom;
+
+                const stats = `[DEBUG] scroll=${Math.round(scrollOffsetRef.current)} kb=${Math.round(keyboardHeight)} cursorY=${Math.round(cursorY)} age=${cursorAgeStr} statusBar=${statusBarH} editorTop=${Math.round(editorTop)} editorH=${Math.round(editorHeight)} cursorScreen=${Math.round(cursorScreen)} visRange=${Math.round(visTop)}-${Math.round(visBottom)} inRange=${inRange}`;
+                console.log(stats);
+
+                // Also update debug data for display
+                setDebugData(prev => ({ ...prev, editorTop, editorHeight }));
+              });
+            }}
+          />
+        </>
+      )}
 
       {/* Snackbar */}
       {snackbarMessage && (

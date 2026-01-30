@@ -16,6 +16,7 @@ import {
   PriorityPicker,
   TimePicker,
   AttributesPicker,
+  AttributeGridSheet,
   StatusPicker,
   DueDatePicker,
   EntryDatePicker,
@@ -34,6 +35,7 @@ export type ActivePicker =
   | "status"
   | "type"
   | "attributes"
+  | "attributeGrid" // New combined attribute sheet
   | "entryDate"
   | "time"
   | "unsupportedStatus"
@@ -423,7 +425,7 @@ export function EntryPickers({
         onSnackbar={showSnackbar}
       />
 
-      {/* Entry Menu */}
+      {/* Entry Menu (accessed via header ... button) */}
       <AttributesPicker
         visible={activePicker === "attributes"}
         onClose={() => setActivePicker(null)}
@@ -453,6 +455,47 @@ export function EntryPickers({
         onAddPhoto={onAddPhoto}
         onDelete={handleDelete}
         onSnackbar={showSnackbar}
+      />
+
+      {/* Combined Attribute Grid Sheet (accessed via pills) */}
+      <AttributeGridSheet
+        visible={activePicker === "attributeGrid"}
+        onClose={() => setActivePicker(null)}
+        status={formData.status}
+        type={formData.type}
+        dueDate={formData.dueDate}
+        rating={formData.rating}
+        priority={formData.priority}
+        showStatus={showStatus}
+        showType={showType}
+        showDueDate={showDueDate}
+        showRating={showRating}
+        showPriority={showPriority}
+        allowedStatuses={currentStream?.entry_statuses}
+        availableTypes={currentStream?.entry_types ?? []}
+        onStatusChange={(value) => {
+          updateField("status", value);
+          if (!isEditMode) enterEditMode();
+        }}
+        onTypeChange={(value) => {
+          updateField("type", value);
+          if (!isEditMode) enterEditMode();
+        }}
+        onDueDateChange={(value) => {
+          updateField("dueDate", value);
+          if (!isEditMode) enterEditMode();
+        }}
+        onRatingChange={(value) => {
+          updateField("rating", value);
+          if (!isEditMode) enterEditMode();
+        }}
+        onPriorityChange={(value) => {
+          updateField("priority", value);
+          if (!isEditMode) enterEditMode();
+        }}
+        onSnackbar={showSnackbar}
+        onDelete={isEditing ? handleDelete : undefined}
+        isEditing={isEditing}
       />
     </>
   );

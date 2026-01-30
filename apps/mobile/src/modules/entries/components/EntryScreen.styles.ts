@@ -5,6 +5,12 @@ export const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   loadingContainer: {
     justifyContent: "center",
     alignItems: "center",
@@ -126,7 +132,7 @@ export const styles = StyleSheet.create({
     // Note: fontWeight removed - use fontFamily with weight variant instead (e.g., Inter_700Bold)
     padding: 0,
     margin: 0,
-    textAlign: "center",
+    textAlign: "left",
   },
   titleTouchable: {
     width: "100%",
@@ -134,7 +140,7 @@ export const styles = StyleSheet.create({
   titleText: {
     fontSize: 22,
     // Note: fontWeight removed - use fontFamily with weight variant instead (e.g., Inter_700Bold)
-    textAlign: "center",
+    textAlign: "left",
   },
   titleBarContent: {
     flex: 1,
@@ -251,7 +257,7 @@ export const styles = StyleSheet.create({
   titlePlaceholder: {
     fontSize: 22,
     // Note: fontWeight removed - use fontFamily with weight variant instead (e.g., Inter_700Bold)
-    textAlign: "center",
+    textAlign: "left",
   },
   titleInput: {
     fontSize: 22,
@@ -280,10 +286,17 @@ export const styles = StyleSheet.create({
     padding: 4,
   },
   editorContainer: {
-    flex: 1,
+    // No flex: 1 - height is determined by content + minHeight
+    // This allows the editor to grow and push content above it when content grows
     paddingLeft: 24,
     paddingRight: 12,
     // paddingBottom is set dynamically based on edit mode and popout state
+  },
+  editorContainerFlex: {
+    // flex: 1 fills remaining space - editor handles its own scrolling
+    flex: 1,
+    paddingLeft: 12,
+    paddingRight: 12,
   },
   // Toolbar styles
   fullScreenToolbar: {

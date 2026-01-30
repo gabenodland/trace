@@ -238,6 +238,7 @@ export function useCaptureFormState(options: UseCaptureFormStateOptions) {
       field: K,
       value: CaptureFormData[K]
     ) => {
+      console.log('[useCaptureFormState] updateField:', field, field === 'content' ? `(len: ${(value as string)?.length})` : value);
       setFormData((prev) => ({ ...prev, [field]: value }));
     },
     []

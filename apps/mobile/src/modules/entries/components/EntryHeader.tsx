@@ -29,6 +29,7 @@ interface EntryHeaderProps {
   onAddTime: () => void;
   onAttributesPress: () => void;
   enterEditMode: () => void;
+  onHeightChange?: (height: number) => void;
   // Refs
   editorRef: React.RefObject<any>;
 }
@@ -50,6 +51,7 @@ export function EntryHeader({
   onAddTime,
   onAttributesPress,
   enterEditMode,
+  onHeightChange,
   editorRef,
 }: EntryHeaderProps) {
   const theme = useTheme();
@@ -70,7 +72,10 @@ export function EntryHeader({
   }, [isSaving]);
 
   return (
-    <View style={[styles.titleBar, { backgroundColor: theme.colors.background.secondary }, isFullScreen && styles.titleBarFullScreen]}>
+    <View
+      style={[styles.titleBar, { backgroundColor: theme.colors.background.secondary }, isFullScreen && styles.titleBarFullScreen]}
+      onLayout={(e) => onHeightChange?.(e.nativeEvent.layout.height)}
+    >
       {/* Left side: Back button (always shown, auto-saves if dirty) */}
       <View style={styles.headerLeftContainer}>
         <TouchableOpacity
