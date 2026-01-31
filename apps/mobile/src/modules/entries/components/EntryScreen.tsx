@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
+import { View, Text, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
 import { extractTagsAndMentions, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate } from "@trace/core";
 import { createLocation } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
@@ -103,12 +103,9 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     return false; // Need to wait for entry or location
   });
 
-  const [isTitleExpanded, setIsTitleExpanded] = useState(true);
-  const [isTitleFocused, setIsTitleFocused] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const snackbarOpacity = useRef(new Animated.Value(0)).current;
   const editorRef = useRef<any>(null);
-  const titleInputRef = useRef<TextInput>(null);
   const photoCaptureRef = useRef<PhotoCaptureRef>(null);
   const isInitialLoad = useRef(true); // Track if this is first load
   const [baselinePhotoCount, setBaselinePhotoCount] = useState<number | null>(null); // Baseline for dirty tracking (null = not yet initialized)
@@ -272,15 +269,23 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   // Also checks editor content directly to handle race condition where user types
   // and quickly hits back before RichTextEditor's polling syncs to formData
   const hasUnsavedChanges = (): boolean => {
-    console.log('🔍 [hasUnsavedChanges] Checking...', { isEditMode, isFormDirty });
+    console.log('🔍 [hasUnsavedChanges] Checking...', { isEditMode, isFormDirty, isEditing });
 
-    // If not in edit mode, no changes are possible
+    // For EXISTING entries: check if form is dirty regardless of isEditMode
+    // This handles the case where user types in the editor (which sets isFormDirty via ContentWatcher)
+    // but hasn't explicitly entered edit mode via a tap-to-edit action
+    if (isEditing && isFormDirty) {
+      console.log('🔍 [hasUnsavedChanges] Editing existing entry with dirty form, returning true');
+      return true;
+    }
+
+    // For NEW entries: respect the edit mode state (new entries start in edit mode anyway)
     if (!isEditMode) {
-      console.log('🔍 [hasUnsavedChanges] Not in edit mode, returning false');
+      console.log('🔍 [hasUnsavedChanges] Not in edit mode (new entry), returning false');
       return false;
     }
 
-    // First check the hook's dirty state (covers title, date, stream, etc.)
+    // Check the hook's dirty state (covers title, date, stream, etc.)
     if (isFormDirty) {
       console.log('🔍 [hasUnsavedChanges] isFormDirty=true, returning true');
       return true;
@@ -506,22 +511,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     showSnackbar(`Entry updated by ${editingDevice}`);
   }, [entry, isEditing, isFormDirty, streams, updateMultipleFields, setBaseline, photoCount, formData.entryDate, formData.includeTime, formData.locationData, formData.pendingPhotos, getKnownVersion, initializeVersion, updateKnownVersion, isExternalUpdate]);
 
-  // Handle tap on title to enter edit mode
-  const handleTitlePress = () => {
-    if (!isEditMode) {
-      // Clear any pending body focus - we're focusing the title instead
-      editorRef.current?.clearPendingFocus?.();
-      enterEditMode();
-      // Focus the title input after a short delay to ensure edit mode is active
-      setTimeout(() => {
-        titleInputRef.current?.focus();
-      }, 100);
-    }
-    setIsTitleExpanded(true);
-  };
-
-  // Determine if formData.title should be collapsed
-  const shouldCollapse = !formData.title.trim() && formData.content.trim().length > 0 && !isTitleExpanded;
 
   // Location picker mode: 'view' if already has location data (saved or GPS-captured), 'select' to pick/create
   // Even unnamed GPS-captured locations should open in view mode to show "Dropped Pin"
@@ -543,15 +532,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     navigate(screenMap[viewMode] || "inbox");
   }, [viewMode, navigate]);
 
-  // Auto-collapse formData.title when user starts typing in body without a formData.title
-  // Don't collapse while title is focused (prevents keyboard dismissal while typing)
-  useEffect(() => {
-    if (!formData.title.trim() && formData.content.trim().length > 0 && !isTitleFocused) {
-      setIsTitleExpanded(false);
-    } else if (formData.title.trim()) {
-      setIsTitleExpanded(true);
-    }
-  }, [formData.title, formData.content, isTitleFocused]);
 
   // Load entry data when editing (INITIAL LOAD ONLY)
   // Pattern: Build complete form data object, set baseline AND form atomically, then mark ready
@@ -621,14 +601,34 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
 
   // Called when RichTextEditor is ready with its actual content (possibly normalized)
   // This syncs formData AND baseline to the editor's real content if normalization changed it
+  // Note: Auto-focus for new entries is handled in AdvancedEditor's onCreate callback (web-side)
   const handleEditorReady = useCallback((editorContent: string) => {
-    if (!isEditing || !isFormReady) return;
+    // For NEW entries: nothing to sync, web-side handles auto-focus via TipTap onCreate
+    if (!isEditing) {
+      return;
+    }
+
+    if (!isFormReady) return;
+
+    const formLen = formData.content?.length || 0;
+    const editorLen = editorContent?.length || 0;
+
+    // Don't sync if editor content is significantly shorter than form content
+    // This means the editor hasn't finished loading the content yet
+    // (e.g., editor started with empty default before setContent completed)
+    if (editorLen < formLen * 0.5 && formLen > 20) {
+      console.log('📝 [handleEditorReady] Skipping sync - editor content too short (still loading)', {
+        formContentLen: formLen,
+        editorContentLen: editorLen,
+      });
+      return;
+    }
 
     // Only sync if editor normalized the content differently
     if (formData.content !== editorContent) {
       console.log('📝 [handleEditorReady] Editor normalized content, syncing baseline', {
-        formContentLen: formData.content?.length,
-        editorContentLen: editorContent?.length,
+        formContentLen: formLen,
+        editorContentLen: editorLen,
       });
       // Update formData to match editor's actual content
       updateField("content", editorContent);
@@ -737,10 +737,8 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
 
         // Scroll cursor into view when keyboard appears
         // Use a longer delay to ensure edit mode transition is complete
-        // IMPORTANT: Only scroll if:
-        // 1. Title is NOT focused - scrollToCursor calls editor.focus() which would steal focus
-        // 2. No picker is open - picker inputs (like search) need to keep their focus
-        if (editorRef.current && !titleInputRef.current?.isFocused() && !activePicker) {
+        // IMPORTANT: Only scroll if no picker is open - picker inputs (like search) need to keep their focus
+        if (editorRef.current && !activePicker) {
           setTimeout(() => {
             editorRef.current?.scrollToCursor();
           }, 300);
@@ -1390,65 +1388,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         />
       )}
 
-      {/* Title Row - Full width below metadata (hidden in fullscreen - formData.title shows in header) */}
-      {!isFullScreen && (
-        <View style={styles.titleRow}>
-          {shouldCollapse ? (
-            <TouchableOpacity
-              style={styles.titleCollapsed}
-              onPress={() => {
-                if (isEditMode) {
-                  setIsTitleExpanded(true);
-                  setTimeout(() => titleInputRef.current?.focus(), 100);
-                } else {
-                  enterEditMode();
-                  setIsTitleExpanded(true);
-                  setTimeout(() => titleInputRef.current?.focus(), 100);
-                }
-              }}
-            >
-              <Text style={[styles.titlePlaceholder, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]}>
-                {isEditMode ? "Add Title" : "Untitled"}
-              </Text>
-            </TouchableOpacity>
-          ) : !isEditMode ? (
-            // View mode: use Text in TouchableOpacity (TextInput with editable=false doesn't capture taps)
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={handleTitlePress}
-              style={styles.titleTouchable}
-            >
-              <Text style={[styles.titleText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>
-                {formData.title || "Title"}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            // Edit mode: direct TextInput for keyboard interaction
-            <TextInput
-              ref={titleInputRef}
-              value={formData.title}
-              onChangeText={(text) => updateField("title", text.replace(/\n/g, ' '))}
-              placeholder={isTitleFocused ? "" : "Add Title"}
-              placeholderTextColor={theme.colors.text.disabled}
-              style={[styles.titleInputFullWidth, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}
-              editable={!isSubmitting}
-              multiline={true}
-              blurOnSubmit={true}
-              returnKeyType="done"
-              onFocus={() => {
-                setIsTitleFocused(true);
-                setIsTitleExpanded(true);
-                // Clear any pending body focus - title is being focused instead
-                editorRef.current?.clearPendingFocus?.();
-                // Also blur the editor to ensure keyboard shows for title, not body
-                editorRef.current?.blur?.();
-              }}
-              onBlur={() => setIsTitleFocused(false)}
-              onPressIn={handleTitlePress}
-            />
-          )}
-        </View>
-      )}
 
       {/* Content Area */}
       <View style={[
@@ -1476,7 +1415,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
           />
         )}
 
-        {/* Editor */}
+        {/* Editor with integrated title */}
         <View style={[
           styles.editorContainer,
           isFullScreen && styles.fullScreenEditor
@@ -1489,6 +1428,9 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
             editable={isEditMode}
             onPress={enterEditMode}
             onReady={handleEditorReady}
+            title={formData.title}
+            onTitleChange={(text) => updateField("title", text)}
+            titlePlaceholder="Title"
           />
         </View>
 

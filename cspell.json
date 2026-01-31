@@ -1,0 +1,26 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "tentap",
+    "tiptap",
+    "prosemirror",
+    "supabase",
+    "tanstack",
+    "vitest",
+    "autofocus",
+    "monorepo",
+    "overscroll",
+    "touchstart",
+    "touchend",
+    "touchmove",
+    "webview"
+  ],
+  "ignorePaths": [
+    "node_modules",
+    "package-lock.json",
+    "*.min.js",
+    "android",
+    "ios"
+  ]
+}

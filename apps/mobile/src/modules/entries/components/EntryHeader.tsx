@@ -153,10 +153,11 @@ export function EntryHeader({
         </View>
       )}
 
-      {/* Right side: Status indicator (in edit mode) + Attributes menu */}
+      {/* Right side: Status indicator (in edit mode or when editing existing entry with changes) + Attributes menu */}
       <View style={styles.headerRightContainer}>
-        {/* Status indicator - orange when dirty, red when saving, green checkmark briefly after save */}
-        {isEditMode && (
+        {/* Status indicator - orange when dirty, red when saving, green checkmark briefly after save
+            Show when: in edit mode OR editing existing entry with dirty form (user typed in editor) */}
+        {(isEditMode || (isEditing && isDirty)) && (
           <View style={styles.headerSaveButton}>
             {isSaving ? (
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />

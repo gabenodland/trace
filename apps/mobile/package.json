@@ -12,7 +12,10 @@
     "prebuild:android": "expo prebuild --platform android && node scripts/addDebugAppId.js",
     "prebuild:ios": "expo prebuild --platform ios",
     "type-check": "tsc --noEmit",
-    "build:release": "node scripts/incrementBuildNumber.js && npm run prebuild:android && cd android && ./gradlew assembleRelease"
+    "build:release": "node scripts/incrementBuildNumber.js && npm run prebuild:android && cd android && ./gradlew assembleRelease",
+    "editor:dev": "vite --config ./editor-web/vite.config.ts build -w",
+    "editor:build": "vite --config ./editor-web/vite.config.ts build && npm run editor:post-build",
+    "editor:post-build": "node ./node_modules/@10play/tentap-editor/scripts/buildEditor.js ./editor-web/build/index.html"
   },
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",
@@ -87,6 +90,7 @@
     "expo-web-browser": "^15.0.9",
     "ramda": "^0.32.0",
     "react": "19.1.0",
+    "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-calendars": "^1.1313.0",
     "react-native-maps": "1.26.20",
@@ -97,8 +101,12 @@
   "devDependencies": {
     "@expo/ngrok": "^4.1.0",
     "@types/react": "~19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
     "sharp": "^0.34.5",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vite": "^6.3.1",
+    "vite-plugin-singlefile": "^2.0.3"
   },
   "private": true
 }

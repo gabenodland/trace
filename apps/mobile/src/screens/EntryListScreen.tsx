@@ -211,6 +211,10 @@ export function EntryListScreen() {
   }, [setStreamSortPreference, viewPrefKey]);
 
   const handleAddEntry = () => {
+    console.log('\n\n################################################################################');
+    console.log('#################### NEW ENTRY BUTTON PRESSED ####################');
+    console.log('################################################################################\n');
+
     let initialContent = "";
 
     if (typeof selectedStreamId === 'string') {
