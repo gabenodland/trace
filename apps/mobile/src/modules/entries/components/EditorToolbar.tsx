@@ -10,14 +10,10 @@ import { styles } from "./EntryScreen.styles";
 
 interface EditorToolbarProps {
   editorRef: React.RefObject<any>;
-  isFullScreen: boolean;
-  onToggleFullScreen: () => void;
 }
 
 export function EditorToolbar({
   editorRef,
-  isFullScreen,
-  onToggleFullScreen,
 }: EditorToolbarProps) {
   const theme = useTheme();
   const iconColor = theme.colors.text.secondary;
@@ -84,25 +80,6 @@ export function EditorToolbar({
           <Path d="M7 9l-4 3 4 3" strokeLinecap="round" strokeLinejoin="round" />
           <Path d="M9 4h12M9 8h12M9 12h12M9 16h12M9 20h12" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
-      </TouchableOpacity>
-
-      {/* Full Screen Toggle Button - toggles between expand/collapse */}
-      <View style={[styles.toolbarDivider, { backgroundColor: theme.colors.border.light }]} />
-      <TouchableOpacity
-        style={styles.toolbarButton}
-        onPress={onToggleFullScreen}
-      >
-        {isFullScreen ? (
-          // Collapse icon - arrows pointing inward
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-            <Path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        ) : (
-          // Expand icon - arrows pointing outward
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-            <Path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        )}
       </TouchableOpacity>
     </View>
   );

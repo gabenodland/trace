@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { View, Text, TextInput, TouchableOpacity, Keyboard } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Keyboard, Animated } from "react-native";
 import Svg, { Path, Circle, Polyline } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { styles } from "./EntryScreen.styles";
@@ -12,7 +12,8 @@ import { styles } from "./EntryScreen.styles";
 interface EntryHeaderProps {
   // Mode flags
   isEditMode: boolean;
-  isFullScreen: boolean;
+  showTitleInHeader: boolean; // When true, show title instead of date (header is collapsed)
+  titleOpacity?: Animated.AnimatedInterpolation<number>; // Smooth opacity transition for title
   isSubmitting: boolean;
   isSaving: boolean; // For save indicator (includes autosave, unlike isSubmitting which is manual only)
   isEditing: boolean;
@@ -29,13 +30,15 @@ interface EntryHeaderProps {
   onAddTime: () => void;
   onAttributesPress: () => void;
   enterEditMode: () => void;
+  onRevealHeader?: () => void; // Expand header and scroll content to top
   // Refs
   editorRef: React.RefObject<any>;
 }
 
 export function EntryHeader({
   isEditMode,
-  isFullScreen,
+  showTitleInHeader,
+  titleOpacity,
   isSubmitting,
   isSaving,
   isEditing,
@@ -50,6 +53,7 @@ export function EntryHeader({
   onAddTime,
   onAttributesPress,
   enterEditMode,
+  onRevealHeader,
   editorRef,
 }: EntryHeaderProps) {
   const theme = useTheme();
@@ -70,7 +74,7 @@ export function EntryHeader({
   }, [isSaving]);
 
   return (
-    <View style={[styles.titleBar, { backgroundColor: theme.colors.background.secondary }, isFullScreen && styles.titleBarFullScreen]}>
+    <View style={[styles.titleBar, { backgroundColor: theme.colors.background.secondary }]}>
       {/* Left side: Back button (always shown, auto-saves if dirty) */}
       <View style={styles.headerLeftContainer}>
         <TouchableOpacity
@@ -83,20 +87,17 @@ export function EntryHeader({
         </TouchableOpacity>
       </View>
 
-      {/* Center: Date & Time (normal mode) or Editable Title (fullscreen mode) */}
-      {isFullScreen ? (
-        <View style={styles.headerTitleContainer}>
-          <TextInput
-            value={title}
-            onChangeText={onTitleChange}
-            placeholder="Untitled"
-            placeholderTextColor={theme.colors.text.disabled}
-            style={[styles.headerTitleInput, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}
-            editable={isEditMode && !isSubmitting}
-            returnKeyType="done"
-            blurOnSubmit={true}
-          />
-        </View>
+      {/* Center: Date & Time (normal mode) or Title display (when header collapsed) */}
+      {showTitleInHeader ? (
+        <Animated.View style={[styles.headerTitleContainer, { alignItems: 'flex-start', opacity: titleOpacity ?? 1 }]}>
+          <Text
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            style={[styles.headerTitleText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold, textAlign: 'left' }]}
+          >
+            {title || 'Untitled'}
+          </Text>
+        </Animated.View>
       ) : (
         <View style={styles.headerDateContainer}>
           {/* Date */}
@@ -170,8 +171,18 @@ export function EntryHeader({
           </View>
         )}
 
-        {/* Attributes menu button (...) - hidden in fullscreen mode */}
-        {!isFullScreen && (
+        {/* Attributes menu button (...) in normal mode, chevron (V) when collapsed */}
+        {showTitleInHeader ? (
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={onRevealHeader}
+          >
+            {/* Down chevron to reveal header */}
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
+              <Polyline points="6 9 12 15 18 9" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+        ) : (
           <TouchableOpacity
             style={styles.menuButton}
             onPress={onAttributesPress}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Keyboard, Animated, PanResponder } from "react-native";
 import { extractTagsAndMentions, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate } from "@trace/core";
 import { createLocation } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
@@ -28,6 +28,37 @@ import { MetadataBar } from "./MetadataBar";
 import { EditorToolbar } from "./EditorToolbar";
 import { EntryHeader } from "./EntryHeader";
 import { EntryPickers, type ActivePicker } from "./EntryPickers";
+
+// =============================================================================
+// SCROLL SYSTEM CONSTANTS
+// =============================================================================
+// These thresholds control the unified scroll system behavior.
+// Centralizing them here prevents inconsistencies across the codebase.
+
+/** Content is considered "at top" when scrollTop <= this value (px) */
+const SCROLL_AT_TOP_THRESHOLD = 5;
+
+/** CL enforcement triggers when content scrolls past this value (px) */
+const SCROLL_CL_ENFORCE_THRESHOLD = 2;
+
+/** Title appears in header when progress drops below this (0-1 scale, 0.15 = 85% collapsed) */
+const TITLE_VISIBILITY_PROGRESS = 0.15;
+
+/** Minimum velocity (px/ms) to trigger momentum reveal (negative = scrolling up) */
+const REVEAL_VELOCITY_THRESHOLD = -0.5;
+
+/** Multiplier for converting gesture velocity to momentum scroll distance */
+const MOMENTUM_MULTIPLIER = 300;
+
+/** Minimum drag distance before gesture is captured (prevents micro-swipes) */
+const DRAG_THRESHOLD = 15;
+
+/** Time window (ms) for velocity calculation - older events are stale */
+const VELOCITY_TIME_WINDOW = 150;
+
+/** Animation duration range for momentum reveal (ms) */
+const REVEAL_ANIMATION_MIN_DURATION = 150;
+const REVEAL_ANIMATION_MAX_DURATION = 300;
 
 interface EntryScreenProps {
   entryId?: string | null;
@@ -172,8 +203,358 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
   // Edit mode: new entries start in edit mode, existing entries start in read-only
   const [isEditMode, setIsEditMode] = useState(!isEditing);
 
-  // Full-screen edit mode (hides all metadata, shows only formData.title + body + toolbar)
-  const [isFullScreen, setIsFullScreen] = useState(false);
+  // ==========================================================================
+  // DRAWER STATE - Collapsible Header Section
+  // ==========================================================================
+  // The EntryScreen has two main sections:
+  // 1. Fixed header bar (90px) - always visible at top
+  // 2. Collapsible section - metadata, photos, title - slides under fixed header
+  //
+  // The collapsible section is controlled by drawerAnim (0=collapsed, 1=expanded).
+  // When collapsed, the section is translated up by -collapsibleHeight, sliding
+  // under the fixed header and revealing more space for the editor.
+  //
+  // Key state variables:
+  //   drawerAnim: Animated.Value controlling translateY of collapsible section
+  //   drawerProgressRef: Current progress (1=expanded, 0=collapsed) for gesture logic
+  //   showTitleInHeader: When true, title appears in fixed header (collapsed state)
+  //   isHeaderCollapsed: When true, content scroll is unlocked (HL reached)
+  //   isAtTopRef: Tracks if WebView content is at scroll position 0
+  //   collapsibleHeight: Measured height of collapsible section (H in formulas)
+  // ==========================================================================
+
+  // Track if scroll is at top (for pull-to-reveal gesture detection)
+  const isAtTopRef = useRef(true);
+
+  // Animated value for drawer position (0 = collapsed, 1 = expanded)
+  // No discrete "modes" - position is continuous for smooth gestures
+  const drawerAnim = useRef(new Animated.Value(1)).current;
+  const drawerProgressRef = useRef(1); // Track current progress for gesture logic
+
+  // Title opacity interpolated from drawer position - smooth fade instead of pop
+  // Fades in during final portion of collapse (controlled by TITLE_VISIBILITY_PROGRESS)
+  const titleOpacity = drawerAnim.interpolate({
+    inputRange: [0, TITLE_VISIBILITY_PROGRESS, 1],
+    outputRange: [1, 0, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Show title in header when collapsed (for conditional rendering)
+  // Opacity handles the visual transition, this controls whether to render
+  const [showTitleInHeader, setShowTitleInHeader] = useState(false);
+
+  // Track if header is fully collapsed (controls CL/HL via scrollLocked prop)
+  // Separate from showTitleInHeader: title appears at 85% collapsed, but
+  // scroll only unlocks at ~98% collapsed to prevent jitter
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+
+  // Measured height of the collapsible section (this is H in the formulas)
+  // Updated via onLayout when section mounts or content changes
+  const [collapsibleHeight, setCollapsibleHeight] = useState(160); // Default fallback
+
+  // Minimum drag distance before gesture is captured (prevents micro-swipes)
+  // Note: Using module-level constant DRAG_THRESHOLD
+
+  // ============================================================================
+  // UNIFIED SCROLL SYSTEM - CRITICAL ARCHITECTURE
+  // ============================================================================
+  //
+  // This implements coordinated scrolling between a collapsible header (metadata,
+  // photos, title) and a WebView-based rich text editor. The goal is seamless
+  // "unified scroll" where swiping up first collapses the header, then scrolls
+  // the content - as if they were one continuous scroll view.
+  //
+  // KEY CONCEPTS:
+  //
+  // 1. UNIFIED SCROLL SPACE: Think of the entire scrollable area as ONE
+  //    continuous scroll space from position 0 to infinity:
+  //      - Position 0 to H (collapsibleHeight): "Header zone" - header collapses
+  //      - Position H to ∞: "Content zone" - WebView scrolls
+  //
+  // 2. CONTENT LOCK (CL): When header is NOT fully collapsed (position < H),
+  //    the WebView content MUST stay at scroll position 0. The header "absorbs"
+  //    any scroll gestures. This is enforced by:
+  //      - scrollLocked={true} prop on RichTextEditor
+  //      - CSS overflow:hidden in WebView
+  //      - JS scroll event handler resetting to 0
+  //
+  // 3. HEADER LOCK (HL): When header IS fully collapsed (position >= H),
+  //    the header is "locked" in place and content can scroll freely.
+  //    scrollLocked={false} unlocks the WebView.
+  //
+  // 4. CROSSOVER: The transition from CL to HL (or vice versa) is the tricky
+  //    part. See RichTextEditor.tsx scrollBy() comments for critical details
+  //    about why immediate unlock via JS injection is necessary.
+  //
+  // STATE VARIABLES:
+  //   unifiedScrollPos: Current position in unified scroll space
+  //   drawerProgressRef: Header collapse progress (1=expanded, 0=collapsed)
+  //   isHeaderCollapsed: True when at HL (controls scrollLocked prop)
+  //   isAtTopRef: True when WebView content is at scroll position 0
+  //
+  // GESTURE FLOW:
+  //   1. User starts swiping up
+  //   2. PanResponder captures gesture (if in header zone)
+  //   3. Header collapses as gesture moves
+  //   4. At HL (position = H), scrollLocked becomes false
+  //   5. PanResponder calls scrollBy() to scroll content
+  //   6. Eventually PanResponder releases, WebView handles natively
+  //
+  // MOMENTUM TRANSFER:
+  //   When user scrolls content to top with velocity (swiping down quickly),
+  //   the momentum should continue to reveal the header. This is handled in
+  //   the onScroll callback by detecting velocity and animating header reveal.
+  //
+  // FAILED APPROACHES (don't try again):
+  //   - Single ScrollView wrapping everything: WebView doesn't work inside
+  //   - CSS-only scroll lock: Content could drift
+  //   - scrollEnabled-only: Blocked programmatic scrollBy()
+  //   - Discrete modes (EXPANDED/COLLAPSED): Jarring transitions, lost scroll
+  //   - Snapping on release: Not smooth enough, user lost control
+  // ============================================================================
+
+  // Track unified scroll position (0 = expanded, H = HL, >H = content scrolling)
+  const unifiedScrollPos = useRef(0);
+  // Track where gesture started in unified scroll space
+  const gestureStartScroll = useRef(0);
+  // Track last content scroll we applied (for delta calculations during gesture)
+  const lastContentScrollApplied = useRef(0);
+
+  // Velocity tracking for momentum transfer from WebView content scroll to header reveal
+  // When user scrolls content to top with velocity, momentum should continue to reveal header
+  const lastScrollTopRef = useRef(0);
+  const lastScrollTimeRef = useRef(Date.now());
+  const scrollVelocityRef = useRef(0); // px/ms (negative = scrolling toward top)
+
+  /**
+   * Helper to update visual state from unified scroll position.
+   *
+   * This is the "render" function for the unified scroll system - it takes
+   * a scroll position and updates all the visual state accordingly:
+   *   - drawerAnim: Controls the collapsible section translateY
+   *   - drawerProgressRef: Tracks current progress for gesture logic
+   *   - showTitleInHeader: Shows title in fixed header when collapsed
+   *   - isHeaderCollapsed: Controls CL/HL (scrollLocked prop on editor)
+   *
+   * Called from:
+   *   - PanResponder.onPanResponderMove: During gesture
+   *   - onScroll callback: When absorbing content scroll into header
+   */
+  const updateFromUnifiedScroll = useCallback((scrollPos: number) => {
+    const H = collapsibleHeight;
+
+    if (scrollPos <= 0) {
+      // Fully expanded
+      drawerAnim.setValue(1);
+      drawerProgressRef.current = 1;
+      setShowTitleInHeader(false);
+      setIsHeaderCollapsed(false);
+    } else if (scrollPos < H) {
+      // Header collapsing (between expanded and HL)
+      const progress = 1 - (scrollPos / H);
+      drawerAnim.setValue(progress);
+      drawerProgressRef.current = progress;
+      // Title appears when nearly collapsed
+      setShowTitleInHeader(progress < TITLE_VISIBILITY_PROGRESS);
+      setIsHeaderCollapsed(false);
+    } else {
+      // At or past HL - header locked collapsed, content scrolls
+      drawerAnim.setValue(0);
+      drawerProgressRef.current = 0;
+      setShowTitleInHeader(true);
+      setIsHeaderCollapsed(true);
+    }
+  }, [collapsibleHeight, drawerAnim]);
+
+  /**
+   * ==========================================================================
+   * PANRESPONDER - Unified Scroll Gesture Handling
+   * ==========================================================================
+   *
+   * This PanResponder implements the gesture handling for the unified scroll
+   * system. It coordinates between header collapse and WebView content scroll.
+   *
+   * GESTURE CAPTURE LOGIC:
+   *   - Never capture on initial touch (let taps through to children)
+   *   - Capture during move based on scroll position and direction:
+   *     Case 1: Header not at HL → capture any vertical drag to collapse/expand
+   *     Case 2: At HL + content at top + pulling down → capture to reveal header
+   *     Case 3: At HL + swiping up → DON'T capture, let WebView scroll natively
+   *
+   * CRITICAL TIMING in onPanResponderMove:
+   *   When scrollPos crosses H (CL→HL transition), we call scrollBy() on the
+   *   editor. At that moment, React state hasn't updated yet, so scrollLocked
+   *   is still true. scrollBy() MUST immediately unlock via JS injection.
+   *   See RichTextEditor.tsx scrollBy() for details.
+   *
+   * NO SNAPPING:
+   *   Earlier versions snapped to fully expanded or collapsed on release.
+   *   This felt janky. Current version: header stays exactly where user
+   *   releases. This feels more natural and gives user full control.
+   * ==========================================================================
+   */
+  const drawerPanResponder = useMemo(() => PanResponder.create({
+    // Never capture on initial touch - let children handle taps
+    // This is critical: users need to tap on metadata chips, photos, title input
+    onStartShouldSetPanResponderCapture: () => false,
+
+    /**
+     * Capture during move based on scroll position and direction.
+     *
+     * The key insight: we need to know WHERE we are in the unified scroll
+     * space and WHICH DIRECTION the user is swiping to decide whether to
+     * capture the gesture or let WebView handle it.
+     */
+    onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+      const currentScroll = unifiedScrollPos.current;
+      const H = collapsibleHeight;
+      const atHL = currentScroll >= H; // At or past Header Lock
+      const atContentTop = isAtTopRef.current;
+
+      // Case 1: Header NOT at HL - capture any vertical drag to move header
+      // User is in "header zone" - all scroll gestures should collapse/expand header
+      if (!atHL) {
+        return Math.abs(gestureState.dy) > DRAG_THRESHOLD;
+      }
+
+      // Case 2: At HL + content at top + pulling DOWN - capture to reveal header
+      // This is the "pull-to-reveal" gesture - user at top of content, wants header back
+      if (atHL && atContentTop && gestureState.dy > DRAG_THRESHOLD) {
+        return true;
+      }
+
+      // Case 3: At HL + swiping UP - let WebView handle content scroll natively
+      // Header is locked, user wants to scroll content - WebView does this better
+      // (smoother momentum, native scroll indicators, etc.)
+      return false;
+    },
+
+    onPanResponderGrant: () => {
+      // Stop any running animation (e.g., momentum reveal from scroll)
+      drawerAnim.stopAnimation();
+      // Record starting position in unified scroll space
+      gestureStartScroll.current = unifiedScrollPos.current;
+      lastContentScrollApplied.current = 0;
+    },
+
+    /**
+     * Handle gesture movement - the core of the unified scroll system.
+     *
+     * Maps touch movement to unified scroll position, then updates visuals
+     * and scrolls content if past HL.
+     */
+    onPanResponderMove: (_, gestureState) => {
+      // dy < 0 = swiping UP = scrolling DOWN = increasing scroll position
+      // dy > 0 = swiping DOWN = scrolling UP = decreasing scroll position
+      const newScrollPos = Math.max(0, gestureStartScroll.current - gestureState.dy);
+      const H = collapsibleHeight;
+
+      // Update unified scroll position
+      unifiedScrollPos.current = newScrollPos;
+
+      // Update header visual state (translateY, progress, title visibility)
+      updateFromUnifiedScroll(newScrollPos);
+
+      // If past HL, scroll content by the overflow amount
+      // CRITICAL: scrollBy() handles the immediate unlock needed at crossover
+      if (newScrollPos > H) {
+        const contentScrollTarget = newScrollPos - H;
+        const scrollDelta = contentScrollTarget - lastContentScrollApplied.current;
+
+        if (Math.abs(scrollDelta) > 0.5) {
+          editorRef.current?.scrollBy?.(scrollDelta);
+          lastContentScrollApplied.current = contentScrollTarget;
+        }
+      } else {
+        // Entering header zone from past HL - enforce CL (content must be at 0)
+        if (lastContentScrollApplied.current > 0) {
+          editorRef.current?.resetScroll?.();
+        }
+        lastContentScrollApplied.current = 0;
+      }
+    },
+
+    /**
+     * Handle gesture release.
+     *
+     * NO SNAPPING - header stays exactly where user left it.
+     * Only action: transfer momentum to WebView if past HL with upward velocity.
+     */
+    onPanResponderRelease: (_, gestureState) => {
+      const currentScroll = unifiedScrollPos.current;
+      const H = collapsibleHeight;
+      const velocity = -gestureState.vy; // Convert: vy<0 (up) = positive scroll velocity
+
+      // Transfer momentum to WebView if past HL with upward velocity
+      // This makes the gesture feel continuous - swipe up to collapse header,
+      // and content continues scrolling with momentum
+      if (currentScroll >= H && velocity > 0.5) {
+        const momentumPx = velocity * MOMENTUM_MULTIPLIER;
+        editorRef.current?.scrollBy?.(momentumPx);
+      }
+      // Otherwise: do nothing - header stays in place, no snapping
+    },
+
+    onPanResponderTerminate: () => {
+      // Gesture interrupted (e.g., by system alert) - leave header where it is
+      // NO SNAPPING - user can continue from current position
+    },
+  }), [collapsibleHeight, drawerAnim, updateFromUnifiedScroll]);
+
+  // Interpolate translateY for collapsible section
+  // When collapsed (0): slides up by collapsibleHeight (goes under fixed header)
+  // When expanded (1): at normal position
+  const collapsibleTranslateY = drawerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-collapsibleHeight, 0],
+  });
+
+  // Interpolate marginBottom for layout collapse (so editor fills space)
+  const collapsibleMarginBottom = drawerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-collapsibleHeight, 0],
+  });
+
+  /**
+   * Collapse header and scroll cursor into view.
+   *
+   * Used when keyboard appears or when typing would push cursor off-screen.
+   * This function coordinates the CL→HL transition before scrolling content.
+   *
+   * CRITICAL SEQUENCE:
+   *   1. Animate header collapse (drawerAnim → 0)
+   *   2. Wait for animation to complete
+   *   3. Sync unified scroll state (set isHeaderCollapsed = true)
+   *   4. Wait for React re-render (scrollLocked prop propagates to WebView)
+   *   5. THEN scroll to cursor
+   *
+   * If we skip step 4, scrollToCursor() will try to scroll while CL is still
+   * active (scrollLocked=true) and nothing will happen.
+   */
+  const ensureCursorVisible = useCallback(() => {
+    // If header is not fully collapsed, collapse it first
+    if (drawerProgressRef.current > 0) {
+      Animated.timing(drawerAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: false,
+      }).start(() => {
+        // Sync unified scroll system - now at HL (Header Lock)
+        unifiedScrollPos.current = collapsibleHeight;
+        drawerProgressRef.current = 0;
+        setShowTitleInHeader(true);
+        setIsHeaderCollapsed(true); // This unlocks CL via scrollLocked prop
+        // Wait for React to re-render and scrollLocked to propagate to WebView
+        // before attempting to scroll to cursor
+        setTimeout(() => {
+          editorRef.current?.scrollToCursor();
+        }, 150);
+      });
+    } else {
+      // Header already collapsed (at HL), content is unlocked, just scroll
+      editorRef.current?.scrollToCursor();
+    }
+  }, [collapsibleHeight, drawerAnim]);
 
   // Combined dirty state: hook's isDirty + photo count comparison for existing entries
   // For editing existing entries, photos are saved directly to LocalDB (not pendingPhotos),
@@ -735,14 +1116,14 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       (e) => {
         setKeyboardHeight(e.endCoordinates.height);
 
-        // Scroll cursor into view when keyboard appears
-        // Use a longer delay to ensure edit mode transition is complete
+        // Ensure cursor is visible when keyboard appears
+        // This collapses header if needed, then scrolls to cursor
         // IMPORTANT: Only scroll if:
         // 1. Title is NOT focused - scrollToCursor calls editor.focus() which would steal focus
         // 2. No picker is open - picker inputs (like search) need to keep their focus
         if (editorRef.current && !titleInputRef.current?.isFocused() && !activePicker) {
           setTimeout(() => {
-            editorRef.current?.scrollToCursor();
+            ensureCursorVisible();
           }, 300);
         }
       }
@@ -758,7 +1139,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
-  }, [isEditMode, activePicker]); // Re-register when edit mode or picker changes
+  }, [isEditMode, activePicker, ensureCursorVisible]); // Re-register when edit mode or picker changes
 
   // Save handler
   // isAutosave: when true, don't set isSubmitting to keep inputs editable (seamless background save)
@@ -1323,10 +1704,12 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
-      {/* Header Bar with Back/Date/Save buttons */}
+      {/* FIXED Header Bar - always visible at top, never moves */}
+      {/* Shows date/time normally, shows title when header is collapsed */}
       <EntryHeader
         isEditMode={isEditMode}
-        isFullScreen={isFullScreen}
+        showTitleInHeader={showTitleInHeader}
+        titleOpacity={titleOpacity}
         isSubmitting={isSubmitting}
         isSaving={isSaving}
         isEditing={isEditing}
@@ -1346,11 +1729,46 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         }}
         onAttributesPress={() => setActivePicker('attributes')}
         enterEditMode={enterEditMode}
+        onRevealHeader={() => {
+          // Scroll content to top, then expand header
+          editorRef.current?.scrollToTop?.();
+          Animated.timing(drawerAnim, {
+            toValue: 1,
+            duration: 150,
+            useNativeDriver: false,
+          }).start(() => {
+            // Sync unified scroll system
+            unifiedScrollPos.current = 0;
+            drawerProgressRef.current = 1;
+            setShowTitleInHeader(false);
+            setIsHeaderCollapsed(false);
+          });
+        }}
         editorRef={editorRef}
       />
 
-      {/* Metadata Bar - Only shows SET values (hidden in full-screen mode) */}
-      {!isFullScreen && (
+      {/* COLLAPSIBLE Section - metadata + photos + title */}
+      {/* Slides under the fixed header via PanResponder drag gesture */}
+      <Animated.View
+        onLayout={(event) => {
+          const { height } = event.nativeEvent.layout;
+          // Only update if significantly different to avoid re-render loops
+          if (Math.abs(height - collapsibleHeight) > 10) {
+            setCollapsibleHeight(height);
+          }
+        }}
+        style={[
+          styles.collapsibleSection,
+          {
+            transform: [{ translateY: collapsibleTranslateY }],
+            marginBottom: collapsibleMarginBottom,
+            backgroundColor: theme.colors.background.primary,
+          },
+        ]}
+        {...drawerPanResponder.panHandlers}
+      >
+
+        {/* Metadata Bar - Only shows SET values */}
         <MetadataBar
           streamName={formData.streamName}
           locationData={formData.locationData}
@@ -1388,10 +1806,24 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
           onPhotosPress={() => setPhotosCollapsed(false)}
           editorRef={editorRef}
         />
-      )}
 
-      {/* Title Row - Full width below metadata (hidden in fullscreen - formData.title shows in header) */}
-      {!isFullScreen && (
+        {/* Photo Gallery */}
+        <PhotoGallery
+          entryId={effectiveEntryId || tempEntryId}
+          refreshKey={photoCount + externalRefreshKey}
+          onPhotoCountChange={setPhotoCount}
+          onPhotoDelete={handlePhotoDelete}
+          pendingPhotos={isEditing ? undefined : formData.pendingPhotos}
+          collapsible={true}
+          isCollapsed={photosCollapsed}
+          onCollapsedChange={setPhotosCollapsed}
+          onAddPhoto={() => {
+            if (!isEditMode) enterEditMode();
+            photoCaptureRef.current?.openMenu();
+          }}
+        />
+
+        {/* Title Row - Below photos */}
         <View style={styles.titleRow}>
           {shouldCollapse ? (
             <TouchableOpacity
@@ -1447,40 +1879,25 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
               onPressIn={handleTitlePress}
             />
           )}
+          {/* Document-style underline */}
+          <View style={[styles.titleRowBorder, { backgroundColor: theme.colors.border.medium }]} />
         </View>
-      )}
+
+      </Animated.View>
 
       {/* Content Area */}
       <View style={[
         styles.contentContainer,
-        // Dynamic padding to account for bottom bar height (~60px)
-        isEditMode ? { paddingBottom: 60 } : { paddingBottom: 0 },
+        // Dynamic padding: edit mode has bottom bar (~60px), view mode has breathing room (~40px)
+        isEditMode ? { paddingBottom: 60 } : { paddingBottom: 40 },
         keyboardHeight > 0 && { paddingBottom: keyboardHeight + 80 }
       ]}>
 
-        {/* Photo Gallery (hidden in full-screen mode) */}
-        {!isFullScreen && (
-          <PhotoGallery
-            entryId={effectiveEntryId || tempEntryId}
-            refreshKey={photoCount + externalRefreshKey}
-            onPhotoCountChange={setPhotoCount}
-            onPhotoDelete={handlePhotoDelete}
-            pendingPhotos={isEditing ? undefined : formData.pendingPhotos}
-            collapsible={true}
-            isCollapsed={photosCollapsed}
-            onCollapsedChange={setPhotosCollapsed}
-            onAddPhoto={() => {
-              if (!isEditMode) enterEditMode();
-              photoCaptureRef.current?.openMenu();
-            }}
-          />
-        )}
-
-        {/* Editor */}
-        <View style={[
-          styles.editorContainer,
-          isFullScreen && styles.fullScreenEditor
-        ]}>
+        {/* Editor - PanResponder on wrapper for pull-to-reveal */}
+        <View
+          style={styles.editorContainer}
+          {...drawerPanResponder.panHandlers}
+        >
           <RichTextEditor
             ref={editorRef}
             value={formData.content}
@@ -1489,6 +1906,138 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
             editable={isEditMode}
             onPress={enterEditMode}
             onReady={handleEditorReady}
+            scrollLocked={!isHeaderCollapsed}
+            /**
+             * ================================================================
+             * onScroll - Content Lock Enforcement & Momentum Transfer
+             * ================================================================
+             *
+             * This callback receives scroll position updates from the WebView
+             * editor. It has two critical responsibilities:
+             *
+             * 1. CONTENT LOCK (CL) ENFORCEMENT:
+             *    If header is NOT at HL (isHeaderCollapsed=false) and content
+             *    somehow scrolled past 0 (e.g., from typing, soft keyboard
+             *    pushing content), we must:
+             *      a) Absorb the scroll into header collapse
+             *      b) Reset content scroll to 0
+             *    This maintains the invariant: CL active → content at 0.
+             *
+             * 2. MOMENTUM TRANSFER (Pull-to-Reveal):
+             *    When user scrolls content to top with velocity (swiping down
+             *    quickly), the momentum should continue to reveal the header.
+             *    We detect this by tracking velocity and animating header
+             *    reveal when content hits top with upward momentum.
+             *
+             * The velocity tracking uses timestamps and scroll deltas to
+             * calculate approximate scroll velocity. Negative velocity means
+             * scrolling toward top (user swiping down).
+             * ================================================================
+             */
+            onScroll={(scrollTop) => {
+              console.log('[CL-DEBUG] onScroll received:', { scrollTop, isHeaderCollapsed, threshold: SCROLL_CL_ENFORCE_THRESHOLD });
+
+              // Track if at top for PanResponder gesture detection (pull-to-reveal)
+              isAtTopRef.current = scrollTop <= SCROLL_AT_TOP_THRESHOLD;
+
+              const H = collapsibleHeight;
+
+              // ============================================================
+              // CONTENT LOCK (CL) ENFORCEMENT
+              // ============================================================
+              // When header is showing (CL active) and content scrolls past 0,
+              // it's usually because:
+              //   - Typing pushed cursor off-screen, editor auto-scrolled
+              //   - Soft keyboard pushed content up
+              //   - Some other programmatic scroll
+              //
+              // BEHAVIOR: Collapse header fully, then scroll to cursor.
+              // This ensures the cursor remains visible after typing.
+              //
+              // HISTORY: Previous approach tried to "absorb" partial scroll
+              // into header collapse and reset content to 0, but this left
+              // the cursor invisible below the keyboard.
+              // ============================================================
+              if (!isHeaderCollapsed && scrollTop > SCROLL_CL_ENFORCE_THRESHOLD) {
+                console.log('[CL-DEBUG] CL ENFORCEMENT TRIGGERED! Collapsing header and scrolling to cursor');
+                drawerAnim.setValue(0);
+                drawerProgressRef.current = 0;
+                unifiedScrollPos.current = H;
+                setShowTitleInHeader(true);
+                setIsHeaderCollapsed(true);
+
+                // Now that header is collapsed (HL), scroll to cursor
+                // Use setTimeout to wait for scrollLocked prop to propagate
+                setTimeout(() => {
+                  console.log('[CL-DEBUG] Calling scrollToCursor after 100ms delay');
+                  editorRef.current?.scrollToCursor?.();
+                }, 100);
+
+                return; // Skip velocity tracking when enforcing CL
+              } else {
+                console.log('[CL-DEBUG] CL enforcement NOT triggered:', { isHeaderCollapsed, scrollTop, meetsThreshold: scrollTop > SCROLL_CL_ENFORCE_THRESHOLD });
+              }
+
+              // ============================================================
+              // VELOCITY TRACKING FOR MOMENTUM TRANSFER
+              // ============================================================
+              // Track scroll velocity to detect when user scrolls content to
+              // top with momentum (for pull-to-reveal animation).
+              //
+              // We calculate velocity as: (scrollDelta) / (timeDelta)
+              // Negative velocity = scrollTop decreasing = user swiping down
+              const now = Date.now();
+              const timeDelta = now - lastScrollTimeRef.current;
+
+              if (timeDelta > 0 && timeDelta < VELOCITY_TIME_WINDOW) {
+                // Only calculate velocity for recent events (< 150ms)
+                // Older events would give stale/inaccurate velocity
+                const scrollDelta = scrollTop - lastScrollTopRef.current;
+                scrollVelocityRef.current = scrollDelta / timeDelta; // px/ms
+              }
+
+              lastScrollTopRef.current = scrollTop;
+              lastScrollTimeRef.current = now;
+
+              // ============================================================
+              // MOMENTUM TRANSFER: Pull-to-Reveal Animation
+              // ============================================================
+              // When content hits top (scrollTop ≤ 2) with upward velocity
+              // (negative = user was swiping down), animate header reveal.
+              //
+              // This creates the "overscroll reveals header" effect:
+              // User scrolls content to top → content bounces → header reveals
+              //
+              // Conditions:
+              // - scrollTop near 0 (content at top)
+              // - Negative velocity (scrolling toward top)
+              // - Header is collapsed (at HL) - otherwise nothing to reveal
+              if (scrollTop <= SCROLL_CL_ENFORCE_THRESHOLD && scrollVelocityRef.current < REVEAL_VELOCITY_THRESHOLD && isHeaderCollapsed) {
+                // Convert velocity to animation duration
+                // Faster velocity = shorter duration = snappier reveal
+                const absVelocity = Math.abs(scrollVelocityRef.current);
+                const duration = Math.max(REVEAL_ANIMATION_MIN_DURATION, Math.min(REVEAL_ANIMATION_MAX_DURATION, REVEAL_ANIMATION_MIN_DURATION / absVelocity));
+
+                // Animate header reveal with momentum
+                Animated.timing(drawerAnim, {
+                  toValue: 1, // Fully expanded
+                  duration,
+                  useNativeDriver: false, // Can't use native driver for layout props
+                }).start(() => {
+                  // Animation complete - sync unified scroll system
+                  // Now at position 0 (fully expanded), CL becomes active
+                  unifiedScrollPos.current = 0;
+                  drawerProgressRef.current = 1;
+                  setShowTitleInHeader(false);
+                  setIsHeaderCollapsed(false); // This re-enables CL via scrollLocked prop
+                  // Reset content to 0 since CL is now active
+                  editorRef.current?.resetScroll?.();
+                });
+
+                // Clear velocity to prevent multiple triggers from same scroll event
+                scrollVelocityRef.current = 0;
+              }
+            }}
           />
         </View>
 
@@ -1499,8 +2048,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         <BottomBar keyboardOffset={keyboardHeight}>
           <EditorToolbar
             editorRef={editorRef}
-            isFullScreen={isFullScreen}
-            onToggleFullScreen={() => setIsFullScreen(!isFullScreen)}
           />
         </BottomBar>
       )}

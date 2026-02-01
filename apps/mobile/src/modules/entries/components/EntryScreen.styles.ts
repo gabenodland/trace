@@ -32,10 +32,17 @@ export const styles = StyleSheet.create({
     paddingBottom: 4,
     flexDirection: "row",
     alignItems: "center",
+    // Fixed header stays on top - collapsible content slides UNDER it
+    zIndex: 20,
   },
-  titleBarFullScreen: {
-    // Keep same structure as titleBar but adjust spacing
-    // Normal titleBar: height 90, paddingTop 45 (ios), paddingBottom 4
+  collapsibleSection: {
+    // Slides under the fixed header via translateY
+    // Lower z-index so it goes behind the header
+    zIndex: 10,
+  },
+  collapsibleContent: {
+    // Wrapper for metadata bar, photos, and title that slides during pull-to-reveal
+    // overflow: 'hidden' is set dynamically in component
   },
   headerTitleContainer: {
     flex: 1,
@@ -61,7 +68,7 @@ export const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   headerRightContainer: {
-    width: 100,
+    width: 70,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
@@ -120,13 +127,18 @@ export const styles = StyleSheet.create({
   titleRow: {
     paddingHorizontal: themeBase.spacing.lg,
     paddingVertical: 6,
+    marginBottom: 4,
+  },
+  titleRowBorder: {
+    height: StyleSheet.hairlineWidth,
+    marginTop: 6,
   },
   titleInputFullWidth: {
     fontSize: 22,
     // Note: fontWeight removed - use fontFamily with weight variant instead (e.g., Inter_700Bold)
     padding: 0,
     margin: 0,
-    textAlign: "center",
+    textAlign: "left",
   },
   titleTouchable: {
     width: "100%",
@@ -134,7 +146,7 @@ export const styles = StyleSheet.create({
   titleText: {
     fontSize: 22,
     // Note: fontWeight removed - use fontFamily with weight variant instead (e.g., Inter_700Bold)
-    textAlign: "center",
+    textAlign: "left",
   },
   titleBarContent: {
     flex: 1,
@@ -251,7 +263,7 @@ export const styles = StyleSheet.create({
   titlePlaceholder: {
     fontSize: 22,
     // Note: fontWeight removed - use fontFamily with weight variant instead (e.g., Inter_700Bold)
-    textAlign: "center",
+    textAlign: "left",
   },
   titleInput: {
     fontSize: 22,
@@ -298,7 +310,8 @@ export const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   fullScreenEditor: {
-    paddingTop: 16,
+    // 20px gap between fullscreen header (ends at y=90) and first line of content
+    paddingTop: 20,
   },
   actionButtons: {
     flexDirection: "row",
