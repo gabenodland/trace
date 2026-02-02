@@ -444,6 +444,94 @@ This enables:
 
 ---
 
+## ✏️ Custom Rich Text Editor
+
+We use a custom Tiptap editor with a **title-first schema** that runs inside TenTap's WebView.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  React Native (RichTextEditor.tsx)                      │
+│    └─ useEditorBridge({ customSource: editorHtml })     │
+│         └─ TenTap RichText WebView                      │
+│              └─ Custom HTML bundle (editor-web/)        │
+│                   └─ useTenTap + Title extensions       │
+└─────────────────────────────────────────────────────────┘
+```
+
+- **TenTap** (`@10play/tentap-editor`): React Native wrapper for Tiptap using WebView
+- **Custom bundle**: Our Tiptap editor with Title-first schema, built as single HTML file
+- **Bridges**: Handle communication between RN and WebView (formatting commands, content sync)
+
+### Title-First Schema
+
+The editor enforces a document structure where the first node is always a title:
+
+```typescript
+// TitleDocument: content: 'title block+'
+// - Exactly one title node first
+// - Followed by one or more block nodes (paragraphs, lists, etc.)
+```
+
+**Title node behavior:**
+- Renders as `<h1 class="entry-title">`
+- No formatting marks allowed (bold/italic blocked)
+- Backspace at start blocked (can't delete title)
+- Enter key moves cursor to body
+- Shift+Enter blocked (no line breaks in title)
+- Only plain text allowed (no `<br>` tags)
+
+### Build Commands
+
+```bash
+# From apps/mobile directory:
+
+# Build the custom editor bundle
+npm run editor:build
+# Output: editor-web/build/editorHtml.js
+
+# This is imported by RichTextEditor.tsx via customSource
+```
+
+**When to rebuild:**
+- After modifying `editor-web/index.tsx` or `editor-web/index.html`
+- After modifying Title/TitleDocument extensions in `@trace/core`
+- The bundle is NOT auto-rebuilt during `npm run android`
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `apps/mobile/editor-web/index.tsx` | Editor entry point using useTenTap |
+| `apps/mobile/editor-web/index.html` | HTML template with CSS |
+| `apps/mobile/editor-web/vite.config.ts` | Vite build config |
+| `apps/mobile/editor-web/build/editorHtml.js` | Built bundle (auto-generated) |
+| `packages/core/src/modules/editor/TitleExtension.ts` | Title node extension |
+| `packages/core/src/modules/editor/TitleDocument.ts` | Document schema |
+| `packages/core/src/modules/editor/editorHelpers.ts` | HTML parsing utilities |
+| `src/components/editor/RichTextEditor.tsx` | RN component using TenTap |
+
+### Helper Functions
+
+Import from `@trace/core`:
+
+```typescript
+import {
+  splitTitleAndBody,    // Split HTML into { title, body }
+  combineTitleAndBody,  // Combine title + body into HTML
+  extractTitle,         // Get just the title text
+  extractBody,          // Get just the body HTML
+  hasTitleStructure,    // Check if HTML has title-first format
+} from '@trace/core';
+```
+
+### Theming
+
+The editor receives theme colors via `CoreBridge.configureCSS()` which injects CSS at runtime. Title styling (border, placeholder color) adapts to the current theme.
+
+---
+
 ## 🎯 Project Overview
 
 Trace is a cross-platform monorepo application (mobile/web) with shared business logic. The architecture is designed for:

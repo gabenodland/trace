@@ -190,19 +190,22 @@ export function useFilteredEntries({
       if (!deferredFilter.showArchived && entry.is_archived) return false;
 
       // Status filter (empty = show all)
-      if (deferredFilter.statuses.length > 0 && !deferredFilter.statuses.includes(entry.status)) return false;
+      const statuses = deferredFilter.statuses ?? [];
+      if (statuses.length > 0 && !statuses.includes(entry.status)) return false;
 
       // Priority filter (empty = show all)
-      if (deferredFilter.priorities.length > 0) {
+      const priorities = deferredFilter.priorities ?? [];
+      if (priorities.length > 0) {
         // Check if entry's priority matches any selected priority
         // entry.priority is the numeric value (0-4)
-        if (!deferredFilter.priorities.includes(entry.priority as 0 | 1 | 2 | 3 | 4)) return false;
+        if (!priorities.includes(entry.priority as 0 | 1 | 2 | 3 | 4)) return false;
       }
 
       // Type filter (empty = show all)
-      if (deferredFilter.types.length > 0) {
+      const types = deferredFilter.types ?? [];
+      if (types.length > 0) {
         // entry.type is null or string
-        if (entry.type === null || !deferredFilter.types.includes(entry.type)) return false;
+        if (entry.type === null || !types.includes(entry.type)) return false;
       }
 
       // Rating filter (null = no filter)

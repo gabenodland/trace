@@ -58,11 +58,13 @@ export interface ActiveFilterInfo {
  * Check if status filter is active
  */
 function getStatusFilterInfo(
-  selectedStatuses: string[],
-  availableStatuses: string[]
+  selectedStatuses: string[] | undefined,
+  availableStatuses: string[] | undefined
 ): FilterCategoryInfo {
-  const validSelected = selectedStatuses.filter(s => availableStatuses.includes(s));
-  const allSelected = validSelected.length === availableStatuses.length;
+  const statuses = selectedStatuses ?? [];
+  const available = availableStatuses ?? [];
+  const validSelected = statuses.filter(s => available.includes(s));
+  const allSelected = available.length > 0 && validSelected.length === available.length;
   const isActive = validSelected.length > 0 && !allSelected;
 
   return {
@@ -75,11 +77,13 @@ function getStatusFilterInfo(
  * Check if type filter is active
  */
 function getTypeFilterInfo(
-  selectedTypes: string[],
-  availableTypes: string[]
+  selectedTypes: string[] | undefined,
+  availableTypes: string[] | undefined
 ): FilterCategoryInfo {
-  const validSelected = selectedTypes.filter(t => availableTypes.includes(t));
-  const allSelected = validSelected.length === availableTypes.length;
+  const types = selectedTypes ?? [];
+  const available = availableTypes ?? [];
+  const validSelected = types.filter(t => available.includes(t));
+  const allSelected = available.length > 0 && validSelected.length === available.length;
   const isActive = validSelected.length > 0 && !allSelected;
 
   let badge: string | undefined;
@@ -93,15 +97,16 @@ function getTypeFilterInfo(
 /**
  * Check if priority filter is active
  */
-function getPriorityFilterInfo(selectedPriorities: PriorityLevel[]): FilterCategoryInfo {
-  const allSelected = selectedPriorities.length === ALL_PRIORITIES.length;
-  const isActive = selectedPriorities.length > 0 && !allSelected;
+function getPriorityFilterInfo(selectedPriorities: PriorityLevel[] | undefined): FilterCategoryInfo {
+  const priorities = selectedPriorities ?? [];
+  const allSelected = priorities.length === ALL_PRIORITIES.length;
+  const isActive = priorities.length > 0 && !allSelected;
 
   let badge: string | undefined;
   if (isActive) {
-    badge = selectedPriorities.length === 1
-      ? getPriorityLabel(selectedPriorities[0])
-      : `${selectedPriorities.length} selected`;
+    badge = priorities.length === 1
+      ? getPriorityLabel(priorities[0])
+      : `${priorities.length} selected`;
   }
 
   return { isActive, badge };
@@ -154,12 +159,13 @@ function getPhotosFilterInfo(hasPhotos: boolean | null): FilterCategoryInfo {
 /**
  * Check if due date filter is active
  */
-function getDueDateFilterInfo(dueDatePreset: DueDatePreset): FilterCategoryInfo {
-  const isActive = dueDatePreset !== 'all';
-  const preset = DUE_DATE_PRESETS.find(p => p.value === dueDatePreset);
+function getDueDateFilterInfo(dueDatePreset: DueDatePreset | undefined): FilterCategoryInfo {
+  const preset = dueDatePreset ?? 'all';
+  const isActive = preset !== 'all';
+  const presetInfo = DUE_DATE_PRESETS.find(p => p.value === preset);
   return {
     isActive,
-    badge: isActive ? preset?.label : undefined,
+    badge: isActive ? presetInfo?.label : undefined,
   };
 }
 

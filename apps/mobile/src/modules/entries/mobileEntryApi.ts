@@ -13,8 +13,6 @@
 
 import { Entry, CreateEntryInput, EntryFilter } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
-import { Platform } from 'react-native';
-import * as Device from 'expo-device';
 import * as FileSystem from 'expo-file-system/legacy';
 // Import directly from syncApi to avoid circular dependency through sync/index.ts
 import { triggerPushSync, refreshEntryFromServer } from '../../shared/sync/syncApi';
@@ -152,12 +150,11 @@ export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEn
 
 /**
  * Get device identifier for attribution
+ * Imported from shared utils to avoid circular dependency
+ * Re-exported for backwards compatibility
  */
-export function getDeviceName(): string {
-  const deviceName = Device.deviceName || 'Unknown Device';
-  const platformName = Platform.OS === 'ios' ? 'iOS' : 'Android';
-  return `${deviceName} (${platformName})`;
-}
+import { getDeviceName } from '../../shared/utils/deviceUtils';
+export { getDeviceName };
 
 /**
  * Generate UUID

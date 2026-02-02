@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Trace Editor</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      #root {
+        min-height: 100%;
+        height: 100%;
+        width: 100%;
+      }
+
+      .ProseMirror {
+        min-height: 100%;
+        padding: 12px;
+        padding-bottom: 100px;
+        outline: none;
+        cursor: text;
+      }
+
+      .ProseMirror:focus {
+        outline: none;
+      }
+
+      /* Title styling */
+      .ProseMirror h1.entry-title {
+        font-size: 24px;
+        font-weight: bold;
+        margin: 0 0 12px 0;
+        padding: 0 0 8px 0;
+        border-bottom: 1px solid #e5e5e5;
+        min-height: 1.4em;
+      }
+
+      /* Title placeholder */
+      .ProseMirror h1.entry-title.is-empty::before {
+        content: attr(data-placeholder);
+        color: #9ca3af;
+        pointer-events: none;
+        position: absolute;
+      }
+
+      /* Body placeholder (using Tiptap Placeholder extension classes) */
+      .ProseMirror > p.is-empty.is-editor-empty:first-of-type::before,
+      .ProseMirror > p.is-empty:first-of-type::before {
+        content: attr(data-placeholder);
+        color: #9ca3af;
+        pointer-events: none;
+        float: left;
+        height: 0;
+      }
+
+      /* Dynamic height support for TenTap */
+      .dynamic-height {
+        overflow: visible;
+      }
+      .dynamic-height .ProseMirror {
+        padding-bottom: 20px;
+      }
+
+      /* Ensure empty paragraphs have height */
+      .ProseMirror p:empty::before {
+        content: '';
+        display: inline-block;
+      }
+
+      /* Clickable area after content */
+      .ProseMirror::after {
+        content: '';
+        display: block;
+        min-height: 200px;
+        cursor: text;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
+  </body>
+</html>

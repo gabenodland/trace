@@ -10,6 +10,7 @@ export * from "./modules/attachments";
 export * from "./modules/locations";
 export * from "./modules/settings";
 export * from "./modules/subscriptions";
+export * from "./modules/editor";
 
 // Shared utilities
 export * from "./shared/types";

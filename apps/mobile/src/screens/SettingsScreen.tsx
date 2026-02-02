@@ -246,6 +246,31 @@ export function SettingsScreen() {
             </View>
           </TouchableOpacity>
 
+          {/* Editor Test */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+            onPress={() => navigate("editorTest")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Editor Test</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                Test custom TenTap editor bundle
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M9 18l6-6-6-6"
+                  stroke={theme.colors.text.tertiary}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </TouchableOpacity>
+
           {/* Version Info */}
           <View style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}>
             <View style={styles.settingContent}>

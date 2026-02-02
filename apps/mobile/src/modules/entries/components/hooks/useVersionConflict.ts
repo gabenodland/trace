@@ -12,7 +12,7 @@
  */
 
 import { useRef, useCallback } from "react";
-import { getDeviceName } from "../../mobileEntryApi";
+import { getDeviceName } from "../../../../shared/utils/deviceUtils";
 import type { Entry } from "@trace/core";
 
 export interface UseVersionConflictOptions {

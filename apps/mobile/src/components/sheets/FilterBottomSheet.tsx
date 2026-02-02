@@ -158,21 +158,25 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
     if (entries.length === 0) return { filteredCount: 0, totalCount: 0 };
 
     const total = entries.length;
+    const statuses = currentFilter.statuses ?? [];
+    const priorities = currentFilter.priorities ?? [];
+    const types = currentFilter.types ?? [];
+
     const filtered = entries.filter(entry => {
       // Archive filter (default: hide archived)
       if (!currentFilter.showArchived && entry.is_archived) return false;
 
       // Status filter (empty = show all)
-      if (currentFilter.statuses.length > 0 && !currentFilter.statuses.includes(entry.status)) return false;
+      if (statuses.length > 0 && !statuses.includes(entry.status)) return false;
 
       // Priority filter (empty = show all)
-      if (currentFilter.priorities.length > 0) {
-        if (!currentFilter.priorities.includes(entry.priority as 0 | 1 | 2 | 3 | 4)) return false;
+      if (priorities.length > 0) {
+        if (!priorities.includes(entry.priority as 0 | 1 | 2 | 3 | 4)) return false;
       }
 
       // Type filter (empty = show all)
-      if (currentFilter.types.length > 0) {
-        if (entry.type === null || !currentFilter.types.includes(entry.type)) return false;
+      if (types.length > 0) {
+        if (entry.type === null || !types.includes(entry.type)) return false;
       }
 
       // Rating filter
@@ -284,26 +288,29 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
   };
 
   const handleStatusToggle = (status: string) => {
-    const isSelected = currentFilter.statuses.includes(status);
+    const statuses = currentFilter.statuses ?? [];
+    const isSelected = statuses.includes(status);
     const newStatuses = isSelected
-      ? currentFilter.statuses.filter(s => s !== status)
-      : [...currentFilter.statuses, status];
+      ? statuses.filter(s => s !== status)
+      : [...statuses, status];
     updateLocalFilter({ statuses: newStatuses });
   };
 
   const handlePriorityToggle = (priority: PriorityLevel) => {
-    const isSelected = currentFilter.priorities.includes(priority);
+    const priorities = currentFilter.priorities ?? [];
+    const isSelected = priorities.includes(priority);
     const newPriorities = isSelected
-      ? currentFilter.priorities.filter(p => p !== priority)
-      : [...currentFilter.priorities, priority];
+      ? priorities.filter(p => p !== priority)
+      : [...priorities, priority];
     updateLocalFilter({ priorities: newPriorities });
   };
 
   const handleTypeToggle = (type: string) => {
-    const isSelected = currentFilter.types.includes(type);
+    const types = currentFilter.types ?? [];
+    const isSelected = types.includes(type);
     const newTypes = isSelected
-      ? currentFilter.types.filter(t => t !== type)
-      : [...currentFilter.types, type];
+      ? types.filter(t => t !== type)
+      : [...types, type];
     updateLocalFilter({ types: newTypes });
   };
 
@@ -465,7 +472,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
             {/* Status Options */}
             <View style={styles.optionsGrid}>
               {ALL_STATUSES.filter(s => availableStatusValues.includes(s.value)).map(status => {
-                const isSelected = currentFilter.statuses.includes(status.value);
+                const isSelected = (currentFilter.statuses ?? []).includes(status.value);
                 return (
                   <TouchableOpacity
                     key={status.value}
@@ -505,7 +512,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
             {/* Priority Options */}
             <View style={styles.optionsGrid}>
               {ALL_PRIORITIES.map(priority => {
-                const isSelected = currentFilter.priorities.includes(priority.value);
+                const isSelected = (currentFilter.priorities ?? []).includes(priority.value);
                 const priorityColor = theme.colors.priority[priority.category as PriorityCategory];
                 return (
                   <TouchableOpacity
@@ -546,7 +553,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
             {/* Type Options */}
             <View style={styles.optionsGrid}>
               {availableTypes.map(type => {
-                const isSelected = currentFilter.types.includes(type);
+                const isSelected = (currentFilter.types ?? []).includes(type);
                 return (
                   <TouchableOpacity
                     key={type}

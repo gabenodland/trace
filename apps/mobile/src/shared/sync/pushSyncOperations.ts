@@ -7,9 +7,18 @@
 
 import { localDB } from '../db/localDB';
 import { supabase, Entry, LocationEntity, isCompletedStatus, ALL_STATUSES, EntryStatus } from '@trace/core';
-import { uploadAttachmentToSupabase } from '../../modules/attachments/mobileAttachmentApi';
 import { createScopedLogger } from '../utils/logger';
-import { getDeviceName } from '../../modules/entries/mobileEntryApi';
+import { getDeviceName } from '../utils/deviceUtils';
+
+// Lazy import to break circular dependency
+let _uploadAttachmentToSupabase: ((localPath: string, remotePath: string) => Promise<{ url: string; size: number }>) | null = null;
+async function uploadAttachmentToSupabase(localPath: string, remotePath: string): Promise<{ url: string; size: number }> {
+  if (!_uploadAttachmentToSupabase) {
+    const module = await import('../../modules/attachments/mobileAttachmentApi');
+    _uploadAttachmentToSupabase = module.uploadAttachmentToSupabase;
+  }
+  return _uploadAttachmentToSupabase(localPath, remotePath);
+}
 
 const deviceName = getDeviceName();
 const log = createScopedLogger(`Push:${deviceName}`, '⬆️');

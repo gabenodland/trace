@@ -7,9 +7,18 @@
 
 import { localDB } from '../db/localDB';
 import { supabase, Entry, LocationEntity } from '@trace/core';
-import { deleteAttachmentFromLocalStorage } from '../../modules/attachments/mobileAttachmentApi';
 import { createScopedLogger } from '../utils/logger';
-import { getDeviceName } from '../../modules/entries/mobileEntryApi';
+import { getDeviceName } from '../utils/deviceUtils';
+
+// Lazy import to break circular dependency
+let _deleteAttachmentFromLocalStorage: ((attachmentId: string) => Promise<void>) | null = null;
+async function deleteAttachmentFromLocalStorage(attachmentId: string): Promise<void> {
+  if (!_deleteAttachmentFromLocalStorage) {
+    const module = await import('../../modules/attachments/mobileAttachmentApi');
+    _deleteAttachmentFromLocalStorage = module.deleteAttachmentFromLocalStorage;
+  }
+  return _deleteAttachmentFromLocalStorage(attachmentId);
+}
 
 const deviceName = getDeviceName();
 const log = createScopedLogger(`Pull:${deviceName}`, '⬇️');

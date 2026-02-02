@@ -24,6 +24,8 @@
   },
   "peerDependencies": {
     "@tanstack/react-query": "*",
+    "@tiptap/core": "*",
+    "@tiptap/pm": "*",
     "react": "*"
   }
 }

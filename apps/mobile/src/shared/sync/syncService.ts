@@ -14,9 +14,19 @@ import { supabase, Entry } from '@trace/core';
 import NetInfo from '@react-native-community/netinfo';
 import { AppState, AppStateStatus } from 'react-native';
 import type { QueryClient } from '@tanstack/react-query';
-import { downloadAttachmentsInBackground } from '../../modules/attachments/mobileAttachmentApi';
-import { getDeviceName } from '../../modules/entries/mobileEntryApi';
+import { getDeviceName } from '../utils/deviceUtils';
 import { createScopedLogger } from '../utils/logger';
+
+// Lazy import to break circular dependency
+// mobileAttachmentApi imports syncApi, which imports this file
+let _downloadAttachmentsInBackground: ((limit?: number) => Promise<void>) | null = null;
+async function downloadAttachmentsInBackground(limit: number = 10): Promise<void> {
+  if (!_downloadAttachmentsInBackground) {
+    const module = await import('../../modules/attachments/mobileAttachmentApi');
+    _downloadAttachmentsInBackground = module.downloadAttachmentsInBackground;
+  }
+  return _downloadAttachmentsInBackground(limit);
+}
 import {
   SyncResult,
   SyncStatus,

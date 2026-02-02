@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { View, Text, TextInput, TouchableOpacity, Keyboard } from "react-native";
+import { View, Text, TouchableOpacity, Keyboard } from "react-native";
 import Svg, { Path, Circle, Polyline } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { styles } from "./EntryScreen.styles";
@@ -18,11 +18,9 @@ interface EntryHeaderProps {
   isEditing: boolean;
   isDirty: boolean;
   // Form data
-  title: string;
   entryDate: string;
   includeTime: boolean;
   // Callbacks
-  onTitleChange: (text: string) => void;
   onBack: () => void;
   onDatePress: () => void;
   onTimePress: () => void;
@@ -40,10 +38,8 @@ export function EntryHeader({
   isSaving,
   isEditing,
   isDirty,
-  title,
   entryDate,
   includeTime,
-  onTitleChange,
   onBack,
   onDatePress,
   onTimePress,
@@ -83,19 +79,12 @@ export function EntryHeader({
         </TouchableOpacity>
       </View>
 
-      {/* Center: Date & Time (normal mode) or Editable Title (fullscreen mode) */}
+      {/* Center: Date & Time */}
       {isFullScreen ? (
         <View style={styles.headerTitleContainer}>
-          <TextInput
-            value={title}
-            onChangeText={onTitleChange}
-            placeholder="Untitled"
-            placeholderTextColor={theme.colors.text.disabled}
-            style={[styles.headerTitleInput, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}
-            editable={isEditMode && !isSubmitting}
-            returnKeyType="done"
-            blurOnSubmit={true}
-          />
+          <Text style={[styles.headerDateText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>
+            Full Screen
+          </Text>
         </View>
       ) : (
         <View style={styles.headerDateContainer}>

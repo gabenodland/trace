@@ -1,3 +1,9 @@
+// ============================================================================
+// STARTUP TIMING - Remove after debugging
+// ============================================================================
+console.time('⏱️ TOTAL_STARTUP');
+console.time('⏱️ 1_imports');
+
 // Initialize core FIRST - before any other @trace/core imports
 import "./src/config/initializeCore";
 
@@ -41,6 +47,7 @@ import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { AccountScreen } from "./src/screens/AccountScreen";
 import { DatabaseInfoScreen } from "./src/screens/DatabaseInfoScreen";
+import { EditorTestScreen } from "./src/screens/EditorTestScreen";
 import { LocationsScreen } from "./src/screens/LocationsScreen";
 import { MapScreen } from "./src/screens/MapScreen";
 import { StreamsScreen } from "./src/screens/StreamsScreen";
@@ -51,6 +58,8 @@ import { localDB } from "./src/shared/db/localDB";
 import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
 import { checkAppVersion, logAppSession, VersionStatus } from "./src/config/appVersionService";
+
+console.timeEnd('⏱️ 1_imports');
 
 // Create a query client
 const queryClient = new QueryClient({
@@ -165,10 +174,16 @@ function AuthGate() {
     // Initialize for the first time
     hasInitializedRef.current = true;
 
+    const dbStart = Date.now();
     localDB.init()
       .then(() => {
+        console.log(`⏱️ 3_localDB.init: ${Date.now() - dbStart}ms`);
         setDbInitialized(true);
-        return initializeSync(queryClient);
+        const syncStart = Date.now();
+        return initializeSync(queryClient).then(() => {
+          console.log(`⏱️ 4_initializeSync: ${Date.now() - syncStart}ms`);
+          console.timeEnd('⏱️ TOTAL_STARTUP');
+        });
       })
       .catch((error) => {
         console.error('Failed to initialize:', error);
@@ -431,6 +446,10 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
         boundaryName = "DatabaseInfoScreen";
         content = <DatabaseInfoScreen />;
         break;
+      case "editorTest":
+        boundaryName = "EditorTestScreen";
+        content = <EditorTestScreen />;
+        break;
       case "locations":
         boundaryName = "LocationsScreen";
         content = <LocationsScreen />;
@@ -592,6 +611,9 @@ async function handleAuthDeepLink(url: string): Promise<boolean> {
  * Root App Component
  */
 export default function App() {
+  // Track font loading time
+  const fontStartTime = useRef(Date.now());
+
   const [fontsLoaded] = useFonts({
     // Core fonts
     MavenPro_400Regular,
@@ -651,6 +673,13 @@ export default function App() {
     Exo2_600SemiBold,
     Exo2_700Bold,
   });
+
+  // Log font loading time
+  useEffect(() => {
+    if (fontsLoaded) {
+      console.log(`⏱️ 2_fonts: ${Date.now() - fontStartTime.current}ms (${56} font files)`);
+    }
+  }, [fontsLoaded]);
 
   // Handle deep links for auth callbacks
   useEffect(() => {
