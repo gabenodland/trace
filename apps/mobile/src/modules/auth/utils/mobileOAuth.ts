@@ -1,6 +1,9 @@
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { signInWithGoogle, setSession, OAUTH_CONSTANTS, ERROR_MESSAGES } from "@trace/core";
+import { createScopedLogger, LogScopes } from "../../../shared/utils/logger";
+
+const log = createScopedLogger(LogScopes.OAuth);
 
 export interface OAuthResult {
   error: { message: string; code: string } | null;
@@ -14,14 +17,14 @@ export async function handleMobileGoogleOAuth(): Promise<OAuthResult> {
     // In development with Expo Go, use the dynamic URL (tunnel/LAN/localhost)
     // In production, this would use the custom scheme from app.json
     const redirectTo = Linking.createURL(OAUTH_CONSTANTS.CALLBACK_PATH);
-    console.log("[OAuth] Redirect URL:", redirectTo);
+    log.debug("Redirect URL", { redirectTo });
 
     let data;
     try {
       data = await signInWithGoogle(redirectTo);
-      console.log("[OAuth] Sign in response:", data);
+      log.debug("Sign in response received", { hasUrl: !!data?.url });
     } catch (error: unknown) {
-      console.log("[OAuth] Sign in error:", error);
+      log.error("Sign in error", error);
       return {
         error: {
           message: error instanceof Error ? error.message : "Unknown error",
@@ -35,14 +38,14 @@ export async function handleMobileGoogleOAuth(): Promise<OAuthResult> {
 
     if (data?.url) {
       // Open the OAuth URL in a web browser
-      console.log("[OAuth] Opening auth URL:", data.url);
+      log.debug("Opening auth URL");
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      console.log("[OAuth] Browser result:", result);
+      log.debug("Browser result", { type: result.type });
 
       if (result.type === "success" && result.url) {
         // Parse the callback URL - it might have fragments or query params
         const url = result.url;
-        console.log("[OAuth] Callback URL received:", url);
+        log.debug("Callback URL received");
         let access_token = null;
         let refresh_token = null;
 
@@ -62,12 +65,12 @@ export async function handleMobileGoogleOAuth(): Promise<OAuthResult> {
         }
 
         if (access_token) {
-          console.log("[OAuth] Access token found, setting session");
+          log.info("Access token found, setting session");
           try {
             await setSession(access_token, refresh_token);
-            console.log("[OAuth] Session set successfully");
+            log.info("Session set successfully");
           } catch (sessionError: unknown) {
-            console.log("[OAuth] Session error:", sessionError);
+            log.error("Session error", sessionError);
             return {
               error: {
                 message: sessionError instanceof Error ? sessionError.message : "Unknown error",
@@ -80,7 +83,7 @@ export async function handleMobileGoogleOAuth(): Promise<OAuthResult> {
           }
           return { error: null };
         } else {
-          console.log("[OAuth] No access token found in callback URL");
+          log.warn("No access token found in callback URL");
           return {
             error: {
               message: ERROR_MESSAGES.NO_ACCESS_TOKEN,

@@ -4,20 +4,16 @@
  */
 
 import { localDB } from './localDB';
+import { createScopedLogger, LogScopes } from '../utils/logger';
+
+const log = createScopedLogger(LogScopes.Database);
 
 /**
  * Log all entries to console
  */
 export async function logAllEntries() {
   const entries = await localDB.getAllEntries();
-  console.log('📊 All Entries:', entries.length);
-  console.table(entries.map(e => ({
-    id: e.entry_id.slice(0, 8),
-    title: e.title || '(no title)',
-    synced: e.synced ? '✅' : '❌',
-    local_only: e.local_only ? '🔒' : '',
-    action: e.sync_action || '-',
-  })));
+  log.debug('All entries', { count: entries.length });
   return entries;
 }
 
@@ -26,12 +22,7 @@ export async function logAllEntries() {
  */
 export async function logUnsyncedEntries() {
   const entries = await localDB.getUnsyncedEntries();
-  console.log('⏳ Unsynced Entries:', entries.length);
-  console.table(entries.map(e => ({
-    id: e.entry_id.slice(0, 8),
-    title: e.title || '(no title)',
-    action: e.sync_action,
-  })));
+  log.debug('Unsynced entries', { count: entries.length });
   return entries;
 }
 
@@ -52,8 +43,7 @@ export async function logSyncStats() {
     delete_pending: all.filter(e => e.sync_action === 'delete').length,
   };
 
-  console.log('📈 Database Statistics:');
-  console.table(stats);
+  log.debug('Database statistics', stats);
   return stats;
 }
 
@@ -62,7 +52,7 @@ export async function logSyncStats() {
  */
 export async function logEntry(entryId: string) {
   const entry = await localDB.getEntry(entryId);
-  console.log('🔍 Entry Details:', entry);
+  log.debug('Entry details', { entryId, entry });
   return entry;
 }
 
@@ -70,9 +60,9 @@ export async function logEntry(entryId: string) {
  * Run custom SQL query
  */
 export async function runSQL(sql: string, params?: any[]) {
-  console.log('🔍 Running SQL:', sql);
+  log.debug('Running SQL', { sql, params });
   const result = await localDB.runCustomQuery(sql, params);
-  console.table(result);
+  log.debug('SQL result', { rowCount: result.length });
   return result;
 }
 

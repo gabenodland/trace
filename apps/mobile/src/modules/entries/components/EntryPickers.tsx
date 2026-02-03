@@ -22,7 +22,7 @@ import {
   TypePicker,
   UnsupportedAttributePicker,
 } from "./pickers";
-import type { CaptureFormData } from "./hooks/useCaptureFormState";
+import type { CaptureFormData } from "./context/EntryFormContext";
 
 // Picker types - GPS picker removed, unified into location
 export type ActivePicker =

@@ -14,6 +14,9 @@ import { PhotoViewer } from './PhotoViewer';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
 import type { Attachment } from '@trace/core';
+import { createScopedLogger, LogScopes } from '../../../shared/utils/logger';
+
+const log = createScopedLogger(LogScopes.PhotoGallery);
 
 interface PendingPhoto {
   photoId: string;
@@ -151,7 +154,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
         await new Promise(resolve => setTimeout(resolve, 100 * (retryCount + 1)));
         return loadPhotos(mounted, retryCount + 1, isRefresh);
       }
-      console.error('Error loading photos:', error);
+      log.error('Error loading photos', error);
     } finally {
       if (mounted) {
         setLoading(false);
@@ -170,7 +173,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
 
       // If photo is not downloaded yet, download it in background for offline use
       if (!photoDownloadStatus[photo.attachment_id] && !downloadingPhotos.has(photo.attachment_id)) {
-        console.log(`📥 Triggering background download for photo ${photo.attachment_id}`);
+        log.debug('Triggering background download', { attachmentId: photo.attachment_id });
         setDownloadingPhotos(prev => new Set(prev).add(photo.attachment_id));
 
         try {
@@ -178,9 +181,9 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
 
           // Update download status
           setPhotoDownloadStatus(prev => ({ ...prev, [photo.attachment_id]: true }));
-          console.log(`✅ Photo ${photo.attachment_id} downloaded for offline use`);
+          log.info('Photo downloaded for offline use', { attachmentId: photo.attachment_id });
         } catch (error) {
-          console.error(`Failed to download photo ${photo.attachment_id}:`, error);
+          log.error('Failed to download photo', error, { attachmentId: photo.attachment_id });
         } finally {
           setDownloadingPhotos(prev => {
             const newSet = new Set(prev);
@@ -202,7 +205,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
       // Reload photos (isRefresh=true to avoid flash)
       await loadPhotos(true, 0, true);
     } catch (error) {
-      console.error('Error deleting photo:', error);
+      log.error('Error deleting photo', error);
     }
   };
 
@@ -328,7 +331,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
           setSelectedPhotoIndex(0);
         }}
         onDelete={onPhotoDelete ? (photoId) => {
-          console.log('📸 PhotoGallery delete callback called for:', photoId);
+          log.debug('Delete callback called', { photoId });
           handlePhotoDelete(photoId);
         } : undefined}
       />

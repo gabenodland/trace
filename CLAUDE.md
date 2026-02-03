@@ -142,6 +142,79 @@ A correct diagnosis leads to a simple fix. An incorrect diagnosis leads to compl
 
 ---
 
+## 📋 Logging Guidelines
+
+**Use the centralized logger for ALL logging in mobile code.**
+
+### Quick Start
+
+```typescript
+import { createScopedLogger, LogScopes } from '../../../../shared/utils/logger';
+
+// Use a predefined scope (PREFERRED)
+const log = createScopedLogger(LogScopes.Sync);
+
+// Usage
+log.debug('Starting sync', { userId });  // Dev/debug mode only
+log.info('Sync completed', { count: 5 }); // General info
+log.warn('Slow response', { ms: 3000 }); // Something unexpected
+log.error('Sync failed', error, { userId }); // Errors
+```
+
+### Log Levels
+
+| Level | When to Use | Example |
+|-------|-------------|---------|
+| `debug` | Detailed troubleshooting info, state changes | `log.debug('State updated', { old, new })` |
+| `info` | General operational messages | `log.info('User logged in')` |
+| `warn` | Unexpected but handled situations | `log.warn('Retry attempt', { attempt: 2 })` |
+| `error` | Errors requiring attention | `log.error('Save failed', error)` |
+
+### Available Scopes (LogScopes)
+
+Use these predefined scopes for consistency:
+
+| Category | Scopes |
+|----------|--------|
+| Core | `App`, `Init`, `Config` |
+| Data & Sync | `Sync`, `SyncPush`, `SyncPull`, `Database`, `Cache`, `Migration` |
+| Auth | `Auth`, `OAuth`, `Session` |
+| Entries | `Entry`, `EntryForm`, `EntryNav`, `EntryApi`, `Autosave` |
+| Media | `Photos`, `Attachments`, `PhotoGallery` |
+| Location | `Location`, `Geocode`, `GPS`, `LocationPicker` |
+| Streams | `Streams`, `StreamApi` |
+| UI | `Editor`, `Navigation`, `Settings`, `Map` |
+| Other | `Profile`, `Version` |
+
+### Adding a New Scope
+
+1. Add to `LogScopes` in `apps/mobile/src/shared/utils/logger.ts`:
+```typescript
+export const LogScopes = {
+  // ... existing scopes
+  YourNewScope: { icon: '🆕', name: 'YourNewScope' },
+} as const;
+```
+
+2. Use it:
+```typescript
+const log = createScopedLogger(LogScopes.YourNewScope);
+```
+
+### Rules
+
+1. **NEVER use raw `console.log`** - Always use the scoped logger
+2. **Choose the right level** - Don't spam `info` with debug-level details
+3. **Include context** - Pass relevant data as the second argument
+4. **Errors need the error object** - `log.error('Message', error, { context })`
+5. **Keep messages concise** - The scope name provides context
+
+### Runtime Debug Mode
+
+Users can enable debug mode in Settings > Developer to capture all logs (including debug level) for bug reports. Logs are stored in a circular buffer and can be exported via the Share API.
+
+---
+
 ## 🔧 Project Configuration
 
 **Supabase Project:**

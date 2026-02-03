@@ -33,6 +33,9 @@ import {
 import { useAuth } from '../../../../../shared/contexts/AuthContext';
 import { useLocationsWithCounts, useUpdateLocationDetails } from '../../../mobileLocationHooks';
 import { createLocation } from '../../../mobileLocationApi';
+import { createScopedLogger, LogScopes } from '../../../../../shared/utils/logger';
+
+const log = createScopedLogger(LogScopes.LocationPicker);
 import {
   type LocationSelection,
   type LocationPickerUI,
@@ -362,7 +365,7 @@ export function useLocationPicker({
             }
           }
         } catch (error) {
-          console.error('Error fetching location:', error);
+          log.error('Error fetching location', error);
         } finally {
           setIsLoadingLocation(false);
         }
@@ -475,8 +478,7 @@ export function useLocationPicker({
 
   // Update selection with Mapbox data when it arrives
   useEffect(() => {
-    // DEBUG: Log effect state
-    console.log('[LocationPicker] 📍 Mapbox effect check:', {
+    log.debug('Mapbox effect check', {
       isLoadingDetails: selection.isLoadingDetails,
       hasMapboxData: !!mapboxData,
       mapboxLoading,
@@ -485,8 +487,7 @@ export function useLocationPicker({
     });
 
     if (selection.isLoadingDetails && mapboxData && !mapboxLoading && selection.location) {
-      // DEBUG: Log full Mapbox response
-      console.log('[LocationPicker] 📍 MAPBOX RESPONSE - Processing data');
+      log.debug('Processing Mapbox response');
 
       // Use core helper to parse and enrich location
       const enrichedLocation = enrichLocationFromMapbox(selection.location, mapboxData);
@@ -582,7 +583,7 @@ export function useLocationPicker({
       onSelect(finalLocation);
       onClose();
     } catch (error) {
-      console.error('Failed to save POI location:', error);
+      log.error('Failed to save POI location', error);
       // Still apply the location even if save fails (just without location_id)
       onSelect(poiLocation);
       onClose();
@@ -771,11 +772,10 @@ export function useLocationPicker({
   // Handler: Lookup address (re-trigger reverse geocoding after clearing)
   const handleLookupAddress = useCallback(() => {
     if (selection.location) {
-      console.log('[LocationPicker] 🔍 handleLookupAddress called, re-triggering reverse geocode');
       // Use original coordinates if available (preserves the original pin location)
       const lat = selection.location.originalLatitude ?? selection.location.latitude;
       const lng = selection.location.originalLongitude ?? selection.location.longitude;
-      console.log('[LocationPicker] 🔍 Coordinates:', { lat, lng });
+      log.debug('Lookup address triggered', { lat, lng });
 
       // Set isLoadingDetails to true so the effect processes the result
       setSelection(prev => ({
@@ -825,7 +825,7 @@ export function useLocationPicker({
           const savedLocation = await createLocation(locationInput);
           finalLocation.location_id = savedLocation.location_id;
         } catch (error) {
-          console.error('Failed to save location:', error);
+          log.error('Failed to save location', error);
           // Still proceed with the location even if save fails
         }
       }
@@ -879,7 +879,7 @@ export function useLocationPicker({
           }));
         }
       } catch (error) {
-        console.error('Error getting location:', error);
+        log.error('Error getting location', error);
       }
       return;
     }
@@ -933,7 +933,7 @@ export function useLocationPicker({
         }));
       }
     } catch (error) {
-      console.error('Error getting location:', error);
+      log.error('Error getting location', error);
     }
   }, [effectiveMode, mapState.markerPosition, mapState.region, ui.showingDetails]);
 
@@ -1056,7 +1056,7 @@ export function useLocationPicker({
         onSelect(finalLocation);
       }
     } catch (error) {
-      console.error('Failed to update location details:', error);
+      log.error('Failed to update location details', error);
     }
   }, [selection.locationId, selection.location, updateLocationDetailsMutation, setSelection, setUI, onSelect]);
 

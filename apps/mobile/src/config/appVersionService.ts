@@ -13,6 +13,9 @@ import * as Device from 'expo-device';
 import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSupabase } from '@trace/core';
+import { createScopedLogger, LogScopes } from '../shared/utils/logger';
+
+const log = createScopedLogger(LogScopes.Version);
 
 const DEVICE_ID_KEY = '@trace/device_id';
 
@@ -87,12 +90,12 @@ export async function getDeviceId(): Promise<string> {
     await AsyncStorage.setItem(DEVICE_ID_KEY, newId);
 
     if (__DEV__) {
-      console.log('[AppVersion] Generated new device ID:', newId);
+      log.debug('Generated new device ID', { deviceId: newId });
     }
 
     return newId;
   } catch (err) {
-    console.error('[AppVersion] Failed to get/generate device ID:', err);
+    log.error('Failed to get/generate device ID', err);
     // Fallback: generate a temporary ID (won't persist)
     return Crypto.randomUUID();
   }
@@ -119,7 +122,7 @@ export async function checkAppVersion(): Promise<VersionStatus> {
       .single();
 
     if (error) {
-      console.error('[VersionCheck] Failed to fetch version requirements:', error);
+      log.error('Failed to fetch version requirements', error);
       // Don't block app if we can't check version
       return { status: 'ok' };
     }
@@ -150,7 +153,7 @@ export async function checkAppVersion(): Promise<VersionStatus> {
 
     return { status: 'ok' };
   } catch (err) {
-    console.error('[VersionCheck] Error:', err);
+    log.error('Version check error', err);
     // Don't block app on errors
     return { status: 'ok' };
   }
@@ -186,9 +189,9 @@ export async function logAppSession(userId: string): Promise<void> {
       .upsert(sessionData, { onConflict: 'device_id,user_id' });
 
     if (error) {
-      console.error('[AppSession] Failed to log session:', error);
+      log.error('Failed to log session', error);
     } else if (__DEV__) {
-      console.log('[AppSession] Session logged:', {
+      log.debug('Session logged', {
         deviceId: deviceId.substring(0, 8) + '...',
         platform: sessionData.platform,
         version: sessionData.app_version,
@@ -196,7 +199,7 @@ export async function logAppSession(userId: string): Promise<void> {
       });
     }
   } catch (err) {
-    console.error('[AppSession] Error:', err);
+    log.error('Session logging error', err);
     // Non-critical, don't throw
   }
 }

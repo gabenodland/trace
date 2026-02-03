@@ -10,6 +10,9 @@ import ImageViewing from 'react-native-image-viewing';
 import { ImageSource } from 'react-native-image-viewing/dist/@types';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Sharing from 'expo-sharing';
+import { createScopedLogger, LogScopes } from '../../../shared/utils/logger';
+
+const log = createScopedLogger(LogScopes.Photos);
 
 interface PhotoItem {
   photoId: string;
@@ -113,7 +116,7 @@ export function PhotoViewer({ visible, photos, initialIndex = 0, onClose, onDele
         dialogTitle: 'Save or share photo',
       });
     } catch (error) {
-      console.error('Error sharing photo:', error);
+      log.error('Error sharing photo', error);
       Alert.alert('Error', 'Failed to share photo.');
     }
   };

@@ -12,6 +12,9 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
+import { createScopedLogger, LogScopes } from "../shared/utils/logger";
+
+const log = createScopedLogger(LogScopes.Streams);
 import Svg, { Path, Circle } from "react-native-svg";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import {
@@ -225,7 +228,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
         showSnackbar("Stream settings saved");
       }
     } catch (error) {
-      console.error("Failed to save stream:", error);
+      log.error("Failed to save stream", error);
       showSnackbar(isCreateMode ? "Failed to create stream" : "Failed to save stream properties");
     }
   };
@@ -610,7 +613,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
                             .eq("stream_id", stream.stream_id);
 
                           if (entriesError) {
-                            console.error("Failed to delete server entries:", entriesError);
+                            log.error("Failed to delete server entries", entriesError);
                           }
 
                           // Delete stream from server
@@ -620,7 +623,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
                             .eq("stream_id", stream.stream_id);
 
                           if (streamError) {
-                            console.error("Failed to delete server stream:", streamError);
+                            log.error("Failed to delete server stream", streamError);
                           }
 
                           // Now update local state
@@ -628,7 +631,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
                           markChanged();
                           showSnackbar("Stream is now local only");
                         } catch (error) {
-                          console.error("Failed to make stream local only:", error);
+                          log.error("Failed to make stream local only", error);
                           showSnackbar("Failed to delete server data");
                         }
                       },

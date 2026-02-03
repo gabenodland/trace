@@ -8,6 +8,9 @@
 
 import * as SQLite from 'expo-sqlite';
 import { Entry, CreateEntryInput, LocationEntity, CreateLocationInput } from '@trace/core';
+import { createScopedLogger, LogScopes } from '../utils/logger';
+
+const log = createScopedLogger(LogScopes.Database);
 
 class LocalDatabase {
   private db: SQLite.SQLiteDatabase | null = null;
@@ -34,7 +37,7 @@ class LocalDatabase {
       this.db = await SQLite.openDatabaseAsync('trace.db');
 
       // Log database opened
-      console.log('📦 SQLite database opened: trace.db');
+      log.info('SQLite database opened', { dbName: 'trace.db' });
 
       // Create tables (without indexes that depend on migrated columns)
       await this.createTables();
@@ -45,9 +48,9 @@ class LocalDatabase {
       // Create indexes (after migrations have added any missing columns)
       await this.createIndexes();
 
-      console.log('✅ SQLite tables and indexes created');
+      log.info('SQLite tables and indexes created');
     } catch (error) {
-      console.error('❌ Failed to initialize database:', error);
+      log.error('Failed to initialize database', error);
       throw error;
     }
   }
@@ -67,14 +70,14 @@ class LocalDatabase {
       );
 
       if (!result) {
-        console.log('📦 Running migration: Adding location_id to entries table...');
+        log.info('Running migration: Adding location_id to entries table');
         await this.db.execAsync(`ALTER TABLE entries ADD COLUMN location_id TEXT`);
         // Create index for the new column
         await this.db.execAsync(`CREATE INDEX IF NOT EXISTS idx_entries_location_id ON entries(location_id)`);
-        console.log('✅ Migration complete: location_id added to entries');
+        log.info('Migration complete: location_id added to entries');
       }
     } catch (error) {
-      console.error('Migration error (location_id):', error);
+      log.error('Migration error (location_id)', error);
       // Don't throw - the column might already exist or there could be other reasons
     }
 
@@ -85,16 +88,16 @@ class LocalDatabase {
       );
 
       if (!priorityCheck) {
-        console.log('📦 Running migration: Adding priority, rating, is_pinned to entries table...');
+        log.info('Running migration: Adding priority, rating, is_pinned to entries table');
         await this.db.execAsync(`
           ALTER TABLE entries ADD COLUMN priority INTEGER DEFAULT 0;
           ALTER TABLE entries ADD COLUMN rating REAL DEFAULT 0.00;
           ALTER TABLE entries ADD COLUMN is_pinned INTEGER DEFAULT 0;
         `);
-        console.log('✅ Migration complete: priority, rating, is_pinned added to entries');
+        log.info('Migration complete: priority, rating, is_pinned added to entries');
       }
     } catch (error) {
-      console.error('Migration error (priority/rating/is_pinned):', error);
+      log.error('Migration error (priority/rating/is_pinned)', error);
     }
 
     // Migration: Add is_archived column to entries table
@@ -104,15 +107,15 @@ class LocalDatabase {
       );
 
       if (!archivedCheck) {
-        console.log('📦 Running migration: Adding is_archived to entries table...');
+        log.info('Running migration: Adding is_archived to entries table');
         await this.db.execAsync(`
           ALTER TABLE entries ADD COLUMN is_archived INTEGER DEFAULT 0;
         `);
         await this.db.execAsync(`CREATE INDEX IF NOT EXISTS idx_entries_is_archived ON entries(is_archived)`);
-        console.log('✅ Migration complete: is_archived added to entries');
+        log.info('Migration complete: is_archived added to entries');
       }
     } catch (error) {
-      console.error('Migration error (is_archived):', error);
+      log.error('Migration error (is_archived)', error);
     }
 
     // Migration: Add locations table if it doesn't exist (should be handled by CREATE TABLE IF NOT EXISTS, but just in case)
@@ -122,7 +125,7 @@ class LocalDatabase {
       );
 
       if (!result) {
-        console.log('📦 Running migration: Creating locations table...');
+        log.info('Running migration: Creating locations table');
         await this.db.execAsync(`
           CREATE TABLE IF NOT EXISTS locations (
             location_id TEXT PRIMARY KEY,
@@ -153,10 +156,10 @@ class LocalDatabase {
           CREATE INDEX IF NOT EXISTS idx_locations_city ON locations(city);
           CREATE INDEX IF NOT EXISTS idx_locations_synced ON locations(synced);
         `);
-        console.log('✅ Migration complete: locations table created');
+        log.info('Migration complete: locations table created');
       }
     } catch (error) {
-      console.error('Migration error (locations table):', error);
+      log.error('Migration error (locations table)', error);
     }
 
     // Migration: Update status CHECK constraint to include 'in_progress'
@@ -168,14 +171,14 @@ class LocalDatabase {
       );
 
       if (!migrationCheck) {
-        console.log('📦 Running migration: Updating entries status constraint to include in_progress...');
+        log.info('Running migration: Updating entries status constraint to include in_progress');
 
         // Get existing column names from the entries table
         const columns = await this.db.getAllAsync<{ name: string }>(
           `SELECT name FROM pragma_table_info('entries')`
         );
         const columnNames = columns.map(c => c.name);
-        console.log(`Found ${columnNames.length} columns in entries table`);
+        log.debug('Found columns in entries table', { count: columnNames.length });
 
         // Define the new table columns (matching current schema)
         const newTableColumns = `
@@ -229,7 +232,7 @@ class LocalDatabase {
         const columnsToMigrate = newTableColumnNames.filter(col => columnNames.includes(col));
         const columnList = columnsToMigrate.join(', ');
 
-        console.log(`Migrating columns: ${columnList}`);
+        log.debug('Migrating columns', { columns: columnList });
 
         // Drop any existing entries_new table from previous failed migration
         await this.db.execAsync(`DROP TABLE IF EXISTS entries_new;`);
@@ -255,10 +258,10 @@ class LocalDatabase {
           VALUES ('migration_status_in_progress_done', 'true', ${Date.now()});
         `);
 
-        console.log('✅ Migration complete: entries status constraint updated to include in_progress');
+        log.info('Migration complete: entries status constraint updated to include in_progress');
       }
     } catch (error) {
-      console.error('Migration error (status in_progress constraint):', error);
+      log.error('Migration error (status in_progress constraint)', error);
     }
 
     // Migration: Update to new 9-status system (incomplete->todo, complete->done, add new statuses)
@@ -268,14 +271,14 @@ class LocalDatabase {
       );
 
       if (!migrationCheck) {
-        console.log('📦 Running migration: Converting to 9-status system...');
+        log.info('Running migration: Converting to 9-status system');
 
         // Get existing column names from the entries table
         const columns = await this.db.getAllAsync<{ name: string }>(
           `SELECT name FROM pragma_table_info('entries')`
         );
         const columnNames = columns.map(c => c.name);
-        console.log(`Found ${columnNames.length} columns in entries table`);
+        log.debug('Found columns in entries table', { count: columnNames.length });
 
         // Define the new table columns with updated status constraint
         const newTableColumns = `
@@ -354,10 +357,10 @@ class LocalDatabase {
           VALUES ('migration_9_status_system_done', 'true', ${Date.now()});
         `);
 
-        console.log('✅ Migration complete: converted to 9-status system (incomplete->todo, complete->done)');
+        log.info('Migration complete: converted to 9-status system (incomplete->todo, complete->done)');
       }
     } catch (error) {
-      console.error('Migration error (9-status system):', error);
+      log.error('Migration error (9-status system)', error);
     }
 
     // Migration: Add entry_statuses and entry_default_status columns to streams table
@@ -367,15 +370,15 @@ class LocalDatabase {
       );
 
       if (!statusesCheck) {
-        console.log('📦 Running migration: Adding entry_statuses and entry_default_status to streams table...');
+        log.info('Running migration: Adding entry_statuses and entry_default_status to streams table');
         await this.db.execAsync(`
           ALTER TABLE streams ADD COLUMN entry_statuses TEXT DEFAULT '["new","todo","in_progress","done"]';
           ALTER TABLE streams ADD COLUMN entry_default_status TEXT DEFAULT 'new';
         `);
-        console.log('✅ Migration complete: entry_statuses and entry_default_status added to streams');
+        log.info('Migration complete: entry_statuses and entry_default_status added to streams');
       }
     } catch (error) {
-      console.error('Migration error (streams status config):', error);
+      log.error('Migration error (streams status config)', error);
     }
 
     // Migration: Add entry_types and entry_use_type columns to streams table
@@ -385,15 +388,15 @@ class LocalDatabase {
       );
 
       if (!typesCheck) {
-        console.log('📦 Running migration: Adding entry_types and entry_use_type to streams table...');
+        log.info('Running migration: Adding entry_types and entry_use_type to streams table');
         await this.db.execAsync(`
           ALTER TABLE streams ADD COLUMN entry_types TEXT DEFAULT '[]';
           ALTER TABLE streams ADD COLUMN entry_use_type INTEGER DEFAULT 0;
         `);
-        console.log('✅ Migration complete: entry_types and entry_use_type added to streams');
+        log.info('Migration complete: entry_types and entry_use_type added to streams');
       }
     } catch (error) {
-      console.error('Migration error (streams type config):', error);
+      log.error('Migration error (streams type config)', error);
     }
 
     // Migration: Add type column to entries table
@@ -403,16 +406,16 @@ class LocalDatabase {
       );
 
       if (!typeCheck) {
-        console.log('📦 Running migration: Adding type column to entries table...');
+        log.info('Running migration: Adding type column to entries table');
         await this.db.execAsync(`
           ALTER TABLE entries ADD COLUMN type TEXT;
         `);
         // Create index for type lookups
         await this.db.execAsync(`CREATE INDEX IF NOT EXISTS idx_entries_type ON entries(type)`);
-        console.log('✅ Migration complete: type added to entries');
+        log.info('Migration complete: type added to entries');
       }
     } catch (error) {
-      console.error('Migration error (entries type):', error);
+      log.error('Migration error (entries type)', error);
     }
 
     // Migration: Add entry_rating_type column to streams table
@@ -422,14 +425,14 @@ class LocalDatabase {
       );
 
       if (!ratingTypeCheck) {
-        console.log('📦 Running migration: Adding entry_rating_type to streams table...');
+        log.info('Running migration: Adding entry_rating_type to streams table');
         await this.db.execAsync(`
           ALTER TABLE streams ADD COLUMN entry_rating_type TEXT DEFAULT 'stars';
         `);
-        console.log('✅ Migration complete: entry_rating_type added to streams');
+        log.info('Migration complete: entry_rating_type added to streams');
       }
     } catch (error) {
-      console.error('Migration error (streams entry_rating_type):', error);
+      log.error('Migration error (streams entry_rating_type)', error);
     }
 
     // Migration: Add location hierarchy fields to entries table
@@ -439,7 +442,7 @@ class LocalDatabase {
       );
 
       if (!placeNameCheck) {
-        console.log('📦 Running migration: Adding location hierarchy fields to entries table...');
+        log.info('Running migration: Adding location hierarchy fields to entries table');
         await this.db.execAsync(`
           ALTER TABLE entries ADD COLUMN place_name TEXT;
           ALTER TABLE entries ADD COLUMN address TEXT;
@@ -457,10 +460,10 @@ class LocalDatabase {
           CREATE INDEX IF NOT EXISTS idx_entries_region ON entries(region);
           CREATE INDEX IF NOT EXISTS idx_entries_country ON entries(country);
         `);
-        console.log('✅ Migration complete: location hierarchy fields added to entries');
+        log.info('Migration complete: location hierarchy fields added to entries');
 
         // Backfill from locations table
-        console.log('📦 Backfilling entry location data from locations table...');
+        log.info('Backfilling entry location data from locations table');
         await this.db.execAsync(`
           UPDATE entries
           SET
@@ -474,10 +477,10 @@ class LocalDatabase {
             country = (SELECT country FROM locations WHERE locations.location_id = entries.location_id)
           WHERE location_id IS NOT NULL AND place_name IS NULL
         `);
-        console.log('✅ Backfill complete: entry location data populated from locations');
+        log.info('Backfill complete: entry location data populated from locations');
       }
     } catch (error) {
-      console.error('Migration error (entries location hierarchy):', error);
+      log.error('Migration error (entries location hierarchy)', error);
     }
 
     // Migration: Add missing columns to attachments table FIRST (before data copy)
@@ -494,19 +497,19 @@ class LocalDatabase {
 
         if (!columnNames.includes('thumbnail_path')) {
           await this.db.execAsync(`ALTER TABLE attachments ADD COLUMN thumbnail_path TEXT`);
-          console.log('📦 Added thumbnail_path column to attachments');
+          log.info('Added thumbnail_path column to attachments');
         }
         if (!columnNames.includes('captured_at')) {
           await this.db.execAsync(`ALTER TABLE attachments ADD COLUMN captured_at TEXT`);
-          console.log('📦 Added captured_at column to attachments');
+          log.info('Added captured_at column to attachments');
         }
         if (!columnNames.includes('sync_error')) {
           await this.db.execAsync(`ALTER TABLE attachments ADD COLUMN sync_error TEXT`);
-          console.log('📦 Added sync_error column to attachments');
+          log.info('Added sync_error column to attachments');
         }
       }
     } catch (error) {
-      console.error('Migration error (attachments columns):', error);
+      log.error('Migration error (attachments columns)', error);
     }
 
     // Migration: Rename photos table to attachments
@@ -522,11 +525,11 @@ class LocalDatabase {
       );
 
       if (photosTableCheck) {
-        console.log('📦 Running migration: Migrating photos table to attachments...');
+        log.info('Running migration: Migrating photos table to attachments');
 
         if (attachmentsTableCheck) {
           // Both tables exist - copy data from photos to attachments, then drop photos
-          console.log('📦 Both tables exist - copying data and dropping old table...');
+          log.info('Both tables exist - copying data and dropping old table');
 
           // Get columns from both tables to find common ones
           const photosColumns = await this.db.getAllAsync<{ name: string }>(
@@ -552,7 +555,7 @@ class LocalDatabase {
           const attachmentsCols = ['attachment_id', ...commonCols].join(', ');
           const photosCols = ['photo_id', ...commonCols].join(', ');
 
-          console.log('📦 Copying columns:', attachmentsCols);
+          log.debug('Copying columns', { columns: attachmentsCols });
 
           await this.db.execAsync(`
             INSERT OR IGNORE INTO attachments (${attachmentsCols})
@@ -561,12 +564,12 @@ class LocalDatabase {
 
           // Drop the old photos table
           await this.db.execAsync(`DROP TABLE photos`);
-          console.log('✅ Data migrated and old photos table dropped');
+          log.info('Data migrated and old photos table dropped');
         } else {
           // Only photos table exists - rename it
           await this.db.execAsync(`ALTER TABLE photos RENAME TO attachments`);
           await this.db.execAsync(`ALTER TABLE attachments RENAME COLUMN photo_id TO attachment_id`);
-          console.log('✅ Photos table renamed to attachments');
+          log.info('Photos table renamed to attachments');
         }
 
         // Drop old indexes (they may or may not exist)
@@ -578,10 +581,10 @@ class LocalDatabase {
           DROP INDEX IF EXISTS idx_photos_synced;
         `);
 
-        console.log('✅ Migration complete: photos migrated to attachments');
+        log.info('Migration complete: photos migrated to attachments');
       }
     } catch (error) {
-      console.error('Migration error (photos to attachments):', error);
+      log.error('Migration error (photos to attachments)', error);
     }
 
     // Migration: Add geocode_status field to entries table
@@ -591,7 +594,7 @@ class LocalDatabase {
       );
 
       if (!geocodeStatusCheck) {
-        console.log('📦 Running migration: Adding geocode_status to entries table...');
+        log.info('Running migration: Adding geocode_status to entries table');
         await this.db.execAsync(`
           ALTER TABLE entries ADD COLUMN geocode_status TEXT;
         `);
@@ -601,10 +604,10 @@ class LocalDatabase {
           ON entries(user_id)
           WHERE geocode_status IS NULL AND entry_latitude IS NOT NULL;
         `);
-        console.log('✅ Migration complete: geocode_status added to entries');
+        log.info('Migration complete: geocode_status added to entries');
       }
     } catch (error) {
-      console.error('Migration error (entries geocode_status):', error);
+      log.error('Migration error (entries geocode_status)', error);
     }
 
     // Migration: Add location_radius field to locations table (renamed from accuracy)
@@ -614,14 +617,14 @@ class LocalDatabase {
       );
 
       if (!locationRadiusCheck) {
-        console.log('📦 Running migration: Adding location_radius to locations table...');
+        log.info('Running migration: Adding location_radius to locations table');
         await this.db.execAsync(`
           ALTER TABLE locations ADD COLUMN location_radius REAL;
         `);
-        console.log('✅ Migration complete: location_radius added to locations');
+        log.info('Migration complete: location_radius added to locations');
       }
     } catch (error) {
-      console.error('Migration error (locations location_radius):', error);
+      log.error('Migration error (locations location_radius)', error);
     }
 
     // Migration: Rename accuracy to location_radius (for existing databases)
@@ -634,11 +637,11 @@ class LocalDatabase {
       );
 
       if (hasAccuracy && !hasLocationRadius) {
-        console.log('📦 Running migration: Renaming accuracy to location_radius...');
+        log.info('Running migration: Renaming accuracy to location_radius');
         await this.db.execAsync(`
           ALTER TABLE locations RENAME COLUMN accuracy TO location_radius;
         `);
-        console.log('✅ Migration complete: locations.accuracy renamed to location_radius');
+        log.info('Migration complete: locations.accuracy renamed to location_radius');
       }
 
       // Also rename on entries table
@@ -650,14 +653,14 @@ class LocalDatabase {
       );
 
       if (entriesHasAccuracy && !entriesHasRadius) {
-        console.log('📦 Running migration: Renaming entries.location_accuracy to location_radius...');
+        log.info('Running migration: Renaming entries.location_accuracy to location_radius');
         await this.db.execAsync(`
           ALTER TABLE entries RENAME COLUMN location_accuracy TO location_radius;
         `);
-        console.log('✅ Migration complete: entries.location_accuracy renamed to location_radius');
+        log.info('Migration complete: entries.location_accuracy renamed to location_radius');
       }
     } catch (error) {
-      console.error('Migration error (rename accuracy to location_radius):', error);
+      log.error('Migration error (rename accuracy to location_radius)', error);
     }
 
     // Migration: Remove unused geo_ fields (never used for filtering)
@@ -668,7 +671,7 @@ class LocalDatabase {
       );
 
       if (!migrationCheck) {
-        console.log('📦 Running migration: Removing unused geo_ fields from entries and locations tables...');
+        log.info('Running migration: Removing unused geo_ fields from entries and locations tables');
 
         // Drop indexes first
         await this.db.execAsync(`
@@ -691,10 +694,10 @@ class LocalDatabase {
           VALUES ('migration_remove_geo_fields_done', 'true', ${Date.now()});
         `);
 
-        console.log('✅ Migration complete: Removed geo_ field indexes');
+        log.info('Migration complete: Removed geo_ field indexes');
       }
     } catch (error) {
-      console.error('Migration error (remove geo_ fields):', error);
+      log.error('Migration error (remove geo_ fields)', error);
     }
 
     // Migration: Add sync_error column to locations table
@@ -705,14 +708,14 @@ class LocalDatabase {
       );
 
       if (!syncErrorCheck) {
-        console.log('📦 Running migration: Adding sync_error column to locations table...');
+        log.info('Running migration: Adding sync_error column to locations table');
         await this.db.execAsync(`
           ALTER TABLE locations ADD COLUMN sync_error TEXT;
         `);
-        console.log('✅ Migration complete: sync_error added to locations');
+        log.info('Migration complete: sync_error added to locations');
       }
     } catch (error) {
-      console.error('Migration error (locations sync_error):', error);
+      log.error('Migration error (locations sync_error)', error);
     }
   }
 
@@ -1267,12 +1270,11 @@ class LocalDatabase {
       updated_at: updates.updated_at || new Date(now).toISOString()
     };
 
-    console.log('🔧 [LocalDB] updateEntry called:', {
+    log.debug('updateEntry called', {
       entryId,
-      updates,
-      'updated.is_pinned': updated.is_pinned,
-      'updated.priority': updated.priority,
-      'updated.rating': updated.rating
+      is_pinned: updated.is_pinned,
+      priority: updated.priority,
+      rating: updated.rating
     });
 
     await this.db.runAsync(
@@ -1335,10 +1337,10 @@ class LocalDatabase {
       ]
     );
 
-    console.log('✅ [LocalDB] UPDATE executed, fetching updated entry...');
+    log.debug('UPDATE executed, fetching updated entry');
     const result = await this.getEntry(entryId);
     if (!result) throw new Error('Entry not found after update');
-    console.log('📖 [LocalDB] Retrieved entry:', {
+    log.debug('Retrieved entry', {
       entryId: result.entry_id,
       is_pinned: result.is_pinned,
       priority: result.priority,
@@ -1857,7 +1859,7 @@ class LocalDatabase {
             entryStatuses = parsed;
           }
         } catch (e) {
-          console.warn('Failed to parse entry_statuses:', e);
+          log.warn('Failed to parse entry_statuses', { error: e });
         }
       }
 
@@ -1874,7 +1876,7 @@ class LocalDatabase {
             entryTypes = parsed;
           }
         } catch (e) {
-          console.warn('Failed to parse entry_types:', e);
+          log.warn('Failed to parse entry_types', { error: e });
         }
       }
 
@@ -1932,7 +1934,7 @@ class LocalDatabase {
           entryStatuses = parsed;
         }
       } catch (e) {
-        console.warn('Failed to parse entry_statuses:', e);
+        log.warn('Failed to parse entry_statuses', { error: e });
       }
     }
 
@@ -1949,7 +1951,7 @@ class LocalDatabase {
           entryTypes = parsed;
         }
       } catch (e) {
-        console.warn('Failed to parse entry_types:', e);
+        log.warn('Failed to parse entry_types', { error: e });
       }
     }
 
@@ -2468,7 +2470,7 @@ class LocalDatabase {
       ]
     );
 
-    console.log(`📎 Attachment created: ${attachment.attachment_id}${fromSync ? ' (from sync)' : ''}`);
+    log.debug('Attachment created', { attachmentId: attachment.attachment_id, fromSync });
   }
 
   /**
@@ -2578,7 +2580,7 @@ class LocalDatabase {
     const sql = `UPDATE attachments SET ${fields.join(', ')} WHERE attachment_id = ?`;
     await this.db.runAsync(sql, values);
 
-    console.log(`📎 Attachment updated: ${attachmentId}`);
+    log.debug('Attachment updated', { attachmentId });
   }
 
   /**
@@ -2588,54 +2590,44 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    console.log(`📎 updateAttachmentEntryIds: ${oldEntryId} → ${newEntryId}`);
+    log.debug('updateAttachmentEntryIds', { oldEntryId, newEntryId });
 
     const attachments = await this.db.getAllAsync<any>(
       'SELECT attachment_id, file_path, local_path FROM attachments WHERE entry_id = ?',
       [oldEntryId]
     );
 
-    console.log(`📎 Found ${attachments.length} attachments to update`);
+    log.debug('Found attachments to update', { count: attachments.length });
 
     if (attachments.length === 0) return;
 
     const FileSystem = await import('expo-file-system/legacy');
 
     for (const attachment of attachments) {
-      console.log(`📎 Processing attachment ${attachment.attachment_id}:`);
-      console.log(`  Old path: ${attachment.local_path}`);
+      log.debug('Processing attachment', { attachmentId: attachment.attachment_id, oldPath: attachment.local_path });
 
       const newFilePath = attachment.file_path.replace(oldEntryId, newEntryId);
       let newLocalPath = attachment.local_path ? attachment.local_path.replace(oldEntryId, newEntryId) : null;
 
-      console.log(`  New path: ${newLocalPath}`);
-
       if (attachment.local_path && newLocalPath) {
         try {
           const oldFileInfo = await FileSystem.getInfoAsync(attachment.local_path);
-          console.log(`  Old file exists: ${oldFileInfo.exists}`);
 
           if (oldFileInfo.exists) {
             const newDir = newLocalPath.substring(0, newLocalPath.lastIndexOf('/'));
-            console.log(`  Creating new directory: ${newDir}`);
-
             await FileSystem.makeDirectoryAsync(newDir, { intermediates: true });
 
-            console.log(`  Moving file...`);
             await FileSystem.moveAsync({
               from: attachment.local_path,
               to: newLocalPath,
             });
 
-            console.log(`✅ Moved attachment file successfully`);
-
-            const newFileInfo = await FileSystem.getInfoAsync(newLocalPath);
-            console.log(`  New file exists: ${newFileInfo.exists}`);
+            log.debug('Moved attachment file successfully', { attachmentId: attachment.attachment_id, newPath: newLocalPath });
           } else {
-            console.log(`⚠️ Old file doesn't exist at ${attachment.local_path}`);
+            log.warn('Old file does not exist', { path: attachment.local_path });
           }
         } catch (error) {
-          console.error(`❌ Failed to move attachment file ${attachment.attachment_id}:`, error);
+          log.error('Failed to move attachment file', error, { attachmentId: attachment.attachment_id });
         }
       }
 
@@ -2643,10 +2635,10 @@ class LocalDatabase {
         'UPDATE attachments SET entry_id = ?, file_path = ?, local_path = ?, synced = 0 WHERE attachment_id = ?',
         [newEntryId, newFilePath, newLocalPath, attachment.attachment_id]
       );
-      console.log(`✅ Updated database for attachment ${attachment.attachment_id}`);
+      log.debug('Updated database for attachment', { attachmentId: attachment.attachment_id });
     }
 
-    console.log(`📎 Finished updating ${attachments.length} attachments`);
+    log.debug('Finished updating attachments', { count: attachments.length });
   }
 
   /**
@@ -2661,7 +2653,7 @@ class LocalDatabase {
       ['delete', attachmentId]
     );
 
-    console.log(`📎 Attachment marked for deletion: ${attachmentId}`);
+    log.debug('Attachment marked for deletion', { attachmentId });
   }
 
   /**
@@ -2672,7 +2664,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.runAsync('DELETE FROM attachments WHERE attachment_id = ?', [attachmentId]);
-    console.log(`📎 Attachment permanently deleted: ${attachmentId}`);
+    log.debug('Attachment permanently deleted', { attachmentId });
   }
 
   /**
@@ -2682,7 +2674,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    console.log('🧹 Searching for orphaned attachments...');
+    log.debug('Searching for orphaned attachments');
 
     let query = 'SELECT * FROM attachments WHERE sync_action IS NULL OR sync_action != ?';
     const params: any[] = ['delete'];
@@ -2699,16 +2691,16 @@ class LocalDatabase {
       const entry = await this.getEntry(attachment.entry_id);
 
       if (!entry || entry.deleted_at) {
-        console.log(`🗑️ Found orphaned attachment ${attachment.attachment_id} (entry ${attachment.entry_id} ${!entry ? 'not found' : 'deleted'})`);
+        log.debug('Found orphaned attachment', { attachmentId: attachment.attachment_id, entryId: attachment.entry_id, reason: !entry ? 'not found' : 'deleted' });
         await this.deleteAttachment(attachment.attachment_id);
         orphanCount++;
       }
     }
 
     if (orphanCount > 0) {
-      console.log(`🧹 Cleanup complete: Found and marked ${orphanCount} orphaned attachments for deletion`);
+      log.info('Cleanup complete: Found and marked orphaned attachments for deletion', { count: orphanCount });
     } else {
-      console.log('✅ No orphaned attachments found');
+      log.debug('No orphaned attachments found');
     }
 
     return orphanCount;
@@ -2826,9 +2818,9 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    console.log('🔍 Debug query:', sql);
+    log.debug('Debug query', { sql });
     const result = await this.db.getAllAsync<any>(sql);
-    console.log('📊 Result:', JSON.stringify(result, null, 2));
+    log.debug('Debug query result', { rowCount: result.length });
     return result;
   }
 
@@ -2848,7 +2840,7 @@ class LocalDatabase {
       DELETE FROM sync_logs;
     `);
 
-    console.log('🗑️ All local data cleared');
+    log.info('All local data cleared');
   }
 
   /**
@@ -2856,15 +2848,15 @@ class LocalDatabase {
    * Use this when migrations fail or schema is corrupted
    */
   async resetSchema(): Promise<void> {
-    console.log('🔄 Resetting database schema...');
+    log.info('Resetting database schema');
 
     // Close existing connection if open
     if (this.db) {
       try {
         await this.db.closeAsync();
-        console.log('Closed existing database connection');
+        log.debug('Closed existing database connection');
       } catch (e) {
-        console.log('Could not close db (may already be closed):', e);
+        log.warn('Could not close db (may already be closed)', { error: e });
       }
       this.db = null;
     }
@@ -2874,20 +2866,20 @@ class LocalDatabase {
 
     // Open fresh connection
     this.db = await SQLite.openDatabaseAsync('trace.db');
-    console.log('Opened fresh database connection');
+    log.debug('Opened fresh database connection');
 
     // Drop all tables one by one (more robust than multi-statement)
     const tables = ['attachments', 'photos', 'entries', 'streams', 'locations', 'sync_metadata', 'sync_logs', 'entries_new'];
     for (const table of tables) {
       try {
         await this.db.execAsync(`DROP TABLE IF EXISTS ${table};`);
-        console.log(`Dropped table: ${table}`);
+        log.debug('Dropped table', { table });
       } catch (e) {
-        console.log(`Could not drop ${table}:`, e);
+        log.warn('Could not drop table', { table, error: e });
       }
     }
 
-    console.log('🗑️ All tables dropped');
+    log.info('All tables dropped');
 
     // Close and reopen to ensure clean state
     await this.db.closeAsync();
@@ -2896,7 +2888,7 @@ class LocalDatabase {
     // Recreate tables with fresh schema via init
     await this.init();
 
-    console.log('✅ Database schema reset complete');
+    log.info('Database schema reset complete');
   }
 
   /**
@@ -2915,7 +2907,7 @@ class LocalDatabase {
    */
   setCurrentUser(userId: string): void {
     if (this.currentUserId !== userId) {
-      console.log(`👤 Switched to user: ${userId}`);
+      log.debug('Switched to user', { userId });
       this.currentUserId = userId;
     }
   }
@@ -2924,7 +2916,7 @@ class LocalDatabase {
    * Clear current user
    */
   clearCurrentUser(): void {
-    console.log('👤 Cleared current user');
+    log.debug('Cleared current user');
     this.currentUserId = null;
   }
 

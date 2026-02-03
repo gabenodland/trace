@@ -8,6 +8,9 @@ import {
   TextInput,
   Alert,
 } from "react-native";
+import { createScopedLogger, LogScopes } from "../shared/utils/logger";
+
+const log = createScopedLogger(LogScopes.Streams);
 import Svg, { Path } from "react-native-svg";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import type { Stream } from "@trace/core";
@@ -57,7 +60,7 @@ export function StreamsScreen() {
             try {
               await streamMutations.deleteStream(stream.stream_id);
             } catch (error) {
-              console.error("Failed to delete stream:", error);
+              log.error("Failed to delete stream", error);
               Alert.alert("Error", "Failed to delete stream");
             }
           },

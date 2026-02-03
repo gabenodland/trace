@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, PanResponder, Dimensions } from "react-native";
+import { createScopedLogger, LogScopes } from "../shared/utils/logger";
+
+const log = createScopedLogger(LogScopes.Map);
 import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useNavigation } from "../shared/contexts/NavigationContext";
@@ -511,7 +514,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
         Alert.alert("Location Error", "Unable to determine your current location.");
       }
     } catch (error) {
-      console.error("Error getting location:", error);
+      log.error("Failed to get current location", error);
       Alert.alert("Location Error", "Failed to get your current location. Please try again.");
     }
   };
@@ -583,7 +586,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
       setShowMoveStreamPicker(false);
       setEntryToMove(null);
     } catch (error) {
-      console.error("Failed to move entry:", error);
+      log.error("Failed to move entry", error);
       Alert.alert("Error", "Failed to move entry");
     }
   };
@@ -594,7 +597,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
       const newEntryId = await entryMutations.copyEntry(entryId);
       navigate("capture", { entryId: newEntryId });
     } catch (error) {
-      console.error("Failed to copy entry:", error);
+      log.error("Failed to copy entry", error);
       Alert.alert("Error", "Failed to copy entry");
     }
   };
@@ -613,7 +616,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
             try {
               await entryMutations.deleteEntry(entryId);
             } catch (error) {
-              console.error("Failed to delete entry:", error);
+              log.error("Failed to delete entry", error);
               Alert.alert("Error", "Failed to delete entry");
             }
           },
@@ -629,7 +632,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
         is_pinned: !currentPinned,
       });
     } catch (error) {
-      console.error("Failed to pin/unpin entry:", error);
+      log.error("Failed to pin/unpin entry", error);
       Alert.alert("Error", "Failed to pin/unpin entry");
     }
   };

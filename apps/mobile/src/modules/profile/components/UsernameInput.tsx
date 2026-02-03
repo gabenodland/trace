@@ -12,6 +12,9 @@ import { View, Text, TextInput, StyleSheet, ActivityIndicator } from 'react-nati
 import Svg, { Path, Circle } from 'react-native-svg';
 import { validateUsername } from '@trace/core';
 import { theme } from '../../../shared/theme/theme';
+import { createScopedLogger, LogScopes } from '../../../shared/utils/logger';
+
+const log = createScopedLogger(LogScopes.Profile);
 
 interface UsernameInputProps {
   /** Current username value */
@@ -78,7 +81,7 @@ export function UsernameInput({
         setStatus(isAvailable ? 'available' : 'taken');
       }
     } catch (error) {
-      console.error('Username availability check failed:', error);
+      log.error('Username availability check failed', error);
       // Don't show error state, just go back to idle
       if (lastCheckedRef.current === username) {
         setStatus('idle');

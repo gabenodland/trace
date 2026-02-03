@@ -6,6 +6,9 @@
 import { useState } from 'react';
 import { Alert } from 'react-native';
 import type { Entry } from '@trace/core';
+import { createScopedLogger, LogScopes } from '../../shared/utils/logger';
+
+const log = createScopedLogger(LogScopes.Entry);
 
 interface EntryMutations {
   updateEntry: (entryId: string, data: Partial<Entry>) => Promise<Entry>;
@@ -44,7 +47,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
       setShowMoveStreamPicker(false);
       setEntryToMove(null);
     } catch (error) {
-      console.error("Failed to move entry:", error);
+      log.error("Failed to move entry", error);
       Alert.alert("Error", "Failed to move entry");
     }
   };
@@ -67,7 +70,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
             try {
               await entryMutations.deleteEntry(entryId);
             } catch (error) {
-              console.error("Failed to delete entry:", error);
+              log.error("Failed to delete entry", error);
               Alert.alert("Error", "Failed to delete entry");
             }
           },
@@ -82,7 +85,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
         is_pinned: !currentPinned,
       });
     } catch (error) {
-      console.error("Failed to pin/unpin entry:", error);
+      log.error("Failed to pin/unpin entry", error);
       Alert.alert("Error", "Failed to pin/unpin entry");
     }
   };
@@ -91,7 +94,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
     try {
       await entryMutations.archiveEntry(entryId, !currentArchived);
     } catch (error) {
-      console.error("Failed to archive/unarchive entry:", error);
+      log.error("Failed to archive/unarchive entry", error);
       Alert.alert("Error", "Failed to archive/unarchive entry");
     }
   };
@@ -101,7 +104,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
       const newEntryId = await entryMutations.copyEntry(entryId);
       navigate("capture", { entryId: newEntryId });
     } catch (error) {
-      console.error("Failed to copy entry:", error);
+      log.error("Failed to copy entry", error);
       Alert.alert("Error", "Failed to copy entry");
     }
   };

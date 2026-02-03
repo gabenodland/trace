@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
+import { createScopedLogger, LogScopes } from "../utils/logger";
 import {
   type Session,
   type User,
@@ -30,6 +31,8 @@ const authHelpers = {
 };
 import { handleMobileGoogleOAuth } from "../../modules/auth/utils/mobileOAuth";
 import { localDB } from "../db/localDB";
+
+const log = createScopedLogger(LogScopes.Auth);
 
 // Supabase stores session with this key format
 const SUPABASE_AUTH_KEY = "sb-lsszorssvkavegobmqic-auth-token";
@@ -76,7 +79,7 @@ async function getCachedSession(): Promise<Session | null> {
     }
     return null;
   } catch (error) {
-    console.log("[Auth] Failed to read cached session:", error);
+    log.error("Failed to read cached session", error);
     return null;
   }
 }
@@ -106,17 +109,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (!online) {
           // OFFLINE: Read cached session directly from AsyncStorage (instant)
-          console.log("[Auth] Offline - reading cached session");
+          log.debug("Offline - reading cached session");
           const cachedSession = await getCachedSession();
 
           if (!isMounted) return;
 
           if (cachedSession) {
-            console.log("[Auth] Restored session from cache (offline)", { userId: cachedSession.user?.id });
+            log.info("Restored session from cache (offline)", { userId: cachedSession.user?.id });
             setSession(cachedSession);
             setUser(cachedSession.user ?? null);
           } else {
-            console.log("[Auth] No cached session (offline, not logged in)");
+            log.debug("No cached session (offline, not logged in)");
           }
 
           setIsLoading(false);
@@ -125,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // ONLINE: Use normal Supabase flow
-        console.log("[Auth] Online - fetching session from Supabase");
+        log.debug("Online - fetching session from Supabase");
         const supabaseSession = await getSession();
 
         if (!isMounted) return;
@@ -136,12 +139,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         initialLoadCompleteRef.current = true;
 
         if (supabaseSession) {
-          console.log("[Auth] Session restored from Supabase", { userId: supabaseSession.user?.id });
+          log.info("Session restored from Supabase", { userId: supabaseSession.user?.id });
         } else {
-          console.log("[Auth] No session (not logged in)");
+          log.debug("No session (not logged in)");
         }
       } catch (error) {
-        console.log("[Auth] Init error, falling back to cache:", error);
+        log.error("Init error, falling back to cache", error);
 
         if (!isMounted) return;
 
@@ -162,18 +165,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Skip events before initial load to avoid race conditions
       if (!initialLoadCompleteRef.current) {
-        console.log("[Auth] Ignoring auth change before init:", _event);
+        log.debug("Ignoring auth change before init", { event: _event });
         return;
       }
 
-      console.log("[Auth] Auth state changed:", _event);
+      log.info("Auth state changed", { event: _event });
       setSession(newSession);
       setUser(newSession?.user ?? null);
       setIsOffline(false); // If we got an auth event, we're online
 
       if (!newSession && queryClient) {
         queryClient.clear();
-        console.log("[Auth] Signed out - cleared query cache");
+        log.info("Signed out - cleared query cache");
       }
     });
 
@@ -213,7 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signOutApi();
     if (queryClient) {
       queryClient.clear();
-      console.log("[Auth] Cleared query cache on sign out");
+      log.info("Cleared query cache on sign out");
     }
   };
 

@@ -2,6 +2,9 @@ import { useState } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
+import { createScopedLogger, LogScopes } from "../../../shared/utils/logger";
+
+const log = createScopedLogger(LogScopes.Streams);
 
 interface AddStreamModalProps {
   visible: boolean;
@@ -26,7 +29,7 @@ export function AddStreamModal({ visible, onClose, onSubmit }: AddStreamModalPro
       setName("");
       onClose();
     } catch (error) {
-      console.error("Failed to create stream:", error);
+      log.error("Failed to create stream", error);
       Alert.alert("Error", `Failed to create stream: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setIsSubmitting(false);

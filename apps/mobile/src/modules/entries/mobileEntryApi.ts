@@ -349,7 +349,7 @@ export async function updateEntry(
     synced: updatesWithSync.synced,
     sync_action: updatesWithSync.sync_action,
     version: updatesWithSync.version,
-    currentBaseVersion: currentEntry.base_version,
+    serverBaseVersion: currentEntry.base_version,
   });
 
   // Update in SQLite

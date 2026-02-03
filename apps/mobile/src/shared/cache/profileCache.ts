@@ -7,6 +7,9 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Profile } from '@trace/core';
+import { createScopedLogger, LogScopes } from '../utils/logger';
+
+const log = createScopedLogger(LogScopes.Cache);
 
 const PROFILE_CACHE_KEY = 'trace_profile_cache';
 const CACHE_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -30,14 +33,14 @@ export async function getCachedProfile(userId: string): Promise<Profile | null> 
     // Check if cache has expired
     if (Date.now() - cached.cachedAt > CACHE_DURATION_MS) {
       await AsyncStorage.removeItem(`${PROFILE_CACHE_KEY}_${userId}`);
-      console.log('[ProfileCache] Cache expired, removed');
+      log.debug('Cache expired, removed', { userId });
       return null;
     }
 
-    console.log('[ProfileCache] Loaded from cache', { userId, cachedAt: new Date(cached.cachedAt).toISOString() });
+    log.debug('Loaded from cache', { userId, cachedAt: new Date(cached.cachedAt).toISOString() });
     return cached.profile;
   } catch (error) {
-    console.log('[ProfileCache] Failed to read cache:', error);
+    log.warn('Failed to read cache', { userId, error });
     return null;
   }
 }
@@ -52,9 +55,9 @@ export async function setCachedProfile(userId: string, profile: Profile): Promis
       cachedAt: Date.now(),
     };
     await AsyncStorage.setItem(`${PROFILE_CACHE_KEY}_${userId}`, JSON.stringify(cached));
-    console.log('[ProfileCache] Saved to cache', { userId });
+    log.debug('Saved to cache', { userId });
   } catch (error) {
-    console.log('[ProfileCache] Failed to write cache:', error);
+    log.warn('Failed to write cache', { userId, error });
   }
 }
 
@@ -64,9 +67,9 @@ export async function setCachedProfile(userId: string, profile: Profile): Promis
 export async function clearProfileCache(userId: string): Promise<void> {
   try {
     await AsyncStorage.removeItem(`${PROFILE_CACHE_KEY}_${userId}`);
-    console.log('[ProfileCache] Cleared cache', { userId });
+    log.debug('Cleared cache', { userId });
   } catch (error) {
-    console.log('[ProfileCache] Failed to clear cache:', error);
+    log.warn('Failed to clear cache', { userId, error });
   }
 }
 
@@ -79,9 +82,9 @@ export async function clearAllProfileCaches(): Promise<void> {
     const profileKeys = keys.filter(key => key.startsWith(PROFILE_CACHE_KEY));
     if (profileKeys.length > 0) {
       await AsyncStorage.multiRemove(profileKeys);
-      console.log('[ProfileCache] Cleared all caches', { count: profileKeys.length });
+      log.debug('Cleared all caches', { count: profileKeys.length });
     }
   } catch (error) {
-    console.log('[ProfileCache] Failed to clear all caches:', error);
+    log.warn('Failed to clear all caches', { error });
   }
 }

@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking } from "react-native";
-import { useState } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking, Alert } from "react-native";
+import { useState, useEffect } from "react";
 import Svg, { Path } from "react-native-svg";
 import { getAppVersion, getBuildNumber } from "../config/appVersionService";
 import { useSettings } from "../shared/contexts/SettingsContext";
@@ -13,6 +13,7 @@ import { FontSelector } from "../components/settings/FontSelector";
 import { UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
 import { getThemeOptions } from "../shared/theme/themes";
 import { getFontOptions } from "../shared/theme/fonts";
+import { logger } from "../shared/utils/logger";
 
 export function SettingsScreen() {
   const { settings, updateSettings } = useSettings();
@@ -23,6 +24,52 @@ export function SettingsScreen() {
   const [showImageQualitySelector, setShowImageQualitySelector] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [showFontSelector, setShowFontSelector] = useState(false);
+
+  // Debug mode state
+  const [debugModeEnabled, setDebugModeEnabled] = useState(logger.isDebugModeEnabled());
+  const [logBufferSize, setLogBufferSize] = useState(logger.getBufferSize());
+
+  // Sync debug mode state with logger on mount
+  useEffect(() => {
+    setDebugModeEnabled(logger.isDebugModeEnabled());
+    setLogBufferSize(logger.getBufferSize());
+  }, []);
+
+  // Handle debug mode toggle
+  const handleDebugModeToggle = async (enabled: boolean) => {
+    setDebugModeEnabled(enabled);
+    await logger.setDebugMode(enabled);
+    setLogBufferSize(logger.getBufferSize());
+  };
+
+  // Handle export logs
+  const handleExportLogs = async () => {
+    const bufferSize = logger.getBufferSize();
+    if (bufferSize === 0) {
+      Alert.alert('No Logs', 'There are no logs to export. Enable debug mode and use the app to generate logs.');
+      return;
+    }
+    await logger.shareLogs();
+  };
+
+  // Handle clear logs
+  const handleClearLogs = () => {
+    Alert.alert(
+      'Clear Debug Logs',
+      `Are you sure you want to clear ${logBufferSize} log entries?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: () => {
+            logger.clearBuffer();
+            setLogBufferSize(0);
+          },
+        },
+      ]
+    );
+  };
 
   // Get labels for current settings
   const unitLabel = UNIT_OPTIONS.find(u => u.value === settings.units)?.label || 'Metric';
@@ -278,10 +325,88 @@ export function SettingsScreen() {
             </View>
             <View style={styles.settingValue}>
               <Text style={[styles.settingValueText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                {getAppVersion()} ({getBuildNumber() || '1'})
+                {getAppVersion()} ({getBuildNumber() || '1'}){__DEV__ ? ' dev' : ''}
               </Text>
             </View>
           </View>
+        </View>
+
+        {/* Developer Section */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Developer</Text>
+
+          {/* Debug Mode Toggle */}
+          <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Debug Mode</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                {__DEV__
+                  ? 'Always enabled in development builds.'
+                  : 'Enable verbose logging for troubleshooting. Logs can be exported for bug reports.'}
+              </Text>
+            </View>
+            <Switch
+              value={__DEV__ ? true : debugModeEnabled}
+              onValueChange={handleDebugModeToggle}
+              disabled={__DEV__}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          {/* Export Logs Button */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+            onPress={handleExportLogs}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Export Debug Logs</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                Share logs via email or other apps for support
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Text style={[styles.settingValueText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                {logBufferSize} entries
+              </Text>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"
+                  stroke={theme.colors.text.tertiary}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </TouchableOpacity>
+
+          {/* Clear Logs Button */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
+            onPress={handleClearLogs}
+            activeOpacity={0.7}
+            disabled={logBufferSize === 0}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[
+                styles.settingLabel,
+                { color: logBufferSize > 0 ? theme.colors.functional.overdue : theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.medium }
+              ]}>Clear Debug Logs</Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"
+                  stroke={logBufferSize > 0 ? theme.colors.functional.overdue : theme.colors.text.disabled}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Bottom padding */}

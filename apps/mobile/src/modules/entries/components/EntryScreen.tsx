@@ -1,13 +1,12 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { View, Text, TouchableOpacity, Alert, Platform, Keyboard, Animated } from "react-native";
-import { extractTagsAndMentions, generateAttachmentPath, type Location as LocationType, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate, combineTitleAndBody, splitTitleAndBody } from "@trace/core";
+import { useRef, useMemo, useCallback, useEffect, useState } from "react";
+import { View, Text, TouchableOpacity, Alert, Animated } from "react-native";
+import { extractTagsAndMentions, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate, combineTitleAndBody, splitTitleAndBody } from "@trace/core";
 import { createLocation } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
 import { useLocations } from "../../locations/mobileLocationHooks";
 import { useAttachments } from "../../attachments/mobileAttachmentHooks";
 import { useNavigation } from "../../../shared/contexts/NavigationContext";
-import { useDrawer } from "../../../shared/contexts/DrawerContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { useAuth } from "../../../shared/contexts/AuthContext";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
@@ -15,19 +14,24 @@ import { RichTextEditor } from "../../../components/editor/RichTextEditor";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
-import { compressAttachment, saveAttachmentToLocalStorage, deleteAttachment, createAttachment, getAttachmentsForEntry } from "../../attachments/mobileAttachmentApi";
-import * as Crypto from "expo-crypto";
-import { useCaptureFormState, type GeocodeStatus } from "./hooks/useCaptureFormState";
+import { createAttachment } from "../../attachments/mobileAttachmentApi";
+import { EntryFormProvider, useEntryForm } from "./context/EntryFormContext";
 import { useAutosave } from "./hooks/useAutosave";
 import { useGpsCapture } from "./hooks/useGpsCapture";
-import { usePhotoTracking } from "./hooks/usePhotoTracking";
-import { useVersionConflict } from "./hooks/useVersionConflict";
 import { useAutoGeocode } from "./hooks/useAutoGeocode";
+import { useKeyboardHeight } from "./hooks/useKeyboardHeight";
+import { useEntryNavigation } from "./hooks/useEntryNavigation";
+import { useEntryPhotos } from "./hooks/useEntryPhotos";
+import { getEntryFieldVisibility, getUnsupportedFieldFlags } from "./helpers/entryVisibility";
+import { buildGpsFields, buildLocationHierarchyFields, getOrCreateLocationId, extractContentMetadata, hasUserContent } from "./helpers/entrySaveHelpers";
 import { styles } from "./EntryScreen.styles";
 import { MetadataBar } from "./MetadataBar";
 import { EditorToolbar } from "./EditorToolbar";
 import { EntryHeader } from "./EntryHeader";
-import { EntryPickers, type ActivePicker } from "./EntryPickers";
+import { EntryPickers } from "./EntryPickers";
+import { createScopedLogger } from "../../../shared/utils/logger";
+
+const log = createScopedLogger('EntryScreen', '📄');
 
 interface EntryScreenProps {
   entryId?: string | null;
@@ -37,180 +41,170 @@ interface EntryScreenProps {
   initialDate?: string;
 }
 
+/**
+ * EntryScreen - Entry point that provides context
+ * Fetches data and wraps EntryScreenContent with EntryFormProvider
+ */
 export function EntryScreen({ entryId, initialStreamId, initialStreamName, initialContent, initialDate }: EntryScreenProps = {}) {
-  // Profiling: Log when component mounts
-  console.log(`⏱️ EntryScreen: render (entryId=${entryId})`);
+  // Track savedEntryId at this level for effectiveEntryId calculation
+  const [savedEntryId, setSavedEntryIdLocal] = useState<string | null>(null);
+  const effectiveEntryId = savedEntryId || entryId || null;
 
-  const theme = useTheme();
-
-  // Track when a new entry has been saved (for autosave transition from create to update)
-  const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
-
-  // Determine if we're editing an existing entry or creating a new one
-  // - entryId: passed in when editing an existing entry
-  // - savedEntryId: set after autosave creates a new entry (transitions to editing mode)
-  const isEditing = !!entryId || !!savedEntryId;
-
-  // The effective entry ID to use for updates (savedEntryId takes precedence for new entries that have been autosaved)
-  const effectiveEntryId = savedEntryId || entryId;
-
-  // Get user settings for default GPS capture behavior
-  const { settings } = useSettings();
-
-  // IMPORTANT: Fetch entry and streams BEFORE useCaptureFormState
-  // This allows the form state to initialize directly from cached entry data
-  // avoiding the Loading flash when navigating from entry list
+  // Fetch data needed by the provider
   const { streams } = useStreams();
-  const { data: savedLocations = [] } = useLocations(); // For location snapping
-  const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(
-    effectiveEntryId || null
-  );
-  // Profiling: Log when entry data is available
-  console.log(`⏱️ EntryScreen: useEntry returned (entry=${!!entry}, isLoading=${isLoadingEntry})`);
-
-  // Single form data state hook (consolidates form field state + pending photos)
-  // When editing and entry is cached, form initializes directly from entry
-  const { formData, updateField, updateMultipleFields, addPendingPhoto, removePendingPhoto, isDirty, setBaseline, markClean } = useCaptureFormState({
-    isEditing,
-    initialStreamId,
-    initialStreamName,
-    initialContent,
-    initialDate,
-    captureGpsSetting: settings.captureGpsLocation,
-    entry: isEditing ? entry : null,
-    streams,
-  });
-
-  // UI State (NOT form data - keep as individual useState)
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  // Separate state for save indicator - tracks both manual and autosave (isSubmitting only tracks manual)
-  const [isSaving, setIsSaving] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  // Consolidated picker visibility state - only one picker can be open at a time
-  const [activePicker, setActivePicker] = useState<ActivePicker>(null);
-
-  // Tracks when form data is fully loaded and ready for baseline
-  // Ready immediately when:
-  // - New entry (not editing)
-  // - Editing AND entry cached AND no location_id (form initialized from entry, no async fetch needed)
-  // Not ready when:
-  // - Editing but entry not cached yet
-  // - Editing with location_id (need to fetch location data)
-  const [isFormReady, setIsFormReady] = useState(() => {
-    if (!isEditing) return true; // New entry
-    if (isEditing && entry && !entry.location_id) return true; // Cached entry, no location fetch
-    return false; // Need to wait for entry or location
-  });
-
-  const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
-  const snackbarOpacity = useRef(new Animated.Value(0)).current;
-  const editorRef = useRef<any>(null);
-  // Stable initial content for edit mode - prevents cursor jumping from value updates
-  const editModeInitialContent = useRef<string | null>(null);
-  const photoCaptureRef = useRef<PhotoCaptureRef>(null);
-  const isInitialLoad = useRef(true); // Track if this is first load
-  const [baselinePhotoCount, setBaselinePhotoCount] = useState<number | null>(null); // Baseline for dirty tracking (null = not yet initialized)
-  const [photosCollapsed, setPhotosCollapsed] = useState(false); // Start expanded
-  // For new entries, generate a temp ID. For editing, use the existing entryId.
-  const [tempEntryId] = useState(() => entryId || Crypto.randomUUID());
-
-  const { entryMutations } = useEntries();
+  const { data: savedLocations = [] } = useLocations();
+  const { settings } = useSettings();
   const { user } = useAuth();
-  // Use React Query for photos to detect external sync changes
+  const { entry, isLoading: isLoadingEntry } = useEntry(effectiveEntryId);
+  const { attachments: queryAttachments } = useAttachments(effectiveEntryId);
+
+  return (
+    <EntryFormProvider
+      entryId={entryId}
+      initialStreamId={initialStreamId}
+      initialStreamName={initialStreamName}
+      initialContent={initialContent}
+      initialDate={initialDate}
+      entry={entry}
+      isLoadingEntry={isLoadingEntry}
+      streams={streams}
+      settings={{
+        captureGpsLocation: settings.captureGpsLocation,
+        imageQuality: settings.imageQuality,
+      }}
+      userId={user?.id ?? null}
+      queryPhotoCount={queryAttachments.length}
+    >
+      <EntryScreenContent
+        streams={streams}
+        savedLocations={savedLocations}
+        initialStreamId={initialStreamId}
+        onSavedEntryIdChange={setSavedEntryIdLocal}
+      />
+    </EntryFormProvider>
+  );
+}
+
+interface EntryScreenContentProps {
+  streams: ReturnType<typeof useStreams>['streams'];
+  savedLocations: ReturnType<typeof useLocations>['data'];
+  initialStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people";
+  onSavedEntryIdChange: (id: string | null) => void;
+}
+
+/**
+ * EntryScreenContent - Main content using context
+ * All state comes from useEntryForm()
+ */
+function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedEntryIdChange }: EntryScreenContentProps) {
+  const theme = useTheme();
+  const { navigate } = useNavigation();
+
+  // Get ALL state from context
+  const {
+    // User and settings
+    userId,
+    // Form data
+    formData,
+    updateField,
+    updateMultipleFields,
+    setBaseline,
+    markClean,
+    isFormReady,
+    isFormDirty,
+    // Editing state
+    isEditing,
+    effectiveEntryId,
+    tempEntryId,
+    savedEntryId,
+    setSavedEntryId: setSavedEntryIdContext,
+    // Save state
+    isSubmitting,
+    setIsSubmitting,
+    isSaving,
+    setIsSaving,
+    // Edit mode
+    isEditMode,
+    isFullScreen,
+    setIsFullScreen,
+    enterEditMode,
+    // Photo tracking
+    photoCount,
+    setPhotoCount,
+    baselinePhotoCount,
+    setBaselinePhotoCount,
+    syncPhotoCount,
+    externalRefreshKey,
+    // UI state
+    activePicker,
+    setActivePicker,
+    photosCollapsed,
+    setPhotosCollapsed,
+    // Snackbar
+    snackbarMessage,
+    snackbarOpacity,
+    showSnackbar,
+    // Refs
+    editorRef,
+    handleSaveRef,
+    handleAutosaveRef,
+    // Version conflict
+    checkForConflict,
+    initializeVersion,
+    updateKnownVersion,
+    incrementKnownVersion,
+    recordSaveTime,
+  } = useEntryForm();
+
+  // Wrapper to sync savedEntryId to parent (for effectiveEntryId in data fetching)
+  const setSavedEntryId = useCallback((id: string | null) => {
+    setSavedEntryIdContext(id);
+    onSavedEntryIdChange(id);
+  }, [setSavedEntryIdContext, onSavedEntryIdChange]);
+
+  // Fetch entry data for conflict detection and error handling
+  const { entry, entryMutations: singleEntryMutations } = useEntry(effectiveEntryId || null);
+  const { entryMutations } = useEntries();
   const { attachments: queryAttachments } = useAttachments(effectiveEntryId || null);
 
-  // Photo tracking hook - handles external detection and photo count for ordering
-  const { photoCount, setPhotoCount, externalRefreshKey, syncPhotoCount } = usePhotoTracking({
-    entryId: effectiveEntryId || null,
-    isEditing,
-    isFormReady,
-    baselinePhotoCount,
-    queryPhotoCount: queryAttachments.length,
-  });
+  const photoCaptureRef = useRef<PhotoCaptureRef>(null);
 
-  const { navigate, setBeforeBackHandler } = useNavigation();
+  // Stable initial content for edit mode - prevents cursor jumping
+  const editModeInitialContent = useRef<string | null>(null);
+
+  // Keyboard height tracking with scroll-to-cursor on show
+  const keyboardHeight = useKeyboardHeight({
+    onShow: () => {
+      if (editorRef.current && !activePicker) {
+        setTimeout(() => {
+          editorRef.current?.scrollToCursor();
+        }, 300);
+      }
+    },
+  });
 
   // Get current stream for visibility controls
   const currentStream = streams.find(s => s.stream_id === formData.streamId);
 
-  // Stream-based visibility
-  // If no stream: show all fields (default true)
-  // If stream set: only show if field is true (database converts 0/1 to false/true)
-  const showRating = !currentStream || currentStream.entry_use_rating === true;
-  const showPriority = !currentStream || currentStream.entry_use_priority === true;
-  const showStatus = !currentStream || currentStream.entry_use_status !== false;
-  const showType = currentStream?.entry_use_type === true && (currentStream?.entry_types?.length ?? 0) > 0;
-  const showDueDate = !currentStream || currentStream.entry_use_duedates === true;
-  const showLocation = !currentStream || currentStream.entry_use_location !== false;
-  const showPhotos = !currentStream || currentStream.entry_use_photos !== false;
+  // Stream-based field visibility
+  const {
+    showRating, showPriority, showStatus, showType,
+    showDueDate, showLocation, showPhotos
+  } = useMemo(() => getEntryFieldVisibility(currentStream), [currentStream]);
 
-  // Stream data readiness - used by useGpsCapture to prevent race condition
-  // Ready if: no stream selected OR stream data is loaded
+  // Stream data readiness for GPS capture
   const streamReady = !formData.streamId || !!currentStream;
 
-  // Unsupported flags - attribute not supported by stream BUT entry has a value
-  // Used to show strikethrough in MetadataBar with option to remove
-  const unsupportedStatus = !showStatus && formData.status !== "none";
-  const unsupportedType = !showType && !!formData.type;
-  const unsupportedDueDate = !showDueDate && !!formData.dueDate;
-  const unsupportedRating = !showRating && formData.rating > 0;
-  const unsupportedPriority = !showPriority && formData.priority > 0;
-  const unsupportedLocation = !showLocation && !!formData.locationData;
-
-  // Version conflict detection hook
+  // Unsupported flags
   const {
-    getKnownVersion,
-    initializeVersion,
-    updateKnownVersion,
-    incrementKnownVersion,
-    checkForConflict,
-    isExternalUpdate,
-  } = useVersionConflict({ isEditing });
+    unsupportedStatus, unsupportedType, unsupportedDueDate,
+    unsupportedRating, unsupportedPriority, unsupportedLocation
+  } = useMemo(() => getUnsupportedFieldFlags(
+    { showRating, showPriority, showStatus, showType, showDueDate, showLocation, showPhotos },
+    formData
+  ), [showRating, showPriority, showStatus, showType, showDueDate, showLocation, showPhotos, formData]);
 
-  // Edit mode: new entries start in edit mode, existing entries start in read-only
-  const [isEditMode, setIsEditMode] = useState(!isEditing);
-
-  // Full-screen edit mode (hides all metadata, shows only formData.title + body + toolbar)
-  const [isFullScreen, setIsFullScreen] = useState(false);
-
-  // Combined dirty state: hook's isDirty + photo count comparison for existing entries
-  // For editing existing entries, photos are saved directly to LocalDB (not pendingPhotos),
-  // so we need to compare photoCount against the baseline stored as state
-  const isFormDirty = useMemo(() => {
-    // If hook says dirty, it's dirty
-    if (isDirty) return true;
-
-    // For editing existing entries, check if photo count changed from baseline
-    // Only compare if baseline has been initialized (not null)
-    if (isEditing && baselinePhotoCount !== null && photoCount !== baselinePhotoCount) {
-      return true;
-    }
-
-    return false;
-  }, [isDirty, isEditing, photoCount, baselinePhotoCount]);
-
-  // Initialize baseline for new entries
-  useEffect(() => {
-    if (!isEditing && baselinePhotoCount === null) {
-      // Set baseline in hook for dirty tracking
-      setBaseline(formData);
-      // For new entries, photos use pendingPhotos so baseline starts at 0
-      setBaselinePhotoCount(0);
-      // Initialize edit mode content for new entries (which start in edit mode)
-      editModeInitialContent.current = formData.content;
-    }
-  }, []);
-
-  // Memoized check for actual content (for autosave: don't save empty new entries)
-  const hasContent = useMemo(() =>
-    formData.title.trim() !== '' ||
-    formData.content.replace(/<[^>]*>/g, '').trim() !== '' ||
-    formData.pendingPhotos.length > 0,
-    [formData.title, formData.content, formData.pendingPhotos.length]
-  );
-
-  // Title-first editor: combine title + body for editor, split on change
+  // Title-first editor: combine title + body for editor
   const editorValue = useMemo(() => {
     return combineTitleAndBody(formData.title, formData.content);
   }, [formData.title, formData.content]);
@@ -221,485 +215,92 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     if (body !== formData.content) updateField("content", body);
   }, [formData.title, formData.content, updateField]);
 
-  // Autosave callback ref - updated on each render but doesn't cause re-renders
-  const handleAutosaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  // Navigation hook - handles back button and auto-save
+  const { handleBack, navigateBack } = useEntryNavigation();
 
-  // Stable callback for autosave - wraps the ref so it doesn't trigger effect re-runs
-  const stableOnSave = useCallback(async () => {
-    await handleAutosaveRef.current();
-  }, []); // Empty deps - ref access is stable
+  // Autosave hook
+  useAutosave();
 
-  // AUTOSAVE: Uses extracted hook for debounced saving
-  // Triggers 2s after last change, only when dirty and in edit mode
-  useAutosave({
-    isEditMode,
-    isEditing,
-    isFormDirty,
-    isFormReady,
-    isSubmitting,
-    isSaving,
-    hasContent,
-    onSave: stableOnSave,
-  });
+  // Photo handlers from hook
+  const { handlePhotoSelected: onPhotoSelected, handleMultiplePhotosSelected: onMultiplePhotosSelected, handlePhotoDelete } = useEntryPhotos();
 
-  // Register beforeBack handler for gesture/hardware back interception
-  // Always saves if dirty, no prompts
-  useEffect(() => {
-    const beforeBackHandler = async (): Promise<boolean> => {
-      // For NEW entries: check if there's actual user content worth saving
-      // (title, text, or photos - not just metadata like stream/GPS)
-      // If no user content, just discard and proceed with back
-      if (!isEditing) {
-        const editorContent = editorRef.current?.getHTML?.() ?? formData.content ?? '';
-        const hasUserContent =
-          formData.title.trim().length > 0 ||
-          (typeof editorContent === 'string' && editorContent.replace(/<[^>]*>/g, '').trim().length > 0) ||
-          formData.pendingPhotos.length > 0;
+  // Adapter functions to match PhotoCapture interface (uri, width, height) to hook interface (PhotoInfo object)
+  const handlePhotoSelected = useCallback((uri: string, width: number, height: number) => {
+    onPhotoSelected({ uri, width, height });
+  }, [onPhotoSelected]);
 
-        if (!hasUserContent) {
-          return true; // Proceed with back, no save
-        }
-      }
+  const handleMultiplePhotosSelected = useCallback((photos: { uri: string; width: number; height: number }[]) => {
+    onMultiplePhotosSelected(photos);
+  }, [onMultiplePhotosSelected]);
 
-      // Check if there are unsaved changes
-      if (!hasUnsavedChanges()) {
-        return true; // No changes, proceed with back
-      }
-
-      // Auto-save and proceed
-      await handleSave();
-      return true;
-    };
-
-    // Register the handler
-    setBeforeBackHandler(beforeBackHandler);
-
-    // Cleanup: unregister handler when component unmounts
-    return () => {
-      setBeforeBackHandler(null);
-    };
-  }, [formData.title, formData.content, formData.streamId, formData.status, formData.dueDate, formData.entryDate, formData.locationData, photoCount, formData.pendingPhotos, isEditMode, isEditing]);
-
-  // Check if there are unsaved changes - combines edit mode check with dirty tracking
-  // Also checks editor content directly to handle race condition where user types
-  // and quickly hits back before RichTextEditor's polling syncs to formData
-  const hasUnsavedChanges = (): boolean => {
-    console.log('🔍 [hasUnsavedChanges] Checking...', { isEditMode, isFormDirty });
-
-    // If not in edit mode, no changes are possible
-    if (!isEditMode) {
-      console.log('🔍 [hasUnsavedChanges] Not in edit mode, returning false');
-      return false;
-    }
-
-    // First check the hook's dirty state (covers title, date, stream, etc.)
-    if (isFormDirty) {
-      console.log('🔍 [hasUnsavedChanges] isFormDirty=true, returning true');
-      return true;
-    }
-
-    // Also check if editor content differs from formData (race condition fix)
-    // This catches the case where user typed but polling hasn't synced yet
-    const editorContent = editorRef.current?.getHTML?.();
-    if (typeof editorContent === 'string' && editorContent !== formData.content) {
-      console.log('🔍 [hasUnsavedChanges] Editor content differs from formData, returning true');
-      return true;
-    }
-
-    console.log('🔍 [hasUnsavedChanges] No changes detected, returning false');
-    return false;
-  };
-
-  // Back button handler - saves if dirty, then navigates
-  // Not memoized to always use latest hasUnsavedChanges/handleSave
-  const handleBack = () => {
-    console.log('⬅️ [handleBack] Called, checking for unsaved changes...');
-
-    // For NEW entries: check if there's actual user content worth saving
-    // (title, text, or photos - not just metadata like stream/GPS)
-    // If no user content, just discard and go back
-    if (!isEditing) {
-      const editorContent = editorRef.current?.getHTML?.() ?? formData.content ?? '';
-      const hasUserContent =
-        formData.title.trim().length > 0 ||
-        (typeof editorContent === 'string' && editorContent.replace(/<[^>]*>/g, '').trim().length > 0) ||
-        formData.pendingPhotos.length > 0;
-
-      if (!hasUserContent) {
-        console.log('⬅️ [handleBack] New entry with no user content, discarding');
-        navigateBack();
-        return;
-      }
-    }
-
-    if (!hasUnsavedChanges()) {
-      console.log('⬅️ [handleBack] No unsaved changes, navigating back');
-      navigateBack();
-      return;
-    }
-
-    console.log('⬅️ [handleBack] Has unsaved changes, saving first...');
-    // Auto-save and then navigate
-    handleSave().then(() => {
-      console.log('⬅️ [handleBack] Save complete, navigating back');
-      navigateBack();
-    });
-  };
-
-  // Enter edit mode - RichTextEditor handles focus automatically
-  // when editor receives focus while in read-only UI mode
-  const enterEditMode = useCallback(() => {
-    // Capture current content as stable initial value for edit session
-    // This prevents cursor jumping from continuous value updates
-    editModeInitialContent.current = formData.content;
-    setIsEditMode(true);
-  }, [formData.content]);
-
-  // GPS capture hook - handles loading, pending state, and auto-capture
-  const {
-    isGpsLoading,
-    isNewGpsCapture,
-    setIsNewGpsCapture,
-    pendingLocationData,
-    captureGps,
-    clearPendingGps,
-    savePendingGps,
-  } = useGpsCapture({
-    isEditing,
-    captureGpsSetting: settings.captureGpsLocation,
+  // GPS capture hook (values used by EntryPickers via context)
+  useGpsCapture({
     streamReady,
     locationEnabled: showLocation,
-    currentLocationData: formData.locationData,
-    onLocationChange: (location) => updateField("locationData", location),
-    onBaselineUpdate: (locationData) => setBaseline({ ...formData, locationData }),
-    isEditMode,
-    enterEditMode,
   });
 
-  // Auto-geocode GPS coordinates when captured (async, non-blocking)
-  // First tries to snap to a saved location within 100ft, then falls back to geocode API
-  // Only runs if location is enabled for the current stream
+  // Auto-geocode hook
   useAutoGeocode({
-    locationData: formData.locationData,
-    geocodeStatus: formData.geocodeStatus,
-    savedLocations: savedLocations,
+    savedLocations: savedLocations || [],
     locationEnabled: showLocation,
-    onLocationFieldsChange: (fields) => {
-      // Update locationData with geocoded fields from Mapbox or snapped location
-      const updatedLocationData: LocationType | null = formData.locationData
-        ? { ...formData.locationData, ...fields }
-        : null;
-      updateField("locationData", updatedLocationData);
-    },
-    onGeocodeStatusChange: (status) => updateField("geocodeStatus", status),
-    onLocationIdChange: (snappedLocation) => {
-      // When snapping to a saved location, use ALL fields from the saved location
-      if (snappedLocation && formData.locationData) {
-        const snappedLocationData: LocationType = {
-          // Keep original coordinates and locationRadius from captured location
-          latitude: formData.locationData.latitude,
-          longitude: formData.locationData.longitude,
-          locationRadius: formData.locationData.locationRadius,
-          // Copy ALL geo fields from the saved location
-          location_id: snappedLocation.location_id,
-          name: snappedLocation.name,
-          source: 'user_custom', // Snapped to user's saved location
-          address: snappedLocation.address || null,
-          neighborhood: snappedLocation.neighborhood || null,
-          postalCode: snappedLocation.postal_code || null,
-          city: snappedLocation.city || null,
-          subdivision: snappedLocation.subdivision || null,
-          region: snappedLocation.region || null,
-          country: snappedLocation.country || null,
-        };
-        updateField("locationData", snappedLocationData);
-      }
-    },
-    isInitialCapture: !isEditing,
-    onBaselineLocationFieldsUpdate: !isEditing
-      ? (fields) => {
-          const updatedLocationData: LocationType | null = formData.locationData
-            ? { ...formData.locationData, ...fields }
-            : null;
-          setBaseline({
-            ...formData,
-            locationData: updatedLocationData,
-            geocodeStatus: (fields.geocode_status as GeocodeStatus) ?? null,
-          });
-        }
-      : undefined,
   });
 
-  // Show snackbar notification
-  const showSnackbar = (message: string) => {
-    setSnackbarMessage(message);
-    Animated.sequence([
-      Animated.timing(snackbarOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.delay(2000),
-      Animated.timing(snackbarOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => setSnackbarMessage(null));
-  };
-
-  // Detect external updates by watching entry.version via global sync
-  // Simple logic: If version increased AND it's from a different device, update the form
-  useEffect(() => {
-    if (!entry || !isEditing) return;
-
-    const entryVersion = entry.version || 1;
-    const knownVersion = getKnownVersion();
-    const externalCheck = isExternalUpdate(entry);
-
-    // First load - just record the version
-    if (knownVersion === null) {
-      initializeVersion(entryVersion);
-      return;
-    }
-
-    // Version didn't change - nothing to do
-    if (entryVersion <= knownVersion) return;
-
-    // Version increased - check if it's from another device
-    const isExternal = externalCheck?.isExternal ?? false;
-    const editingDevice = externalCheck?.device || '';
-
-    // Update known version
-    updateKnownVersion(entryVersion);
-
-    // If change is from THIS device (our own save), don't update form
-    if (!isExternal) {
-      return;
-    }
-
-    // External update - if user has unsaved changes, warn them
-    if (isFormDirty) {
-      showSnackbar(`Entry updated by ${editingDevice} - you have unsaved changes`);
-      return;
-    }
-
-    // No local changes - build complete new form data and set both form and baseline atomically
-    const streamName = entry.stream_id && streams.length > 0
-      ? streams.find(s => s.stream_id === entry.stream_id)?.name || null
-      : null;
-
-    const newFormData = {
-      title: entry.title || '',
-      content: entry.content || '',
-      streamId: entry.stream_id || null,
-      streamName,
-      status: (entry.status || 'none') as EntryStatus,
-      type: entry.type || null,
-      dueDate: entry.due_date || null,
-      rating: entry.rating || 0,
-      priority: entry.priority || 0,
-      entryDate: entry.entry_date || formData.entryDate,
-      includeTime: entry.entry_date ? new Date(entry.entry_date).getMilliseconds() !== 100 : formData.includeTime,
-      // Keep current locationData - location_id changes are rare and would need async fetch
-      locationData: formData.locationData,
-      geocodeStatus: formData.geocodeStatus,
-      pendingPhotos: formData.pendingPhotos,
-    };
-
-    // Set baseline FIRST with the exact data we're loading
-    // This prevents any dirty state since baseline === formData
-    setBaseline(newFormData);
-    setBaselinePhotoCount(photoCount);
-
-    // Then update form to same data
-    updateMultipleFields(newFormData);
-
-    // Note: PhotoGallery refresh is handled by usePhotoTracking hook
-    // which detects external photo changes via queryAttachments
-
-    showSnackbar(`Entry updated by ${editingDevice}`);
-  }, [entry, isEditing, isFormDirty, streams, updateMultipleFields, setBaseline, photoCount, formData.entryDate, formData.includeTime, formData.locationData, formData.pendingPhotos, getKnownVersion, initializeVersion, updateKnownVersion, isExternalUpdate]);
-
-
-  // Location picker mode: 'view' if already has location data (saved or GPS-captured), 'select' to pick/create
-  // Even unnamed GPS-captured locations should open in view mode to show "Dropped Pin"
+  // Location picker mode
   const locationPickerMode: 'select' | 'view' =
     (formData.locationData?.latitude && formData.locationData?.longitude) ? 'view' : 'select';
 
-  // Get viewMode from DrawerContext for back navigation
-  const { viewMode } = useDrawer();
-
-  // Helper to navigate back - uses viewMode from DrawerContext
-  // Main view state (stream selection, map region, calendar date) is already preserved in context
-  const navigateBack = useCallback(() => {
-    // Map viewMode to screen name
-    const screenMap: Record<string, string> = {
-      list: "inbox",
-      map: "map",
-      calendar: "calendar",
-    };
-    navigate(screenMap[viewMode] || "inbox");
-  }, [viewMode, navigate]);
-
-
-  // Load entry data when editing (INITIAL LOAD ONLY)
-  // Pattern: Build complete form data object, set baseline AND form atomically, then mark ready
-  // IMPORTANT: Only runs once on initial load - subsequent entry changes are handled by version detection
+  // Initialize baseline for new entries
   useEffect(() => {
-    if (!entry || !isEditing) return;
-    // Guard: Don't reload form if already loaded - version change handler deals with updates
-    if (isFormReady) return;
-
-    // Build base form data synchronously
-    const entryDate = entry.entry_date || entry.created_at || formData.entryDate;
-    const includeTime = entryDate ? new Date(entryDate).getMilliseconds() !== 100 : formData.includeTime;
-
-    // Look up stream name
-    const streamName = entry.stream_id && streams.length > 0
-      ? streams.find(s => s.stream_id === entry.stream_id)?.name || null
-      : null;
-
-    // Helper to finalize loading - sets baseline and form atomically
-    const finalizeLoad = (locationData: LocationType | null) => {
-      const newFormData = {
-        title: entry.title || '',
-        content: entry.content || '',
-        streamId: entry.stream_id || null,
-        streamName,
-        status: (entry.status || 'none') as EntryStatus,
-        type: entry.type || null,
-        dueDate: entry.due_date || null,
-        rating: entry.rating || 0,
-        priority: entry.priority || 0,
-        entryDate,
-        includeTime,
-        locationData,
-        geocodeStatus: (entry.geocode_status as GeocodeStatus) ?? null,
-        pendingPhotos: [], // Existing entries don't use pendingPhotos
-      };
-
-      // Set baseline FIRST, then form data - ensures they're identical
-      setBaseline(newFormData);
-      updateMultipleFields(newFormData);
-      // Mark load complete
-      isInitialLoad.current = false;
-      setIsFormReady(true);
-    };
-
-    // Build locationData from entry's inline location fields
-    // All location data is cached on the entry itself - no need to fetch from locations table
-    const hasLocationData = entry.place_name || entry.address || entry.city || entry.region || entry.country ||
-      (entry.entry_latitude != null && entry.entry_longitude != null);
-    const locationData: LocationType | null = hasLocationData ? {
-      location_id: entry.location_id ?? undefined,
-      latitude: entry.entry_latitude ?? 0,
-      longitude: entry.entry_longitude ?? 0,
-      name: entry.place_name,
-      source: 'user_custom',
-      address: entry.address,
-      neighborhood: entry.neighborhood,
-      postalCode: entry.postal_code,
-      city: entry.city,
-      subdivision: entry.subdivision,
-      region: entry.region,
-      country: entry.country,
-      locationRadius: entry.location_radius ?? undefined,
-    } : null;
-    finalizeLoad(locationData);
-  }, [entry, isEditing, streams, setBaseline, updateMultipleFields, isFormReady]);
-
-  // Called when RichTextEditor is ready with its actual content (possibly normalized)
-  // This syncs formData AND baseline to the editor's real content if normalization changed it
-  // For new entries, auto-focus to show keyboard immediately
-  const handleEditorReady = useCallback((editorContent: string) => {
-    // For new entries, auto-focus the editor to show keyboard
-    if (!isEditing) {
-      setTimeout(() => {
-        editorRef.current?.requestFocusSync();
-      }, 100);
-      return;
+    if (!isEditing && baselinePhotoCount === null) {
+      setBaseline(formData);
+      setBaselinePhotoCount(0);
+      editModeInitialContent.current = formData.content;
     }
-
-    if (!isFormReady) return;
-
-    // Only sync if editor normalized the content differently
-    if (formData.content !== editorContent) {
-      console.log('📝 [handleEditorReady] Editor normalized content, syncing baseline', {
-        formContentLen: formData.content?.length,
-        editorContentLen: editorContent?.length,
-      });
-      // Update formData to match editor's actual content
-      updateField("content", editorContent);
-      // Also update baseline so this doesn't mark as dirty
-      const syncedData = { ...formData, content: editorContent };
-      setBaseline(syncedData);
-    }
-  }, [isEditing, isFormReady, formData, setBaseline, updateField]);
+  }, []);
 
   // Set baseline photo count for editing after initial load
-  // Use queryAttachments.length directly to avoid race with photoCount state
-  // The form data baseline is set atomically in the load effect above
   useEffect(() => {
     if (isEditing && isFormReady && baselinePhotoCount === null) {
       const actualPhotoCount = queryAttachments.length;
       setBaselinePhotoCount(actualPhotoCount);
-      // Also sync photoCount via hook if it differs
       if (photoCount !== actualPhotoCount) {
         syncPhotoCount(actualPhotoCount);
       }
     }
   }, [isEditing, isFormReady, baselinePhotoCount, queryAttachments.length, photoCount, syncPhotoCount]);
 
-  // Apply default status for new entries with an initial stream
-  // This handles the case when navigating directly to capture form with a stream preset
+  // Apply default status for new entries with initial stream
   useEffect(() => {
-    // Only for new entries (not editing)
     if (isEditing) return;
-
-    // Only if we have an initial stream and streams are loaded
     if (!formData.streamId || streams.length === 0) return;
-
-    // Only if status is still "none" (hasn't been set yet)
     if (formData.status !== "none") return;
 
-    // Find the stream and apply its default status if enabled
     const stream = streams.find(s => s.stream_id === formData.streamId);
     if (stream?.entry_use_status && stream?.entry_default_status) {
       updateField("status", stream.entry_default_status);
     }
   }, [isEditing, formData.streamId, formData.status, streams, updateField]);
 
-  // Apply templates when form loads with an initial stream
-  // This handles the case where user navigates from a stream view and clicks "new"
+  // Apply templates when form loads with initial stream
   const hasAppliedInitialTemplateRef = useRef(false);
   useEffect(() => {
-    // Only for new entries (not editing)
     if (isEditing) return;
-
-    // Only run once
     if (hasAppliedInitialTemplateRef.current) return;
-
-    // Only if streams are loaded
     if (streams.length === 0) return;
 
-    // Only if we have an initial stream ID that's a valid stream (not a filter)
     const specialStreamValues = ["all", "events", "streams", "tags", "people", null, undefined];
     const hasValidStreamFromView = initialStreamId && !specialStreamValues.includes(initialStreamId as any);
     if (!hasValidStreamFromView) return;
 
-    // Find the stream
     const selectedStream = streams.find(s => s.stream_id === initialStreamId);
     if (!selectedStream) return;
 
-    // Mark as applied
     hasAppliedInitialTemplateRef.current = true;
 
     const templateDate = new Date();
     const titleIsBlank = !formData.title.trim();
     const contentIsBlank = !formData.content.trim();
 
-    // Apply title template if title is blank (independent of content)
     if (titleIsBlank && selectedStream.entry_title_template) {
       const newTitle = applyTitleTemplate(selectedStream.entry_title_template, {
         date: templateDate,
@@ -710,7 +311,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       }
     }
 
-    // Apply content template if content is blank (independent of title)
     if (contentIsBlank && selectedStream.entry_content_template) {
       const newContent = applyContentTemplate(selectedStream.entry_content_template, {
         date: templateDate,
@@ -721,60 +321,39 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       }
     }
 
-    // Apply default status if stream has status enabled and a default set
     if (selectedStream.entry_use_status && selectedStream.entry_default_status && selectedStream.entry_default_status !== "none") {
       updateField("status", selectedStream.entry_default_status);
     }
   }, [isEditing, streams, initialStreamId, formData.title, formData.content, updateField]);
 
-  // Keyboard listeners
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
-
-        // Scroll cursor into view when keyboard appears
-        // Use a longer delay to ensure edit mode transition is complete
-        // IMPORTANT: Only scroll if no picker is open (picker inputs need to keep their focus)
-        if (editorRef.current && !activePicker) {
-          setTimeout(() => {
-            editorRef.current?.scrollToCursor();
-          }, 300);
-        }
-      }
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => {
-        setKeyboardHeight(0);
-      }
-    );
-
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
-    };
-  }, [isEditMode, activePicker]); // Re-register when edit mode or picker changes
-
-  // Save handler
-  // isAutosave: when true, don't set isSubmitting to keep inputs editable (seamless background save)
-  const handleSave = async (isAutosave = false) => {
-    // Prevent multiple simultaneous saves
-    if (isSubmitting || isSaving) {
+  // Called when RichTextEditor is ready
+  const handleEditorReady = useCallback((editorContent: string) => {
+    if (!isEditing) {
+      setTimeout(() => {
+        editorRef.current?.requestFocusSync();
+      }, 100);
       return;
     }
 
-    // Always set isSaving for the indicator (tracks both manual and autosave)
-    setIsSaving(true);
+    if (!isFormReady) return;
 
-    // Only set isSubmitting for manual saves - autosave should be seamless (keeps inputs editable)
+    if (formData.content !== editorContent) {
+      updateField("content", editorContent);
+      const syncedData = { ...formData, content: editorContent };
+      setBaseline(syncedData);
+    }
+  }, [isEditing, isFormReady, formData, setBaseline, updateField, editorRef]);
+
+  // Save handler
+  const handleSave = useCallback(async (isAutosave = false) => {
+    if (isSubmitting || isSaving) return;
+
+    setIsSaving(true);
     if (!isAutosave) {
       setIsSubmitting(true);
     }
 
-    // CONFLICT DETECTION (Option 5 from ENTRY_EDITING_DATAFLOW.md)
-    // Check if another device updated this entry while we were editing
+    // Conflict detection
     const conflictResult = checkForConflict(entry);
     if (entry && conflictResult?.hasConflict) {
       const { currentVersion, conflictDevice: lastDevice } = conflictResult;
@@ -782,231 +361,136 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
       setIsSubmitting(false);
       setIsSaving(false);
 
-      // Show conflict resolution dialog
       return new Promise<void>((resolve) => {
-          Alert.alert(
-            'Entry Modified',
-            `This entry was updated by ${lastDevice} while you were editing. How would you like to proceed?`,
-            [
-              {
-                text: 'Cancel',
-                style: 'cancel',
-                onPress: () => resolve(),
+        Alert.alert(
+          'Entry Modified',
+          `This entry was updated by ${lastDevice} while you were editing. How would you like to proceed?`,
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+              onPress: () => resolve(),
+            },
+            {
+              text: 'Discard My Changes',
+              style: 'destructive',
+              onPress: () => {
+                updateMultipleFields({
+                  title: entry.title || '',
+                  content: entry.content || '',
+                  streamId: entry.stream_id || null,
+                  status: entry.status || 'none' as EntryStatus,
+                  type: entry.type || null,
+                  dueDate: entry.due_date || null,
+                  rating: entry.rating || 0,
+                  priority: entry.priority || 0,
+                  entryDate: entry.entry_date || formData.entryDate,
+                });
+                updateKnownVersion(currentVersion);
+                markClean();
+                setBaselinePhotoCount(photoCount);
+                showSnackbar('Discarded your changes, loaded latest version');
+                resolve();
               },
-              {
-                text: 'Discard My Changes',
-                style: 'destructive',
-                onPress: () => {
-                  // Reload form from entry (server version)
-                  updateMultipleFields({
-                    title: entry.title || '',
-                    content: entry.content || '',
-                    streamId: entry.stream_id || null,
-                    status: entry.status || 'none' as EntryStatus,
-                    type: entry.type || null,
-                    dueDate: entry.due_date || null,
-                    rating: entry.rating || 0,
-                    priority: entry.priority || 0,
-                    entryDate: entry.entry_date || formData.entryDate,
-                    // locationData is already loaded in baseline - keep current value
-                  });
-                  // Update known version to current
-                  updateKnownVersion(currentVersion);
-                  markClean();
-                  setBaselinePhotoCount(photoCount);
-                  showSnackbar('Discarded your changes, loaded latest version');
-                  resolve();
-                },
-              },
-              {
-                text: 'Save as Copy',
-                onPress: async () => {
-                  // Create a new entry with current form data
-                  try {
-                    const { tags, mentions } = extractTagsAndMentions(formData.content);
+            },
+            {
+              text: 'Save as Copy',
+              onPress: async () => {
+                try {
+                  const { tags, mentions } = extractTagsAndMentions(formData.content);
+                  const gpsFields = buildGpsFields(formData.locationData);
 
-                    // Build GPS fields from location data
-                    let gpsFields: { entry_latitude: number | null; entry_longitude: number | null; location_radius: number | null };
-                    if (formData.locationData) {
-                      gpsFields = {
-                        entry_latitude: formData.locationData.latitude,
-                        entry_longitude: formData.locationData.longitude,
-                        location_radius: formData.locationData.locationRadius ?? null,
-                      };
+                  let location_id: string | null = null;
+                  if (formData.locationData && formData.locationData.name) {
+                    if (formData.locationData.location_id) {
+                      location_id = formData.locationData.location_id;
                     } else {
-                      gpsFields = { entry_latitude: null, entry_longitude: null, location_radius: null };
+                      const locationInput = locationToCreateInput(formData.locationData);
+                      const savedLocation = await createLocation(locationInput);
+                      location_id = savedLocation.location_id;
                     }
-
-                    // Get or create location
-                    let location_id: string | null = null;
-                    if (formData.locationData && formData.locationData.name) {
-                      if (formData.locationData.location_id) {
-                        location_id = formData.locationData.location_id;
-                      } else {
-                        const locationInput = locationToCreateInput(formData.locationData);
-                        const savedLocation = await createLocation(locationInput);
-                        location_id = savedLocation.location_id;
-                      }
-                    }
-
-                    // Create new entry with "Copy of" title
-                    const copyTitle = formData.title.trim()
-                      ? `Copy of ${formData.title.trim()}`
-                      : 'Copy of Untitled';
-
-                    await entryMutations.createEntry({
-                      title: copyTitle,
-                      content: formData.content,
-                      tags,
-                      mentions,
-                      entry_date: formData.entryDate,
-                      stream_id: formData.streamId,
-                      status: formData.status,
-                      type: formData.type,
-                      due_date: formData.dueDate,
-                      rating: formData.rating || 0,
-                      priority: formData.priority || 0,
-                      location_id,
-                      ...gpsFields,
-                    });
-
-                    showSnackbar('Saved as new entry');
-                    navigateBack();
-                  } catch (error) {
-                    console.error('Failed to save as copy:', error);
-                    Alert.alert('Error', `Failed to save copy: ${error instanceof Error ? error.message : 'Unknown error'}`);
                   }
-                  resolve();
-                },
+
+                  const copyTitle = formData.title.trim()
+                    ? `Copy of ${formData.title.trim()}`
+                    : 'Copy of Untitled';
+
+                  await entryMutations.createEntry({
+                    title: copyTitle,
+                    content: formData.content,
+                    tags,
+                    mentions,
+                    entry_date: formData.entryDate,
+                    stream_id: formData.streamId,
+                    status: formData.status,
+                    type: formData.type,
+                    due_date: formData.dueDate,
+                    rating: formData.rating || 0,
+                    priority: formData.priority || 0,
+                    location_id,
+                    ...gpsFields,
+                  });
+
+                  showSnackbar('Saved as new entry');
+                  navigateBack();
+                } catch (error) {
+                  log.error('Failed to save as copy', error);
+                  Alert.alert('Error', `Failed to save copy: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
+                resolve();
               },
-              {
-                text: 'Keep My Changes',
-                style: 'default',
-                onPress: async () => {
-                  // Proceed with save - this will overwrite the remote version
-                  // Update known version so we don't detect conflict again
-                  updateKnownVersion(currentVersion);
-                  setIsSubmitting(true);
-                  await performSave();
-                  resolve();
-                },
+            },
+            {
+              text: 'Keep My Changes',
+              style: 'default',
+              onPress: async () => {
+                updateKnownVersion(currentVersion);
+                setIsSubmitting(true);
+                await performSave();
+                resolve();
               },
-            ]
-          );
-        });
+            },
+          ]
+        );
+      });
     }
 
     await performSave(isAutosave);
-  };
+  }, [isSubmitting, isSaving, entry, checkForConflict, formData, photoCount, entryMutations, navigateBack, showSnackbar, updateMultipleFields, updateKnownVersion, markClean, setBaselinePhotoCount, setIsSaving, setIsSubmitting]);
 
-  // Update autosave ref so the useAutosave hook can call handleSave(true)
-  handleAutosaveRef.current = () => handleSave(true);
-
-  // Actual save logic extracted for reuse in conflict resolution
-  // isAutosave: when true, skip setting isSubmitting and don't show empty entry alert
-  const performSave = async (isAutosave = false) => {
-    // Get the actual editor content directly - handles race condition where user
-    // types quickly and hits back/save before RichTextEditor's polling syncs
+  // Actual save logic
+  const performSave = useCallback(async (isAutosave = false) => {
     const editorContent = editorRef.current?.getHTML?.();
-    // Use editor content if it's a valid string, otherwise fall back to formData
     const contentToSave = (typeof editorContent === 'string') ? editorContent : formData.content;
-    if (typeof editorContent === 'string' && editorContent !== formData.content) {
-      console.log('💾 [performSave] Using editor content directly (not yet synced to formData)');
-      // Also sync to formData for consistency
+    // Only sync content to formData for manual saves, not autosave
+    // Autosave shouldn't update formData as it causes cursor jump from re-render
+    if (!isAutosave && typeof editorContent === 'string' && editorContent !== formData.content) {
       updateField("content", editorContent);
     }
 
-    // Check if there's something to save
-    // For NEW entries: only save if there's user-provided content (title, text, photos)
-    // GPS and named location alone aren't enough - they're metadata that can be auto-captured
-    // For EXISTING entries: any change is valid (entry already exists in DB)
-    const textContent = contentToSave.replace(/<[^>]*>/g, '').trim();
-    const hasTitle = formData.title.trim().length > 0;
-    const hasTextContent = textContent.length > 0;
-    const hasPhotos = isEditing ? photoCount > 0 : formData.pendingPhotos.length > 0;
-
-    // For new entries, require actual user content (title, text, or photos)
-    // Once entry exists (isEditing), we save any changes including metadata-only updates
-    const hasUserContent = hasTitle || hasTextContent || hasPhotos;
-
-    if (!isEditing && !hasUserContent) {
+    const effectivePhotoCount = isEditing ? photoCount : formData.pendingPhotos.length;
+    if (!isEditing && !hasUserContent(formData.title, contentToSave, effectivePhotoCount)) {
       if (!isAutosave) {
         setIsSubmitting(false);
         setIsSaving(false);
         Alert.alert("Empty Entry", "Please add a title, content, or photo before saving");
       } else {
-        // For autosave, silently skip - nothing to save yet
         setIsSaving(false);
       }
       return;
     }
 
     try {
-      const { tags, mentions } = extractTagsAndMentions(contentToSave);
+      const { tags, mentions } = extractContentMetadata(contentToSave);
+      const gpsFields = buildGpsFields(formData.locationData);
+      const locationHierarchyFields = buildLocationHierarchyFields(formData.locationData, formData.geocodeStatus);
 
-      // Build GPS fields from location data
-      // Location data includes coordinates and privacy radius for the entry
-      let gpsFields: { entry_latitude: number | null; entry_longitude: number | null; location_radius: number | null };
-      if (formData.locationData) {
-        // Use location coordinates and privacy radius
-        gpsFields = {
-          entry_latitude: formData.locationData.latitude,
-          entry_longitude: formData.locationData.longitude,
-          location_radius: formData.locationData.locationRadius ?? null,
-        };
-      } else {
-        // No location data at all
-        gpsFields = {
-          entry_latitude: null,
-          entry_longitude: null,
-          location_radius: null,
-        };
+      let location_id = await getOrCreateLocationId(formData.locationData);
+      if (location_id && formData.locationData && !formData.locationData.location_id) {
+        updateField("locationData", { ...formData.locationData, location_id });
       }
-
-      // Get or create location if we have location data
-      let location_id: string | null = null;
-      if (formData.locationData && formData.locationData.name) {
-        // Check if this is a saved location (has existing location_id)
-        if (formData.locationData.location_id) {
-          // Reuse existing location
-          location_id = formData.locationData.location_id;
-        } else {
-          // Create a new location in the locations table
-          const locationInput = locationToCreateInput(formData.locationData);
-          const savedLocation = await createLocation(locationInput);
-          location_id = savedLocation.location_id;
-          // Update form state with new location_id so subsequent LocationPicker opens
-          // show "Edit Name" option (requires location_id to be set)
-          updateField("locationData", { ...formData.locationData, location_id });
-        }
-      }
-
-      // Build location hierarchy fields from locationData
-      // These are copied directly to the entry (entry-owned data model)
-      const locationHierarchyFields = formData.locationData ? {
-        place_name: formData.locationData.name || null,
-        address: formData.locationData.address || null,
-        neighborhood: formData.locationData.neighborhood || null,
-        postal_code: formData.locationData.postalCode || null,
-        city: formData.locationData.city || null,
-        subdivision: formData.locationData.subdivision || null,
-        region: formData.locationData.region || null,
-        country: formData.locationData.country || null,
-        geocode_status: formData.geocodeStatus,
-      } : {
-        place_name: null,
-        address: null,
-        neighborhood: null,
-        postal_code: null,
-        city: null,
-        subdivision: null,
-        region: null,
-        country: null,
-        geocode_status: formData.geocodeStatus,
-      };
 
       if (isEditing) {
-        // Update existing entry
         await singleEntryMutations.updateEntry({
           title: formData.title.trim() || null,
           content: contentToSave,
@@ -1024,7 +508,6 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
           ...locationHierarchyFields,
         });
       } else {
-        // Create new entry
         const newEntry = await entryMutations.createEntry({
           title: formData.title.trim() || null,
           content: contentToSave,
@@ -1042,14 +525,12 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
           ...locationHierarchyFields,
         });
 
-        // CRITICAL: Save all pending photos to DB with the real entry_id
+        // Save pending photos to DB with real entry_id
         if (formData.pendingPhotos.length > 0) {
           for (const photo of formData.pendingPhotos) {
-            // Update file path and local path to use real entry_id
             const newFilePath = photo.filePath.replace(tempEntryId, newEntry.entry_id);
             const newLocalPath = photo.localPath.replace(tempEntryId, newEntry.entry_id);
 
-            // Move file from temp directory to real directory
             const FileSystem = await import('expo-file-system/legacy');
             const newDir = newLocalPath.substring(0, newLocalPath.lastIndexOf('/'));
             await FileSystem.makeDirectoryAsync(newDir, { intermediates: true });
@@ -1058,11 +539,10 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
               to: newLocalPath,
             });
 
-            // Save to DB with real entry_id using proper API
             await createAttachment({
               attachment_id: photo.photoId,
               entry_id: newEntry.entry_id,
-              user_id: user!.id,
+              user_id: userId!,
               file_path: newFilePath,
               local_path: newLocalPath,
               mime_type: photo.mimeType,
@@ -1074,43 +554,40 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
             });
           }
 
-          updateField("pendingPhotos", []); // Clear pending photos
+          updateField("pendingPhotos", []);
         }
 
-        // Transition to "editing" mode - subsequent saves will update instead of create
         setSavedEntryId(newEntry.entry_id);
-        // Initialize the known version for the new entry
         initializeVersion(1);
       }
 
-      // Note: Sync is triggered automatically in mobileEntryApi after save
-
-      // For all saves (new and existing): stay on screen
-      markClean(); // Mark form as clean after successful save
-      setBaselinePhotoCount(photoCount); // Update photo baseline
-      // Update known version - we just created a new version with this save
-      // This prevents false conflict detection on subsequent saves
+      markClean();
+      setBaselinePhotoCount(photoCount);
+      recordSaveTime();
       if (isEditing) {
         incrementKnownVersion();
       }
     } catch (error) {
-      console.error(`Failed to ${isEditing ? 'update' : 'create'} entry:`, error);
-      // Only show error alert for manual saves - autosave failures are silent
+      log.error(`Failed to ${isEditing ? 'update' : 'create'} entry`, error);
       if (!isAutosave) {
         Alert.alert("Error", `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`);
       }
     } finally {
-      // Always reset isSaving (tracks both manual and autosave)
       setIsSaving(false);
-      // Only reset isSubmitting for manual saves (autosave never set it to true)
       if (!isAutosave) {
         setIsSubmitting(false);
       }
     }
-  };
+  }, [formData, isEditing, photoCount, tempEntryId, userId, singleEntryMutations, entryMutations, editorRef, updateField, markClean, setBaselinePhotoCount, setSavedEntryId, initializeVersion, incrementKnownVersion, recordSaveTime, setIsSaving, setIsSubmitting]);
 
-  // Delete handler (only for editing)
-  const handleDelete = () => {
+  // Update save refs for navigation and autosave
+  useEffect(() => {
+    handleSaveRef.current = () => handleSave();
+    handleAutosaveRef.current = () => handleSave(true);
+  }, [handleSave, handleSaveRef, handleAutosaveRef]);
+
+  // Delete handler
+  const handleDelete = useCallback(() => {
     if (!isEditing) return;
 
     Alert.alert(
@@ -1126,175 +603,17 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
               await singleEntryMutations.deleteEntry();
               navigate("inbox");
             } catch (error) {
-              console.error("Failed to delete entry:", error);
+              log.error("Failed to delete entry", error);
               Alert.alert("Error", `Failed to delete: ${error instanceof Error ? error.message : "Unknown error"}`);
             }
           },
         },
       ]
     );
-  };
+  }, [isEditing, singleEntryMutations, navigate]);
 
-  // Photo handler
-  const handlePhotoSelected = async (uri: string, width: number, height: number) => {
-    try {
-      // Check if user is logged in
-      if (!user) {
-        Alert.alert("Error", "You must be logged in to add photos");
-        return;
-      }
-
-      // Compress photo using quality setting
-      const compressed = await compressAttachment(uri, settings.imageQuality);
-
-      // Generate IDs
-      const photoId = Crypto.randomUUID();
-      const userId = user.id;
-
-      if (isEditing) {
-        // EXISTING ENTRY: Save photo to DB immediately using proper API
-        // Use effectiveEntryId (handles autosaved new entries where savedEntryId is set but entryId prop is null)
-        const localPath = await saveAttachmentToLocalStorage(compressed.uri, photoId, userId, effectiveEntryId!);
-
-        await createAttachment({
-          attachment_id: photoId,
-          entry_id: effectiveEntryId!,
-          user_id: userId,
-          file_path: generateAttachmentPath(userId, effectiveEntryId!, photoId, 'jpg'),
-          local_path: localPath,
-          mime_type: 'image/jpeg',
-          file_size: compressed.file_size,
-          width: compressed.width,
-          height: compressed.height,
-          position: photoCount,
-          uploaded: false,
-        });
-
-        setPhotoCount(photoCount + 1);
-      } else {
-        // NEW ENTRY: Store photo in state only (don't save to DB until entry is saved)
-        const localPath = await saveAttachmentToLocalStorage(compressed.uri, photoId, userId, tempEntryId);
-
-        addPendingPhoto({
-          photoId,
-          localPath,
-          filePath: generateAttachmentPath(userId, tempEntryId, photoId, 'jpg'),
-          mimeType: 'image/jpeg',
-          fileSize: compressed.file_size,
-          width: compressed.width,
-          height: compressed.height,
-          position: photoCount,
-        });
-
-        setPhotoCount(photoCount + 1);
-      }
-
-      // Enter edit mode if not already in it
-      if (!isEditMode) {
-        enterEditMode();
-      }
-    } catch (error) {
-      console.error('Error adding photo:', error);
-      Alert.alert('Error', 'Failed to add photo');
-    }
-  };
-
-  // Multiple photos handler (for gallery multi-select)
-  const handleMultiplePhotosSelected = async (photos: { uri: string; width: number; height: number }[]) => {
-    if (!user) {
-      Alert.alert("Error", "You must be logged in to add photos");
-      return;
-    }
-
-    try {
-      let currentPosition = photoCount;
-
-      for (const photo of photos) {
-        // Compress photo using quality setting
-        const compressed = await compressAttachment(photo.uri, settings.imageQuality);
-
-        // Generate IDs
-        const photoId = Crypto.randomUUID();
-        const userId = user.id;
-
-        if (isEditing) {
-          // EXISTING ENTRY: Save photo to DB immediately using proper API
-          // Use effectiveEntryId (handles autosaved new entries where savedEntryId is set but entryId prop is null)
-          const localPath = await saveAttachmentToLocalStorage(compressed.uri, photoId, userId, effectiveEntryId!);
-
-          await createAttachment({
-            attachment_id: photoId,
-            entry_id: effectiveEntryId!,
-            user_id: userId,
-            file_path: generateAttachmentPath(userId, effectiveEntryId!, photoId, 'jpg'),
-            local_path: localPath,
-            mime_type: 'image/jpeg',
-            file_size: compressed.file_size,
-            width: compressed.width,
-            height: compressed.height,
-            position: currentPosition,
-            uploaded: false,
-          });
-        } else {
-          // NEW ENTRY: Store photo in state only
-          const localPath = await saveAttachmentToLocalStorage(compressed.uri, photoId, userId, tempEntryId);
-
-          addPendingPhoto({
-            photoId,
-            localPath,
-            filePath: generateAttachmentPath(userId, tempEntryId, photoId, 'jpg'),
-            mimeType: 'image/jpeg',
-            fileSize: compressed.file_size,
-            width: compressed.width,
-            height: compressed.height,
-            position: currentPosition,
-          });
-        }
-
-        currentPosition++;
-      }
-
-      // Update photo count once at the end with total
-      setPhotoCount(currentPosition);
-
-      // Enter edit mode if not already in it
-      if (!isEditMode) {
-        enterEditMode();
-      }
-    } catch (error) {
-      console.error('Error adding photos:', error);
-      Alert.alert('Error', 'Failed to add some photos');
-    }
-  };
-
-  // Photo deletion handler
-  const handlePhotoDelete = async (photoId: string) => {
-    try {
-      // Enter edit mode if not already (deletion is an edit action)
-      if (!isEditMode) {
-        enterEditMode();
-      }
-
-      if (isEditing) {
-        // EXISTING ENTRY: Delete from DB
-        await deleteAttachment(photoId);
-      } else {
-        // NEW ENTRY: Remove from pending photos state
-        removePendingPhoto(photoId);
-      }
-
-      // Decrement photo count
-      setPhotoCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Error deleting photo:', error);
-      Alert.alert('Error', 'Failed to delete photo');
-    }
-  };
-
-  // Show loading when editing and form is not fully ready
-  // This blocks rendering until entry AND location are both loaded
+  // Loading state
   if (isEditing && !isFormReady) {
-    console.log(`⏱️ EntryScreen: showing Loading... (isEditing=${isEditing}, isFormReady=${isFormReady})`);
     return (
       <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
         <Text style={[styles.loadingText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading...</Text>
@@ -1302,11 +621,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
     );
   }
 
-  console.log('⏱️ EntryScreen: rendering full form UI');
-
-  // Show error if editing an EXISTING entry (opened via entryId) and entry not found
-  // Don't show error if we just created the entry via autosave (savedEntryId is set)
-  // because we know it exists - React Query just hasn't cached it yet
+  // Error state - entry not found
   if (isEditing && !entry && !savedEntryId) {
     return (
       <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
@@ -1320,7 +635,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
-      {/* Header Bar with Back/Date/Save buttons */}
+      {/* Header Bar */}
       <EntryHeader
         isEditMode={isEditMode}
         isFullScreen={isFullScreen}
@@ -1344,7 +659,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         editorRef={editorRef}
       />
 
-      {/* Metadata Bar - Only shows SET values (hidden in full-screen mode) */}
+      {/* Metadata Bar */}
       {!isFullScreen && (
         <MetadataBar
           streamName={formData.streamName}
@@ -1385,17 +700,14 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         />
       )}
 
-      {/* Title is now part of the editor content (h1.entry-title) */}
-
       {/* Content Area */}
       <View style={[
         styles.contentContainer,
-        // Dynamic padding to account for bottom bar height (~60px)
         isEditMode ? { paddingBottom: 60 } : { paddingBottom: 0 },
         keyboardHeight > 0 && { paddingBottom: keyboardHeight + 80 }
       ]}>
 
-        {/* Photo Gallery (hidden in full-screen mode) */}
+        {/* Photo Gallery */}
         {!isFullScreen && (
           <PhotoGallery
             entryId={effectiveEntryId || tempEntryId}
@@ -1413,7 +725,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
           />
         )}
 
-        {/* Editor - uses title-first schema in edit mode */}
+        {/* Editor */}
         <View style={[
           styles.editorContainer,
           isFullScreen && styles.fullScreenEditor
@@ -1427,21 +739,11 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
             onPress={enterEditMode}
             onReady={handleEditorReady}
           />
-          {/*
-            No overlay - let taps reach the editor naturally.
-            The editor is always internally editable, and taps on content will:
-            1. Put cursor at tap position
-            2. Focus the editor (showing keyboard via user gesture)
-            3. Trigger onPress via polling mechanism → enterEditMode()
-
-            For truly empty space below content, the 50vh padding in RichTextEditor
-            CSS extends the tappable area.
-          */}
         </View>
 
       </View>
 
-      {/* Bottom Bar - only shown when in edit mode */}
+      {/* Bottom Bar */}
       {isEditMode && (
         <BottomBar keyboardOffset={keyboardHeight}>
           <EditorToolbar
@@ -1452,7 +754,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         </BottomBar>
       )}
 
-      {/* All Pickers - extracted to separate component for maintainability */}
+      {/* All Pickers */}
       <EntryPickers
         activePicker={activePicker}
         setActivePicker={setActivePicker}
@@ -1477,7 +779,7 @@ export function EntryScreen({ entryId, initialStreamId, initialStreamName, initi
         onAddPhoto={() => photoCaptureRef.current?.openMenu()}
       />
 
-      {/* Photo Capture (hidden, triggered via ref) */}
+      {/* Photo Capture */}
       <PhotoCapture
         ref={photoCaptureRef}
         showButton={false}

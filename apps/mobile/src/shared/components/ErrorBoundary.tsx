@@ -1,6 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { createScopedLogger, LogScopes } from '../utils/logger';
+
+const log = createScopedLogger(LogScopes.App);
 
 interface Props {
   children: React.ReactNode;
@@ -29,9 +32,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     // Store component stack for display
     this.setState({ componentStack: errorInfo.componentStack || '' });
 
-    console.error(`🚨 [ErrorBoundary:${this.props.name}] Caught error:`, {
-      error: error.message,
-      stack: error.stack,
+    log.error(`ErrorBoundary [${this.props.name}] caught error`, error, {
       componentStack: errorInfo.componentStack,
     });
   }

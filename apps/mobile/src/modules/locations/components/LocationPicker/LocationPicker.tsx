@@ -490,20 +490,14 @@ export function LocationPicker({
                 )}
 
                 {/* Search Radius Circle (dashed) - shows 50km autocomplete search area around selected pin */}
-                {(() => {
-                  const shouldShow = picker.ui.searchQuery.length >= 2 && picker.mapState.markerPosition;
-                  if (shouldShow) {
-                    console.log('🔵 [SearchRadius] Drawing circle at:', picker.mapState.markerPosition?.latitude.toFixed(4), picker.mapState.markerPosition?.longitude.toFixed(4));
-                  }
-                  return shouldShow ? (
-                    <Polyline
-                      coordinates={generateCirclePoints(picker.mapState.markerPosition!, AUTOCOMPLETE_SEARCH_RADIUS)}
-                      strokeColor="#FFCC00"
-                      strokeWidth={2}
-                      lineDashPattern={[10, 10]}
-                    />
-                  ) : null;
-                })()}
+                {picker.ui.searchQuery.length >= 2 && picker.mapState.markerPosition && (
+                  <Polyline
+                    coordinates={generateCirclePoints(picker.mapState.markerPosition, AUTOCOMPLETE_SEARCH_RADIUS)}
+                    strokeColor="#FFCC00"
+                    strokeWidth={2}
+                    lineDashPattern={[10, 10]}
+                  />
+                )}
               </MapView>
 
               {/* Fit Both Markers Button - shows when preview marker is visible (hidden when keyboard up) */}

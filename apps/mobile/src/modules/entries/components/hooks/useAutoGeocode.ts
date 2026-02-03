@@ -7,12 +7,8 @@
  * 3. Parses the response into entry location fields
  * 4. Updates the form with city, region, country, etc.
  *
- * The hook tracks geocode_status to:
- * - 'snapped' = matched to a saved location (no API call needed)
- * - 'success' = got data from Mapbox reverse geocode API
- * - 'no_data' = API returned no address data (ocean, wilderness)
- * - 'error' = API call failed
- * - null = never attempted
+ * Uses EntryFormContext for form state access.
+ * Accepts saved locations and stream-specific parameters.
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -21,44 +17,22 @@ import {
   reverseGeocode,
   geocodeResponseToEntryFields,
   findNearbyLocation,
-  type EntryLocationFields,
   type Location as LocationType,
   type LocationEntity,
 } from "@trace/core";
-import type { GeocodeStatus } from "./useCaptureFormState";
+import { useEntryForm, type GeocodeStatus } from "../context/EntryFormContext";
+import { createScopedLogger } from "../../../../shared/utils/logger";
+
+const log = createScopedLogger('AutoGeocode', '📍');
 
 /** Threshold for location snapping: 100 feet ≈ 30 meters */
 const SNAP_THRESHOLD_METERS = 30;
 
 export interface UseAutoGeocodeOptions {
-  /** Current location data from form (coordinates to geocode, may already have geocoded data) */
-  locationData: LocationType | null;
-  /** Current geocode status */
-  geocodeStatus: GeocodeStatus;
   /** Saved locations to check for snapping */
   savedLocations: LocationEntity[];
   /** Whether location is enabled for this stream (skip snapping if false) */
   locationEnabled: boolean;
-  /** Callback to update location fields */
-  onLocationFieldsChange: (fields: Partial<EntryLocationFields>) => void;
-  /** Callback to update geocode status */
-  onGeocodeStatusChange: (status: 'pending' | 'success' | 'snapped' | 'no_data' | 'error' | null) => void;
-  /** Callback to set location_id when snapping to saved location (passes full location data) */
-  onLocationIdChange?: (snappedLocation: {
-    location_id: string;
-    name: string;
-    address: string | null;
-    neighborhood: string | null;
-    postal_code: string | null;
-    city: string | null;
-    subdivision: string | null;
-    region: string | null;
-    country: string | null;
-  } | null) => void;
-  /** Whether this is initial capture (should update baseline) */
-  isInitialCapture: boolean;
-  /** Callback to update baseline for initial capture */
-  onBaselineLocationFieldsUpdate?: (fields: Partial<EntryLocationFields>) => void;
 }
 
 export interface UseAutoGeocodeReturn {
@@ -72,17 +46,19 @@ export interface UseAutoGeocodeReturn {
  * Automatically snaps to saved locations or geocodes GPS coordinates
  */
 export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeReturn {
+  const { savedLocations, locationEnabled } = options;
+
+  // Get state from context
   const {
-    locationData,
-    geocodeStatus,
-    savedLocations,
-    locationEnabled,
-    onLocationFieldsChange,
-    onGeocodeStatusChange,
-    onLocationIdChange,
-    isInitialCapture,
-    onBaselineLocationFieldsUpdate,
-  } = options;
+    isEditing,
+    formData,
+    updateField,
+    setBaseline,
+  } = useEntryForm();
+
+  const locationData = formData.locationData;
+  const geocodeStatus = formData.geocodeStatus;
+  const isInitialCapture = !isEditing;
 
   // Track if geocoding is in progress
   const isGeocodingRef = useRef(false);
@@ -91,8 +67,87 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
   const lastProcessedCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   /**
+   * Update location fields in form
+   */
+  const onLocationFieldsChange = useCallback(
+    (fields: Partial<LocationType>) => {
+      if (formData.locationData) {
+        updateField("locationData", { ...formData.locationData, ...fields });
+      }
+    },
+    [formData.locationData, updateField]
+  );
+
+  /**
+   * Update geocode status
+   */
+  const onGeocodeStatusChange = useCallback(
+    (status: GeocodeStatus) => {
+      updateField("geocodeStatus", status);
+    },
+    [updateField]
+  );
+
+  /**
+   * Handle snapping to a saved location
+   */
+  const onLocationIdChange = useCallback(
+    (snappedLocation: {
+      location_id: string;
+      name: string;
+      address: string | null;
+      neighborhood: string | null;
+      postal_code: string | null;
+      city: string | null;
+      subdivision: string | null;
+      region: string | null;
+      country: string | null;
+    } | null) => {
+      if (snappedLocation && formData.locationData) {
+        const snappedLocationData: LocationType = {
+          // Keep original coordinates and locationRadius from captured location
+          latitude: formData.locationData.latitude,
+          longitude: formData.locationData.longitude,
+          locationRadius: formData.locationData.locationRadius,
+          // Copy ALL geo fields from the saved location
+          location_id: snappedLocation.location_id,
+          name: snappedLocation.name,
+          source: 'user_custom',
+          address: snappedLocation.address || undefined,
+          neighborhood: snappedLocation.neighborhood || undefined,
+          postalCode: snappedLocation.postal_code || undefined,
+          city: snappedLocation.city || undefined,
+          subdivision: snappedLocation.subdivision || undefined,
+          region: snappedLocation.region || undefined,
+          country: snappedLocation.country || undefined,
+        };
+        updateField("locationData", snappedLocationData);
+      }
+    },
+    [formData.locationData, updateField]
+  );
+
+  /**
+   * Update baseline for initial capture
+   */
+  const onBaselineLocationFieldsUpdate = useCallback(
+    (fields: Partial<LocationType> & { geocode_status?: GeocodeStatus }) => {
+      if (isInitialCapture) {
+        const updatedLocationData: LocationType | null = formData.locationData
+          ? { ...formData.locationData, ...fields }
+          : null;
+        setBaseline({
+          ...formData,
+          locationData: updatedLocationData,
+          geocodeStatus: fields.geocode_status ?? formData.geocodeStatus,
+        });
+      }
+    },
+    [isInitialCapture, formData, setBaseline]
+  );
+
+  /**
    * Perform location snap and/or reverse geocoding for the given coordinates
-   * Snap-first: checks saved locations before calling geocode API
    */
   const performSnapOrGeocode = useCallback(async (latitude: number, longitude: number): Promise<void> => {
     // Prevent concurrent processing
@@ -122,34 +177,30 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
 
       if (snapResult.location) {
         // Found a saved location within threshold - snap to it!
-
-        // Update form with snapped location data
         onLocationFieldsChange({
-          address: snapResult.location.address,
-          neighborhood: snapResult.location.neighborhood,
-          postal_code: snapResult.location.postal_code,
-          city: snapResult.location.city,
-          subdivision: snapResult.location.subdivision,
-          region: snapResult.location.region,
-          country: snapResult.location.country,
+          address: snapResult.location.address || undefined,
+          neighborhood: snapResult.location.neighborhood || undefined,
+          postalCode: snapResult.location.postal_code || undefined,
+          city: snapResult.location.city || undefined,
+          subdivision: snapResult.location.subdivision || undefined,
+          region: snapResult.location.region || undefined,
+          country: snapResult.location.country || undefined,
         });
         onGeocodeStatusChange('snapped');
 
-        // Set the location_id to link to the saved location (pass full location for all geo fields)
-        if (onLocationIdChange) {
-          onLocationIdChange(snapResult.location);
-        }
+        // Set the location_id to link to the saved location
+        onLocationIdChange(snapResult.location);
 
         // For initial capture, also update baseline
-        if (isInitialCapture && onBaselineLocationFieldsUpdate) {
+        if (isInitialCapture) {
           onBaselineLocationFieldsUpdate({
-            address: snapResult.location.address,
-            neighborhood: snapResult.location.neighborhood,
-            postal_code: snapResult.location.postal_code,
-            city: snapResult.location.city,
-            subdivision: snapResult.location.subdivision,
-            region: snapResult.location.region,
-            country: snapResult.location.country,
+            address: snapResult.location.address || undefined,
+            neighborhood: snapResult.location.neighborhood || undefined,
+            postalCode: snapResult.location.postal_code || undefined,
+            city: snapResult.location.city || undefined,
+            subdivision: snapResult.location.subdivision || undefined,
+            region: snapResult.location.region || undefined,
+            country: snapResult.location.country || undefined,
             geocode_status: 'snapped',
           });
         }
@@ -164,7 +215,7 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
       // Check network connectivity before making API call
       const netState = await NetInfo.fetch();
       if (!netState.isConnected) {
-        onGeocodeStatusChange(null); // Reset so we can retry later
+        onGeocodeStatusChange(null);
         return;
       }
 
@@ -173,39 +224,46 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
 
       // Update form with geocoded fields
       onLocationFieldsChange({
-        address: fields.address,
-        neighborhood: fields.neighborhood,
-        postal_code: fields.postal_code,
-        city: fields.city,
-        subdivision: fields.subdivision,
-        region: fields.region,
-        country: fields.country,
+        address: fields.address || undefined,
+        neighborhood: fields.neighborhood || undefined,
+        postalCode: fields.postal_code || undefined,
+        city: fields.city || undefined,
+        subdivision: fields.subdivision || undefined,
+        region: fields.region || undefined,
+        country: fields.country || undefined,
       });
-      onGeocodeStatusChange(fields.geocode_status);
+      onGeocodeStatusChange(fields.geocode_status as GeocodeStatus);
 
       // For initial capture, also update baseline
-      if (isInitialCapture && onBaselineLocationFieldsUpdate) {
+      if (isInitialCapture) {
         onBaselineLocationFieldsUpdate({
-          address: fields.address,
-          neighborhood: fields.neighborhood,
-          postal_code: fields.postal_code,
-          city: fields.city,
-          subdivision: fields.subdivision,
-          region: fields.region,
-          country: fields.country,
-          geocode_status: fields.geocode_status,
+          address: fields.address || undefined,
+          neighborhood: fields.neighborhood || undefined,
+          postalCode: fields.postal_code || undefined,
+          city: fields.city || undefined,
+          subdivision: fields.subdivision || undefined,
+          region: fields.region || undefined,
+          country: fields.country || undefined,
+          geocode_status: fields.geocode_status as GeocodeStatus,
         });
       }
 
       // Track the processed coordinates
       lastProcessedCoordsRef.current = { lat: latitude, lng: longitude };
     } catch (error) {
-      console.error('[AutoGeocode] Error:', error);
+      log.error('Geocoding failed', error);
       onGeocodeStatusChange('error');
     } finally {
       isGeocodingRef.current = false;
     }
-  }, [savedLocations, onLocationFieldsChange, onGeocodeStatusChange, onLocationIdChange, isInitialCapture, onBaselineLocationFieldsUpdate]);
+  }, [
+    savedLocations,
+    isInitialCapture,
+    onLocationFieldsChange,
+    onGeocodeStatusChange,
+    onLocationIdChange,
+    onBaselineLocationFieldsUpdate,
+  ]);
 
   /**
    * Manually trigger snap/geocoding (useful for retry)
@@ -234,13 +292,11 @@ export function useAutoGeocode(options: UseAutoGeocodeOptions): UseAutoGeocodeRe
     }
 
     // Skip if we already have geocoded data (locationData has city/region/country)
-    // This prevents re-geocoding when editing an entry that already has location data
     if (locationData.city || locationData.region || locationData.country) {
       return;
     }
 
     // Skip if geocode already attempted and got no_data
-    // (Don't keep hitting the API for middle-of-ocean locations)
     if (geocodeStatus === 'no_data') {
       return;
     }

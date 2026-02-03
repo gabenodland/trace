@@ -8,35 +8,23 @@
  * - Auto-capture for new entries
  * - The actual GPS capture function
  *
- * Note: GPS capture now writes directly to locationData (dropped pin)
+ * Uses EntryFormContext for form state access.
+ * Accepts stream-specific parameters that depend on stream configuration.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Alert } from "react-native";
 import * as Location from "expo-location";
 import type { Location as LocationType } from "@trace/core";
+import { useEntryForm } from "../context/EntryFormContext";
 
 const GPS_TIMEOUT_MS = 15000;
 
 export interface UseGpsCaptureOptions {
-  /** Whether we're editing an existing entry */
-  isEditing: boolean;
-  /** Whether GPS capture setting is enabled */
-  captureGpsSetting: boolean;
   /** Whether stream data is loaded (or no stream selected) - prevents race condition */
   streamReady: boolean;
   /** Whether location is enabled for the current stream */
   locationEnabled: boolean;
-  /** Current location data from form */
-  currentLocationData: LocationType | null;
-  /** Callback to update form location data */
-  onLocationChange: (location: LocationType | null) => void;
-  /** Callback to update baseline (for initial capture) */
-  onBaselineUpdate: (locationData: LocationType) => void;
-  /** Whether form is in edit mode */
-  isEditMode: boolean;
-  /** Callback to enter edit mode */
-  enterEditMode: () => void;
 }
 
 export interface UseGpsCaptureReturn {
@@ -65,17 +53,21 @@ export interface UseGpsCaptureReturn {
  * Manages GPS capture state and logic for the entry screen.
  */
 export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureReturn {
+  const { streamReady, locationEnabled } = options;
+
+  // Get state from context
   const {
     isEditing,
-    captureGpsSetting,
-    streamReady,
-    locationEnabled,
-    currentLocationData,
-    onLocationChange,
-    onBaselineUpdate,
+    settings,
+    formData,
+    updateField,
+    setBaseline,
     isEditMode,
     enterEditMode,
-  } = options;
+  } = useEntryForm();
+
+  const captureGpsSetting = settings.captureGpsLocation;
+  const currentLocationData = formData.locationData;
 
   // GPS loading state
   const [isGpsLoading, setIsGpsLoading] = useState(false);
@@ -88,6 +80,26 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
 
   // Track if auto-capture has been attempted (prevents double capture when deps change)
   const hasAttemptedCapture = useRef(false);
+
+  /**
+   * Update location in form
+   */
+  const onLocationChange = useCallback(
+    (location: LocationType | null) => {
+      updateField("locationData", location);
+    },
+    [updateField]
+  );
+
+  /**
+   * Update baseline for initial capture
+   */
+  const onBaselineUpdate = useCallback(
+    (locationData: LocationType) => {
+      setBaseline({ ...formData, locationData });
+    },
+    [formData, setBaseline]
+  );
 
   /**
    * Capture GPS coordinates (creates a dropped pin location)
@@ -187,12 +199,10 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
   }, [onLocationChange, onBaselineUpdate, isEditMode, enterEditMode]);
 
   // Store captureGps in a ref so the useEffect can access the latest version
-  // This avoids the closure issue where useEffect captures a stale/undefined reference
   const captureGpsRef = useRef(captureGps);
   captureGpsRef.current = captureGps;
 
   // Auto-capture GPS for new entries when setting is enabled
-  // Uses proper dependencies to handle race condition when streams are loading
   useEffect(() => {
     // Guard: only attempt capture once
     if (hasAttemptedCapture.current) {
@@ -210,7 +220,6 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
     }
 
     // Wait for stream data to be loaded before making decision
-    // This prevents capturing GPS before we know if stream allows it
     if (!streamReady) {
       return;
     }
@@ -225,10 +234,10 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
       return;
     }
 
-    // Mark that we've attempted capture (prevents re-running after deps change)
+    // Mark that we've attempted capture
     hasAttemptedCapture.current = true;
 
-    // Use the ref to access the function - avoids closure issues
+    // Use the ref to access the function
     captureGpsRef.current(false, false, true);
   }, [isEditing, captureGpsSetting, streamReady, locationEnabled, currentLocationData]);
 

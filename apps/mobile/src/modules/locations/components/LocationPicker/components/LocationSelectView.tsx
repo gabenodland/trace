@@ -298,8 +298,6 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
 
     // Add POIs (only for Nearby tab - not when savedOnly/star is active)
     if (showNearby && displayedPOIs && displayedPOIs.length > 0) {
-      console.log(`🔍 [MergedList] Processing ${displayedPOIs.length} POIs for query "${ui.searchQuery}":`);
-      displayedPOIs.slice(0, 5).forEach((p, i) => console.log(`  ${i+1}. ${p.name}`));
       const savedLocationKeys = new Map<string, LocationEntity & { distance: number }>();
       savedLocations.forEach(loc => {
         const nameKey = loc.name.toLowerCase().trim();
@@ -317,9 +315,6 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
         // Check for exact duplicate by name+address
         const fullKey = normalizedAddress ? `${normalizedName}|${normalizedAddress}` : '';
         const isDuplicateByFullKey = fullKey && savedLocationKeys.has(fullKey);
-        if (isDuplicateByFullKey) {
-          console.log(`🔍 [DupeCheck] "${poi.name}" FILTERED by exact key match: ${fullKey}`);
-        }
 
         // Check for name match, but only suppress if within 91 meters (300 feet)
         // This allows chains like "The Peanut" to show multiple locations
@@ -331,9 +326,6 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
             { latitude: savedWithSameName.latitude, longitude: savedWithSameName.longitude }
           ).meters;
           isDuplicateByNameAndProximity = distanceToSaved < 91; // ~300 feet
-          console.log(`🔍 [DupeCheck] "${poi.name}" dist=${distanceToSaved.toFixed(0)}m to saved "${savedWithSameName.name}" → ${isDuplicateByNameAndProximity ? 'FILTERED' : 'SHOW'}`);
-        } else if (savedWithSameName) {
-          console.log(`🔍 [DupeCheck] "${poi.name}" has saved match but no coords - SHOWING`);
         }
 
         const isDuplicateOfSaved = isDuplicateByFullKey || isDuplicateByNameAndProximity;

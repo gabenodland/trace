@@ -3,6 +3,9 @@
  */
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createScopedLogger, LogScopes } from '../utils/logger';
+
+const log = createScopedLogger(LogScopes.Cache);
 
 export function usePersistedState<T>(
   key: string,
@@ -20,7 +23,7 @@ export function usePersistedState<T>(
           setState(JSON.parse(storedValue));
         }
       } catch (error) {
-        console.error(`Error loading ${key} from AsyncStorage:`, error);
+        log.error(`Error loading ${key} from AsyncStorage`, error);
       } finally {
         setIsLoaded(true);
       }
@@ -37,7 +40,7 @@ export function usePersistedState<T>(
       try {
         await AsyncStorage.setItem(key, JSON.stringify(state));
       } catch (error) {
-        console.error(`Error saving ${key} to AsyncStorage:`, error);
+        log.error(`Error saving ${key} to AsyncStorage`, error);
       }
     }
 

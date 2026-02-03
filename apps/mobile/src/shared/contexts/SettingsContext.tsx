@@ -7,6 +7,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createScopedLogger, LogScopes } from '../utils/logger';
 import {
   type UserSettings,
   type StreamSortPreference,
@@ -19,6 +20,8 @@ import {
   DEFAULT_DISPLAY_MODE,
   DEFAULT_STREAM_VIEW_FILTER,
 } from '@trace/core';
+
+const log = createScopedLogger(LogScopes.Settings);
 
 // Debounce delay for saving settings (ms)
 const SAVE_DEBOUNCE_MS = 500;
@@ -70,12 +73,12 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
           // Merge with defaults to ensure all fields exist
           const merged = mergeWithDefaults(parsed, DEFAULT_SETTINGS);
           setSettings(merged);
-          console.log('[SettingsContext] Loaded settings:', merged);
+          log.debug('Loaded settings', merged);
         } else {
-          console.log('[SettingsContext] No stored settings, using defaults');
+          log.debug('No stored settings, using defaults');
         }
       } catch (error) {
-        console.error('[SettingsContext] Error loading settings:', error);
+        log.error('Error loading settings', error);
         // Use defaults on error
         setSettings(DEFAULT_SETTINGS);
       } finally {
@@ -99,9 +102,9 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     saveTimeoutRef.current = setTimeout(async () => {
       try {
         await AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-        console.log('[SettingsContext] Saved settings (debounced)');
+        log.debug('Saved settings (debounced)');
       } catch (error) {
-        console.error('[SettingsContext] Error saving settings:', error);
+        log.error('Error saving settings', error);
       }
     }, SAVE_DEBOUNCE_MS);
 

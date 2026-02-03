@@ -12,6 +12,9 @@ import { localDB } from '../shared/db/localDB';
 import { useSync, getSyncStatus, triggerPushSync } from '../shared/sync';
 import { deleteAttachmentFromLocalStorage } from '../modules/attachments/mobileAttachmentApi';
 import Svg, { Path } from 'react-native-svg';
+import { createScopedLogger, LogScopes } from '../shared/utils/logger';
+
+const log = createScopedLogger(LogScopes.Database);
 
 type TabType = 'status' | 'entries' | 'streams' | 'locations' | 'attachments' | 'logs';
 type SyncFilter = 'all' | 'synced' | 'unsynced' | 'errors';
@@ -128,7 +131,7 @@ export function DatabaseInfoScreen() {
         });
       }
     } catch (error) {
-      console.error('Failed to load debug info:', error);
+      log.error('Failed to load debug info', error);
     }
   };
 
@@ -514,7 +517,7 @@ export function DatabaseInfoScreen() {
                     // Small delay to avoid rate limiting
                     await new Promise(resolve => setTimeout(resolve, 200));
                   } catch (err) {
-                    console.error(`Failed to enrich location ${loc.name}:`, err);
+                    log.error('Failed to enrich location', err, { locationName: loc.name });
                     errorCount++;
                   }
                 }
@@ -670,7 +673,7 @@ export function DatabaseInfoScreen() {
                     // Small delay to avoid rate limiting
                     await new Promise(resolve => setTimeout(resolve, 200));
                   } catch (err) {
-                    console.error(`Failed to process entry ${entry.title || entry.entry_id}:`, err);
+                    log.error('Failed to process entry', err, { entryTitle: entry.title, entryId: entry.entry_id });
                     errorCount++;
                   }
                 }
@@ -681,7 +684,7 @@ export function DatabaseInfoScreen() {
                 try {
                   await sync();
                 } catch (syncError) {
-                  console.error('[SnapAll] Sync failed after processing:', syncError);
+                  log.error('Sync failed after processing', syncError);
                 }
 
                 const results = [];
@@ -728,7 +731,7 @@ export function DatabaseInfoScreen() {
                     await deleteAttachmentFromLocalStorage(attachment.local_path);
                     deletedCount++;
                   } catch (err) {
-                    console.warn(`Failed to delete attachment file: ${attachment.local_path}`, err);
+                    log.warn('Failed to delete attachment file', { path: attachment.local_path, error: err });
                   }
                 }
               }
