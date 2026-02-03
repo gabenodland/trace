@@ -125,6 +125,7 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     setIsSaving,
     // Edit mode
     isEditMode,
+    setIsEditMode,
     isFullScreen,
     setIsFullScreen,
     enterEditMode,
@@ -639,9 +640,7 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
       <EntryHeader
         isEditMode={isEditMode}
         isFullScreen={isFullScreen}
-        isSubmitting={isSubmitting}
         isSaving={isSaving}
-        isEditing={isEditing}
         isDirty={isFormDirty}
         entryDate={formData.entryDate}
         includeTime={formData.includeTime}
@@ -654,12 +653,12 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
           date.setMilliseconds(0);
           updateField("entryDate", date.toISOString());
         }}
-        onAttributesPress={() => setActivePicker('attributes')}
+        onToggleFullScreen={() => setIsFullScreen(!isFullScreen)}
         enterEditMode={enterEditMode}
         editorRef={editorRef}
       />
 
-      {/* Metadata Bar */}
+      {/* Metadata Bar - below header, hidden in fullscreen */}
       {!isFullScreen && (
         <MetadataBar
           streamName={formData.streamName}
@@ -696,6 +695,7 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
           onRatingPress={() => unsupportedRating ? setActivePicker('unsupportedRating') : setActivePicker('rating')}
           onPriorityPress={() => unsupportedPriority ? setActivePicker('unsupportedPriority') : setActivePicker('priority')}
           onPhotosPress={() => setPhotosCollapsed(false)}
+          onAttributesPress={() => setActivePicker('attributes')}
           editorRef={editorRef}
         />
       )}
@@ -743,13 +743,16 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
 
       </View>
 
-      {/* Bottom Bar */}
+      {/* Bottom Bar - EditorToolbar only in edit mode */}
       {isEditMode && (
         <BottomBar keyboardOffset={keyboardHeight}>
           <EditorToolbar
             editorRef={editorRef}
-            isFullScreen={isFullScreen}
-            onToggleFullScreen={() => setIsFullScreen(!isFullScreen)}
+            onDone={() => {
+              editorRef.current?.blur();
+              setIsEditMode(false);
+              setIsFullScreen(false);
+            }}
           />
         </BottomBar>
       )}

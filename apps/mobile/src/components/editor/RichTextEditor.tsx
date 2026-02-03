@@ -1,5 +1,5 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle, useMemo } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, DeviceEventEmitter } from "react-native";
 import {
   RichText,
   useEditorBridge,
@@ -543,6 +543,16 @@ export const RichTextEditor = forwardRef(({
 
     return () => clearInterval(interval);
   }, [editable, editor, onPress]);
+
+  // Listen for global blur event (triggered by swipe-back gesture)
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('blurEditors', () => {
+      log.debug('Received blurEditors event, blurring');
+      editor.blur();
+    });
+
+    return () => subscription.remove();
+  }, [editor]);
 
   return (
     <View ref={containerRef} style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>

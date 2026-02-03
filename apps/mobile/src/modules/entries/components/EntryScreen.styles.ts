@@ -146,7 +146,7 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     paddingHorizontal: themeBase.spacing.lg,
     paddingTop: 10,
     paddingBottom: 10,

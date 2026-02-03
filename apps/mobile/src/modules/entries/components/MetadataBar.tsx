@@ -53,6 +53,7 @@ interface MetadataBarProps {
   onRatingPress: () => void;
   onPriorityPress: () => void;
   onPhotosPress: () => void;
+  onAttributesPress: () => void;
   // Editor ref for blur
   editorRef: React.RefObject<any>;
 }
@@ -92,6 +93,7 @@ export function MetadataBar({
   onRatingPress,
   onPriorityPress,
   onPhotosPress,
+  onAttributesPress,
   editorRef,
 }: MetadataBarProps) {
   const theme = useTheme();
@@ -464,6 +466,18 @@ export function MetadataBar({
           </TouchableOpacity>
         </>
       )}
+
+      {/* Attributes menu button (...) - pushed to the right */}
+      <TouchableOpacity
+        style={styles.entryMenuButton}
+        onPress={() => handlePress(onAttributesPress)}
+      >
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+          <Circle cx={12} cy={5} r={2} />
+          <Circle cx={12} cy={12} r={2} />
+          <Circle cx={12} cy={19} r={2} />
+        </Svg>
+      </TouchableOpacity>
     </View>
   );
 }

@@ -540,6 +540,7 @@ export function EntryFormProvider({
   const enterEditMode = useCallback(() => {
     editModeInitialContent.current = formData.content;
     setIsEditMode(true);
+    setIsFullScreen(true);
   }, [formData.content]);
 
   // ============================================================================

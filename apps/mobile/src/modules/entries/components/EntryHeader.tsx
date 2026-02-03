@@ -13,9 +13,7 @@ interface EntryHeaderProps {
   // Mode flags
   isEditMode: boolean;
   isFullScreen: boolean;
-  isSubmitting: boolean;
   isSaving: boolean; // For save indicator (includes autosave, unlike isSubmitting which is manual only)
-  isEditing: boolean;
   isDirty: boolean;
   // Form data
   entryDate: string;
@@ -25,7 +23,7 @@ interface EntryHeaderProps {
   onDatePress: () => void;
   onTimePress: () => void;
   onAddTime: () => void;
-  onAttributesPress: () => void;
+  onToggleFullScreen: () => void;
   enterEditMode: () => void;
   // Refs
   editorRef: React.RefObject<any>;
@@ -34,9 +32,7 @@ interface EntryHeaderProps {
 export function EntryHeader({
   isEditMode,
   isFullScreen,
-  isSubmitting,
   isSaving,
-  isEditing,
   isDirty,
   entryDate,
   includeTime,
@@ -44,7 +40,7 @@ export function EntryHeader({
   onDatePress,
   onTimePress,
   onAddTime,
-  onAttributesPress,
+  onToggleFullScreen,
   enterEditMode,
   editorRef,
 }: EntryHeaderProps) {
@@ -159,19 +155,21 @@ export function EntryHeader({
           </View>
         )}
 
-        {/* Attributes menu button (...) - hidden in fullscreen mode */}
-        {!isFullScreen && (
-          <TouchableOpacity
-            style={styles.menuButton}
-            onPress={onAttributesPress}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
-              <Circle cx={12} cy={5} r={2} />
-              <Circle cx={12} cy={12} r={2} />
-              <Circle cx={12} cy={19} r={2} />
-            </Svg>
-          </TouchableOpacity>
-        )}
+        {/* Fullscreen toggle button - chevron down (V) when normal, chevron up (^) when fullscreen */}
+        <TouchableOpacity
+          style={styles.menuButton}
+          onPress={onToggleFullScreen}
+        >
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2.5}>
+            {isFullScreen ? (
+              // Chevron up (^) - exit fullscreen
+              <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            ) : (
+              // Chevron down (V) - enter fullscreen
+              <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            )}
+          </Svg>
+        </TouchableOpacity>
       </View>
     </View>
   );
