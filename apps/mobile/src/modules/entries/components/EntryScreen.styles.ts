@@ -144,13 +144,9 @@ export const styles = StyleSheet.create({
   },
   metadataBar: {
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
-    justifyContent: "flex-start",
     paddingHorizontal: themeBase.spacing.lg,
-    paddingTop: 10,
-    paddingBottom: 10,
-    rowGap: 6,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     // Subtle iOS-style shadow
     shadowColor: "#000",
@@ -158,6 +154,25 @@ export const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 2,
     elevation: 1,
+  },
+  metadataContent: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    rowGap: 6,
+    columnGap: 0, // Pills handle their own spacing via dividers
+  },
+  metadataMenuSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: themeBase.spacing.sm,
+  },
+  metadataSeparator: {
+    width: 1,
+    height: 24,
+    opacity: 0.2,
+    marginLeft: themeBase.spacing.sm,
   },
   metadataLink: {
     paddingVertical: 6,
@@ -185,9 +200,13 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   entryMenuButton: {
-    marginLeft: "auto",
     padding: 8,
-    opacity: 0.6,
+    borderRadius: 6,
+  },
+  entryMenuButtonLabel: {
+    fontSize: 11,
+    letterSpacing: 0.3,
+    marginTop: 2,
   },
   attributePickerContainer: {
     borderRadius: themeBase.borderRadius.lg,

@@ -19,19 +19,21 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
 
 6. **Always play a sound when complete** - After providing summary of completed work:
    - Mac: `say "<one sentence summary of what was completed>"`
-   - Windows: `powershell -Command "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('<one sentence summary of what was completed>')"`
+   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File "C:/Projects/trace/scripts/speak.ps1" -text "<one sentence summary of what was completed>"`
    - Linux: `aplay /path/to/complete.wav`
    - Example (Mac): `say "just updated the app config with ios permissions"`
-   - Example (Windows): `powershell -Command "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('just updated the app config with ios permissions')"`
+   - Example (Windows): `powershell -NoProfile -ExecutionPolicy Bypass -File "C:/Projects/trace/scripts/speak.ps1" -text "just updated the app config with ios permissions"`
 
 7. **Always play a sound when you need more information** - After asking a question:
    - Mac: `say "<one sentence summary of what you need>"`
-   - Windows: `powershell -Command "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('<one sentence summary of what you need>')"`
+   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File "C:/Projects/trace/scripts/speak.ps1" -text "<one sentence summary of what you need>"`
    - Linux: `aplay /path/to/question.wav`
    - Example (Mac): `say "do you want me to update the permissions config"`
-   - Example (Windows): `powershell -Command "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('do you want me to update the permissions config')"`
+   - Example (Windows): `powershell -NoProfile -ExecutionPolicy Bypass -File "C:/Projects/trace/scripts/speak.ps1" -text "do you want me to update the permissions config"`
 
    **NOTE:** The user likes hearing your voice! TTS works even in plan mode since it doesn't modify files. Use it freely.
+   **Voice:** Uses Microsoft Zira (female, English US). To change voice, edit `C:/Projects/trace/scripts/speak.ps1`.
+   **Available voices:** David (male EN), Zira (female EN), Hedda (female DE), Helena (female ES), Hortense (female FR), Elsa (female IT), Huihui (female CN).
 
 8. **Never create 'nul' files** - Always use correct null device syntax for bash:
    - ✅ Use `/dev/null` in bash/Git Bash commands

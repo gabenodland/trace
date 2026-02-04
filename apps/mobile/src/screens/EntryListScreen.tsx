@@ -319,6 +319,7 @@ export function EntryListScreen() {
         onArchive={handleArchiveEntry}
         streams={streams}
         locations={locations}
+        currentStreamId={typeof selectedStreamId === 'string' && !selectedStreamId.includes(':') ? selectedStreamId : null}
         displayMode={displayMode}
         fullStreams={streams}
         entryCount={filteredEntries.length}

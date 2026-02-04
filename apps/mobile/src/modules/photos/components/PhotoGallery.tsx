@@ -38,10 +38,11 @@ interface PhotoGalleryProps {
   collapsible?: boolean; // Enable collapse/expand functionality
   isCollapsed?: boolean; // Controlled collapsed state
   onCollapsedChange?: (collapsed: boolean) => void; // Callback when collapsed state changes
-  onAddPhoto?: () => void; // Callback to trigger photo capture
+  onTakePhoto?: () => void; // Callback to open camera
+  onGallery?: () => void; // Callback to open gallery
 }
 
-export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoDelete, pendingPhotos, collapsible, isCollapsed, onCollapsedChange, onAddPhoto }: PhotoGalleryProps) {
+export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoDelete, pendingPhotos, collapsible, isCollapsed, onCollapsedChange, onTakePhoto, onGallery }: PhotoGalleryProps) {
   const dynamicTheme = useTheme();
   const [photos, setPhotos] = useState<Attachment[]>([]);
   const [photoUris, setPhotoUris] = useState<Record<string, string>>({});
@@ -265,23 +266,65 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
             );
           })}
 
-          {/* Add Photo button - inline as last thumbnail */}
-          {onAddPhoto && (
-            <TouchableOpacity
-              style={[styles.addPhotoButton, { borderColor: dynamicTheme.colors.border.medium, backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={onAddPhoto}
-              activeOpacity={0.7}
-            >
-              <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M12 5v14M5 12h14"
-                  stroke={dynamicTheme.colors.text.tertiary}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </TouchableOpacity>
+          {/* Add Photo buttons - stacked camera + gallery */}
+          {(onTakePhoto || onGallery) && (
+            <View style={styles.addPhotoButtonsContainer}>
+              {/* Camera button */}
+              {onTakePhoto && (
+                <TouchableOpacity
+                  style={[styles.addPhotoButton, { borderColor: dynamicTheme.colors.border.medium, backgroundColor: dynamicTheme.colors.background.secondary }]}
+                  onPress={onTakePhoto}
+                  activeOpacity={0.7}
+                >
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                      stroke={dynamicTheme.colors.text.tertiary}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <Path
+                      d="M12 17a4 4 0 100-8 4 4 0 000 8z"
+                      stroke={dynamicTheme.colors.text.tertiary}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </Svg>
+                </TouchableOpacity>
+              )}
+
+              {/* Gallery button */}
+              {onGallery && (
+                <TouchableOpacity
+                  style={[styles.addPhotoButton, { borderColor: dynamicTheme.colors.border.medium, backgroundColor: dynamicTheme.colors.background.secondary }]}
+                  onPress={onGallery}
+                  activeOpacity={0.7}
+                >
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M4 16l4.586-4.586a2 2 0 0 1 2.828 0L16 16m-2-2l1.586-1.586a2 2 0 0 1 2.828 0L20 14.5"
+                      stroke={dynamicTheme.colors.text.tertiary}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <Path
+                      d="M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6z"
+                      stroke={dynamicTheme.colors.text.tertiary}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <Path
+                      d="M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"
+                      fill={dynamicTheme.colors.text.tertiary}
+                    />
+                  </Svg>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </ScrollView>
 
@@ -376,9 +419,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  addPhotoButtonsContainer: {
+    gap: 4,
+  },
   addPhotoButton: {
     width: 100,
-    height: 100,
+    height: 48,
     borderRadius: themeBase.borderRadius.md,
     borderWidth: 1.5,
     borderStyle: 'dashed',

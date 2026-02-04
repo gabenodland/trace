@@ -14,6 +14,8 @@ interface EntryListContentProps {
   locationMap?: Record<string, string> | null;
   /** Map of stream_id to Stream object for attribute visibility */
   streamById?: Record<string, Stream> | null;
+  /** ID of the stream being viewed (to hide redundant stream badge) */
+  currentStreamId?: string | null;
   onEntryPress: (entryId: string) => void;
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
@@ -37,6 +39,7 @@ export function EntryListContent({
   streamMap,
   locationMap,
   streamById,
+  currentStreamId,
   onEntryPress,
   onTagPress,
   onMentionPress,
@@ -68,6 +71,7 @@ export function EntryListContent({
           onPin={onPin}
           streamName={entry.stream_id && streamMap ? streamMap[entry.stream_id] : null}
           locationName={entry.location_id && locationMap ? locationMap[entry.location_id] : null}
+          currentStreamId={currentStreamId}
           displayMode={displayMode}
           showMenu={openMenuEntryId === entry.entry_id}
           onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}

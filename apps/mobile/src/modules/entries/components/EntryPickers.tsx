@@ -55,7 +55,6 @@ export interface EntryPickersProps {
 
   // Mode flags
   isEditing: boolean;
-  isEditMode: boolean;
 
   // Stream data
   streams: Stream[];
@@ -70,16 +69,14 @@ export interface EntryPickersProps {
   showPriority: boolean;
   showPhotos: boolean;
 
-  // Photo count
-  photoCount: number;
-
   // Location picker mode
   locationPickerMode: "select" | "create" | "view";
 
   // Callbacks
   showSnackbar: (message: string) => void;
   handleDelete: () => void;
-  onAddPhoto: () => void;
+  onTakePhoto: () => void;
+  onOpenGallery: () => void;
 }
 
 export function EntryPickers({
@@ -88,7 +85,6 @@ export function EntryPickers({
   formData,
   updateField,
   isEditing,
-  isEditMode,
   streams,
   currentStream,
   showLocation,
@@ -98,11 +94,11 @@ export function EntryPickers({
   showRating,
   showPriority,
   showPhotos,
-  photoCount,
   locationPickerMode,
   showSnackbar,
   handleDelete,
-  onAddPhoto,
+  onTakePhoto,
+  onOpenGallery,
 }: EntryPickersProps) {
   const { setIsModalOpen } = useNavigation();
 
@@ -409,7 +405,6 @@ export function EntryPickers({
         visible={activePicker === "attributes"}
         onClose={() => setActivePicker(null)}
         isEditing={isEditing}
-        isEditMode={isEditMode}
         showLocation={showLocation}
         showStatus={showStatus}
         showType={showType}
@@ -417,22 +412,22 @@ export function EntryPickers({
         showRating={showRating}
         showPriority={showPriority}
         showPhotos={showPhotos}
-        hasLocationData={!!(formData.locationData?.latitude || formData.locationData?.name)}
+        locationData={formData.locationData}
         status={formData.status}
         type={formData.type}
         dueDate={formData.dueDate}
         rating={formData.rating}
         priority={formData.priority}
-        photoCount={photoCount}
+        ratingType={currentStream?.entry_rating_type}
         onShowLocationPicker={() => setActivePicker("location")}
         onShowStatusPicker={() => setActivePicker("status")}
         onShowTypePicker={() => setActivePicker("type")}
         onShowDatePicker={() => setActivePicker("dueDate")}
         onShowRatingPicker={() => setActivePicker("rating")}
         onShowPriorityPicker={() => setActivePicker("priority")}
-        onAddPhoto={onAddPhoto}
+        onTakePhoto={onTakePhoto}
+        onGallery={onOpenGallery}
         onDelete={handleDelete}
-        onSnackbar={showSnackbar}
       />
     </>
   );

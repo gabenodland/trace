@@ -125,22 +125,24 @@ export function MetadataBar({
 
   return (
     <View style={[styles.metadataBar, { backgroundColor: theme.colors.background.secondary, borderBottomColor: theme.colors.border.light }]}>
-      {/* Stream - always shown */}
-      <TouchableOpacity
-        style={styles.metadataLink}
-        onPress={() => handlePress(onStreamPress)}
-      >
-        <View style={styles.metadataLinkContent}>
-          <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-            <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-          <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]} numberOfLines={1} ellipsizeMode="tail">
-            {streamName || "No Stream"}
-          </Text>
-        </View>
-      </TouchableOpacity>
+      {/* Metadata content - wraps attributes */}
+      <View style={styles.metadataContent}>
+        {/* Stream - always shown */}
+        <TouchableOpacity
+          style={styles.metadataLink}
+          onPress={() => handlePress(onStreamPress)}
+        >
+          <View style={styles.metadataLinkContent}>
+            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+              <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+            <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]} numberOfLines={1} ellipsizeMode="tail">
+              {streamName || "No Stream"}
+            </Text>
+          </View>
+        </TouchableOpacity>
 
       {/* Type - show if supported OR unsupported with value */}
       {(showType || unsupportedType) && type && (
@@ -443,38 +445,44 @@ export function MetadataBar({
         </>
       )}
 
-      {/* Photos - only if has photos and collapsed */}
-      {showPhotos && photoCount > 0 && photosCollapsed && (
-        <>
-          <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
-          <TouchableOpacity
-            style={styles.metadataLink}
-            onPress={onPhotosPress}
-          >
-            <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-              <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]} numberOfLines={1} ellipsizeMode="tail">
-                {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </>
-      )}
+        {/* Photos - only if has photos and collapsed */}
+        {showPhotos && photoCount > 0 && photosCollapsed && (
+          <>
+            <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
+            <TouchableOpacity
+              style={styles.metadataLink}
+              onPress={onPhotosPress}
+            >
+              <View style={styles.metadataLinkContent}>
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
+                  <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+                  <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+                <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]} numberOfLines={1} ellipsizeMode="tail">
+                  {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
 
-      {/* Attributes menu button (...) - pushed to the right */}
-      <TouchableOpacity
-        style={styles.entryMenuButton}
-        onPress={() => handlePress(onAttributesPress)}
-      >
-        <Svg width={16} height={16} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
-          <Circle cx={12} cy={5} r={2} />
-          <Circle cx={12} cy={12} r={2} />
-          <Circle cx={12} cy={19} r={2} />
-        </Svg>
-      </TouchableOpacity>
+      {/* Separator */}
+      <View style={[styles.metadataSeparator, { backgroundColor: theme.colors.border.medium }]} />
+
+      {/* Menu section - dedicated area for entry options */}
+      <View style={styles.metadataMenuSection}>
+        <TouchableOpacity
+          style={[styles.entryMenuButton, { backgroundColor: theme.colors.background.tertiary }]}
+          onPress={() => handlePress(onAttributesPress)}
+        >
+          <Svg width={16} height={16} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
+            <Circle cx={12} cy={5} r={2} />
+            <Circle cx={12} cy={12} r={2} />
+            <Circle cx={12} cy={19} r={2} />
+          </Svg>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }

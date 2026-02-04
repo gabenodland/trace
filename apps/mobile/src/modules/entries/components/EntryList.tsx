@@ -34,6 +34,8 @@ interface EntryListProps {
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
   streams?: Stream[]; // Optional streams for displaying stream names
   locations?: Location[]; // Optional locations for displaying location names
+  /** ID of the stream being viewed (to hide redundant stream badge) */
+  currentStreamId?: string | null;
   displayMode?: EntryDisplayMode; // Display mode for entry items
   /** Full stream objects for attribute visibility determination */
   fullStreams?: FullStream[];
@@ -48,7 +50,7 @@ export interface EntryListRef {
   scrollToTop: () => void;
 }
 
-export const EntryList = forwardRef<EntryListRef, EntryListProps>(function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, onArchive, ListHeaderComponent, streams, locations, displayMode, fullStreams, entryCount, totalCount }, ref) {
+export const EntryList = forwardRef<EntryListRef, EntryListProps>(function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, onArchive, ListHeaderComponent, streams, locations, currentStreamId, displayMode, fullStreams, entryCount, totalCount }, ref) {
   const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList<Entry>>(null);
@@ -129,6 +131,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         onArchive={onArchive}
         streamName={item.stream_id && streamMap ? streamMap[item.stream_id] : null}
         locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
+        currentStreamId={currentStreamId}
         displayMode={displayMode}
         showMenu={openMenuEntryId === item.entry_id}
         onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}

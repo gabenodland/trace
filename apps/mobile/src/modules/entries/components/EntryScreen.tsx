@@ -228,11 +228,19 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
   // Adapter functions to match PhotoCapture interface (uri, width, height) to hook interface (PhotoInfo object)
   const handlePhotoSelected = useCallback((uri: string, width: number, height: number) => {
     onPhotoSelected({ uri, width, height });
-  }, [onPhotoSelected]);
+    // Expand photos if collapsed
+    if (photosCollapsed) {
+      setPhotosCollapsed(false);
+    }
+  }, [onPhotoSelected, photosCollapsed]);
 
   const handleMultiplePhotosSelected = useCallback((photos: { uri: string; width: number; height: number }[]) => {
     onMultiplePhotosSelected(photos);
-  }, [onMultiplePhotosSelected]);
+    // Expand photos if collapsed
+    if (photosCollapsed) {
+      setPhotosCollapsed(false);
+    }
+  }, [onMultiplePhotosSelected, photosCollapsed]);
 
   // GPS capture hook (values used by EntryPickers via context)
   useGpsCapture({
@@ -716,9 +724,11 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
             collapsible={true}
             isCollapsed={photosCollapsed}
             onCollapsedChange={setPhotosCollapsed}
-            onAddPhoto={() => {
-              if (!isEditMode) enterEditMode();
-              photoCaptureRef.current?.openMenu();
+            onTakePhoto={() => {
+              photoCaptureRef.current?.openCamera();
+            }}
+            onGallery={() => {
+              photoCaptureRef.current?.openGallery();
             }}
           />
         )}
@@ -762,7 +772,6 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
         formData={formData}
         updateField={updateField}
         isEditing={isEditing}
-        isEditMode={isEditMode}
         streams={streams}
         currentStream={currentStream ?? null}
         showLocation={showLocation}
@@ -772,17 +781,16 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
         showRating={showRating}
         showPriority={showPriority}
         showPhotos={showPhotos}
-        photoCount={photoCount}
         locationPickerMode={locationPickerMode}
         showSnackbar={showSnackbar}
         handleDelete={handleDelete}
-        onAddPhoto={() => photoCaptureRef.current?.openMenu()}
+        onTakePhoto={() => photoCaptureRef.current?.openCamera()}
+        onOpenGallery={() => photoCaptureRef.current?.openGallery()}
       />
 
-      {/* Photo Capture */}
+      {/* Photo Capture - ref-based, no UI */}
       <PhotoCapture
         ref={photoCaptureRef}
-        showButton={false}
         onPhotoSelected={handlePhotoSelected}
         onMultiplePhotosSelected={handleMultiplePhotosSelected}
         onSnackbar={showSnackbar}
