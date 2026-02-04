@@ -7,10 +7,10 @@
 
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { PickerBottomSheet } from '../../../components/sheets';
+import { Icon } from '../../../shared/components';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
 import { getDefaultAvatarUrl } from '@trace/core';
@@ -233,10 +233,7 @@ export function AvatarPicker({
         {/* Edit badge - outside the clipped container */}
         {!isLoading && (
           <View style={[styles.editBadge, { bottom: 0, right: 0, backgroundColor: dynamicTheme.colors.functional.accent }]}>
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
-              <Path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="Edit" size={14} color="#ffffff" />
           </View>
         )}
       </TouchableOpacity>
@@ -266,10 +263,7 @@ export function AvatarPicker({
             activeOpacity={0.7}
           >
             <View style={styles.optionIcon}>
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
-                <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" strokeLinecap="round" strokeLinejoin="round" />
-                <Circle cx={12} cy={13} r={3} strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="Camera" size={20} color={dynamicTheme.colors.text.secondary} />
             </View>
             <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>Take Photo</Text>
           </TouchableOpacity>
@@ -281,11 +275,7 @@ export function AvatarPicker({
             activeOpacity={0.7}
           >
             <View style={styles.optionIcon}>
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
-                <Path d="M4 16l4.586-4.586a2 2 0 0 1 2.828 0L16 16m-2-2l1.586-1.586a2 2 0 0 1 2.828 0L20 14" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6z" strokeLinecap="round" strokeLinejoin="round" />
-                <Circle cx={8.5} cy={8.5} r={1.5} fill={dynamicTheme.colors.text.secondary} stroke="none" />
-              </Svg>
+              <Icon name="Images" size={20} color={dynamicTheme.colors.text.secondary} />
             </View>
             <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary }]}>Choose from Gallery</Text>
           </TouchableOpacity>
@@ -298,9 +288,7 @@ export function AvatarPicker({
               activeOpacity={0.7}
             >
               <View style={styles.optionIcon}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.overdue} strokeWidth={2}>
-                  <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Trash2" size={20} color={dynamicTheme.colors.functional.overdue} />
               </View>
               <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.functional.overdue }]}>Remove Photo</Text>
             </TouchableOpacity>

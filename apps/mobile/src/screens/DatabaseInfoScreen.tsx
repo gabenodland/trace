@@ -11,7 +11,7 @@ import { SecondaryHeader } from '../components/layout/SecondaryHeader';
 import { localDB } from '../shared/db/localDB';
 import { useSync, getSyncStatus, triggerPushSync } from '../shared/sync';
 import { deleteAttachmentFromLocalStorage } from '../modules/attachments/mobileAttachmentApi';
-import Svg, { Path } from 'react-native-svg';
+import { Icon } from '../shared/components';
 import { createScopedLogger, LogScopes } from '../shared/utils/logger';
 
 const log = createScopedLogger(LogScopes.Database);
@@ -1044,9 +1044,7 @@ export function DatabaseInfoScreen() {
 
   const refreshButton = (
     <TouchableOpacity onPress={() => setRefreshKey(prev => prev + 1)} style={styles.refreshButton}>
-      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
-        <Path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0118.8-4.3M22 12.5a10 10 0 01-18.8 4.2" strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
+      <Icon name="RefreshCw" size={20} color="#3b82f6" />
     </TouchableOpacity>
   );
 
@@ -1144,11 +1142,7 @@ export function DatabaseInfoScreen() {
                 </View>
               )}
               <TouchableOpacity onPress={handleSync} style={styles.button}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2} style={styles.buttonIcon}>
-                  <Path d="M12 2v6m0 0L8 4m4 4l4-4" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M12 22v-6m0 0l4 4m-4-4l-4 4" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M2 12h6m0 0L4 8m4 4l-4 4m14-4h6m0 0l-4-4m4 4l-4 4" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="RefreshCw" size={20} color="#ffffff" style={styles.buttonIcon} />
                 <Text style={styles.buttonText}>Sync Database</Text>
               </TouchableOpacity>
             </View>
@@ -1748,15 +1742,10 @@ export function DatabaseInfoScreen() {
               <Text style={styles.modalTitle}>{jsonModalTitle}</Text>
               <View style={styles.modalHeaderButtons}>
                 <TouchableOpacity onPress={copyToClipboard} style={styles.modalCopyButton}>
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={2}>
-                    <Path d="M8 4v12a2 2 0 002 2h8a2 2 0 002-2V7.242a2 2 0 00-.602-1.43L16.083 2.57A2 2 0 0014.685 2H10a2 2 0 00-2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                    <Path d="M16 18v2a2 2 0 01-2 2H6a2 2 0 01-2-2V9a2 2 0 012-2h2" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
+                  <Icon name="Copy" size={20} color="#3b82f6" />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setJsonModalVisible(false)} style={styles.modalCloseButton}>
-                  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                    <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
+                  <Icon name="X" size={24} color="#6b7280" />
                 </TouchableOpacity>
               </View>
             </View>

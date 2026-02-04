@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking, Alert } from "react-native";
 import { useState, useEffect } from "react";
-import Svg, { Path } from "react-native-svg";
+import { Icon } from "../shared/components";
 import { getAppVersion, getBuildNumber } from "../config/appVersionService";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { useTheme } from "../shared/contexts/ThemeContext";
@@ -120,15 +120,7 @@ export function SettingsScreen() {
             </View>
             <View style={styles.settingValue}>
               <Text style={[styles.settingValueText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{themeLabel}</Text>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M9 18l6-6-6-6"
-                  stroke={theme.colors.text.tertiary}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
             </View>
           </TouchableOpacity>
 
@@ -146,15 +138,7 @@ export function SettingsScreen() {
             </View>
             <View style={styles.settingValue}>
               <Text style={[styles.settingValueText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{fontLabel}</Text>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M9 18l6-6-6-6"
-                  stroke={theme.colors.text.tertiary}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
             </View>
           </TouchableOpacity>
 
@@ -172,15 +156,7 @@ export function SettingsScreen() {
             </View>
             <View style={styles.settingValue}>
               <Text style={[styles.settingValueText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{unitLabel}</Text>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M9 18l6-6-6-6"
-                  stroke={theme.colors.text.tertiary}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
             </View>
           </TouchableOpacity>
         </View>
@@ -202,15 +178,7 @@ export function SettingsScreen() {
             </View>
             <View style={styles.settingValue}>
               <Text style={[styles.settingValueText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{imageQualityLabel}</Text>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M9 18l6-6-6-6"
-                  stroke={theme.colors.text.tertiary}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
             </View>
           </TouchableOpacity>
         </View>
@@ -229,15 +197,7 @@ export function SettingsScreen() {
               <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Privacy Policy</Text>
             </View>
             <View style={styles.settingValue}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"
-                  stroke={theme.colors.text.tertiary}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="ExternalLink" size={16} color={theme.colors.text.tertiary} />
             </View>
           </TouchableOpacity>
 
@@ -251,15 +211,7 @@ export function SettingsScreen() {
               <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Terms of Service</Text>
             </View>
             <View style={styles.settingValue}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"
-                  stroke={theme.colors.text.tertiary}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="ExternalLink" size={16} color={theme.colors.text.tertiary} />
             </View>
           </TouchableOpacity>
         </View>
@@ -281,15 +233,7 @@ export function SettingsScreen() {
               </Text>
             </View>
             <View style={styles.settingValue}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M9 18l6-6-6-6"
-                  stroke={theme.colors.text.tertiary}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
             </View>
           </TouchableOpacity>
 
@@ -306,15 +250,7 @@ export function SettingsScreen() {
               </Text>
             </View>
             <View style={styles.settingValue}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M9 18l6-6-6-6"
-                  stroke={theme.colors.text.tertiary}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
             </View>
           </TouchableOpacity>
 
@@ -370,15 +306,7 @@ export function SettingsScreen() {
               <Text style={[styles.settingValueText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
                 {logBufferSize} entries
               </Text>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"
-                  stroke={theme.colors.text.tertiary}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="ExternalLink" size={16} color={theme.colors.text.tertiary} />
             </View>
           </TouchableOpacity>
 
@@ -396,15 +324,7 @@ export function SettingsScreen() {
               ]}>Clear Debug Logs</Text>
             </View>
             <View style={styles.settingValue}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"
-                  stroke={logBufferSize > 0 ? theme.colors.functional.overdue : theme.colors.text.disabled}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="Trash2" size={16} color={logBufferSize > 0 ? theme.colors.functional.overdue : theme.colors.text.disabled} />
             </View>
           </TouchableOpacity>
         </View>

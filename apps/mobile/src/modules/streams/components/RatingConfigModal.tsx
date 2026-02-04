@@ -12,9 +12,9 @@ import {
   Modal,
   Pressable,
 } from "react-native";
-import Svg, { Path, Line, Circle } from "react-native-svg";
 import { theme } from "../../../shared/theme/theme";
 import { type RatingType, getRatingTypeLabel } from "@trace/core";
+import { Icon } from "../../../shared/components";
 
 interface RatingConfigModalProps {
   visible: boolean;
@@ -70,9 +70,7 @@ export function RatingConfigModal({
     switch (iconType) {
       case 'star':
         return (
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill={color} stroke="none">
-            <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </Svg>
+          <Icon name="Star" size={24} color={color} />
         );
       case 'number':
         return (
@@ -104,10 +102,7 @@ export function RatingConfigModal({
           <View style={styles.header}>
             <Text style={styles.title}>Rating Type</Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-                <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-              </Svg>
+              <Icon name="X" size={20} color="#6b7280" />
             </TouchableOpacity>
           </View>
 

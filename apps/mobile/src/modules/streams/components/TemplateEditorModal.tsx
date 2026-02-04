@@ -16,8 +16,8 @@ import {
   Platform,
   SafeAreaView,
 } from "react-native";
-import Svg, { Path, Circle } from "react-native-svg";
 import { TemplateHelpModal } from "./TemplateHelpModal";
+import { Icon } from "../../../shared/components";
 
 interface TemplateEditorModalProps {
   visible: boolean;
@@ -92,10 +92,7 @@ export function TemplateEditorModal({
                 style={styles.helpButton}
                 activeOpacity={0.7}
               >
-                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                  <Circle cx={12} cy={12} r={10} />
-                  <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
-                </Svg>
+                <Icon name="HelpCircle" size={22} color="#6b7280" />
               </TouchableOpacity>
 
               <TouchableOpacity

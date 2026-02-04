@@ -22,7 +22,7 @@ import { SortModeSelector } from "../modules/entries/components/SortModeSelector
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { useTheme } from "../shared/contexts/ThemeContext";
-import Svg, { Path, Circle } from "react-native-svg";
+import { Icon } from "../shared/components/Icon";
 import type { Entry, EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
 import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, sortEntries } from "@trace/core";
 
@@ -90,10 +90,7 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
         </View>
       ) : (
         <View style={styles.singleMarker}>
-          <Svg width={32} height={32} viewBox="0 0 24 24" fill={markerColor}>
-            <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-            <Circle cx="12" cy="10" r="3" fill="#ffffff" />
-          </Svg>
+          <Icon name="MapPin" size={32} color={markerColor} />
         </View>
       )}
     </Marker>
@@ -742,10 +739,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
 
         {/* My Location Button */}
         <TouchableOpacity style={[styles.locationButton, { backgroundColor: theme.colors.background.primary }]} onPress={goToCurrentLocation}>
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-            <Circle cx="12" cy="12" r="10" />
-            <Path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-          </Svg>
+          <Icon name="Crosshair" size={24} color={theme.colors.text.primary} />
         </TouchableOpacity>
 
         {/* Fit All Button */}
@@ -757,9 +751,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
               mapRef.current?.animateToRegion(bounds, 500);
             }}
           >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-              <Path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="Maximize" size={20} color={theme.colors.text.primary} />
           </TouchableOpacity>
         )}
       </View>
@@ -776,13 +768,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
             onPress={() => setIsMapExpanded(!isMapExpanded)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2.5}>
-              {isMapExpanded ? (
-                <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-              ) : (
-                <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-              )}
-            </Svg>
+            <Icon name={isMapExpanded ? "ChevronUp" : "ChevronDown"} size={16} color={theme.colors.text.tertiary} />
           </TouchableOpacity>
         </View>
 
@@ -803,10 +789,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
         {/* Entry List */}
         {entries.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Svg width={64} height={64} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={1.5}>
-              <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-              <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="MapPin" size={64} color={theme.colors.text.disabled} />
             <Text style={[styles.emptyText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.semibold }]}>No entries with locations</Text>
             <Text style={[styles.emptySubtext, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>Add GPS coordinates to your entries to see them on the map</Text>
           </View>

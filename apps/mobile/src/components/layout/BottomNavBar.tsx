@@ -6,8 +6,8 @@
  */
 
 import { View, TouchableOpacity, StyleSheet, Platform, Image } from "react-native";
-import Svg, { Path, Rect } from "react-native-svg";
 import { useTheme } from "../../shared/contexts/ThemeContext";
+import { Icon } from "../../shared/components";
 import { getDefaultAvatarUrl } from "@trace/core";
 import { useState, useEffect } from "react";
 import type { ViewMode } from "../../shared/contexts/DrawerContext";
@@ -56,9 +56,7 @@ export function BottomNavBar({
         onPress={onAddPress}
         activeOpacity={0.8}
       >
-        <Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth={2.5}>
-          <Path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
+        <Icon name="Plus" size={28} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* Navigation Bar */}
@@ -69,9 +67,7 @@ export function BottomNavBar({
           onPress={() => onViewModeChange("list")}
           activeOpacity={0.7}
         >
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={getIconColor("list")} strokeWidth={2}>
-            <Path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="List" size={24} color={getIconColor("list")} />
         </TouchableOpacity>
 
         {/* Map View */}
@@ -80,9 +76,7 @@ export function BottomNavBar({
           onPress={() => onViewModeChange("map")}
           activeOpacity={0.7}
         >
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={getIconColor("map")} strokeWidth={2}>
-            <Path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4zM8 2v16M16 6v16" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="Map" size={24} color={getIconColor("map")} />
         </TouchableOpacity>
 
         {/* Calendar View */}
@@ -91,10 +85,7 @@ export function BottomNavBar({
           onPress={() => onViewModeChange("calendar")}
           activeOpacity={0.7}
         >
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={getIconColor("calendar")} strokeWidth={2}>
-            <Rect x={3} y={4} width={18} height={18} rx={2} ry={2} />
-            <Path d="M16 2v4M8 2v4M3 10h18" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="Calendar" size={24} color={getIconColor("calendar")} />
         </TouchableOpacity>
 
         {/* Account/Profile */}

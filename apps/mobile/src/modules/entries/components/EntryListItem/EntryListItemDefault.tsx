@@ -6,8 +6,8 @@
 
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import Svg, { Path, Circle } from "react-native-svg";
 import type { EntryDisplayMode } from "@trace/core";
+import { Icon } from "../../../../shared/components";
 import { isCompletedStatus, getFirstLineOfText, getFormattedContent, getDisplayModeLines, formatEntryDateOnly } from "@trace/core";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
@@ -72,12 +72,7 @@ export function EntryListItemDefault({
         {/* Pin Icon inline */}
         {entry.is_pinned && (
           <View style={styles.firstLinePinIcon}>
-            <Svg width={displayMode === 'title' ? 12 : 14} height={displayMode === 'title' ? 12 : 14} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"
-                fill="#3b82f6"
-              />
-            </Svg>
+            <Icon name="Pin" size={displayMode === 'title' ? 12 : 14} color="#3b82f6" />
           </View>
         )}
 
@@ -107,16 +102,7 @@ export function EntryListItemDefault({
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
-                stroke={theme.colors.text.tertiary}
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <Circle cx={12} cy={10} r={3} stroke={theme.colors.text.tertiary} strokeWidth={2} />
-            </Svg>
+            <Icon name="MapPin" size={18} color={theme.colors.text.tertiary} />
           </TouchableOpacity>
         )}
 
@@ -127,11 +113,7 @@ export function EntryListItemDefault({
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-            <Circle cx={12} cy={6} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
-            <Circle cx={12} cy={12} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
-            <Circle cx={12} cy={18} r={showMenu ? 2 : 1.5} fill={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
-          </Svg>
+          <Icon name="MoreVertical" size={20} color={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
         </TouchableOpacity>
       </View>
 

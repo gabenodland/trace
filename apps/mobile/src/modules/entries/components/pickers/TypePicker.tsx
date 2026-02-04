@@ -5,7 +5,7 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Icon } from "../../../../shared/components/Icon";
 import { PickerBottomSheet, RemoveIcon } from "../../../../components/sheets";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
@@ -58,9 +58,7 @@ export function TypePicker({
         title="Set Type"
       >
         <View style={styles.emptyState}>
-          <Svg width={40} height={40} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={1.5}>
-            <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="Bookmark" size={40} color={dynamicTheme.colors.text.tertiary} />
           <Text style={[styles.emptyText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }]}>
             No types configured
           </Text>
@@ -93,9 +91,7 @@ export function TypePicker({
       {isLegacy && type && (
         <View style={[styles.legacyWarning, { backgroundColor: dynamicTheme.colors.functional.accentLight }]}>
           <View style={styles.legacyTypeRow}>
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.status.blocked} strokeWidth={2}>
-              <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="Bookmark" size={16} color={dynamicTheme.colors.status.blocked} />
             <Text style={[styles.legacyText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.status.blocked }]}>
               Current: {type}
             </Text>
@@ -120,9 +116,7 @@ export function TypePicker({
               onPress={() => handleSelect(typeOption)}
             >
               <View style={styles.optionIcon}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.secondary} strokeWidth={2}>
-                  <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Bookmark" size={20} color={dynamicTheme.colors.text.secondary} />
               </View>
               <Text
                 style={[
@@ -134,9 +128,7 @@ export function TypePicker({
                 {typeOption}
               </Text>
               {type === typeOption && (
-                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.accent} strokeWidth={2.5} style={styles.checkIcon}>
-                  <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Check" size={18} color={dynamicTheme.colors.functional.accent} style={styles.checkIcon} />
               )}
             </TouchableOpacity>
           ))}

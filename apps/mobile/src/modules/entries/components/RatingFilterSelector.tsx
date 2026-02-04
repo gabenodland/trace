@@ -5,8 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { PickerBottomSheet } from '../../../components/sheets';
+import { Icon } from '../../../shared/components';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
 

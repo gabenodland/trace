@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Icon } from "../../../shared/components";
 
 interface TagListProps {
   tags: Array<{ tag: string; count: number }>;
@@ -33,9 +33,7 @@ export function TagList({ tags, onTagPress, selectedTag }: TagListProps) {
           >
             <View style={styles.tagContent}>
               {/* Hash Icon */}
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? "#111827" : "#6b7280"} strokeWidth={2}>
-                <Path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="Hash" size={20} color={isSelected ? "#111827" : "#6b7280"} />
 
               {/* Tag name with # prefix */}
               <Text style={[styles.tagName, isSelected && styles.tagNameSelected]}>

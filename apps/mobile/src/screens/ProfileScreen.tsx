@@ -23,7 +23,7 @@ import {
   Animated,
   StatusBar,
 } from "react-native";
-import Svg, { Path, Circle, Line } from "react-native-svg";
+import { Icon } from "../shared/components";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
@@ -316,22 +316,7 @@ export function ProfileScreen() {
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Profile" />
         <View style={styles.errorContainer}>
-          <Svg
-            width={48}
-            height={48}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={theme.colors.text.tertiary}
-            strokeWidth={1.5}
-          >
-            <Path d="M1 1l22 22" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M10.71 5.05A16 16 0 0 1 22.58 9" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M8.53 16.11a6 6 0 0 1 6.95 0" strokeLinecap="round" strokeLinejoin="round" />
-            <Line x1="12" y1="20" x2="12.01" y2="20" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="WifiOff" size={48} color={theme.colors.text.tertiary} />
           <Text style={[styles.errorText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold, marginTop: 16 }]}>You're Offline</Text>
           <Text style={[styles.errorDetail, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
             Connect to the internet to view your profile
@@ -366,20 +351,7 @@ export function ProfileScreen() {
           {/* Offline Banner */}
           {isOffline && profile && (
             <View style={styles.offlineBanner}>
-              <Svg
-                width={16}
-                height={16}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#ffffff"
-                strokeWidth={2}
-              >
-                <Path d="M1 1l22 22" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M8.53 16.11a6 6 0 0 1 6.95 0" strokeLinecap="round" strokeLinejoin="round" />
-                <Line x1="12" y1="20" x2="12.01" y2="20" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="WifiOff" size={16} color="#ffffff" />
               <Text style={[styles.offlineBannerText, { fontFamily: theme.typography.fontFamily.medium }]}>
                 Offline - Viewing cached profile
               </Text>
@@ -389,17 +361,7 @@ export function ProfileScreen() {
           {/* Profile Completion Banner */}
           {profile && !profile.profile_complete && !isOffline && (
             <View style={[styles.completionBanner, { backgroundColor: theme.colors.functional.accentLight }]}>
-              <Svg
-                width={20}
-                height={20}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke={theme.colors.functional.accent}
-                strokeWidth={2}
-              >
-                <Circle cx={12} cy={12} r={10} />
-                <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
-              </Svg>
+              <Icon name="Info" size={20} color={theme.colors.functional.accent} />
               <Text style={[styles.completionText, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.medium }]}>
                 Complete your profile to get started
               </Text>
@@ -471,33 +433,10 @@ export function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.settingsLinkContent}>
-              <Svg
-                width={20}
-                height={20}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke={theme.colors.text.primary}
-                strokeWidth={2}
-              >
-                <Circle cx={12} cy={12} r={3} strokeLinecap="round" strokeLinejoin="round" />
-                <Path
-                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="Settings" size={20} color={theme.colors.text.primary} />
               <Text style={[styles.settingsLinkText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>App Settings</Text>
             </View>
-            <Svg
-              width={20}
-              height={20}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={theme.colors.text.tertiary}
-              strokeWidth={2}
-            >
-              <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
           </TouchableOpacity>
 
           {/* Sign Out Button */}
@@ -507,25 +446,7 @@ export function ProfileScreen() {
             activeOpacity={0.7}
             disabled={isSigningOut}
           >
-            <Svg
-              width={20}
-              height={20}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#ffffff"
-              strokeWidth={2}
-            >
-              <Path
-                d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <Path
-                d="M16 17l5-5-5-5M21 12H9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
+            <Icon name="LogOut" size={20} color="#ffffff" />
             <Text style={[styles.signOutText, { fontFamily: theme.typography.fontFamily.semibold }]}>
               {isSigningOut ? "Syncing & Signing Out..." : "Sign Out"}
             </Text>

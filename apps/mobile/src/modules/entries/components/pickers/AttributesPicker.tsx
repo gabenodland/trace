@@ -8,8 +8,8 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
-import Svg, { Path, Circle, Line } from "react-native-svg";
 import { PickerBottomSheet } from "../../../../components/sheets";
+import { Icon } from "../../../../shared/components";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import {
@@ -119,10 +119,7 @@ export function AttributesPicker({
               onPress={onShowLocationPicker}
             >
               <View style={styles.optionIcon}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={hasLocationData ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} strokeWidth={2}>
-                  <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={12} cy={10} r={3} fill={hasLocationData ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
-                </Svg>
+                <Icon name="MapPin" size={16} color={hasLocationData ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
               <Text style={[
                 styles.optionText,
@@ -143,9 +140,7 @@ export function AttributesPicker({
               onPress={onShowStatusPicker}
             >
               <View style={styles.optionIcon}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={status !== "none" ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} strokeWidth={2}>
-                  <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Circle" size={16} color={status !== "none" ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
               <Text style={[
                 styles.optionText,
@@ -166,9 +161,7 @@ export function AttributesPicker({
               onPress={onShowTypePicker}
             >
               <View style={styles.optionIcon}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={type ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} strokeWidth={2}>
-                  <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Folder" size={16} color={type ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
               <Text style={[
                 styles.optionText,
@@ -189,12 +182,7 @@ export function AttributesPicker({
               onPress={onShowDatePicker}
             >
               <View style={styles.optionIcon}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dueDate ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} strokeWidth={2}>
-                  <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                  <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                  <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="CalendarClock" size={16} color={dueDate ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
               <Text style={[
                 styles.optionText,
@@ -215,9 +203,7 @@ export function AttributesPicker({
               onPress={onShowRatingPicker}
             >
               <View style={styles.optionIcon}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill={rating > 0 ? dynamicTheme.colors.text.primary : "none"} stroke={rating > 0 ? "none" : dynamicTheme.colors.text.secondary} strokeWidth={2}>
-                  <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Star" size={16} color={rating > 0 ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
               <Text style={[
                 styles.optionText,
@@ -238,10 +224,7 @@ export function AttributesPicker({
               onPress={onShowPriorityPicker}
             >
               <View style={styles.optionIcon}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill={priority > 0 ? dynamicTheme.colors.text.primary : "none"} stroke={priority > 0 ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} strokeWidth={2}>
-                  <Path d="M5 3v18" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M5 3h13l-4 5 4 5H5z" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Flag" size={16} color={priority > 0 ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
               <Text style={[
                 styles.optionText,
@@ -272,10 +255,7 @@ export function AttributesPicker({
               }}
             >
               <View style={styles.optionIcon}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.primary} strokeWidth={2}>
-                  <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="CustomCamera" size={16} color={dynamicTheme.colors.text.primary} />
               </View>
               <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
                 Take Photo
@@ -291,11 +271,7 @@ export function AttributesPicker({
               }}
             >
               <View style={styles.optionIcon}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.primary} strokeWidth={2}>
-                  <Path d="M4 16l4.586-4.586a2 2 0 0 1 2.828 0L16 16m-2-2l1.586-1.586a2 2 0 0 1 2.828 0L20 14.5" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={8.5} cy={8.5} r={1.5} fill={dynamicTheme.colors.text.primary} />
-                </Svg>
+                <Icon name="CustomGallery" size={16} color={dynamicTheme.colors.text.primary} />
               </View>
               <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
                 Add from Gallery
@@ -320,9 +296,7 @@ export function AttributesPicker({
               }}
             >
               <View style={styles.optionIcon}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}>
-                  <Path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Trash2" size={16} color="#ef4444" />
               </View>
               <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: "#ef4444" }]}>
                 Delete Entry

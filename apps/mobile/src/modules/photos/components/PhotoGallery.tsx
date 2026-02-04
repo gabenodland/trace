@@ -7,8 +7,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { View, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Icon } from '../../../shared/components';
 import { getAttachmentUri, ensureAttachmentDownloaded, getAttachmentsForEntry } from '../../attachments/mobileAttachmentApi';
 import { PhotoViewer } from './PhotoViewer';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
@@ -276,22 +276,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
                   onPress={onTakePhoto}
                   activeOpacity={0.7}
                 >
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
-                      stroke={dynamicTheme.colors.text.tertiary}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <Path
-                      d="M12 17a4 4 0 100-8 4 4 0 000 8z"
-                      stroke={dynamicTheme.colors.text.tertiary}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
+                  <Icon name="CustomCamera" size={20} color={dynamicTheme.colors.text.tertiary} />
                 </TouchableOpacity>
               )}
 
@@ -302,26 +287,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
                   onPress={onGallery}
                   activeOpacity={0.7}
                 >
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M4 16l4.586-4.586a2 2 0 0 1 2.828 0L16 16m-2-2l1.586-1.586a2 2 0 0 1 2.828 0L20 14.5"
-                      stroke={dynamicTheme.colors.text.tertiary}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <Path
-                      d="M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6z"
-                      stroke={dynamicTheme.colors.text.tertiary}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <Path
-                      d="M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"
-                      fill={dynamicTheme.colors.text.tertiary}
-                    />
-                  </Svg>
+                  <Icon name="CustomGallery" size={20} color={dynamicTheme.colors.text.tertiary} />
                 </TouchableOpacity>
               )}
             </View>
@@ -335,15 +301,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
             onPress={() => onCollapsedChange(true)}
             activeOpacity={0.7}
           >
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M18 15l-6-6-6 6"
-                stroke={dynamicTheme.colors.text.tertiary}
-                strokeWidth={2.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
+            <Icon name="ChevronUp" size={14} color={dynamicTheme.colors.text.tertiary} />
           </TouchableOpacity>
         )}
       </View>

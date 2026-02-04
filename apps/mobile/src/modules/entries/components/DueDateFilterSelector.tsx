@@ -6,8 +6,8 @@ import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { DUE_DATE_PRESETS, type DueDatePreset } from '@trace/core';
-import Svg, { Path } from 'react-native-svg';
 import { PickerBottomSheet } from '../../../components/sheets';
+import { Icon } from '../../../shared/components';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
 
@@ -160,15 +160,7 @@ export function DueDateFilterSelector({
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M18 6L6 18M6 6l12 12"
-                      stroke={theme.colors.text.tertiary}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
+                  <Icon name="X" size={16} color={theme.colors.text.tertiary} />
                 </TouchableOpacity>
               )}
             </TouchableOpacity>
@@ -195,15 +187,7 @@ export function DueDateFilterSelector({
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M18 6L6 18M6 6l12 12"
-                      stroke={theme.colors.text.tertiary}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
+                  <Icon name="X" size={16} color={theme.colors.text.tertiary} />
                 </TouchableOpacity>
               )}
             </TouchableOpacity>

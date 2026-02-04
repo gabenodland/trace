@@ -8,8 +8,8 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
-import Svg, { Path } from "react-native-svg";
 import { useDrawer } from "../../shared/contexts/DrawerContext";
+import { Icon } from "../../shared/components";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
 import { useStreams } from "../../modules/streams/mobileStreamHooks";
@@ -105,17 +105,12 @@ function LocationTreeView({
                     activeOpacity={0.6}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 4 }}
                   >
-                    <Svg
-                      width={12}
-                      height={12}
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={drawerTextTertiary}
-                      strokeWidth={2}
+                    <Icon
+                      name="ChevronRight"
+                      size={12}
+                      color={drawerTextTertiary}
                       style={isExpanded ? styles.chevronExpanded : styles.chevron}
-                    >
-                      <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
+                    />
                   </TouchableOpacity>
                 ) : (
                   <View style={styles.locationChevronPlaceholder} />
@@ -327,17 +322,12 @@ export function StreamDrawerContent() {
           activeOpacity={0.6}
           delayPressIn={0}
         >
-          <Svg
-            width={12}
-            height={12}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={drawerTextTertiary}
-            strokeWidth={2}
+          <Icon
+            name="ChevronRight"
+            size={12}
+            color={drawerTextTertiary}
             style={[styles.chevron, streamsExpanded && styles.chevronExpanded]}
-          >
-            <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          />
           <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>STREAMS</Text>
         </TouchableOpacity>
 
@@ -389,17 +379,12 @@ export function StreamDrawerContent() {
           activeOpacity={0.6}
           delayPressIn={0}
         >
-          <Svg
-            width={12}
-            height={12}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={drawerTextTertiary}
-            strokeWidth={2}
+          <Icon
+            name="ChevronRight"
+            size={12}
+            color={drawerTextTertiary}
             style={[styles.chevron, locationsExpanded && styles.chevronExpanded]}
-          >
-            <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          />
           <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>LOCATIONS</Text>
         </TouchableOpacity>
 
@@ -434,17 +419,12 @@ export function StreamDrawerContent() {
           activeOpacity={0.6}
           delayPressIn={0}
         >
-          <Svg
-            width={12}
-            height={12}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={drawerTextTertiary}
-            strokeWidth={2}
+          <Icon
+            name="ChevronRight"
+            size={12}
+            color={drawerTextTertiary}
             style={[styles.chevron, tagsExpanded && styles.chevronExpanded]}
-          >
-            <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          />
           <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>TAGS</Text>
         </TouchableOpacity>
 
@@ -491,17 +471,12 @@ export function StreamDrawerContent() {
           activeOpacity={0.6}
           delayPressIn={0}
         >
-          <Svg
-            width={12}
-            height={12}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={drawerTextTertiary}
-            strokeWidth={2}
+          <Icon
+            name="ChevronRight"
+            size={12}
+            color={drawerTextTertiary}
             style={[styles.chevron, mentionsExpanded && styles.chevronExpanded]}
-          >
-            <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          />
           <Text style={[styles.sectionTitle, { color: drawerTextTertiary, fontFamily: theme.typography.fontFamily.semibold }]}>MENTIONS</Text>
         </TouchableOpacity>
 

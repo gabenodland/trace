@@ -7,8 +7,8 @@
 
 import { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { PickerBottomSheet } from './PickerBottomSheet';
+import { Icon } from '../../shared/components';
 import { useTheme } from '../../shared/contexts/ThemeContext';
 import { themeBase } from '../../shared/theme/themeBase';
 
@@ -185,15 +185,7 @@ export function DatePickerSheet({
       {/* Month/Year Header with Navigation */}
       <View style={styles.monthHeader}>
         <TouchableOpacity onPress={goToPrevMonth} style={styles.navButton} activeOpacity={0.7}>
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M15 18l-6-6 6-6"
-              stroke={theme.colors.text.primary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <Icon name="ChevronLeft" size={24} color={theme.colors.text.primary} />
         </TouchableOpacity>
 
         <Text style={[styles.monthYearText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
@@ -201,15 +193,7 @@ export function DatePickerSheet({
         </Text>
 
         <TouchableOpacity onPress={goToNextMonth} style={styles.navButton} activeOpacity={0.7}>
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M9 18l6-6-6-6"
-              stroke={theme.colors.text.primary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <Icon name="ChevronRight" size={24} color={theme.colors.text.primary} />
         </TouchableOpacity>
       </View>
 

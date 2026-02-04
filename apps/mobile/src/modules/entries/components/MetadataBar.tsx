@@ -4,8 +4,8 @@
  */
 
 import { View, Text, TouchableOpacity } from "react-native";
-import Svg, { Path, Circle, Line } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
+import { Icon } from "../../../shared/components";
 import { styles } from "./EntryScreen.styles";
 import { StatusIcon } from "../../../shared/components/StatusIcon";
 import { getStatusLabel, isLegacyType, formatRatingDisplay, decimalToStars, getLocationLabel, hasLocationLabel, getPriorityInfo, type Location as LocationType, type EntryStatus, type RatingType, type PriorityCategory } from "@trace/core";
@@ -133,11 +133,7 @@ export function MetadataBar({
           onPress={() => handlePress(onStreamPress)}
         >
           <View style={styles.metadataLinkContent}>
-            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-              <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="Layers" size={12} color={theme.colors.text.primary} />
             <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]} numberOfLines={1} ellipsizeMode="tail">
               {streamName || "No Stream"}
             </Text>
@@ -153,10 +149,8 @@ export function MetadataBar({
             onPress={onTypePress}
           >
             <View style={styles.metadataLinkContent}>
-              {/* Bookmark Icon */}
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={unsupportedType ? "#9ca3af" : isLegacyType(type, availableTypes) ? "#f59e0b" : theme.colors.text.secondary} strokeWidth={2.5}>
-                <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              {/* Type Icon */}
+              <Icon name="Folder" size={12} color={unsupportedType ? "#9ca3af" : isLegacyType(type, availableTypes) ? "#f59e0b" : theme.colors.text.secondary} />
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
@@ -180,9 +174,7 @@ export function MetadataBar({
             onPress={onTypePress}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2.5}>
-                <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="Folder" size={12} color={theme.colors.text.disabled} />
               <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Type
               </Text>
@@ -206,20 +198,10 @@ export function MetadataBar({
                   - Crosshairs: Dropped pin with only geocoded data or coordinates */}
               {(locationData?.location_id || locationData?.name) ? (
                 // Pin icon for saved locations or named places
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={unsupportedLocation ? "#9ca3af" : theme.colors.text.primary} strokeWidth={2.5}>
-                  <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={12} cy={10} r={3} fill={unsupportedLocation ? "#9ca3af" : theme.colors.text.primary} />
-                </Svg>
+                <Icon name="MapPin" size={12} color={unsupportedLocation ? "#9ca3af" : theme.colors.text.primary} />
               ) : (
                 // Crosshair icon for dropped pins (coordinates + geocoded data but no location_id/name)
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                  <Circle cx={12} cy={12} r={10} strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={12} cy={12} r={3} fill={theme.colors.text.primary} stroke="none" />
-                  <Line x1={12} y1={2} x2={12} y2={6} strokeLinecap="round" />
-                  <Line x1={12} y1={18} x2={12} y2={22} strokeLinecap="round" />
-                  <Line x1={2} y1={12} x2={6} y2={12} strokeLinecap="round" />
-                  <Line x1={18} y1={12} x2={22} y2={12} strokeLinecap="round" />
-                </Svg>
+                <Icon name="MapPin" size={12} color={theme.colors.text.primary} />
               )}
               <Text style={[
                 styles.metadataText,
@@ -243,10 +225,7 @@ export function MetadataBar({
             onPress={() => handlePress(onLocationPress)}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2.5}>
-                <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                <Circle cx={12} cy={10} r={3} fill={theme.colors.text.disabled} />
-              </Svg>
+              <Icon name="MapPin" size={12} color={theme.colors.text.disabled} />
               <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Location
               </Text>
@@ -305,12 +284,7 @@ export function MetadataBar({
             onPress={() => handlePress(onDueDatePress)}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={unsupportedDueDate ? "#9ca3af" : theme.colors.text.primary} strokeWidth={2.5}>
-                <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
-                <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="CalendarClock" size={12} color={unsupportedDueDate ? "#9ca3af" : theme.colors.text.primary} />
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
@@ -333,12 +307,7 @@ export function MetadataBar({
             onPress={() => handlePress(onDueDatePress)}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2.5}>
-                <Path d="M3 4a2 2 0 012-2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4z" strokeLinecap="round" strokeLinejoin="round" />
-                <Line x1="16" y1="2" x2="16" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                <Line x1="8" y1="2" x2="8" y2="6" strokeLinecap="round" strokeLinejoin="round" />
-                <Line x1="3" y1="10" x2="21" y2="10" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="CalendarClock" size={12} color={theme.colors.text.disabled} />
               <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Due Date
               </Text>
@@ -356,9 +325,7 @@ export function MetadataBar({
             onPress={() => handlePress(onRatingPress)}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill={unsupportedRating ? "#9ca3af" : theme.colors.text.primary} stroke="none">
-                <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-              </Svg>
+              <Icon name="Star" size={12} color={unsupportedRating ? "#9ca3af" : theme.colors.text.primary} />
               <Text style={[
                 styles.metadataText,
                 styles.metadataTextActive,
@@ -381,9 +348,7 @@ export function MetadataBar({
             onPress={() => handlePress(onRatingPress)}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2}>
-                <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="Star" size={12} color={theme.colors.text.disabled} />
               <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 {ratingType === 'stars' ? 'Rate ☆/5' : ratingType === 'decimal_whole' ? 'Rate ?/10' : 'Rate ?.?/10'}
               </Text>
@@ -406,10 +371,7 @@ export function MetadataBar({
               onPress={() => handlePress(onPriorityPress)}
             >
               <View style={styles.metadataLinkContent}>
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill={priorityColor} stroke="none">
-                  <Path d="M5 3v18" strokeWidth="2" stroke={priorityColor} />
-                  <Path d="M5 3h13l-4 5 4 5H5z" />
-                </Svg>
+                <Icon name="Flag" size={12} color={priorityColor} />
                 <Text style={[
                   styles.metadataText,
                   styles.metadataTextActive,
@@ -433,10 +395,7 @@ export function MetadataBar({
             onPress={() => handlePress(onPriorityPress)}
           >
             <View style={styles.metadataLinkContent}>
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2}>
-                <Path d="M5 3v18" strokeLinecap="round" />
-                <Path d="M5 3h13l-4 5 4 5H5z" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="Flag" size={12} color={theme.colors.text.disabled} />
               <Text style={[styles.metadataText, { color: theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1} ellipsizeMode="tail">
                 Set Priority
               </Text>
@@ -454,10 +413,7 @@ export function MetadataBar({
               onPress={onPhotosPress}
             >
               <View style={styles.metadataLinkContent}>
-                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2.5}>
-                  <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                  <Circle cx={12} cy={13} r={4} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="CustomCamera" size={12} color={theme.colors.text.primary} />
                 <Text style={[styles.metadataText, styles.metadataTextActive, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]} numberOfLines={1} ellipsizeMode="tail">
                   {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
                 </Text>
@@ -476,11 +432,7 @@ export function MetadataBar({
           style={[styles.entryMenuButton, { backgroundColor: theme.colors.background.tertiary }]}
           onPress={() => handlePress(onAttributesPress)}
         >
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill={theme.colors.text.secondary} stroke="none">
-            <Circle cx={12} cy={5} r={2} />
-            <Circle cx={12} cy={12} r={2} />
-            <Circle cx={12} cy={19} r={2} />
-          </Svg>
+          <Icon name="MoreVertical" size={16} color={theme.colors.text.secondary} />
         </TouchableOpacity>
       </View>
     </View>

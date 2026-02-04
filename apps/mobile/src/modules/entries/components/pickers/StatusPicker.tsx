@@ -5,7 +5,7 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Icon } from "../../../../shared/components/Icon";
 import { PickerBottomSheet, RemoveIcon } from "../../../../components/sheets";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
@@ -124,9 +124,7 @@ export function StatusPicker({
                 {option.label}
               </Text>
               {status === option.value && (
-                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={option.color} strokeWidth={2.5} style={styles.checkIcon}>
-                  <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Check" size={18} color={option.color} style={styles.checkIcon} />
               )}
             </TouchableOpacity>
           ))}

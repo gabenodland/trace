@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { ReactNode } from 'react';
 import { useTheme } from '../../shared/contexts/ThemeContext';
+import { Icon } from '../../shared/components';
 import { themeBase } from '../../shared/theme/themeBase';
 
 interface SubBarProps {
@@ -35,15 +35,7 @@ export function SubBarSelector({ label, value, onPress }: SubBarSelectorProps) {
     >
       <Text style={[styles.label, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>{label}:</Text>
       <Text style={[styles.value, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>{value}</Text>
-      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={styles.icon}>
-        <Path
-          d="M6 9l6 6 6-6"
-          stroke={theme.colors.text.tertiary}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </Svg>
+      <Icon name="ChevronDown" size={16} color={theme.colors.text.tertiary} style={styles.icon} />
     </TouchableOpacity>
   );
 }
@@ -82,15 +74,7 @@ export function SubBarFilters({
         {/* Offline indicator */}
         {isOffline && (
           <View style={styles.offlineBadge}>
-            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
-              <Path d="M1 1l22 22" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M16.72 11.06A10.94 10.94 0 0119 12.55" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M5 12.55a10.94 10.94 0 015.17-2.39" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M10.71 5.05A16 16 0 0122.58 9" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M1.42 9a15.91 15.91 0 014.7-2.88" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M8.53 16.11a6 6 0 016.95 0" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M12 20h.01" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="WifiOff" size={12} color="#ffffff" />
             <Text style={styles.offlineBadgeText}>Offline</Text>
           </View>
         )}
@@ -103,15 +87,7 @@ export function SubBarFilters({
         >
           <Text style={[styles.label, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>View:</Text>
           <Text style={[styles.value, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>{viewLabel}</Text>
-          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" style={styles.icon}>
-            <Path
-              d="M6 9l6 6 6-6"
-              stroke={theme.colors.text.tertiary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <Icon name="ChevronDown" size={14} color={theme.colors.text.tertiary} style={styles.icon} />
         </TouchableOpacity>
 
         {/* Sort Dropdown */}
@@ -122,15 +98,7 @@ export function SubBarFilters({
         >
           <Text style={[styles.label, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>Sort:</Text>
           <Text style={[styles.value, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>{sortLabel}</Text>
-          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" style={styles.icon}>
-            <Path
-              d="M6 9l6 6 6-6"
-              stroke={theme.colors.text.tertiary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <Icon name="ChevronDown" size={14} color={theme.colors.text.tertiary} style={styles.icon} />
         </TouchableOpacity>
 
         {/* Spacer */}
@@ -145,22 +113,7 @@ export function SubBarFilters({
           ]}
           activeOpacity={0.7}
         >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"
-              stroke={isFiltering ? theme.colors.interactive.primary : theme.colors.text.secondary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <Path
-              d="M1 14h6M9 8h6M17 12h6"
-              stroke={isFiltering ? theme.colors.interactive.primary : theme.colors.text.secondary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <Icon name="ListFilter" size={20} color={isFiltering ? theme.colors.interactive.primary : theme.colors.text.secondary} />
           {filterCount > 0 && (
             <View style={[styles.filterCountBadge, { backgroundColor: theme.colors.interactive.primary }]}>
               <Text style={styles.filterCountText}>{filterCount}</Text>

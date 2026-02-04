@@ -10,9 +10,9 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { Calendar, type DateData } from 'react-native-calendars';
 import { useTheme } from '../../shared/contexts/ThemeContext';
+import { Icon } from '../../shared/components';
 import { useSettings } from '../../shared/contexts/SettingsContext';
 import { useDrawer } from '../../shared/contexts/DrawerContext';
 import { themeBase } from '../../shared/theme/themeBase';
@@ -725,9 +725,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
               </TouchableOpacity>
               {(currentFilter.dueDateStart || currentFilter.dueDateEnd) && (
                 <TouchableOpacity onPress={handleClearDueDates} style={styles.clearDateButton}>
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                    <Path d="M18 6L6 18M6 6l12 12" stroke={theme.colors.text.tertiary} strokeWidth={2} strokeLinecap="round" />
-                  </Svg>
+                  <Icon name="X" size={18} color={theme.colors.text.tertiary} />
                 </TouchableOpacity>
               )}
             </View>
@@ -792,9 +790,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
             </TouchableOpacity>
             {(currentFilter.entryDateStart || currentFilter.entryDateEnd) && (
               <TouchableOpacity onPress={handleClearEntryDates} style={styles.clearDateButton}>
-                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                  <Path d="M18 6L6 18M6 6l12 12" stroke={theme.colors.text.tertiary} strokeWidth={2} strokeLinecap="round" />
-                </Svg>
+                <Icon name="X" size={18} color={theme.colors.text.tertiary} />
               </TouchableOpacity>
             )}
           </View>

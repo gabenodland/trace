@@ -7,10 +7,10 @@ import { useState, useRef, useEffect } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Keyboard, Platform } from "react-native";
 import { useStreams } from "../mobileStreamHooks";
 import { StreamList } from "./StreamList";
-import Svg, { Path } from "react-native-svg";
 import { PickerBottomSheet } from "../../../components/sheets";
 import { themeBase } from "../../../shared/theme/themeBase";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
+import { Icon } from "../../../shared/components";
 
 const ITEM_HEIGHT = 45; // Approximate height of each stream item (used for scroll positioning)
 
@@ -96,9 +96,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
     >
       {/* Search Input */}
       <View style={[styles.searchContainer, { backgroundColor: dynamicTheme.colors.background.secondary, borderColor: dynamicTheme.colors.border.light }]}>
-        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2} style={styles.searchIcon}>
-          <Path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
+        <Icon name="Search" size={18} color={dynamicTheme.colors.text.tertiary} style={styles.searchIcon} />
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -110,9 +108,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearSearch}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
-              <Path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="X" size={18} color={dynamicTheme.colors.text.tertiary} />
           </TouchableOpacity>
         )}
       </View>
@@ -138,11 +134,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
           onPress={() => handleSelect(null)}
         >
           <View style={styles.streamContent}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={selectedStreamId === null ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} strokeWidth={1.5}>
-              <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 2" />
-              <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 2" />
-              <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 2" />
-            </Svg>
+            <Icon name="Layers" size={20} color={selectedStreamId === null ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} />
             <Text style={[
               styles.streamName,
               { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },
@@ -151,9 +143,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
               Unassigned
             </Text>
             {selectedStreamId === null && (
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.functional.accent} strokeWidth={2.5} style={styles.checkIcon}>
-                <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="Check" size={18} color={dynamicTheme.colors.functional.accent} style={styles.checkIcon} />
             )}
           </View>
         </TouchableOpacity>

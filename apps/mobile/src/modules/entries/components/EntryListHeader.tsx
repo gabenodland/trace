@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, type LayoutChangeEvent } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Icon } from "../../../shared/components/Icon";
 import { SubBar, SubBarSelector } from "../../../components/layout/SubBar";
 import { theme } from "../../../shared/theme/theme";
 
@@ -73,9 +73,7 @@ export function StickyEntryListHeader({
       <View style={styles.stickyTitleRow}>
         <Text style={styles.stickyTitle}>{titleWithCount}</Text>
         <TouchableOpacity onPress={onScrollToTop} style={styles.scrollToTopButton}>
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-            <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="ChevronUp" size={16} color={theme.colors.text.tertiary} />
         </TouchableOpacity>
       </View>
       <SubBar>

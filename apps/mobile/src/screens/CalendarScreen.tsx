@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder, Dimensions } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Icon } from "../shared/components/Icon";
 import type { Entry, EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
 import {
   ENTRY_DISPLAY_MODES,
@@ -865,9 +865,7 @@ export function CalendarScreen() {
         >
           <Text style={[styles.dateFieldLabel, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>Show by:</Text>
           <Text style={[styles.dateFieldText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>{dateFieldLabel}</Text>
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-            <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="ChevronDown" size={16} color={theme.colors.text.tertiary} />
         </TouchableOpacity>
       </View>
 
@@ -911,15 +909,7 @@ export function CalendarScreen() {
                     {field.label}
                   </Text>
                   {isSelected && (
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                      <Path
-                        d="M5 13l4 4L19 7"
-                        stroke={theme.colors.functional.accent}
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </Svg>
+                    <Icon name="Check" size={20} color={theme.colors.functional.accent} />
                   )}
                 </TouchableOpacity>
               );

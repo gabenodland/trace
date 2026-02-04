@@ -9,10 +9,10 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
 import { validateUsername } from '@trace/core';
 import { theme } from '../../../shared/theme/theme';
 import { createScopedLogger, LogScopes } from '../../../shared/utils/logger';
+import { Icon } from '../../../shared/components';
 
 const log = createScopedLogger(LogScopes.Profile);
 
@@ -171,16 +171,12 @@ export function UsernameInput({
           )}
           {showCheckmark && (
             <View style={styles.checkmark}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth={3}>
-                <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="Check" size={16} color="#22c55e" />
             </View>
           )}
           {showX && (
             <View style={styles.xMark}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={3}>
-                <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="X" size={16} color="#ef4444" />
             </View>
           )}
         </View>

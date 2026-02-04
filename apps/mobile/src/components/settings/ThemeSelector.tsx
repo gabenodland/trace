@@ -6,11 +6,11 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, ScrollView, Alert } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { getThemeOptions } from '../../shared/theme/themes';
 import { useTheme } from '../../shared/contexts/ThemeContext';
 import { useNavigation } from '../../shared/contexts/NavigationContext';
 import { useSubscription } from '../../shared/hooks/useSubscription';
+import { Icon } from '../../shared/components';
 
 interface ThemeSelectorProps {
   visible: boolean;
@@ -63,9 +63,7 @@ export function ThemeSelector({
         <View style={[styles.header, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
           <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Theme</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-              <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="X" size={24} color={theme.colors.text.secondary} />
           </TouchableOpacity>
         </View>
 
@@ -144,14 +142,9 @@ export function ThemeSelector({
 
                 {/* Checkmark or Lock icon */}
                 {isSelected ? (
-                  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.accent} strokeWidth={2}>
-                    <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
+                  <Icon name="Check" size={24} color={theme.colors.functional.accent} />
                 ) : isLocked ? (
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-                    <Path d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z" strokeLinecap="round" strokeLinejoin="round" />
-                    <Path d="M7 11V7a5 5 0 0110 0v4" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
+                  <Icon name="Lock" size={20} color={theme.colors.text.tertiary} />
                 ) : null}
               </TouchableOpacity>
             );

@@ -9,8 +9,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from "react-native";
-import Svg, { Line } from "react-native-svg";
 import { clampRating } from "@trace/core";
+import { Icon } from "../../../../shared/components/Icon";
 import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
 import { styles as formStyles } from "../EntryScreen.styles";
 import { theme } from "../../../../shared/theme/theme";
@@ -169,10 +169,7 @@ export function DecimalRatingPicker({
         <View style={localStyles.header}>
           <Text style={formStyles.pickerTitle}>Set Rating</Text>
           <TouchableOpacity style={localStyles.closeButton} onPress={onClose}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-              <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-            </Svg>
+            <Icon name="X" size={20} color="#6b7280" />
           </TouchableOpacity>
         </View>
 
@@ -202,10 +199,7 @@ export function DecimalRatingPicker({
                 onClose();
               }}
             >
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={2}>
-                <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-                <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-              </Svg>
+              <Icon name="X" size={16} color="#dc2626" />
               <Text style={localStyles.clearButtonText}>Clear</Text>
             </TouchableOpacity>
           )}

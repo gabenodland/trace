@@ -5,8 +5,8 @@
  */
 
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from "react-native";
-import Svg, { Path, Circle } from "react-native-svg";
 import { TEMPLATE_HELP } from "@trace/core";
+import { Icon } from "../../../shared/components";
 
 interface TemplateHelpModalProps {
   visible: boolean;
@@ -31,9 +31,7 @@ export function TemplateHelpModal({ visible, onClose, mode = 'content' }: Templa
           <View style={styles.header}>
             <Text style={styles.title}>{isTitle ? 'Title Variables' : 'Template Syntax'}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="X" size={24} color="#6b7280" />
             </TouchableOpacity>
           </View>
 
@@ -85,10 +83,7 @@ export function TemplateHelpModal({ visible, onClose, mode = 'content' }: Templa
 
             {/* Note */}
             <View style={styles.note}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Circle cx={12} cy={12} r={10} />
-                <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
-              </Svg>
+              <Icon name="Info" size={16} color="#6b7280" />
               <Text style={styles.noteText}>
                 Templates apply when creating a new empty entry in this stream.
               </Text>

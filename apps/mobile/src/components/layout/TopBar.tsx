@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar, Image } from "react-native";
-import Svg, { Path, Line, Circle } from "react-native-svg";
 import { useEffect, useState, ReactNode } from "react";
 import { useTheme } from "../../shared/contexts/ThemeContext";
+import { Icon } from "../../shared/components";
 import { themeBase } from "../../shared/theme/themeBase";
 import { getDefaultAvatarUrl } from "@trace/core";
 
@@ -72,9 +72,7 @@ export function TopBar({
           onPress={onBackPress}
           activeOpacity={0.7}
         >
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-            <Path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="ChevronLeft" size={24} color={theme.colors.text.primary} />
         </TouchableOpacity>
       )}
 
@@ -94,9 +92,7 @@ export function TopBar({
             </View>
           )}
           {showDropdownArrow && (
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2.5} style={styles.dropdownArrow}>
-              <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="ChevronDown" size={20} color={theme.colors.text.secondary} />
           )}
         </TouchableOpacity>
       )}
@@ -117,10 +113,7 @@ export function TopBar({
             onPress={onSettingsPress}
             activeOpacity={0.7}
           >
-            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-              <Circle cx={12} cy={12} r={3} />
-              <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="Settings" size={22} color={theme.colors.text.primary} />
           </TouchableOpacity>
         )}
 
@@ -131,10 +124,7 @@ export function TopBar({
             onPress={onSearchPress}
             activeOpacity={0.7}
           >
-            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={isSearchActive ? theme.colors.functional.accent : theme.colors.text.primary} strokeWidth={2}>
-              <Circle cx={11} cy={11} r={8} />
-              <Line x1={21} y1={21} x2={16.65} y2={16.65} strokeLinecap="round" />
-            </Svg>
+            <Icon name="Search" size={22} color={isSearchActive ? theme.colors.functional.accent : theme.colors.text.primary} />
           </TouchableOpacity>
         )}
 

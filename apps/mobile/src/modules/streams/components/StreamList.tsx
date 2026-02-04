@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import type { Stream } from "@trace/core";
-import Svg, { Path } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
+import { Icon } from "../../../shared/components";
 
 interface StreamListProps {
   streams: Stream[];
@@ -58,11 +58,7 @@ function StreamItem({ stream, onPress, isSelected }: StreamItemProps) {
       onPress={handlePress}
     >
       <View style={styles.itemContent}>
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isSelected ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} strokeWidth={2}>
-          <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
-          <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-          <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
+        <Icon name="Layers" size={20} color={isSelected ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} />
         <Text style={[
           styles.itemName,
           { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },

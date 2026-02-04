@@ -8,7 +8,7 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import Svg, { Line } from "react-native-svg";
+import { Icon } from "../../shared/components/Icon";
 import { BottomSheet, SheetHeight } from "./BottomSheet";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
@@ -96,17 +96,7 @@ export function PickerBottomSheet({
             onPress={onClose}
             hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
           >
-            <Svg
-              width={22}
-              height={22}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={dynamicTheme.colors.text.secondary}
-              strokeWidth={2}
-            >
-              <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-              <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-            </Svg>
+            <Icon name="X" size={22} color={dynamicTheme.colors.text.secondary} />
           </TouchableOpacity>
         </View>
 
@@ -183,17 +173,7 @@ export function PickerBottomSheet({
 /** Helper to create a danger/remove icon for secondary actions */
 export function RemoveIcon({ color }: { color: string }) {
   return (
-    <Svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth={2}
-    >
-      <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-      <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-    </Svg>
+    <Icon name="X" size={16} color={color} />
   );
 }
 

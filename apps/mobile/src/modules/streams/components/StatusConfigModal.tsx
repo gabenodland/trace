@@ -13,7 +13,6 @@ import {
   ScrollView,
   Pressable,
 } from "react-native";
-import Svg, { Path, Line } from "react-native-svg";
 import { theme } from "../../../shared/theme/theme";
 import { StatusIcon } from "../../../shared/components/StatusIcon";
 import {
@@ -22,6 +21,7 @@ import {
   DEFAULT_STREAM_STATUSES,
   DEFAULT_INITIAL_STATUS,
 } from "@trace/core";
+import { Icon } from "../../../shared/components";
 
 interface StatusConfigModalProps {
   visible: boolean;
@@ -103,10 +103,7 @@ export function StatusConfigModal({
           <View style={styles.header}>
             <Text style={styles.title}>Configure Statuses</Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-                <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-              </Svg>
+              <Icon name="X" size={20} color="#6b7280" />
             </TouchableOpacity>
           </View>
 
@@ -136,9 +133,7 @@ export function StatusConfigModal({
                       ]}
                     >
                       {isSelected && (
-                        <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={3}>
-                          <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
+                        <Icon name="Check" size={14} color="#ffffff" />
                       )}
                     </View>
 
@@ -165,16 +160,11 @@ export function StatusConfigModal({
                       disabled={!isSelected}
                       hitSlop={8}
                     >
-                      <Svg
-                        width={20}
-                        height={20}
-                        viewBox="0 0 24 24"
-                        fill={isDefault ? "#f59e0b" : "none"}
-                        stroke={isSelected ? (isDefault ? "#f59e0b" : "#d1d5db") : "#e5e7eb"}
-                        strokeWidth={2}
-                      >
-                        <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                      </Svg>
+                      <Icon
+                        name={isDefault ? "Star" : "Star"}
+                        size={20}
+                        color={isSelected ? (isDefault ? "#f59e0b" : "#d1d5db") : "#e5e7eb"}
+                      />
                     </Pressable>
                   </Pressable>
                 );

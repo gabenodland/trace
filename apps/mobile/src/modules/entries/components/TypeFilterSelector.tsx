@@ -4,8 +4,8 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { PickerBottomSheet } from '../../../components/sheets';
+import { Icon } from '../../../shared/components';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
 
@@ -74,15 +74,7 @@ export function TypeFilterSelector({
             allSelected && { backgroundColor: theme.colors.interactive.primary, borderColor: theme.colors.interactive.primary }
           ]}>
             {allSelected && (
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M5 13l4 4L19 7"
-                  stroke={theme.colors.background.primary}
-                  strokeWidth={3}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="Check" size={12} color={theme.colors.background.primary} />
             )}
           </View>
         </TouchableOpacity>
@@ -120,15 +112,7 @@ export function TypeFilterSelector({
                   isSelected && { backgroundColor: theme.colors.interactive.primary, borderColor: theme.colors.interactive.primary }
                 ]}>
                   {isSelected && (
-                    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                      <Path
-                        d="M5 13l4 4L19 7"
-                        stroke={theme.colors.background.primary}
-                        strokeWidth={3}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </Svg>
+                    <Icon name="Check" size={12} color={theme.colors.background.primary} />
                   )}
                 </View>
               </TouchableOpacity>

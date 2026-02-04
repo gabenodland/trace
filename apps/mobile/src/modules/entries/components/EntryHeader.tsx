@@ -5,8 +5,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, Keyboard } from "react-native";
-import Svg, { Path, Circle, Polyline } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
+import { Icon } from "../../../shared/components";
 import { styles } from "./EntryScreen.styles";
 
 interface EntryHeaderProps {
@@ -67,9 +67,7 @@ export function EntryHeader({
           onPress={onBack}
           style={styles.headerCancelButton}
         >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-            <Path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="ArrowLeft" size={20} color={theme.colors.text.secondary} />
         </TouchableOpacity>
       </View>
 
@@ -124,10 +122,7 @@ export function EntryHeader({
                 onAddTime();
               }}
             >
-              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-                <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="Clock" size={12} color={theme.colors.text.tertiary} />
             </TouchableOpacity>
           )}
         </View>
@@ -141,9 +136,7 @@ export function EntryHeader({
             {isSaving ? (
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
             ) : showSavedCheck ? (
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth={3}>
-                <Polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="Check" size={14} color="#22c55e" />
             ) : isDirty ? (
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f97316' }} />
             ) : null}
@@ -155,15 +148,7 @@ export function EntryHeader({
           style={styles.menuButton}
           onPress={onToggleFullScreen}
         >
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2.5}>
-            {isFullScreen ? (
-              // Chevron up (^) - exit fullscreen
-              <Path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-            ) : (
-              // Chevron down (V) - enter fullscreen
-              <Path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-            )}
-          </Svg>
+          <Icon name={isFullScreen ? "ChevronUp" : "ChevronDown"} size={20} color={theme.colors.text.secondary} />
         </TouchableOpacity>
       </View>
     </View>

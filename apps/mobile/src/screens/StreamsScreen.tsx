@@ -11,7 +11,7 @@ import {
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
 
 const log = createScopedLogger(LogScopes.Streams);
-import Svg, { Path } from "react-native-svg";
+import { Icon } from "../shared/components";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import type { Stream } from "@trace/core";
 import { useNavigation } from "../shared/contexts/NavigationContext";
@@ -99,11 +99,7 @@ export function StreamsScreen() {
             {stream.icon ? (
               <Text style={styles.streamIconText}>{stream.icon}</Text>
             ) : (
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
-                <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="Layers" size={16} color="#ffffff" />
             )}
           </View>
 
@@ -119,9 +115,7 @@ export function StreamsScreen() {
           onPress={() => handleDeleteStream(stream)}
           activeOpacity={0.7}
         >
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.overdue} strokeWidth={2}>
-            <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="Trash2" size={18} color={theme.colors.functional.overdue} />
         </TouchableOpacity>
       </View>
     );
@@ -133,9 +127,7 @@ export function StreamsScreen() {
       onPress={handleCreateStream}
       activeOpacity={0.7}
     >
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.accent} strokeWidth={2}>
-        <Path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
+      <Icon name="Plus" size={22} color={theme.colors.functional.accent} />
     </TouchableOpacity>
   );
 
@@ -146,9 +138,7 @@ export function StreamsScreen() {
       {/* Search bar */}
       <View style={[styles.searchContainer, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
         <View style={[styles.searchInputWrapper, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-            <Path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="Search" size={18} color={theme.colors.text.tertiary} />
           <TextInput
             style={[styles.searchInput, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
             placeholder="Search streams..."
@@ -158,9 +148,7 @@ export function StreamsScreen() {
           />
           {searchText.length > 0 && (
             <TouchableOpacity onPress={() => setSearchText("")}>
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-                <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="X" size={18} color={theme.colors.text.tertiary} />
             </TouchableOpacity>
           )}
         </View>

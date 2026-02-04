@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { View, StyleSheet, BackHandler } from "react-native";
-import Svg, { Path, Circle } from "react-native-svg";
 import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES, getActiveFilterInfo } from "@trace/core";
+import { Icon } from "../shared/components";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
@@ -124,10 +124,7 @@ export function EntryListScreen() {
       return {
         title: selectedStreamName || "Location",
         titleIcon: (
-          <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-            <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-            <Circle cx={12} cy={10} r={3} />
-          </Svg>
+          <Icon name="MapPin" size={22} color={theme.colors.text.primary} />
         ),
       };
     }

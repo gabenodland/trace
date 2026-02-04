@@ -4,7 +4,7 @@ import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useLocationsWithCounts } from "../modules/locations/mobileLocationHooks";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { SubBar } from "../components/layout/SubBar";
-import Svg, { Path, Circle } from "react-native-svg";
+import { Icon } from "../shared/components";
 import { useTheme, type ThemeContextValue } from "../shared/contexts/ThemeContext";
 import type { LocationEntity } from "@trace/core";
 
@@ -151,9 +151,7 @@ export function LocationsScreen() {
       <SubBar>
         {/* Search Input */}
         <View style={[styles.searchContainer, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2} style={styles.searchIcon}>
-            <Path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="Search" size={16} color={theme.colors.text.tertiary} style={styles.searchIcon} />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -165,9 +163,7 @@ export function LocationsScreen() {
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearSearch}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-                <Path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="X" size={16} color={theme.colors.text.tertiary} />
             </TouchableOpacity>
           )}
         </View>
@@ -176,10 +172,7 @@ export function LocationsScreen() {
       <ScrollView style={[styles.content, { backgroundColor: theme.colors.background.primary }]}>
         {filteredTree.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Svg width={64} height={64} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={1.5}>
-              <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-              <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="MapPin" size={64} color={theme.colors.text.disabled} />
             <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No locations yet</Text>
             <Text style={[styles.emptySubtext, { color: theme.colors.text.tertiary }]}>Add locations to your entries to see them here</Text>
           </View>
@@ -274,43 +267,15 @@ function LocationTreeNode({ node, depth, searchQuery, navigate, theme }: Locatio
   // Get icon based on level
   const getIcon = () => {
     const iconColor = theme.colors.text.secondary;
-    switch (node.level) {
-      case "country":
-        return (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-            <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        );
-      case "region":
-        return (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-            <Path d="M3 21h18M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7H3l2-4h14l2 4M5 21V10.85M19 21V10.85M9 21v-4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        );
-      case "city":
-        return (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-            <Path d="M3 21h18M9 8h1M9 12h1M9 16h1M14 8h1M14 12h1M14 16h1" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        );
-      case "neighborhood":
-        return (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-            <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M9 22V12h6v10" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        );
-      case "place":
-      default:
-        return (
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-            <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-            <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        );
-    }
+    const iconMap: { [key: string]: string } = {
+      country: "Globe",
+      region: "Building2",
+      city: "Building",
+      neighborhood: "Home",
+      place: "MapPin",
+    };
+    const iconName = iconMap[node.level] || "MapPin";
+    return <Icon name={iconName as any} size={20} color={iconColor} />;
   };
 
   const handlePress = () => {
@@ -340,17 +305,12 @@ function LocationTreeNode({ node, depth, searchQuery, navigate, theme }: Locatio
             style={styles.chevronButton}
             onPress={() => setIsExpanded(!isExpanded)}
           >
-            <Svg
-              width={16}
-              height={16}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={theme.colors.text.secondary}
-              strokeWidth={2}
+            <Icon
+              name="ChevronRight"
+              size={16}
+              color={theme.colors.text.secondary}
               style={[styles.chevron, isExpanded && styles.chevronExpanded]}
-            >
-              <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            />
           </TouchableOpacity>
         ) : (
           <View style={styles.chevronButton} />

@@ -4,7 +4,7 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import Svg, { Path, Line } from "react-native-svg";
+import { Icon } from "../../../../shared/components/Icon";
 import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
 import { theme } from "../../../../shared/theme/theme";
 
@@ -38,10 +38,7 @@ export function UnsupportedAttributePicker({
         <View style={styles.header}>
           <Text style={styles.title}>{attributeName}</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-              <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-            </Svg>
+            <Icon name="X" size={20} color="#6b7280" />
           </TouchableOpacity>
         </View>
 
@@ -53,11 +50,7 @@ export function UnsupportedAttributePicker({
 
         {/* Warning message */}
         <View style={styles.warningContainer}>
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth={2}>
-            <Path d="M12 9v4" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M12 17h.01" strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon name="AlertTriangle" size={16} color="#f59e0b" />
           <Text style={styles.warningText}>
             This stream doesn't support {attributeName.toLowerCase()}. You can keep the value in case you move this entry to another stream, or remove it.
           </Text>
@@ -76,10 +69,7 @@ export function UnsupportedAttributePicker({
             style={styles.removeButton}
             onPress={handleRemove}
           >
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={2}>
-              <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-              <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-            </Svg>
+            <Icon name="X" size={16} color="#dc2626" />
             <Text style={styles.removeButtonText}>Remove</Text>
           </TouchableOpacity>
         </View>

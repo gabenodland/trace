@@ -13,7 +13,7 @@
 
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Platform, StatusBar } from "react-native";
 import { useState, useEffect } from "react";
-import Svg, { Path, Circle } from "react-native-svg";
+import { Icon } from "../shared/components";
 import { getDefaultAvatarUrl } from "@trace/core";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useNavigation } from "../shared/contexts/NavigationContext";
@@ -48,15 +48,7 @@ function AccountRow({ icon, label, onPress, showChevron = true, destructive = fa
         {label}
       </Text>
       {showChevron && (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-          <Path
-            d="M9 18l6-6-6-6"
-            stroke={theme.colors.text.tertiary}
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
+        <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
       )}
     </TouchableOpacity>
   );
@@ -108,15 +100,7 @@ export function AccountScreen() {
           onPress={() => navigate("back")}
           activeOpacity={0.7}
         >
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M15 18l-6-6 6-6"
-              stroke={theme.colors.text.primary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <Icon name="ChevronLeft" size={24} color={theme.colors.text.primary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
           Account
@@ -151,15 +135,7 @@ export function AccountScreen() {
               </Text>
             )}
           </View>
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M9 18l6-6-6-6"
-              stroke={theme.colors.text.tertiary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
         </TouchableOpacity>
 
         {/* Subscription Badge */}
@@ -173,16 +149,7 @@ export function AccountScreen() {
               styles.subscriptionBadge,
               { backgroundColor: isPro || isDevMode ? theme.colors.functional.accent : theme.colors.background.tertiary }
             ]}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                  stroke={isPro || isDevMode ? "#fff" : theme.colors.text.tertiary}
-                  strokeWidth={2}
-                  fill={isPro || isDevMode ? "#fff" : "none"}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <Icon name="Star" size={16} color={isPro || isDevMode ? "#fff" : theme.colors.text.tertiary} />
             </View>
             <View style={styles.subscriptionInfo}>
               <Text style={[styles.subscriptionLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
@@ -192,15 +159,7 @@ export function AccountScreen() {
                 {isPro || isDevMode ? "Full access to all features" : "Upgrade for more features"}
               </Text>
             </View>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M9 18l6-6-6-6"
-                stroke={theme.colors.text.tertiary}
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
+            <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
           </View>
           {!isPro && !isDevMode && (
             <View
@@ -219,24 +178,13 @@ export function AccountScreen() {
         </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
           <AccountRow
-            icon={
-              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-                <Path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M2 17l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            }
+            icon={<Icon name="Layers" size={22} color={theme.colors.text.secondary} />}
             label="Streams"
             onPress={() => navigate("streams")}
           />
           <View style={[styles.rowDivider, { backgroundColor: theme.colors.border.light }]} />
           <AccountRow
-            icon={
-              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-                <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-                <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            }
+            icon={<Icon name="MapPin" size={22} color={theme.colors.text.secondary} />}
             label="Locations"
             onPress={() => navigate("locations")}
           />
@@ -248,12 +196,7 @@ export function AccountScreen() {
         </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
           <AccountRow
-            icon={
-              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-                <Circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            }
+            icon={<Icon name="Settings" size={22} color={theme.colors.text.secondary} />}
             label="Settings"
             onPress={() => navigate("settings")}
           />
@@ -262,13 +205,7 @@ export function AccountScreen() {
         {/* Sign Out */}
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary, marginTop: themeBase.spacing.xl }, theme.shadows.sm]}>
           <AccountRow
-            icon={
-              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.overdue} strokeWidth={2}>
-                <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M16 17l5-5-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            }
+            icon={<Icon name="LogOut" size={22} color={theme.colors.functional.overdue} />}
             label="Sign Out"
             onPress={handleSignOut}
             showChevron={false}

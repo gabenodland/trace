@@ -10,7 +10,7 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Icon } from "../../shared/components/Icon";
 import { useNavigation } from "../../shared/contexts/NavigationContext";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import type { ReactNode } from "react";
@@ -46,9 +46,7 @@ export function SecondaryHeader({ title, rightAction, onBack, children }: Second
         onPress={handleBack}
         activeOpacity={0.7}
       >
-        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.primary} strokeWidth={2}>
-          <Path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
+        <Icon name="ArrowLeft" size={24} color={theme.colors.text.primary} />
       </TouchableOpacity>
 
       {/* Center: Title or children */}

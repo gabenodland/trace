@@ -10,8 +10,8 @@
 
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, LayoutAnimation, Platform, UIManager } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../shared/contexts/ThemeContext';
+import { Icon } from '../../shared/components';
 import { themeBase } from '../../shared/theme/themeBase';
 
 // Enable LayoutAnimation on Android
@@ -123,30 +123,14 @@ export function CollapsibleSection({
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   style={styles.clearButton}
                 >
-                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M18 6L6 18M6 6l12 12"
-                      stroke={theme.colors.text.tertiary}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
+                  <Icon name="X" size={16} color={theme.colors.text.tertiary} />
                 </TouchableOpacity>
               )}
             </View>
           )}
         </View>
         <Animated.View style={{ transform: [{ rotate: chevronRotation }] }}>
-          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M6 9l6 6 6-6"
-              stroke={theme.colors.text.tertiary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <Icon name="ChevronDown" size={20} color={theme.colors.text.tertiary} />
         </Animated.View>
       </TouchableOpacity>
 

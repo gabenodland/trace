@@ -7,8 +7,8 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import type { EntrySortMode, EntrySortOrder } from '@trace/core';
 import { ENTRY_SORT_MODES } from '@trace/core';
-import Svg, { Path } from 'react-native-svg';
 import { PickerBottomSheet } from '../../../components/sheets';
+import { Icon } from '../../../shared/components';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
 
@@ -77,15 +77,7 @@ export function SortModeSelector({
                   showPinnedFirst && { backgroundColor: theme.colors.interactive.primary, borderColor: theme.colors.interactive.primary }
                 ]}>
                   {showPinnedFirst && (
-                    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                      <Path
-                        d="M5 13l4 4L19 7"
-                        stroke={theme.colors.background.primary}
-                        strokeWidth={3}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </Svg>
+                    <Icon name="Check" size={12} color={theme.colors.background.primary} />
                   )}
                 </View>
                 <Text style={[styles.checkboxLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
@@ -107,15 +99,7 @@ export function SortModeSelector({
                   isDescending && { backgroundColor: theme.colors.interactive.primary, borderColor: theme.colors.interactive.primary }
                 ]}>
                   {isDescending && (
-                    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                      <Path
-                        d="M5 13l4 4L19 7"
-                        stroke={theme.colors.background.primary}
-                        strokeWidth={3}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </Svg>
+                    <Icon name="Check" size={12} color={theme.colors.background.primary} />
                   )}
                 </View>
                 <Text style={[styles.checkboxLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
@@ -151,9 +135,7 @@ export function SortModeSelector({
                 </Text>
 
                 {isSelected && (
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.interactive.primary} strokeWidth={2.5}>
-                    <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
+                  <Icon name="Check" size={20} color={theme.colors.interactive.primary} />
                 )}
               </TouchableOpacity>
             );

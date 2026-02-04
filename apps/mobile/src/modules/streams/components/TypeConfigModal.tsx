@@ -17,13 +17,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import Svg, { Path, Line } from "react-native-svg";
 import { theme } from "../../../shared/theme/theme";
 import {
   sortTypes,
   validateTypeName,
   MAX_TYPE_NAME_LENGTH,
 } from "@trace/core";
+import { Icon } from "../../../shared/components";
 
 interface TypeConfigModalProps {
   visible: boolean;
@@ -164,10 +164,7 @@ export function TypeConfigModal({
           <View style={styles.header}>
             <Text style={styles.title}>Configure Types</Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-                <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-              </Svg>
+              <Icon name="X" size={20} color="#6b7280" />
             </TouchableOpacity>
           </View>
 
@@ -196,10 +193,7 @@ export function TypeConfigModal({
               onPress={handleAddType}
               disabled={!newTypeName.trim()}
             >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
-                <Line x1={12} y1={5} x2={12} y2={19} strokeLinecap="round" />
-                <Line x1={5} y1={12} x2={19} y2={12} strokeLinecap="round" />
-              </Svg>
+              <Icon name="Plus" size={20} color="#ffffff" />
             </TouchableOpacity>
           </View>
 
@@ -207,9 +201,7 @@ export function TypeConfigModal({
           <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={true}>
             {localTypes.length === 0 ? (
               <View style={styles.emptyState}>
-                <Svg width={40} height={40} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={1.5}>
-                  <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Bookmark" size={40} color="#9ca3af" />
                 <Text style={styles.emptyText}>No types configured</Text>
                 <Text style={styles.emptySubtext}>Add types above to categorize entries</Text>
               </View>
@@ -234,18 +226,13 @@ export function TypeConfigModal({
                           style={styles.editActionButton}
                           onPress={handleSaveEdit}
                         >
-                          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth={2}>
-                            <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                          </Svg>
+                          <Icon name="Check" size={18} color="#22c55e" />
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.editActionButton}
                           onPress={handleCancelEdit}
                         >
-                          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}>
-                            <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-                            <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-                          </Svg>
+                          <Icon name="X" size={18} color="#ef4444" />
                         </TouchableOpacity>
                       </View>
                     ) : (
@@ -253,9 +240,7 @@ export function TypeConfigModal({
                       <>
                         {/* Bookmark icon */}
                         <View style={styles.typeIcon}>
-                          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-                            <Path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
-                          </Svg>
+                          <Icon name="Bookmark" size={18} color="#6b7280" />
                         </View>
 
                         {/* Type name */}
@@ -267,10 +252,7 @@ export function TypeConfigModal({
                           onPress={() => handleStartEdit(index)}
                           hitSlop={8}
                         >
-                          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
-                            <Path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" strokeLinecap="round" strokeLinejoin="round" />
-                            <Path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" />
-                          </Svg>
+                          <Icon name="Edit2" size={16} color="#9ca3af" />
                         </TouchableOpacity>
 
                         {/* Delete button */}
@@ -279,9 +261,7 @@ export function TypeConfigModal({
                           onPress={() => handleRemoveType(index)}
                           hitSlop={8}
                         >
-                          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}>
-                            <Path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round" />
-                          </Svg>
+                          <Icon name="Trash2" size={16} color="#ef4444" />
                         </TouchableOpacity>
                       </>
                     )}

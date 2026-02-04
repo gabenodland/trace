@@ -3,9 +3,9 @@
  */
 
 import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { type ImageQuality, IMAGE_QUALITY_OPTIONS } from '@trace/core';
 import { useTheme } from '../../shared/contexts/ThemeContext';
+import { Icon } from '../../shared/components';
 
 interface ImageQualitySelectorProps {
   visible: boolean;
@@ -39,9 +39,7 @@ export function ImageQualitySelector({
         <View style={[styles.header, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
           <Text style={[styles.title, { color: theme.colors.text.primary }]}>Photo Quality</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-              <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="X" size={24} color={theme.colors.text.secondary} />
           </TouchableOpacity>
         </View>
 
@@ -69,9 +67,7 @@ export function ImageQualitySelector({
                 <Text style={[styles.optionDescription, { color: theme.colors.text.secondary }]}>{option.description}</Text>
               </View>
               {selectedQuality === option.value && (
-                <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.accent} strokeWidth={2}>
-                  <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="Check" size={24} color={theme.colors.functional.accent} />
               )}
             </TouchableOpacity>
           ))}

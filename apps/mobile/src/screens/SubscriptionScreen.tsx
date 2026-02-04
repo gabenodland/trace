@@ -6,11 +6,11 @@
  */
 
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, StatusBar, Linking, Alert } from "react-native";
-import Svg, { Path, Circle } from "react-native-svg";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useNavigation } from "../shared/contexts/NavigationContext";
 import { useSubscription } from "../shared/hooks/useSubscription";
 import { themeBase } from "../shared/theme/themeBase";
+import { Icon } from "../shared/components";
 
 // Feature list for Pro subscription - only features that actually exist
 const PRO_FEATURES = [
@@ -42,86 +42,22 @@ const PRO_FEATURES = [
 ];
 
 function FeatureIcon({ icon, color }: { icon: string; color: string }) {
-  const iconProps = { width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 2 };
+  const iconMap: { [key: string]: string } = {
+    sync: "RefreshCw",
+    backup: "CloudUpload",
+    location: "MapPin",
+    theme: "Palette",
+    font: "Type",
+    stats: "BarChart3",
+    search: "Search",
+    history: "Clock",
+    widget: "Grid",
+    image: "Image",
+    unlimited: "Infinity",
+  };
 
-  switch (icon) {
-    case "sync":
-      return (
-        <Svg {...iconProps}>
-          <Path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case "backup":
-      return (
-        <Svg {...iconProps}>
-          <Path d="M12 16v-8m0 0l-3 3m3-3l3 3" strokeLinecap="round" strokeLinejoin="round" />
-          <Path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case "location":
-      return (
-        <Svg {...iconProps}>
-          <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" />
-          <Circle cx="12" cy="10" r="3" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case "theme":
-      return (
-        <Svg {...iconProps}>
-          <Path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case "font":
-      return (
-        <Svg {...iconProps}>
-          <Path d="M4 7V4h16v3M9 20h6M12 4v16" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case "stats":
-      return (
-        <Svg {...iconProps}>
-          <Path d="M18 20V10M12 20V4M6 20v-6" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case "search":
-      return (
-        <Svg {...iconProps}>
-          <Circle cx="11" cy="11" r="8" strokeLinecap="round" strokeLinejoin="round" />
-          <Path d="M21 21l-4.35-4.35" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case "history":
-      return (
-        <Svg {...iconProps}>
-          <Path d="M12 8v4l3 3" strokeLinecap="round" strokeLinejoin="round" />
-          <Circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case "widget":
-      return (
-        <Svg {...iconProps}>
-          <Path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case "image":
-      return (
-        <Svg {...iconProps}>
-          <Path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case "unlimited":
-      return (
-        <Svg {...iconProps}>
-          <Path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.739-8-4.781 0-4.781 8 0 8 5.606 0 7.644-8 12.74-8z" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    default:
-      return (
-        <Svg {...iconProps}>
-          <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-  }
+  const iconName = iconMap[icon] || "Star";
+  return <Icon name={iconName as any} size={24} color={color} />;
 }
 
 export function SubscriptionScreen() {
@@ -158,15 +94,7 @@ export function SubscriptionScreen() {
           onPress={() => navigate("back")}
           activeOpacity={0.7}
         >
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M15 18l-6-6 6-6"
-              stroke={theme.colors.text.primary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <Icon name="ChevronLeft" size={24} color={theme.colors.text.primary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
           Trace Pro
@@ -178,16 +106,7 @@ export function SubscriptionScreen() {
         {/* Hero Section */}
         <View style={[styles.heroSection, { backgroundColor: theme.colors.functional.accent }]}>
           <View style={styles.heroIcon}>
-            <Svg width={48} height={48} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                stroke="#fff"
-                strokeWidth={2}
-                fill="#fff"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
+            <Icon name="Star" size={48} color="#fff" />
           </View>
           <Text style={[styles.heroTitle, { fontFamily: theme.typography.fontFamily.bold }]}>
             {isSubscribed ? "You have Pro!" : "Upgrade to Pro"}
@@ -250,15 +169,7 @@ export function SubscriptionScreen() {
                   </Text>
                 </View>
                 {isSubscribed && (
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M20 6L9 17l-5-5"
-                      stroke={theme.colors.functional.complete}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
+                  <Icon name="Check" size={20} color={theme.colors.functional.complete} />
                 )}
               </View>
             ))}
@@ -281,9 +192,7 @@ export function SubscriptionScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.manageRowContent}>
-                  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-                    <Path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
+                  <Icon name="CreditCard" size={22} color={theme.colors.text.secondary} />
                   <View style={styles.manageRowText}>
                     <Text style={[styles.manageRowTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
                       Update Payment Method
@@ -293,9 +202,7 @@ export function SubscriptionScreen() {
                     </Text>
                   </View>
                 </View>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path d="M9 18l6-6-6-6" stroke={theme.colors.text.tertiary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
               </TouchableOpacity>
               <View style={[styles.manageDivider, { backgroundColor: theme.colors.border.light }]} />
               <TouchableOpacity
@@ -307,9 +214,7 @@ export function SubscriptionScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.manageRowContent}>
-                  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={theme.colors.functional.overdue} strokeWidth={2}>
-                    <Path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
+                  <Icon name="LogOut" size={22} color={theme.colors.functional.overdue} />
                   <View style={styles.manageRowText}>
                     <Text style={[styles.manageRowTitle, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.medium }]}>
                       Cancel Subscription
@@ -319,9 +224,7 @@ export function SubscriptionScreen() {
                     </Text>
                   </View>
                 </View>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path d="M9 18l6-6-6-6" stroke={theme.colors.text.tertiary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
               </TouchableOpacity>
             </View>
             <Text style={[styles.manageNote, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>

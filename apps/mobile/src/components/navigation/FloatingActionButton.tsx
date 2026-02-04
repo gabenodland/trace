@@ -1,5 +1,5 @@
 import { View, TouchableOpacity, StyleSheet } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Icon } from "../../shared/components";
 
 interface FloatingActionButtonProps {
   mode: "add" | "save";
@@ -23,9 +23,7 @@ export function FloatingActionButton({
         onPress={onAdd}
         activeOpacity={0.8}
       >
-        <Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
-          <Path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
+        <Icon name="Plus" size={28} color="#ffffff" />
       </TouchableOpacity>
     );
   }
@@ -39,9 +37,7 @@ export function FloatingActionButton({
         onPress={onCancel}
         activeOpacity={0.8}
       >
-        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
-          <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
+        <Icon name="X" size={24} color="#ffffff" />
       </TouchableOpacity>
 
       {/* Save Button (Green Check) */}
@@ -51,9 +47,7 @@ export function FloatingActionButton({
         activeOpacity={0.8}
         disabled={isSaving}
       >
-        <Svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2.5}>
-          <Path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
+        <Icon name="Check" size={26} color="#ffffff" />
       </TouchableOpacity>
     </View>
   );

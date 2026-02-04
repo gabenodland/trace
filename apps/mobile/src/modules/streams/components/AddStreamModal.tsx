@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from "react-native";
-import Svg, { Path } from "react-native-svg";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { createScopedLogger, LogScopes } from "../../../shared/utils/logger";
+import { Icon } from "../../../shared/components";
 
 const log = createScopedLogger(LogScopes.Streams);
 
@@ -54,9 +54,7 @@ export function AddStreamModal({ visible, onClose, onSubmit }: AddStreamModalPro
           <View style={[styles.header, { borderBottomColor: theme.colors.border.light }]}>
             <Text style={[styles.headerTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>New Stream</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-                <Path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <Icon name="X" size={24} color={theme.colors.text.secondary} />
             </TouchableOpacity>
           </View>
 

@@ -15,7 +15,7 @@ import {
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
 
 const log = createScopedLogger(LogScopes.Streams);
-import Svg, { Path, Circle } from "react-native-svg";
+import { Icon } from "../shared/components";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import {
   type UpdateStreamInput,
@@ -321,10 +321,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
             style={styles.gearButton}
             onPress={() => setShowRatingConfig(true)}
           >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-              <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
-            </Svg>
+            <Icon name="Settings" size={20} color="#6b7280" />
           </TouchableOpacity>
         )}
         <Switch
@@ -367,10 +364,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
             style={styles.gearButton}
             onPress={() => setShowStatusConfig(true)}
           >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-              <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
-            </Svg>
+            <Icon name="Settings" size={20} color="#6b7280" />
           </TouchableOpacity>
         )}
         <Switch
@@ -402,10 +396,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
             style={styles.gearButton}
             onPress={() => setShowTypeConfig(true)}
           >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-              <Path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
-            </Svg>
+            <Icon name="Settings" size={20} color="#6b7280" />
           </TouchableOpacity>
         )}
         <Switch
@@ -489,10 +480,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
             onPress={() => setShowTitleHelp(true)}
             activeOpacity={0.7}
           >
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2}>
-              <Circle cx={12} cy={12} r={10} />
-              <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
-            </Svg>
+            <Icon name="Info" size={18} color="#6b7280" />
           </TouchableOpacity>
         </View>
         <TextInput
@@ -515,10 +503,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
             onPress={() => setShowContentHelp(true)}
             activeOpacity={0.7}
           >
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.secondary} strokeWidth={2}>
-              <Circle cx={12} cy={12} r={10} />
-              <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
-            </Svg>
+            <Icon name="Info" size={18} color={theme.colors.text.secondary} />
           </TouchableOpacity>
         </View>
         <TouchableOpacity
@@ -536,10 +521,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
             </Text>
           )}
           <View style={styles.editIndicator}>
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2}>
-              <Path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
+            <Icon name="Edit" size={16} color="#9ca3af" />
           </View>
         </TouchableOpacity>
       </View>

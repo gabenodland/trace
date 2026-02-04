@@ -1,7 +1,7 @@
 import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import Svg, { Line, Circle } from 'react-native-svg';
 import { useRef, useEffect } from 'react';
 import { useTheme } from '../../shared/contexts/ThemeContext';
+import { Icon } from '../../shared/components';
 import { themeBase } from '../../shared/theme/themeBase';
 
 interface SearchBarProps {
@@ -44,10 +44,7 @@ export function SearchBar({
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
       <View style={[styles.searchBox, { backgroundColor: theme.colors.background.tertiary }]}>
         {/* Search Icon */}
-        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-          <Circle cx={11} cy={11} r={8} />
-          <Line x1={21} y1={21} x2={16.65} y2={16.65} strokeLinecap="round" />
-        </Svg>
+        <Icon name="Search" size={16} color={theme.colors.text.tertiary} />
 
         {/* Input */}
         <TextInput
@@ -64,10 +61,7 @@ export function SearchBar({
 
         {/* X button - clears text if present, otherwise closes search */}
         <TouchableOpacity style={styles.closeButton} onPress={handleClearOrClose}>
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
-            <Line x1={18} y1={6} x2={6} y2={18} strokeLinecap="round" />
-            <Line x1={6} y1={6} x2={18} y2={18} strokeLinecap="round" />
-          </Svg>
+          <Icon name="X" size={16} color={theme.colors.text.tertiary} />
         </TouchableOpacity>
       </View>
     </View>

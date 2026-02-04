@@ -6,8 +6,8 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import type { EntryDisplayMode } from '@trace/core';
 import { ENTRY_DISPLAY_MODES } from '@trace/core';
-import Svg, { Path } from 'react-native-svg';
 import { PickerBottomSheet } from '../../../components/sheets';
+import { Icon } from '../../../shared/components';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
 
@@ -68,9 +68,7 @@ export function DisplayModeSelector({
                 </View>
 
                 {isSelected && (
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.colors.interactive.primary} strokeWidth={2.5}>
-                    <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
+                  <Icon name="Check" size={20} color={theme.colors.interactive.primary} />
                 )}
               </TouchableOpacity>
             );
