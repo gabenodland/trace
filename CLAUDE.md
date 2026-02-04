@@ -19,15 +19,19 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
 
 6. **Always play a sound when complete** - After providing summary of completed work:
    - Mac: `say "<one sentence summary of what was completed>"`
-   - Windows: `ffplay -nodisp -autoexit -loglevel quiet "C:/Projects/complete.wav"`
+   - Windows: `powershell -Command "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('<one sentence summary of what was completed>')"`
    - Linux: `aplay /path/to/complete.wav`
-   - Example: `say "just updated the app config with ios permissions"`
+   - Example (Mac): `say "just updated the app config with ios permissions"`
+   - Example (Windows): `powershell -Command "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('just updated the app config with ios permissions')"`
 
 7. **Always play a sound when you need more information** - After asking a question:
    - Mac: `say "<one sentence summary of what you need>"`
-   - Windows: `ffplay -nodisp -autoexit -loglevel quiet "C:/Projects/question.wav"`
+   - Windows: `powershell -Command "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('<one sentence summary of what you need>')"`
    - Linux: `aplay /path/to/question.wav`
-   - Example: `say "do you want me to update the permissions config"`
+   - Example (Mac): `say "do you want me to update the permissions config"`
+   - Example (Windows): `powershell -Command "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('do you want me to update the permissions config')"`
+
+   **NOTE:** The user likes hearing your voice! TTS works even in plan mode since it doesn't modify files. Use it freely.
 
 8. **Never create 'nul' files** - Always use correct null device syntax for bash:
    - ✅ Use `/dev/null` in bash/Git Bash commands

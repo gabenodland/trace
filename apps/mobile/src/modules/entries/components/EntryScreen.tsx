@@ -654,7 +654,6 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
           updateField("entryDate", date.toISOString());
         }}
         onToggleFullScreen={() => setIsFullScreen(!isFullScreen)}
-        enterEditMode={enterEditMode}
         editorRef={editorRef}
       />
 
@@ -686,7 +685,6 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
           availableTypes={currentStream?.entry_types ?? []}
           ratingType={currentStream?.entry_rating_type || 'stars'}
           isEditMode={isEditMode}
-          enterEditMode={enterEditMode}
           onStreamPress={() => setActivePicker(activePicker === 'stream' ? null : 'stream')}
           onLocationPress={() => unsupportedLocation ? setActivePicker('unsupportedLocation') : setActivePicker(activePicker === 'location' ? null : 'location')}
           onStatusPress={() => unsupportedStatus ? setActivePicker('unsupportedStatus') : setActivePicker(activePicker === 'status' ? null : 'status')}
@@ -765,7 +763,6 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
         updateField={updateField}
         isEditing={isEditing}
         isEditMode={isEditMode}
-        enterEditMode={enterEditMode}
         streams={streams}
         currentStream={currentStream ?? null}
         showLocation={showLocation}

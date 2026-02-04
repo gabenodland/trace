@@ -15,7 +15,6 @@ interface AttributesPickerProps {
   onClose: () => void;
   isEditing: boolean;
   isEditMode: boolean;
-  enterEditMode: () => void;
   // Visibility flags
   showLocation: boolean;
   showStatus: boolean;
@@ -49,7 +48,6 @@ export function AttributesPicker({
   onClose,
   isEditing,
   isEditMode,
-  enterEditMode,
   showLocation,
   showStatus,
   showType,
@@ -118,7 +116,6 @@ export function AttributesPicker({
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
                 // Direct transition - changes activePicker without going through null
-                if (!isEditMode) enterEditMode();
                 onShowStatusPicker();
               }}
             >
@@ -137,7 +134,6 @@ export function AttributesPicker({
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
                 // Direct transition - changes activePicker without going through null
-                if (!isEditMode) enterEditMode();
                 onShowTypePicker();
               }}
             >
@@ -156,7 +152,6 @@ export function AttributesPicker({
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
                 // Direct transition - changes activePicker without going through null
-                if (!isEditMode) enterEditMode();
                 onShowDatePicker();
               }}
             >
@@ -178,7 +173,6 @@ export function AttributesPicker({
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
                 // Direct transition - changes activePicker without going through null
-                if (!isEditMode) enterEditMode();
                 onShowRatingPicker();
               }}
             >
@@ -197,7 +191,6 @@ export function AttributesPicker({
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
                 // Direct transition - changes activePicker without going through null
-                if (!isEditMode) enterEditMode();
                 onShowPriorityPicker();
               }}
             >
@@ -218,7 +211,6 @@ export function AttributesPicker({
               onPress={() => {
                 // Photos need close + delay for camera (no direct transition)
                 onClose();
-                if (!isEditMode) enterEditMode();
                 setTimeout(() => onAddPhoto(), 100);
               }}
             >

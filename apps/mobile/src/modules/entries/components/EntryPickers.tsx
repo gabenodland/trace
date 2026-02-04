@@ -56,7 +56,6 @@ export interface EntryPickersProps {
   // Mode flags
   isEditing: boolean;
   isEditMode: boolean;
-  enterEditMode: () => void;
 
   // Stream data
   streams: Stream[];
@@ -90,7 +89,6 @@ export function EntryPickers({
   updateField,
   isEditing,
   isEditMode,
-  enterEditMode,
   streams,
   currentStream,
   showLocation,
@@ -185,9 +183,6 @@ export function EntryPickers({
             } else {
               showSnackbar("Success! You added the stream.");
             }
-            if (!isEditMode) {
-              enterEditMode();
-            }
           }}
           selectedStreamId={formData.streamId}
         />
@@ -204,9 +199,6 @@ export function EntryPickers({
               updateField("locationData", null);
               setActivePicker(null);
               showSnackbar("You removed the location");
-              if (!isEditMode) {
-                enterEditMode();
-              }
               return;
             }
 
@@ -219,9 +211,6 @@ export function EntryPickers({
                 ? "Success! You updated the location."
                 : "Success! You added the location."
             );
-            if (!isEditMode) {
-              enterEditMode();
-            }
           }}
           initialLocation={
             formData.locationData
@@ -317,7 +306,6 @@ export function EntryPickers({
         status={formData.status}
         onStatusChange={(value) => {
           updateField("status", value);
-          if (!isEditMode) enterEditMode();
         }}
         onSnackbar={showSnackbar}
         allowedStatuses={currentStream?.entry_statuses}
@@ -330,7 +318,6 @@ export function EntryPickers({
         type={formData.type}
         onTypeChange={(value) => {
           updateField("type", value);
-          if (!isEditMode) enterEditMode();
         }}
         onSnackbar={showSnackbar}
         availableTypes={currentStream?.entry_types ?? []}
@@ -348,7 +335,6 @@ export function EntryPickers({
         }
         onRemove={() => {
           updateField("status", "none");
-          if (!isEditMode) enterEditMode();
         }}
         onSnackbar={showSnackbar}
       />
@@ -360,7 +346,6 @@ export function EntryPickers({
         currentValue={formData.type || ""}
         onRemove={() => {
           updateField("type", null);
-          if (!isEditMode) enterEditMode();
         }}
         onSnackbar={showSnackbar}
       />
@@ -376,7 +361,6 @@ export function EntryPickers({
         }
         onRemove={() => {
           updateField("dueDate", null);
-          if (!isEditMode) enterEditMode();
         }}
         onSnackbar={showSnackbar}
       />
@@ -388,7 +372,6 @@ export function EntryPickers({
         currentValue={`${formData.rating} star${formData.rating !== 1 ? "s" : ""}`}
         onRemove={() => {
           updateField("rating", 0);
-          if (!isEditMode) enterEditMode();
         }}
         onSnackbar={showSnackbar}
       />
@@ -406,7 +389,6 @@ export function EntryPickers({
         }
         onRemove={() => {
           updateField("priority", 0);
-          if (!isEditMode) enterEditMode();
         }}
         onSnackbar={showSnackbar}
       />
@@ -418,7 +400,6 @@ export function EntryPickers({
         currentValue={formData.locationData?.name || "Unknown Location"}
         onRemove={() => {
           updateField("locationData", null);
-          if (!isEditMode) enterEditMode();
         }}
         onSnackbar={showSnackbar}
       />
@@ -429,7 +410,6 @@ export function EntryPickers({
         onClose={() => setActivePicker(null)}
         isEditing={isEditing}
         isEditMode={isEditMode}
-        enterEditMode={enterEditMode}
         showLocation={showLocation}
         showStatus={showStatus}
         showType={showType}

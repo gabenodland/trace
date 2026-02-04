@@ -43,7 +43,6 @@ interface MetadataBarProps {
   ratingType?: RatingType;
   // Edit mode
   isEditMode: boolean;
-  enterEditMode: () => void;
   // Callbacks
   onStreamPress: () => void;
   onLocationPress: () => void;
@@ -84,7 +83,6 @@ export function MetadataBar({
   availableTypes,
   ratingType = 'stars',
   isEditMode,
-  enterEditMode,
   onStreamPress,
   onLocationPress,
   onStatusPress,
@@ -117,12 +115,11 @@ export function MetadataBar({
   // Determine if location is "set" (has any data)
   const locationIsSet = hasAnyLocation;
 
-  const handlePress = (callback: () => void, needsEditMode = false) => {
+  const handlePress = (callback: () => void) => {
     editorRef.current?.blur();
     // Note: We don't dismiss keyboard - pickers appear over it
     setTimeout(() => {
       callback();
-      if (needsEditMode && !isEditMode) enterEditMode();
     }, 100);
   };
 
@@ -303,7 +300,7 @@ export function MetadataBar({
           <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
-            onPress={() => handlePress(onDueDatePress, true)}
+            onPress={() => handlePress(onDueDatePress)}
           >
             <View style={styles.metadataLinkContent}>
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={unsupportedDueDate ? "#9ca3af" : theme.colors.text.primary} strokeWidth={2.5}>
@@ -331,7 +328,7 @@ export function MetadataBar({
           <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
-            onPress={() => handlePress(onDueDatePress, true)}
+            onPress={() => handlePress(onDueDatePress)}
           >
             <View style={styles.metadataLinkContent}>
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2.5}>
@@ -354,7 +351,7 @@ export function MetadataBar({
           <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
-            onPress={() => handlePress(onRatingPress, true)}
+            onPress={() => handlePress(onRatingPress)}
           >
             <View style={styles.metadataLinkContent}>
               <Svg width={12} height={12} viewBox="0 0 24 24" fill={unsupportedRating ? "#9ca3af" : theme.colors.text.primary} stroke="none">
@@ -379,7 +376,7 @@ export function MetadataBar({
           <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
-            onPress={() => handlePress(onRatingPress, true)}
+            onPress={() => handlePress(onRatingPress)}
           >
             <View style={styles.metadataLinkContent}>
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2}>
@@ -404,7 +401,7 @@ export function MetadataBar({
             <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
             <TouchableOpacity
               style={styles.metadataLink}
-              onPress={() => handlePress(onPriorityPress, true)}
+              onPress={() => handlePress(onPriorityPress)}
             >
               <View style={styles.metadataLinkContent}>
                 <Svg width={12} height={12} viewBox="0 0 24 24" fill={priorityColor} stroke="none">
@@ -431,7 +428,7 @@ export function MetadataBar({
           <Text style={[styles.metadataDivider, { color: theme.colors.text.tertiary }]}>·</Text>
           <TouchableOpacity
             style={styles.metadataLink}
-            onPress={() => handlePress(onPriorityPress, true)}
+            onPress={() => handlePress(onPriorityPress)}
           >
             <View style={styles.metadataLinkContent}>
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.disabled} strokeWidth={2}>

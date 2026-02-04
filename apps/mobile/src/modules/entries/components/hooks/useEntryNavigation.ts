@@ -29,7 +29,6 @@ export function useEntryNavigation() {
   // Get state from context
   const {
     isEditing,
-    isEditMode,
     isFormDirty,
     formData,
     editorRef,
@@ -37,9 +36,9 @@ export function useEntryNavigation() {
   } = useEntryForm();
 
   // Store mutable values in refs for stable access in callbacks
-  const stateRef = useRef({ isEditMode, isFormDirty, isEditing, formData });
+  const stateRef = useRef({ isFormDirty, isEditing, formData });
   useEffect(() => {
-    stateRef.current = { isEditMode, isFormDirty, isEditing, formData };
+    stateRef.current = { isFormDirty, isEditing, formData };
   });
 
   /**
@@ -61,17 +60,12 @@ export function useEntryNavigation() {
    * and quickly hits back before RichTextEditor's polling syncs to formData.
    */
   const hasUnsavedChanges = useCallback((): boolean => {
-    const { isEditMode: editMode, isFormDirty: dirty, formData: fd } = stateRef.current;
+    const { isFormDirty: dirty, formData: fd } = stateRef.current;
 
-    log.debug('hasUnsavedChanges checking', { isEditMode: editMode, isFormDirty: dirty });
+    log.debug('hasUnsavedChanges checking', { isFormDirty: dirty });
 
-    // If not in edit mode, no changes are possible
-    if (!editMode) {
-      log.debug('Not in edit mode, returning false');
-      return false;
-    }
-
-    // First check the hook's dirty state (covers title, date, stream, etc.)
+    // Check the hook's dirty state (covers title, content, date, stream, attributes, etc.)
+    // Note: isEditMode is NOT required - attribute changes in view mode should also save
     if (dirty) {
       log.debug('isFormDirty=true, returning true');
       return true;

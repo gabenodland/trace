@@ -43,8 +43,6 @@ export function useEntryPhotos() {
     isEditing,
     effectiveEntryId,
     tempEntryId,
-    isEditMode,
-    enterEditMode,
     photoCount,
     setPhotoCount,
     addPendingPhoto,
@@ -64,11 +62,6 @@ export function useEntryPhotos() {
       if (!userId) {
         Alert.alert("Error", "User not authenticated");
         return;
-      }
-
-      // Enter edit mode if not already
-      if (!isEditMode) {
-        enterEditMode();
       }
 
       try {
@@ -143,8 +136,6 @@ export function useEntryPhotos() {
       isEditing,
       effectiveEntryId,
       tempEntryId,
-      isEditMode,
-      enterEditMode,
       setPhotoCount,
       addPendingPhoto,
     ]
@@ -187,9 +178,6 @@ export function useEntryPhotos() {
           setPhotoCount((prev: number) => Math.max(0, prev - 1));
         } else {
           // For new entries, just remove from pending
-          if (!isEditMode) {
-            enterEditMode();
-          }
           removePendingPhoto(attachmentId);
           setPhotoCount((prev: number) => Math.max(0, prev - 1));
         }
@@ -203,7 +191,7 @@ export function useEntryPhotos() {
         );
       }
     },
-    [isEditing, isEditMode, enterEditMode, removePendingPhoto, setPhotoCount]
+    [isEditing, removePendingPhoto, setPhotoCount]
   );
 
   return {

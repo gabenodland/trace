@@ -62,8 +62,6 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
     formData,
     updateField,
     setBaseline,
-    isEditMode,
-    enterEditMode,
   } = useEntryForm();
 
   const captureGpsSetting = settings.captureGpsLocation;
@@ -185,7 +183,6 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
           }
         }
         setIsGpsLoading(false);
-        if (!isEditMode) enterEditMode();
       }
     } catch (geoError) {
       clearTimeout(timeoutId!);
@@ -196,7 +193,7 @@ export function useGpsCapture(options: UseGpsCaptureOptions): UseGpsCaptureRetur
         [{ text: "OK" }]
       );
     }
-  }, [onLocationChange, onBaselineUpdate, isEditMode, enterEditMode]);
+  }, [onLocationChange, onBaselineUpdate]);
 
   // Store captureGps in a ref so the useEffect can access the latest version
   const captureGpsRef = useRef(captureGps);

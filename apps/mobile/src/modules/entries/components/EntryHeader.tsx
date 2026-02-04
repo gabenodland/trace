@@ -24,7 +24,6 @@ interface EntryHeaderProps {
   onTimePress: () => void;
   onAddTime: () => void;
   onToggleFullScreen: () => void;
-  enterEditMode: () => void;
   // Refs
   editorRef: React.RefObject<any>;
 }
@@ -41,7 +40,6 @@ export function EntryHeader({
   onTimePress,
   onAddTime,
   onToggleFullScreen,
-  enterEditMode,
   editorRef,
 }: EntryHeaderProps) {
   const theme = useTheme();
@@ -91,7 +89,6 @@ export function EntryHeader({
               Keyboard.dismiss();
               setTimeout(() => {
                 onDatePress();
-                if (!isEditMode) enterEditMode();
               }, 100);
             }}
           >
@@ -110,7 +107,6 @@ export function EntryHeader({
               style={styles.headerTimeContainer}
               onPress={() => {
                 onTimePress();
-                if (!isEditMode) enterEditMode();
               }}
             >
               <Text style={[styles.headerDateText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>
@@ -126,7 +122,6 @@ export function EntryHeader({
               style={styles.headerWatchButton}
               onPress={() => {
                 onAddTime();
-                if (!isEditMode) enterEditMode();
               }}
             >
               <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={theme.colors.text.tertiary} strokeWidth={2}>
