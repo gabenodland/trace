@@ -62,7 +62,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
   // Special views (all, tag:, mention:, location:, geo:) should show rating filter
   const isAllEntriesView = !selectedStreamId ||
                            selectedStreamId === 'all' ||
-                           (typeof selectedStreamId === 'string' && selectedStreamId.includes(':'));
+                           (typeof selectedStreamId === 'string' && selectedStreamId.indexOf(':') >= 0);
 
   // LOCAL filter state - this is the ONLY state that changes on checkbox clicks
   // Global context is NEVER updated until the sheet closes
