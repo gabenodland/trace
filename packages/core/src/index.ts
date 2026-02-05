@@ -10,7 +10,7 @@ export * from "./modules/attachments";
 export * from "./modules/locations";
 export * from "./modules/settings";
 export * from "./modules/subscriptions";
-export * from "./modules/editor";
+// Editor module NOT exported - only used in editor-web build (has Tiptap deps not in mobile)
 
 // Shared utilities
 export * from "./shared/types";

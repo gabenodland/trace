@@ -4,6 +4,8 @@
  * All user settings are stored as a single object for efficient persistence.
  */
 
+import type { EntrySortMode, EntrySortOrder, EntryDisplayMode } from '../entries/EntryDisplayTypes';
+
 // ============================================================================
 // UNIT TYPES
 // ============================================================================
@@ -211,8 +213,6 @@ export const RATING_OPERATORS: RatingOperatorOption[] = [
 // ============================================================================
 // STREAM VIEW PREFERENCES
 // ============================================================================
-
-import type { EntrySortMode, EntrySortOrder, EntryDisplayMode } from '../entries/EntryDisplayTypes';
 
 /**
  * View preferences for a single stream (sort + display + filter)

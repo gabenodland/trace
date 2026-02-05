@@ -1,8 +1,4 @@
-// ============================================================================
-// STARTUP TIMING - Remove after debugging
-// ============================================================================
-console.time('⏱️ TOTAL_STARTUP');
-console.time('⏱️ 1_imports');
+// Initialize core FIRST - before any other @trace/core imports
 
 // Initialize core FIRST - before any other @trace/core imports
 import "./src/config/initializeCore";
@@ -58,8 +54,6 @@ import { localDB } from "./src/shared/db/localDB";
 import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
 import { checkAppVersion, logAppSession, VersionStatus } from "./src/config/appVersionService";
-
-console.timeEnd('⏱️ 1_imports');
 
 // Create a query client
 const queryClient = new QueryClient({
@@ -182,7 +176,6 @@ function AuthGate() {
         const syncStart = Date.now();
         return initializeSync(queryClient).then(() => {
           console.log(`⏱️ 4_initializeSync: ${Date.now() - syncStart}ms`);
-          console.timeEnd('⏱️ TOTAL_STARTUP');
         });
       })
       .catch((error) => {
