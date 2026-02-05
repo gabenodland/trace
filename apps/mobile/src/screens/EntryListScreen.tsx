@@ -155,6 +155,14 @@ export function EntryListScreen() {
     handleCopyEntry,
   } = useEntryActions({ entryMutations, navigate, entries });
 
+  // Get current stream for filter context
+  const currentStream = useMemo(() => {
+    if (typeof selectedStreamId === 'string' && !selectedStreamId.includes(':')) {
+      return streams?.find(s => s.stream_id === selectedStreamId);
+    }
+    return undefined;
+  }, [selectedStreamId, streams]);
+
   // Use extracted filtering hook
   const { sortedEntries, filteredEntries, filteredSections } = useFilteredEntries({
     entries,
@@ -164,6 +172,7 @@ export function EntryListScreen() {
     showPinnedFirst,
     streamFilter,
     searchQuery,
+    currentStream,
   });
 
   // Get display labels
@@ -174,21 +183,17 @@ export function EntryListScreen() {
 
   // Check if any filters are active and count them (for filter button indicator)
   const { hasActiveFilters, activeFilterCount } = useMemo(() => {
-    // Get current stream for available statuses/types
-    const currentStream = typeof selectedStreamId === 'string' && !selectedStreamId.includes(':')
-      ? streams?.find(s => s.stream_id === selectedStreamId)
-      : undefined;
-
     const filterInfo = getActiveFilterInfo(streamFilter, {
       availableStatuses: (currentStream?.entry_statuses ?? ALL_STATUSES.map(s => s.value)) as string[],
       availableTypes: currentStream?.entry_types ?? [],
+      ratingType: currentStream?.entry_rating_type ?? 'decimal_whole',
     });
 
     return {
       hasActiveFilters: filterInfo.hasActiveFilters,
       activeFilterCount: filterInfo.activeCount,
     };
-  }, [streamFilter, selectedStreamId, streams]);
+  }, [streamFilter, currentStream]);
 
   // Handlers for display mode and sort mode changes
   const handleDisplayModeChange = useCallback((mode: EntryDisplayMode) => {

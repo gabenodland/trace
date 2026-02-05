@@ -10,10 +10,9 @@
 import { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from "react-native";
 import { clampRating } from "@trace/core";
-import { Icon } from "../../../../shared/components/Icon";
-import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
-import { styles as formStyles } from "../EntryScreen.styles";
-import { theme } from "../../../../shared/theme/theme";
+import { PickerBottomSheet, RemoveIcon } from "../../../../components/sheets";
+import { useTheme } from "../../../../shared/contexts/ThemeContext";
+import { themeBase } from "../../../../shared/theme/themeBase";
 
 interface DecimalRatingPickerProps {
   visible: boolean;
@@ -33,6 +32,8 @@ export function DecimalRatingPicker({
   onRatingChange,
   onSnackbar,
 }: DecimalRatingPickerProps) {
+  const dynamicTheme = useTheme();
+
   // Parse the current rating into whole and decimal parts
   const initialWhole = Math.floor(rating);
   const initialDecimal = Math.round((rating - initialWhole) * 10);
@@ -109,6 +110,13 @@ export function DecimalRatingPicker({
     onClose();
   };
 
+  // Handle remove
+  const handleRemove = () => {
+    onRatingChange(0);
+    onSnackbar("Rating removed");
+    onClose();
+  };
+
   // Render picker column
   const renderPickerColumn = (
     values: number[],
@@ -120,7 +128,7 @@ export function DecimalRatingPicker({
     const paddingItems = Math.floor(VISIBLE_ITEMS / 2);
 
     return (
-      <View style={localStyles.pickerColumn}>
+      <View style={styles.pickerColumn}>
         <ScrollView
           ref={scrollRef}
           showsVerticalScrollIndicator={false}
@@ -128,13 +136,13 @@ export function DecimalRatingPicker({
           decelerationRate="fast"
           onMomentumScrollEnd={onScroll}
           scrollEnabled={!disabled}
-          style={[localStyles.scrollView, disabled && localStyles.scrollViewDisabled]}
+          style={[styles.scrollView, disabled && styles.scrollViewDisabled]}
           contentContainerStyle={{ paddingVertical: paddingItems * ITEM_HEIGHT }}
         >
           {values.map((value) => (
             <TouchableOpacity
               key={value}
-              style={localStyles.pickerItem}
+              style={styles.pickerItem}
               onPress={() => {
                 if (!disabled) {
                   scrollRef.current?.scrollTo({ y: value * ITEM_HEIGHT, animated: true });
@@ -143,9 +151,13 @@ export function DecimalRatingPicker({
             >
               <Text
                 style={[
-                  localStyles.pickerItemText,
-                  value === selectedValue && localStyles.pickerItemTextSelected,
-                  disabled && localStyles.pickerItemTextDisabled,
+                  styles.pickerItemText,
+                  { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary },
+                  value === selectedValue && [
+                    styles.pickerItemTextSelected,
+                    { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }
+                  ],
+                  disabled && { opacity: 0.4 },
                 ]}
               >
                 {value}
@@ -154,7 +166,7 @@ export function DecimalRatingPicker({
           ))}
         </ScrollView>
         {/* Selection highlight */}
-        <View style={localStyles.selectionHighlight} pointerEvents="none" />
+        <View style={[styles.selectionHighlight, { borderColor: dynamicTheme.colors.border.medium, backgroundColor: dynamicTheme.colors.background.tertiary }]} pointerEvents="none" />
       </View>
     );
   };
@@ -163,83 +175,60 @@ export function DecimalRatingPicker({
   const decimalNumbers = Array.from({ length: 10 }, (_, i) => i); // 0-9
 
   return (
-    <TopBarDropdownContainer visible={visible} onClose={onClose}>
-      <View style={formStyles.pickerContainer}>
-        {/* Header with title and close button */}
-        <View style={localStyles.header}>
-          <Text style={formStyles.pickerTitle}>Set Rating</Text>
-          <TouchableOpacity style={localStyles.closeButton} onPress={onClose}>
-            <Icon name="X" size={20} color="#6b7280" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Current value display */}
-        <View style={localStyles.valueDisplay}>
-          <Text style={localStyles.valueText}>
-            {(wholeValue + decimalValue / 10).toFixed(1)}
-          </Text>
-          <Text style={localStyles.valueLabel}>/10</Text>
-        </View>
-
-        {/* Picker columns */}
-        <View style={localStyles.pickerRow}>
-          {renderPickerColumn(wholeNumbers, wholeValue, wholeScrollRef, handleWholeScroll)}
-          <Text style={localStyles.decimalPoint}>.</Text>
-          {renderPickerColumn(decimalNumbers, decimalValue, decimalScrollRef, handleDecimalScroll, wholeValue === 10)}
-        </View>
-
-        {/* Action buttons */}
-        <View style={localStyles.buttonRow}>
-          {rating > 0 && (
-            <TouchableOpacity
-              style={localStyles.clearButton}
-              onPress={() => {
-                onRatingChange(0);
-                onSnackbar("Rating cleared");
-                onClose();
-              }}
-            >
-              <Icon name="X" size={16} color="#dc2626" />
-              <Text style={localStyles.clearButtonText}>Clear</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[localStyles.saveButton, !rating && localStyles.saveButtonFull]}
-            onPress={handleSave}
-          >
-            <Text style={localStyles.saveButtonText}>Set Rating</Text>
-          </TouchableOpacity>
-        </View>
+    <PickerBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Set Rating"
+      primaryAction={{
+        label: "Set Rating",
+        variant: "primary",
+        onPress: handleSave,
+      }}
+      secondaryAction={
+        rating > 0
+          ? {
+              label: "Remove",
+              variant: "danger",
+              icon: <RemoveIcon color={dynamicTheme.colors.functional.overdue} />,
+              onPress: handleRemove,
+            }
+          : undefined
+      }
+    >
+      {/* Current value display */}
+      <View style={styles.valueDisplay}>
+        <Text style={[styles.valueText, { fontFamily: dynamicTheme.typography.fontFamily.bold, color: dynamicTheme.colors.text.primary }]}>
+          {(wholeValue + decimalValue / 10).toFixed(1)}
+        </Text>
+        <Text style={[styles.valueLabel, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }]}>
+          /10
+        </Text>
       </View>
-    </TopBarDropdownContainer>
+
+      {/* Picker columns */}
+      <View style={styles.pickerRow}>
+        {renderPickerColumn(wholeNumbers, wholeValue, wholeScrollRef, handleWholeScroll)}
+        <Text style={[styles.decimalPoint, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }]}>
+          .
+        </Text>
+        {renderPickerColumn(decimalNumbers, decimalValue, decimalScrollRef, handleDecimalScroll, wholeValue === 10)}
+      </View>
+    </PickerBottomSheet>
   );
 }
 
-const localStyles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: theme.spacing.md,
-  },
-  closeButton: {
-    padding: 4,
-  },
+const styles = StyleSheet.create({
   valueDisplay: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "center",
-    marginBottom: theme.spacing.md,
+    marginBottom: themeBase.spacing.md,
   },
   valueText: {
     fontSize: 36,
-    fontWeight: "700",
-    color: theme.colors.text.primary,
   },
   valueLabel: {
     fontSize: 20,
-    fontWeight: "500",
-    color: theme.colors.text.secondary,
     marginLeft: 4,
   },
   pickerRow: {
@@ -247,7 +236,7 @@ const localStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     height: ITEM_HEIGHT * VISIBLE_ITEMS,
-    marginBottom: theme.spacing.md,
+    marginBottom: themeBase.spacing.md,
   },
   pickerColumn: {
     width: 60,
@@ -267,15 +256,9 @@ const localStyles = StyleSheet.create({
   },
   pickerItemText: {
     fontSize: 22,
-    color: theme.colors.text.tertiary,
   },
   pickerItemTextSelected: {
     fontSize: 26,
-    fontWeight: "600",
-    color: theme.colors.text.primary,
-  },
-  pickerItemTextDisabled: {
-    color: theme.colors.text.tertiary,
   },
   selectionHighlight: {
     position: "absolute",
@@ -285,50 +268,10 @@ const localStyles = StyleSheet.create({
     height: ITEM_HEIGHT,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: theme.colors.border.medium,
-    backgroundColor: "rgba(0,0,0,0.02)",
+    zIndex: -1,
   },
   decimalPoint: {
     fontSize: 26,
-    fontWeight: "600",
-    color: theme.colors.text.primary,
     marginHorizontal: 4,
-  },
-  buttonRow: {
-    flexDirection: "row",
-    gap: theme.spacing.md,
-  },
-  clearButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: "#fee2e2",
-    gap: theme.spacing.sm,
-  },
-  clearButtonText: {
-    fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: "#dc2626",
-  },
-  saveButton: {
-    flex: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.text.primary,
-  },
-  saveButtonFull: {
-    flex: 1,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: "#ffffff",
   },
 });

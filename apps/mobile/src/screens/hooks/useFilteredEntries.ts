@@ -122,6 +122,7 @@ interface UseFilteredEntriesOptions {
   showPinnedFirst: boolean;
   streamFilter: StreamViewFilter;
   searchQuery: string;
+  currentStream?: Stream | null;
 }
 
 export function useFilteredEntries({
@@ -132,6 +133,7 @@ export function useFilteredEntries({
   showPinnedFirst,
   streamFilter,
   searchQuery,
+  currentStream,
 }: UseFilteredEntriesOptions) {
   // Defer the filter value so UI updates instantly, filtering catches up
   // This prevents lag when rapidly clicking filter checkboxes
@@ -209,13 +211,28 @@ export function useFilteredEntries({
       }
 
       // Rating filter (null = no filter)
-      // Rating is stored as 0-10 (normalized)
-      if (deferredFilter.ratingMin !== null) {
-        // For rating 0, only exclude if min is set and rating is exactly 0 (unrated)
-        if (entry.rating < deferredFilter.ratingMin) return false;
-      }
-      if (deferredFilter.ratingMax !== null) {
-        if (entry.rating > deferredFilter.ratingMax) return false;
+      // Rating is stored as 0-10 (normalized), no decimals considered
+      if (deferredFilter.ratingOperator && deferredFilter.ratingValue !== null) {
+        const op = deferredFilter.ratingOperator;
+        const uiValue = deferredFilter.ratingValue;
+
+        // Determine max rating based on current stream's rating type
+        const ratingType = currentStream?.entry_rating_type || 'decimal_whole';
+        const maxRating = ratingType === 'stars' ? 5 : 10;
+
+        // Skip filter if it's the "no filter" combination: >= 1 or <= max
+        const isNoFilter = (op === '>=' && uiValue === 1) || (op === '<=' && uiValue === maxRating);
+
+        if (!isNoFilter) {
+          // Convert UI value to database scale (0-10)
+          // 5-star: multiply by 2 (1 star = 2, 5 stars = 10)
+          // 10-point: use as-is
+          const dbValue = ratingType === 'stars' ? uiValue * 2 : uiValue;
+
+          if (op === '>=' && entry.rating < dbValue) return false;
+          if (op === '<=' && entry.rating > dbValue) return false;
+          if (op === '=' && entry.rating !== dbValue) return false;
+        }
       }
 
       // Photos filter (null = show all)
@@ -237,7 +254,7 @@ export function useFilteredEntries({
 
       return true;
     };
-  }, [deferredFilter]);
+  }, [deferredFilter, currentStream]);
 
   // Filter entries by settings drawer filter + search query
   // Uses deferred values so UI updates instantly, filtering catches up

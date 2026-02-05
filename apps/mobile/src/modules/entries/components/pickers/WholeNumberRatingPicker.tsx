@@ -6,10 +6,9 @@
 import { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from "react-native";
 import { clampRating } from "@trace/core";
-import { Icon } from "../../../../shared/components/Icon";
-import { TopBarDropdownContainer } from "../../../../components/layout/TopBarDropdownContainer";
-import { styles as formStyles } from "../EntryScreen.styles";
-import { theme } from "../../../../shared/theme/theme";
+import { PickerBottomSheet, RemoveIcon } from "../../../../components/sheets";
+import { useTheme } from "../../../../shared/contexts/ThemeContext";
+import { themeBase } from "../../../../shared/theme/themeBase";
 
 interface WholeNumberRatingPickerProps {
   visible: boolean;
@@ -29,6 +28,7 @@ export function WholeNumberRatingPicker({
   onRatingChange,
   onSnackbar,
 }: WholeNumberRatingPickerProps) {
+  const dynamicTheme = useTheme();
   const initialValue = Math.round(rating);
   const [selectedValue, setSelectedValue] = useState(initialValue);
   const scrollRef = useRef<ScrollView>(null);
@@ -64,118 +64,106 @@ export function WholeNumberRatingPicker({
     onClose();
   };
 
+  // Handle remove
+  const handleRemove = () => {
+    onRatingChange(0);
+    onSnackbar("Rating removed");
+    onClose();
+  };
+
   const values = Array.from({ length: 11 }, (_, i) => i); // 0-10
   const paddingItems = Math.floor(VISIBLE_ITEMS / 2);
 
   return (
-    <TopBarDropdownContainer visible={visible} onClose={onClose}>
-      <View style={formStyles.pickerContainer}>
-        {/* Header with title and close button */}
-        <View style={localStyles.header}>
-          <Text style={formStyles.pickerTitle}>Set Rating</Text>
-          <TouchableOpacity style={localStyles.closeButton} onPress={onClose}>
-            <Icon name="X" size={20} color="#6b7280" />
-          </TouchableOpacity>
-        </View>
+    <PickerBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Set Rating"
+      primaryAction={{
+        label: "Set Rating",
+        variant: "primary",
+        onPress: handleSave,
+      }}
+      secondaryAction={
+        rating > 0
+          ? {
+              label: "Remove",
+              variant: "danger",
+              icon: <RemoveIcon color={dynamicTheme.colors.functional.overdue} />,
+              onPress: handleRemove,
+            }
+          : undefined
+      }
+    >
+      {/* Current value display */}
+      <View style={styles.valueDisplay}>
+        <Text style={[styles.valueText, { fontFamily: dynamicTheme.typography.fontFamily.bold, color: dynamicTheme.colors.text.primary }]}>
+          {selectedValue}
+        </Text>
+        <Text style={[styles.valueLabel, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary }]}>
+          /10
+        </Text>
+      </View>
 
-        {/* Current value display */}
-        <View style={localStyles.valueDisplay}>
-          <Text style={localStyles.valueText}>{selectedValue}</Text>
-          <Text style={localStyles.valueLabel}>/10</Text>
-        </View>
-
-        {/* Picker */}
-        <View style={localStyles.pickerContainer}>
-          <ScrollView
-            ref={scrollRef}
-            showsVerticalScrollIndicator={false}
-            snapToInterval={ITEM_HEIGHT}
-            decelerationRate="fast"
-            onMomentumScrollEnd={handleScroll}
-            style={localStyles.scrollView}
-            contentContainerStyle={{ paddingVertical: paddingItems * ITEM_HEIGHT }}
-          >
-            {values.map((value) => (
-              <TouchableOpacity
-                key={value}
-                style={localStyles.pickerItem}
-                onPress={() => {
-                  scrollRef.current?.scrollTo({ y: value * ITEM_HEIGHT, animated: true });
-                }}
-              >
-                <Text
-                  style={[
-                    localStyles.pickerItemText,
-                    value === selectedValue && localStyles.pickerItemTextSelected,
-                  ]}
-                >
-                  {value}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          {/* Selection highlight */}
-          <View style={localStyles.selectionHighlight} pointerEvents="none" />
-        </View>
-
-        {/* Action buttons */}
-        <View style={localStyles.buttonRow}>
-          {rating > 0 && (
+      {/* Picker */}
+      <View style={styles.pickerContainer}>
+        <ScrollView
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          snapToInterval={ITEM_HEIGHT}
+          decelerationRate="fast"
+          onMomentumScrollEnd={handleScroll}
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingVertical: paddingItems * ITEM_HEIGHT }}
+        >
+          {values.map((value) => (
             <TouchableOpacity
-              style={localStyles.clearButton}
+              key={value}
+              style={styles.pickerItem}
               onPress={() => {
-                onRatingChange(0);
-                onSnackbar("Rating cleared");
-                onClose();
+                scrollRef.current?.scrollTo({ y: value * ITEM_HEIGHT, animated: true });
               }}
             >
-              <Icon name="X" size={16} color="#dc2626" />
-              <Text style={localStyles.clearButtonText}>Clear</Text>
+              <Text
+                style={[
+                  styles.pickerItemText,
+                  { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary },
+                  value === selectedValue && [
+                    styles.pickerItemTextSelected,
+                    { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.primary }
+                  ],
+                ]}
+              >
+                {value}
+              </Text>
             </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[localStyles.saveButton, !rating && localStyles.saveButtonFull]}
-            onPress={handleSave}
-          >
-            <Text style={localStyles.saveButtonText}>Set Rating</Text>
-          </TouchableOpacity>
-        </View>
+          ))}
+        </ScrollView>
+        {/* Selection highlight */}
+        <View style={[styles.selectionHighlight, { borderColor: dynamicTheme.colors.border.medium, backgroundColor: dynamicTheme.colors.background.tertiary }]} pointerEvents="none" />
       </View>
-    </TopBarDropdownContainer>
+    </PickerBottomSheet>
   );
 }
 
-const localStyles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: theme.spacing.md,
-  },
-  closeButton: {
-    padding: 4,
-  },
+const styles = StyleSheet.create({
   valueDisplay: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "center",
-    marginBottom: theme.spacing.md,
+    marginBottom: themeBase.spacing.md,
   },
   valueText: {
     fontSize: 42,
-    fontWeight: "700",
-    color: theme.colors.text.primary,
   },
   valueLabel: {
     fontSize: 22,
-    fontWeight: "500",
-    color: theme.colors.text.secondary,
     marginLeft: 4,
   },
   pickerContainer: {
     height: ITEM_HEIGHT * VISIBLE_ITEMS,
     position: "relative",
-    marginBottom: theme.spacing.md,
+    marginBottom: themeBase.spacing.md,
   },
   scrollView: {
     flex: 1,
@@ -187,12 +175,9 @@ const localStyles = StyleSheet.create({
   },
   pickerItemText: {
     fontSize: 24,
-    color: theme.colors.text.tertiary,
   },
   pickerItemTextSelected: {
     fontSize: 28,
-    fontWeight: "600",
-    color: theme.colors.text.primary,
   },
   selectionHighlight: {
     position: "absolute",
@@ -202,44 +187,6 @@ const localStyles = StyleSheet.create({
     height: ITEM_HEIGHT,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: theme.colors.border.medium,
-    backgroundColor: "rgba(0,0,0,0.02)",
-  },
-  buttonRow: {
-    flexDirection: "row",
-    gap: theme.spacing.md,
-  },
-  clearButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: "#fee2e2",
-    gap: theme.spacing.sm,
-  },
-  clearButtonText: {
-    fontSize: 16,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: "#dc2626",
-  },
-  saveButton: {
-    flex: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.text.primary,
-  },
-  saveButtonFull: {
-    flex: 1,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: "#ffffff",
+    zIndex: -1,
   },
 });

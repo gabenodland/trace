@@ -183,6 +183,32 @@ export const DUE_DATE_PRESETS: DueDatePresetInfo[] = [
 export type PhotosFilter = boolean | null;
 
 // ============================================================================
+// RATING FILTER TYPES
+// ============================================================================
+
+/**
+ * Rating filter operator
+ */
+export type RatingOperator = '>=' | '<=' | '=';
+
+/**
+ * Rating operator option for UI
+ */
+export interface RatingOperatorOption {
+  value: RatingOperator;
+  label: string;
+}
+
+/**
+ * All rating operators
+ */
+export const RATING_OPERATORS: RatingOperatorOption[] = [
+  { value: '>=', label: '>=' },
+  { value: '<=', label: '<=' },
+  { value: '=', label: '=' },
+];
+
+// ============================================================================
 // STREAM VIEW PREFERENCES
 // ============================================================================
 
@@ -212,8 +238,8 @@ export interface StreamViewFilter {
   // New filters
   priorities: PriorityLevel[];     // Empty = show all priorities
   types: string[];                 // Empty = show all types (stream-specific)
-  ratingMin: number | null;        // Minimum rating (null = no min)
-  ratingMax: number | null;        // Maximum rating (null = no max)
+  ratingOperator: RatingOperator | null;  // Rating comparison operator (null = no filter)
+  ratingValue: number | null;      // Rating value to compare (null = no filter)
   hasPhotos: PhotosFilter;         // null = all, true = with photos, false = without
   dueDatePreset: DueDatePreset;    // Due date filter preset
   dueDateStart: string | null;     // Custom due date range start (ISO string)
@@ -231,8 +257,8 @@ export const DEFAULT_STREAM_VIEW_FILTER: StreamViewFilter = {
   showPrivateNotes: true,
   priorities: [],
   types: [],
-  ratingMin: null,
-  ratingMax: null,
+  ratingOperator: null,
+  ratingValue: null,
   hasPhotos: null,
   dueDatePreset: 'all',
   dueDateStart: null,

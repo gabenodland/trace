@@ -20,6 +20,8 @@ export interface FilterStreamContext {
   availableStatuses: string[];
   /** Available entry types for this stream (stream.entry_types) */
   availableTypes: string[];
+  /** Rating type for the stream (affects max rating value) */
+  ratingType?: 'stars' | 'decimal_whole' | 'decimal' | null;
 }
 
 /**
@@ -124,25 +126,31 @@ function getArchivedFilterInfo(showArchived: boolean): FilterCategoryInfo {
 
 /**
  * Check if rating filter is active
+ * Takes optional ratingType to determine if >= 1 or <= max means "no filter"
  */
 function getRatingFilterInfo(
-  ratingMin: number | null,
-  ratingMax: number | null
+  ratingOperator: string | null,
+  ratingValue: number | null,
+  ratingType?: 'stars' | 'decimal_whole' | 'decimal' | null
 ): FilterCategoryInfo {
-  const isActive = ratingMin !== null || ratingMax !== null;
-
-  let badge: string | undefined;
-  if (isActive) {
-    if (ratingMin !== null && ratingMax !== null) {
-      badge = ratingMin === ratingMax ? `${ratingMin}★` : `${ratingMin}-${ratingMax}★`;
-    } else if (ratingMin !== null) {
-      badge = `${ratingMin}+★`;
-    } else if (ratingMax !== null) {
-      badge = `≤${ratingMax}★`;
-    }
+  // Check if filter is set
+  if (!ratingOperator || ratingValue === null) {
+    return { isActive: false, badge: undefined };
   }
 
-  return { isActive, badge };
+  // Determine max value based on rating type
+  const maxRating = ratingType === 'stars' ? 5 : 10;
+
+  // Check if it's the "no filter" combination: >= 1 or <= max
+  const isNoFilter = (ratingOperator === '>=' && ratingValue === 1) ||
+                     (ratingOperator === '<=' && ratingValue === maxRating);
+
+  if (isNoFilter) {
+    return { isActive: false, badge: undefined };
+  }
+
+  const badge = `${ratingOperator} ${ratingValue}★`;
+  return { isActive: true, badge };
 }
 
 /**
@@ -228,7 +236,7 @@ export function getActiveFilterInfo(
   const type = getTypeFilterInfo(filter.types, context.availableTypes);
   const priority = getPriorityFilterInfo(filter.priorities);
   const archived = getArchivedFilterInfo(filter.showArchived);
-  const rating = getRatingFilterInfo(filter.ratingMin, filter.ratingMax);
+  const rating = getRatingFilterInfo(filter.ratingOperator, filter.ratingValue, context.ratingType);
   const photos = getPhotosFilterInfo(filter.hasPhotos);
   const dueDate = getDueDateFilterInfo(filter.dueDatePreset);
   const entryDate = getEntryDateFilterInfo(filter.entryDateStart, filter.entryDateEnd);

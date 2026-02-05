@@ -92,6 +92,31 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
     </>
   ) : null;
 
+  // Determine the appropriate empty message based on filter state
+  const getEmptyMessage = (): { title: string; subtitle?: string } => {
+    // If we have both counts, determine if it's empty stream or filtered out
+    if (totalCount !== undefined && entryCount !== undefined) {
+      if (totalCount === 0) {
+        return {
+          title: "No entries in this stream yet",
+          subtitle: "Capture your first thought, idea, or task!",
+        };
+      }
+      if (entryCount === 0 && totalCount > 0) {
+        return {
+          title: "No entries match your filters",
+          subtitle: "Try adjusting your filter settings",
+        };
+      }
+    }
+
+    // Default fallback
+    return {
+      title: "No entries yet",
+      subtitle: "Capture your first thought, idea, or task!",
+    };
+  };
+
   // Create a lookup map for streams
   const streamMap = streams?.reduce((map, s) => {
     map[s.stream_id] = s.name;
@@ -166,6 +191,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
 
   // If sections are provided, use SectionList
   if (sections && sections.length > 0) {
+    const emptyMessage = getEmptyMessage();
     return (
       <SectionList
         ref={sectionListRef}
@@ -177,7 +203,12 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>No entries</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>{emptyMessage.title}</Text>
+            {emptyMessage.subtitle && (
+              <Text style={[styles.emptySubtitle, { color: theme.colors.text.tertiary }]}>
+                {emptyMessage.subtitle}
+              </Text>
+            )}
           </View>
         }
         stickySectionHeadersEnabled={false}
@@ -188,6 +219,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
 
   // If we have a header component, always render FlatList (even with no entries)
   if (CombinedHeader) {
+    const emptyMessage = getEmptyMessage();
     return (
       <FlatList
         ref={flatListRef}
@@ -198,7 +230,12 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>No entries for this date</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>{emptyMessage.title}</Text>
+            {emptyMessage.subtitle && (
+              <Text style={[styles.emptySubtitle, { color: theme.colors.text.tertiary }]}>
+                {emptyMessage.subtitle}
+              </Text>
+            )}
           </View>
         }
         removeClippedSubviews={false}
@@ -207,12 +244,15 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
   }
 
   if (entries.length === 0) {
+    const emptyMessage = getEmptyMessage();
     return (
       <View style={styles.centerContainer}>
-        <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>No entries yet</Text>
-        <Text style={[styles.emptySubtitle, { color: theme.colors.text.tertiary }]}>
-          Capture your first thought, idea, or task!
-        </Text>
+        <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>{emptyMessage.title}</Text>
+        {emptyMessage.subtitle && (
+          <Text style={[styles.emptySubtitle, { color: theme.colors.text.tertiary }]}>
+            {emptyMessage.subtitle}
+          </Text>
+        )}
       </View>
     );
   }

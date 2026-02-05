@@ -34,6 +34,8 @@ interface CollapsibleSectionProps {
   defaultExpanded?: boolean;
   /** Callback to clear the badge/filter - shows X button when provided and badge is present */
   onClearBadge?: () => void;
+  /** Selected item names to display inline when collapsed (e.g., ["Urgent", "High"]) */
+  selectedItems?: string[];
 }
 
 export function CollapsibleSection({
@@ -45,6 +47,7 @@ export function CollapsibleSection({
   isFiltering = false,
   defaultExpanded = false,
   onClearBadge,
+  selectedItems,
 }: CollapsibleSectionProps) {
   const theme = useTheme();
 
@@ -83,6 +86,24 @@ export function CollapsibleSection({
     outputRange: ['0deg', '180deg'],
   });
 
+  // Format selected items for display
+  const getItemsDisplay = () => {
+    if (!selectedItems || selectedItems.length === 0) return null;
+
+    // When expanded: show "N items selected" in badge
+    if (expanded) {
+      return `${selectedItems.length} items selected`;
+    }
+
+    // When collapsed: return items array for pill rendering (no truncation, let them wrap)
+    return selectedItems;
+  };
+
+  // Determine which display to use: inline pills or badge
+  const displayItems = getItemsDisplay();
+  const shouldShowInlinePills = displayItems && Array.isArray(displayItems) && !expanded;
+  const shouldShowBadge = (badge || (displayItems && !Array.isArray(displayItems))) && expanded;
+
   return (
     <View style={styles.container}>
       {/* Header - always visible */}
@@ -98,7 +119,74 @@ export function CollapsibleSection({
           ]}>
             {title}
           </Text>
-          {badge && (
+          {/* When collapsed: show selected items as pills that wrap */}
+          {shouldShowInlinePills && (
+            <View style={styles.pillsContainer}>
+              {displayItems.map((item, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.pill,
+                    { backgroundColor: theme.colors.background.tertiary }
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.pillText,
+                      { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </View>
+              ))}
+              {onClearBadge && (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    onClearBadge();
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.clearButton}
+                >
+                  <Icon name="X" size={16} color={theme.colors.text.tertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+          {/* When expanded: show badge with "N items selected" */}
+          {shouldShowBadge && (
+            <View style={styles.badgeContainer}>
+              <View style={[
+                styles.badge,
+                { backgroundColor: isFiltering ? theme.colors.interactive.primary + '20' : theme.colors.background.tertiary }
+              ]}>
+                <Text style={[
+                  styles.badgeText,
+                  {
+                    color: isFiltering ? theme.colors.interactive.primary : theme.colors.text.secondary,
+                    fontFamily: theme.typography.fontFamily.medium
+                  }
+                ]}>
+                  {displayItems || badge}
+                </Text>
+              </View>
+              {onClearBadge && (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    onClearBadge();
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.clearButton}
+                >
+                  <Icon name="X" size={16} color={theme.colors.text.tertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+          {/* Fallback: show original badge when no selected items */}
+          {!shouldShowInlinePills && !shouldShowBadge && badge && (
             <View style={styles.badgeContainer}>
               <View style={[
                 styles.badge,
@@ -151,14 +239,14 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingVertical: themeBase.spacing.lg,
     paddingHorizontal: themeBase.spacing.lg,
   },
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: themeBase.spacing.sm,
     flex: 1,
   },
@@ -177,6 +265,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: themeBase.spacing.xs,
+  },
+  pillsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: themeBase.spacing.xs,
+    flex: 1,
+    alignItems: 'center',
+  },
+  pill: {
+    paddingVertical: 4,
+    paddingHorizontal: themeBase.spacing.sm,
+    borderRadius: themeBase.borderRadius.full,
+  },
+  pillText: {
+    fontSize: themeBase.typography.fontSize.xs,
   },
   clearButton: {
     padding: 2,

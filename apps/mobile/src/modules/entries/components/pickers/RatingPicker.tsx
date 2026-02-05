@@ -11,6 +11,7 @@ import { starsToDecimal, decimalToStars } from "@trace/core";
 import { PickerBottomSheet, RemoveIcon } from "../../../../components/sheets";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
+import { Icon } from "../../../../shared/components";
 
 interface RatingPickerProps {
   visible: boolean;
@@ -70,20 +71,15 @@ export function RatingPicker({
             style={styles.starButton}
             onPress={() => handleStarPress(starValue)}
           >
-            <Text
-              style={[
-                styles.starIcon,
-                {
-                  fontFamily: dynamicTheme.typography.fontFamily.regular,
-                  color: dynamicTheme.colors.border.medium,
-                },
-                currentStars >= starValue && {
-                  color: dynamicTheme.colors.status.blocked,
-                },
-              ]}
-            >
-              ★
-            </Text>
+            <Icon
+              name="StarFilled"
+              size={40}
+              color={
+                currentStars >= starValue
+                  ? dynamicTheme.colors.status.blocked
+                  : dynamicTheme.colors.border.medium
+              }
+            />
           </TouchableOpacity>
         ))}
       </View>
@@ -116,9 +112,6 @@ const styles = StyleSheet.create({
   },
   starButton: {
     padding: themeBase.spacing.sm,
-  },
-  starIcon: {
-    fontSize: 40,
   },
   ratingLabel: {
     textAlign: "center",

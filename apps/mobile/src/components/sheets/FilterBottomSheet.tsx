@@ -23,6 +23,7 @@ import {
   ALL_STATUSES,
   ALL_PRIORITIES,
   DUE_DATE_PRESETS,
+  RATING_OPERATORS,
   DEFAULT_STREAM_VIEW_FILTER,
   extractAttachmentIds,
   getActiveFilterInfo,
@@ -33,6 +34,7 @@ import {
   type PhotosFilter,
   type EntryStatus,
   type StreamViewFilter,
+  type RatingOperator,
 } from '@trace/core';
 
 interface FilterBottomSheetProps {
@@ -57,7 +59,10 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
 
   // Get stream data for filter visibility
   const { stream } = useStream(selectedStreamId ?? null);
-  const isAllEntriesView = !selectedStreamId;
+  // Special views (all, tag:, mention:, location:, geo:) should show rating filter
+  const isAllEntriesView = !selectedStreamId ||
+                           selectedStreamId === 'all' ||
+                           (typeof selectedStreamId === 'string' && selectedStreamId.includes(':'));
 
   // LOCAL filter state - this is the ONLY state that changes on checkbox clicks
   // Global context is NEVER updated until the sheet closes
@@ -65,12 +70,14 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
     () => getStreamFilter(selectedStreamId)
   );
 
-  // Reset local filter when sheet opens
+  // Reset local filter and collapse sections when sheet opens
   useEffect(() => {
     if (visible) {
       const currentGlobalFilter = getStreamFilter(selectedStreamId);
       initialFilterRef.current = currentGlobalFilter;
       setLocalFilter(currentGlobalFilter);
+      // Collapse all sections when opening
+      setExpandedSections({});
     }
   }, [visible, selectedStreamId, getStreamFilter]);
 
@@ -133,6 +140,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
   const showPhotosFilter = isAllEntriesView || stream?.entry_use_photos !== false;
   const showDueDateFilter = true; // Common filter - always available
 
+
   // When viewing a specific stream, only show its allowed statuses
   const allowedStatuses = selectedStreamId && stream?.entry_statuses
     ? stream.entry_statuses
@@ -146,8 +154,9 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
     return getActiveFilterInfo(currentFilter, {
       availableStatuses: availableStatusValues,
       availableTypes: availableTypes,
+      ratingType: ratingType,
     });
-  }, [currentFilter, availableStatusValues, availableTypes]);
+  }, [currentFilter, availableStatusValues, availableTypes, ratingType]);
 
   // Destructure for easier use
   const { hasActiveFilters } = filterInfo;
@@ -180,8 +189,27 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
       }
 
       // Rating filter
-      if (currentFilter.ratingMin !== null && entry.rating < currentFilter.ratingMin) return false;
-      if (currentFilter.ratingMax !== null && entry.rating > currentFilter.ratingMax) return false;
+      if (currentFilter.ratingOperator && currentFilter.ratingValue !== null) {
+        const op = currentFilter.ratingOperator;
+        const uiValue = currentFilter.ratingValue;
+
+        // Determine max rating based on context
+        const maxRating = ratingType === 'stars' ? 5 : 10;
+
+        // Skip filter if it's the "no filter" combination: >= 1 or <= max
+        const isNoFilter = (op === '>=' && uiValue === 1) || (op === '<=' && uiValue === maxRating);
+
+        if (!isNoFilter) {
+          // Convert UI value to database scale (0-10)
+          // 5-star: multiply by 2 (1 star = 2, 5 stars = 10)
+          // 10-point: use as-is
+          const dbValue = ratingType === 'stars' ? uiValue * 2 : uiValue;
+
+          if (op === '>=' && entry.rating < dbValue) return false;
+          if (op === '<=' && entry.rating > dbValue) return false;
+          if (op === '=' && entry.rating !== dbValue) return false;
+        }
+      }
 
       // Photos filter
       if (currentFilter.hasPhotos !== null) {
@@ -314,6 +342,18 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
     updateLocalFilter({ types: newTypes });
   };
 
+  const handleRatingOperatorChange = (operator: RatingOperator | null) => {
+    updateLocalFilter({ ratingOperator: operator });
+  };
+
+  const handleRatingValueChange = (value: number | null) => {
+    updateLocalFilter({ ratingValue: value });
+  };
+
+  const handleClearRating = () => {
+    updateLocalFilter({ ratingOperator: null, ratingValue: null });
+  };
+
   const handlePhotosFilterChange = (hasPhotos: PhotosFilter) => {
     updateLocalFilter({ hasPhotos });
   };
@@ -420,6 +460,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
   const getStatusBadge = () => filterInfo.status.badge;
   const getPriorityBadge = () => filterInfo.priority.badge;
   const getTypeBadge = () => filterInfo.type.badge;
+  const getRatingBadge = () => filterInfo.rating.badge;
   const getPhotosBadge = () => filterInfo.photos.badge;
   const getDueDateBadge = () => filterInfo.dueDate.badge;
   const getEntryDateBadge = () => filterInfo.entryDate.badge;
@@ -428,6 +469,28 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
   const formatDateDisplay = (isoDate: string | null) => {
     if (!isoDate) return 'Select date';
     return new Date(isoDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  // Get selected status names for display
+  const getSelectedStatusNames = () => {
+    const selectedStatuses = currentFilter.statuses ?? [];
+    return ALL_STATUSES
+      .filter(s => selectedStatuses.includes(s.value) && availableStatusValues.includes(s.value))
+      .map(s => s.label);
+  };
+
+  // Get selected priority names for display
+  const getSelectedPriorityNames = () => {
+    const selectedPriorities = currentFilter.priorities ?? [];
+    return ALL_PRIORITIES
+      .filter(p => selectedPriorities.includes(p.value))
+      .map(p => p.label);
+  };
+
+  // Get selected type names for display
+  const getSelectedTypeNames = () => {
+    const selectedTypes = currentFilter.types ?? [];
+    return availableTypes.filter(t => selectedTypes.includes(t));
   };
 
   return (
@@ -468,6 +531,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
             badge={getStatusBadge()}
             isFiltering={!!getStatusBadge()}
             onClearBadge={getStatusBadge() ? () => updateLocalFilter({ statuses: [] }) : undefined}
+            selectedItems={getSelectedStatusNames()}
           >
             {/* Status Options */}
             <View style={styles.optionsGrid}>
@@ -508,6 +572,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
             badge={getPriorityBadge()}
             isFiltering={!!getPriorityBadge()}
             onClearBadge={getPriorityBadge() ? () => updateLocalFilter({ priorities: [] }) : undefined}
+            selectedItems={getSelectedPriorityNames()}
           >
             {/* Priority Options */}
             <View style={styles.optionsGrid}>
@@ -549,6 +614,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
             badge={getTypeBadge()}
             isFiltering={!!getTypeBadge()}
             onClearBadge={getTypeBadge() ? () => updateLocalFilter({ types: [] }) : undefined}
+            selectedItems={getSelectedTypeNames()}
           >
             {/* Type Options */}
             <View style={styles.optionsGrid}>
@@ -575,6 +641,94 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
                   </TouchableOpacity>
                 );
               })}
+            </View>
+          </CollapsibleSection>
+        )}
+
+        {/* Rating Filter Section */}
+        {showRatingFilter && (
+          <CollapsibleSection
+            title="Rating"
+            expanded={expandedSections['rating']}
+            onToggle={() => toggleSection('rating')}
+            badge={getRatingBadge()}
+            isFiltering={!!getRatingBadge()}
+            onClearBadge={getRatingBadge() ? handleClearRating : undefined}
+          >
+            {/* Operator Selection */}
+            <Text style={[styles.customLabel, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>
+              Comparison
+            </Text>
+            <View style={styles.segmentedControl}>
+              {RATING_OPERATORS.map(op => {
+                const isSelected = currentFilter.ratingOperator === op.value;
+                return (
+                  <TouchableOpacity
+                    key={op.value}
+                    style={[
+                      styles.segmentButton,
+                      { backgroundColor: theme.colors.background.secondary },
+                      isSelected && { backgroundColor: theme.colors.interactive.primary },
+                    ]}
+                    onPress={() => handleRatingOperatorChange(op.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.segmentText,
+                      { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular },
+                      isSelected && { color: theme.colors.background.primary, fontFamily: theme.typography.fontFamily.semibold },
+                    ]}>
+                      {op.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Value Selection - Adapts to 5-star or 10-point based on stream */}
+            <Text style={[styles.customLabel, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>
+              Value
+            </Text>
+            <View style={styles.ratingValuesContainer}>
+              {(() => {
+                // Determine max value based on context
+                const maxValue = ratingType === 'stars' ? 5 : 10;
+                const values = Array.from({ length: maxValue }, (_, i) => i + 1);
+
+                // Group into rows of 5
+                const rows: number[][] = [];
+                for (let i = 0; i < values.length; i += 5) {
+                  rows.push(values.slice(i, i + 5));
+                }
+
+                return rows.map((row, rowIndex) => (
+                  <View key={rowIndex} style={styles.ratingValuesRow}>
+                    {row.map(value => {
+                      const isSelected = currentFilter.ratingValue === value;
+                      return (
+                        <TouchableOpacity
+                          key={value}
+                          style={[
+                            styles.ratingValueButton,
+                            { backgroundColor: theme.colors.background.secondary },
+                            isSelected && { backgroundColor: theme.colors.interactive.primary + '20', borderColor: theme.colors.interactive.primary, borderWidth: 1.5 },
+                          ]}
+                          onPress={() => handleRatingValueChange(value)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[
+                            styles.ratingValueText,
+                            { color: isSelected ? theme.colors.interactive.primary : theme.colors.text.primary },
+                            { fontFamily: isSelected ? theme.typography.fontFamily.semibold : theme.typography.fontFamily.medium },
+                          ]}>
+                            {value}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ));
+              })()}
             </View>
           </CollapsibleSection>
         )}
@@ -875,6 +1029,27 @@ const styles = StyleSheet.create({
     borderColor: 'transparent', // Prevents size change when selected border is added
   },
   optionText: {
+    fontSize: themeBase.typography.fontSize.sm,
+  },
+  ratingValuesContainer: {
+    gap: themeBase.spacing.sm,
+  },
+  ratingValuesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: themeBase.spacing.sm,
+  },
+  ratingValueButton: {
+    flex: 1,
+    paddingVertical: themeBase.spacing.sm,
+    paddingHorizontal: themeBase.spacing.xs,
+    borderRadius: themeBase.borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  ratingValueText: {
     fontSize: themeBase.typography.fontSize.sm,
   },
   statusDot: {
