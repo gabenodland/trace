@@ -411,31 +411,51 @@ class Logger {
 
   /**
    * Performance timing - measure operation duration
+   * Note: Uses Date.now() instead of console.time() for Hermes compatibility
    */
+  private timers: Map<string, number> = new Map();
+
   time(label: string) {
     if (this.currentLevel <= LogLevel.DEBUG) {
-      console.time(`⏱️ ${label}`);
+      const key = `⏱️ ${label}`;
+      this.timers.set(key, Date.now());
+      console.log(`${key} [started]`);
     }
   }
 
   timeEnd(label: string) {
     if (this.currentLevel <= LogLevel.DEBUG) {
-      console.timeEnd(`⏱️ ${label}`);
+      const key = `⏱️ ${label}`;
+      const startTime = this.timers.get(key);
+      if (startTime !== undefined) {
+        const duration = Date.now() - startTime;
+        console.log(`${key}: ${duration}ms`);
+        this.timers.delete(key);
+      } else {
+        console.log(`${key} [timer not found]`);
+      }
     }
   }
 
   /**
    * Group related logs together (useful for complex operations)
+   * Note: Hermes doesn't support console.group, so we use a visual prefix instead
    */
+  private groupDepth: number = 0;
+
   group(label: string) {
     if (this.currentLevel <= LogLevel.DEBUG) {
-      console.group(`📦 ${label}`);
+      const indent = '  '.repeat(this.groupDepth);
+      console.log(`${indent}▼ ${label}`);
+      this.groupDepth++;
     }
   }
 
   groupEnd() {
     if (this.currentLevel <= LogLevel.DEBUG) {
-      console.groupEnd();
+      if (this.groupDepth > 0) {
+        this.groupDepth--;
+      }
     }
   }
 }

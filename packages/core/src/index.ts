@@ -10,7 +10,17 @@ export * from "./modules/attachments";
 export * from "./modules/locations";
 export * from "./modules/settings";
 export * from "./modules/subscriptions";
-// Editor module NOT exported - only used in editor-web build (has Tiptap deps not in mobile)
+
+// Editor helpers (pure utilities without Tiptap dependencies)
+// Tiptap extensions (Title, TitleDocument) are only exported for editor-web
+export {
+  splitTitleAndBody,
+  combineTitleAndBody,
+  extractTitle,
+  extractBody,
+  hasTitleStructure,
+  getTitleCSS,
+} from "./modules/editor/editorHelpers";
 
 // Shared utilities
 export * from "./shared/types";
