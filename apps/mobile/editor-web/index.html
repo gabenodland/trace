@@ -48,7 +48,8 @@
         content: attr(data-placeholder);
         color: #9ca3af;
         pointer-events: none;
-        position: absolute;
+        height: 0;
+        float: left;
       }
 
       /* Body placeholder (using Tiptap Placeholder extension classes) */
@@ -86,6 +87,41 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Forward console.log to React Native (must be before module script)
+      (function() {
+        var originalLog = console.log;
+        var originalError = console.error;
+        var originalWarn = console.warn;
+
+        function sendToRN(level, args) {
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            try {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'console',
+                level: level,
+                message: Array.from(args).map(function(a) {
+                  return typeof a === 'object' ? JSON.stringify(a) : String(a);
+                }).join(' ')
+              }));
+            } catch (e) {}
+          }
+        }
+
+        console.log = function() {
+          sendToRN('log', arguments);
+          originalLog.apply(console, arguments);
+        };
+        console.error = function() {
+          sendToRN('error', arguments);
+          originalError.apply(console, arguments);
+        };
+        console.warn = function() {
+          sendToRN('warn', arguments);
+          originalWarn.apply(console, arguments);
+        };
+      })();
+    </script>
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>

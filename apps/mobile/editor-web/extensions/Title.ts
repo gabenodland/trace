@@ -190,10 +190,13 @@ export const Title = Node.create<TitleOptions>({
               const isEmpty = firstChild.content.size === 0;
 
               if (isEmpty) {
-                // Add is-empty class to the title node
+                // Add is-empty class AND data-placeholder to the title node
+                // We add data-placeholder here because TipTap's Placeholder extension
+                // might not recognize our custom 'title' node type (it's in group 'title', not 'block')
                 decorations.push(
                   Decoration.node(0, firstChild.nodeSize, {
                     class: 'is-empty',
+                    'data-placeholder': 'Title',
                   })
                 );
               }

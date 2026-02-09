@@ -210,6 +210,16 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     return combineTitleAndBody(formData.title, formData.content);
   }, [formData.title, formData.content]);
 
+  // Log editorValue changes to debug timing issues
+  useEffect(() => {
+    log.info('editorValue changed', {
+      length: editorValue.length,
+      isFormReady,
+      isEditing,
+      preview: editorValue.substring(0, 50),
+    });
+  }, [editorValue, isFormReady, isEditing]);
+
   const handleEditorChange = useCallback((html: string) => {
     const { title, body } = splitTitleAndBody(html);
     if (title !== formData.title) updateField("title", title);
@@ -337,6 +347,13 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
 
   // Called when RichTextEditor is ready
   const handleEditorReady = useCallback((editorContent: string) => {
+    log.info('handleEditorReady called', {
+      editorContentLength: editorContent.length,
+      isEditing,
+      isFormReady,
+      formDataContentLength: formData.content.length,
+    });
+
     if (!isEditing) {
       setTimeout(() => {
         editorRef.current?.requestFocusSync();

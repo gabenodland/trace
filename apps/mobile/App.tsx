@@ -44,6 +44,8 @@ import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { AccountScreen } from "./src/screens/AccountScreen";
 import { DatabaseInfoScreen } from "./src/screens/DatabaseInfoScreen";
 import { EditorTestScreen } from "./src/screens/EditorTestScreen";
+import { TenTapTestScreen } from "./src/screens/TenTapTestScreen";
+import { RichTextEditorV2TestScreen } from "./src/screens/RichTextEditorV2TestScreen";
 import { LocationsScreen } from "./src/screens/LocationsScreen";
 import { MapScreen } from "./src/screens/MapScreen";
 import { StreamsScreen } from "./src/screens/StreamsScreen";
@@ -75,7 +77,9 @@ const queryClient = new QueryClient({
  * - No history stack needed
  */
 function AuthGate() {
+  console.log('[AuthGate] Starting...');
   const { isAuthenticated, isLoading, user } = useAuth();
+  console.log('[AuthGate] useAuth returned', { isAuthenticated, isLoading, hasUser: !!user });
   const [showSignUp, setShowSignUp] = useState(false);
   const [activeTab, setActiveTab] = useState("inbox");
   const [navParams, setNavParams] = useState<Record<string, any>>({});
@@ -443,6 +447,14 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
         boundaryName = "EditorTestScreen";
         content = <EditorTestScreen />;
         break;
+      case "tenTapTest":
+        boundaryName = "TenTapTestScreen";
+        content = <TenTapTestScreen />;
+        break;
+      case "editorV2Test":
+        boundaryName = "RichTextEditorV2TestScreen";
+        content = <RichTextEditorV2TestScreen />;
+        break;
       case "locations":
         boundaryName = "LocationsScreen";
         content = <LocationsScreen />;
@@ -694,7 +706,9 @@ export default function App() {
   }, []);
 
   // Show loading while fonts are loading
+  console.log('[App] Checking fonts...', { fontsLoaded });
   if (!fontsLoaded) {
+    console.log('[App] Fonts not loaded yet, showing spinner');
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -704,6 +718,7 @@ export default function App() {
     );
   }
 
+  console.log('[App] Fonts loaded, rendering providers...');
   return (
     <QueryClientProvider client={queryClient}>
       <SettingsProvider>

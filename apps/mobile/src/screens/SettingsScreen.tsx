@@ -237,23 +237,6 @@ export function SettingsScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Editor Test */}
-          <TouchableOpacity
-            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
-            onPress={() => navigate("editorTest")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Editor Test</Text>
-              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                Test custom TenTap editor bundle
-              </Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
-            </View>
-          </TouchableOpacity>
-
           {/* Version Info */}
           <View style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}>
             <View style={styles.settingContent}>
@@ -312,7 +295,7 @@ export function SettingsScreen() {
 
           {/* Clear Logs Button */}
           <TouchableOpacity
-            style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
             onPress={handleClearLogs}
             activeOpacity={0.7}
             disabled={logBufferSize === 0}
@@ -325,6 +308,57 @@ export function SettingsScreen() {
             </View>
             <View style={styles.settingValue}>
               <Icon name="Trash2" size={16} color={logBufferSize > 0 ? theme.colors.functional.overdue : theme.colors.text.disabled} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Editor Test (Layer 1 - Plain WebView) */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+            onPress={() => navigate("editorTest")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Editor Test (L1)</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                Plain WebView - no TenTap
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
+            </View>
+          </TouchableOpacity>
+
+          {/* TenTap Test (Layer 2 - TenTap Bridge) */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+            onPress={() => navigate("tenTapTest")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>TenTap Test (L2)</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                EditorWebBridge - single instance
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
+            </View>
+          </TouchableOpacity>
+
+          {/* RichTextEditorV2 Test (Layer 3) */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
+            onPress={() => navigate("editorV2Test")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>RichTextEditor V2 (L3)</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                Full editor with onChange
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
             </View>
           </TouchableOpacity>
         </View>

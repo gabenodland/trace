@@ -79,6 +79,22 @@ export const RichTextEditor = forwardRef(({
   const pendingContent = useRef<string | null>(null);
   // Capture initial value only once - prevents editor recreation on every keystroke
   const initialValueRef = useRef<string>(sanitizeHtmlColors(value) || '');
+  // Component-level mounted flag - shared by all effects to prevent async operations after unmount
+  const isMounted = useRef(true);
+
+  // Log mount with initial value and track component lifecycle
+  useEffect(() => {
+    isMounted.current = true;
+    log.info('Editor mounted', {
+      initialValueLength: initialValueRef.current.length,
+      currentValueLength: value?.length || 0,
+      valuesDiffer: initialValueRef.current !== value,
+    });
+
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   // Dynamic CSS with theme colors and fonts - memoized to prevent editor recreation
   const customCSS = useMemo(() => `
@@ -370,33 +386,91 @@ export const RichTextEditor = forwardRef(({
     },
   }));
 
+  // Editor ready detection: primary via bridgeReady message, fallback via getHTML poll
+  // The bridgeReady message from WebView is the preferred signal, but TenTap may intercept
+  // messages, so we also try getHTML as a fallback to detect when bridge is connected
   useEffect(() => {
-    // Subscribe to content changes with debouncing
-    const interval = setInterval(async () => {
-      const html = await editor.getHTML();
-      if (lastContent.current === null) {
-        // First poll - editor is ready with its (possibly normalized) content
-        lastContent.current = html;
-        isEditorReady.current = true;
-        log.debug('Editor is now ready');
-        if (!hasCalledOnReady.current && onReady) {
-          hasCalledOnReady.current = true;
-          onReady(html);
+    if (isEditorReady.current) return; // Already ready
+
+    let attempts = 0;
+    const maxAttempts = 50; // 5 seconds max
+
+    const checkReady = async () => {
+      if (!isMounted.current || isEditorReady.current) return;
+      attempts++;
+
+      try {
+        const html = await editor.getHTML();
+        if (!isMounted.current) return;
+
+        // getHTML succeeded - bridge is working!
+        if (!isEditorReady.current) {
+          isEditorReady.current = true;
+          log.info('Editor ready (via getHTML fallback)', { attempts, htmlLen: html.length });
+          lastContent.current = html;
+
+          // Apply pending content if any
+          if (pendingContent.current) {
+            const content = pendingContent.current;
+            pendingContent.current = null;
+            lastContent.current = content;
+            log.info('Applying queued content', { length: content.length });
+            editor.setContent(content);
+          }
+
+          // Call onReady
+          if (onReady && !hasCalledOnReady.current) {
+            hasCalledOnReady.current = true;
+            onReady(html);
+          }
         }
-        return;
+      } catch (e) {
+        // getHTML failed - bridge not ready yet
+        if (attempts < maxAttempts) {
+          setTimeout(checkReady, 100);
+        } else {
+          log.error('Editor failed to become ready after max attempts');
+        }
       }
-      if (html !== lastContent.current) {
-        lastContent.current = html;
-        isLocalChange.current = true;
-        lastLocalChangeTime.current = Date.now();
-        onChange(html);
+    };
+
+    // Start checking after a short delay
+    const timer = setTimeout(checkReady, 100);
+    return () => clearTimeout(timer);
+  }, [editor, onReady]);
+
+  // Poll for content changes only after editor is ready
+  useEffect(() => {
+    let pollCount = 0;
+    const interval = setInterval(async () => {
+      if (!isMounted.current || !isEditorReady.current) return;
+
+      try {
+        const html = await editor.getHTML();
+        if (!isMounted.current) return;
+
+        // Log first few polls to debug
+        if (pollCount < 3) {
+          log.debug('Poll check', { pollCount, htmlLen: html.length, lastLen: lastContent.current?.length || 0 });
+          pollCount++;
+        }
+
+        if (html !== lastContent.current) {
+          log.info('Content changed', { oldLen: lastContent.current?.length || 0, newLen: html.length });
+          lastContent.current = html;
+          isLocalChange.current = true;
+          lastLocalChangeTime.current = Date.now();
+          onChange(html);
+        }
+      } catch (e) {
+        log.warn('Poll getHTML failed', { error: e instanceof Error ? e.message : 'unknown' });
       }
-    }, 300); // Poll every 300ms
+    }, 50);
 
     return () => {
       clearInterval(interval);
     };
-  }, [editor, onChange, onReady]);
+  }, [editor, onChange]);
 
   // Update editor when value changes externally (not from typing)
   // Uses retry logic to handle race condition when editor isn't ready yet
@@ -449,43 +523,31 @@ export const RichTextEditor = forwardRef(({
     }
 
     // Editor is ready - set content immediately
-    (async () => {
-      try {
-        editor.setContent(sanitizedValue);
-        const actualContent = await editor.getHTML();
-        lastContent.current = actualContent;
-        pendingContent.current = null;
-        if (editable) {
-          editor.focus('start');
-        }
-        log.debug('setContent succeeded immediately', { sentLength: sanitizedValue.length, actualLength: actualContent.length });
-      } catch (e) {
-        // Failed even though editor was "ready" - leave in pendingContent for polling to retry
-        log.debug('setContent failed despite ready state, polling will retry');
-      }
-    })();
+    editor.setContent(sanitizedValue);
+    lastContent.current = sanitizedValue;
+    pendingContent.current = null;
+    log.debug('setContent applied', { length: sanitizedValue.length });
+    if (editable) {
+      editor.focus('start');
+    }
   }, [value, editor, editable]);
 
-  // Retry pending content when editor might be ready (check every 200ms)
   // Retry pending content once editor is ready
   // This handles the case where value prop changes before editor is initialized
   useEffect(() => {
-    const interval = setInterval(async () => {
-      // Only try if we have pending content AND editor is ready
-      if (pendingContent.current !== null && isEditorReady.current) {
-        try {
-          const contentToSet = pendingContent.current;
-          editor.setContent(contentToSet);
-          const actualContent = await editor.getHTML();
-          lastContent.current = actualContent;
-          pendingContent.current = null;
-          log.debug('Pending content applied', { sentLength: contentToSet.length, actualLength: actualContent.length });
-          if (editable) {
-            editor.focus('start');
-          }
-        } catch (e) {
-          log.debug('Pending content apply failed, will retry');
-        }
+    const interval = setInterval(() => {
+      // Only try if we have pending content AND editor is ready AND component mounted
+      if (!isMounted.current || pendingContent.current === null || !isEditorReady.current) return;
+
+      const contentToSet = pendingContent.current;
+      pendingContent.current = null; // Clear immediately to prevent re-entry
+      lastContent.current = contentToSet; // Assume it works
+
+      log.info('Applying pending content', { length: contentToSet.length });
+      editor.setContent(contentToSet);
+
+      if (editable) {
+        editor.focus('start');
       }
     }, 200);
 
@@ -528,6 +590,7 @@ export const RichTextEditor = forwardRef(({
   useEffect(() => {
     // Check if editor focus changed - if focused while in read-only UI mode, trigger onPress
     const checkFocus = () => {
+      if (!isMounted.current) return;
       const state = editor.getEditorState();
       if (state.isFocused && !editable && onPress) {
         log.debug('Editor focused while in read-only UI mode, triggering onPress');
@@ -547,6 +610,7 @@ export const RichTextEditor = forwardRef(({
   // Listen for global blur event (triggered by swipe-back gesture)
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('blurEditors', () => {
+      if (!isMounted.current) return;
       log.debug('Received blurEditors event, blurring');
       editor.blur();
     });
@@ -561,6 +625,56 @@ export const RichTextEditor = forwardRef(({
         showsVerticalScrollIndicator={true}
         overScrollMode="never"
         style={{ backgroundColor: theme.colors.background.primary }}
+        webviewDebuggingEnabled={__DEV__}
+        onMessage={(event) => {
+          // Log ALL messages to debug what's coming through
+          log.debug('onMessage received', { rawData: event.nativeEvent.data?.substring?.(0, 200) || 'no data' });
+
+          try {
+            const data = JSON.parse(event.nativeEvent.data);
+            log.debug('Parsed message', { type: data.type, keys: Object.keys(data).join(',') });
+
+            // Bridge ready signal from WebView - accept TenTap's 'editor-ready' or our 'bridgeReady'
+            if ((data.type === 'bridgeReady' || data.type === 'editor-ready') && !isEditorReady.current) {
+              isEditorReady.current = true;
+              log.info('Bridge ready signal received', { type: data.type });
+
+              // Apply pending content now that bridge is ready
+              if (pendingContent.current) {
+                const content = pendingContent.current;
+                pendingContent.current = null;
+                lastContent.current = content;
+                log.info('Applying queued content', { length: content.length });
+                editor.setContent(content);
+              }
+
+              // Call onReady callback
+              if (onReady && !hasCalledOnReady.current) {
+                hasCalledOnReady.current = true;
+                editor.getHTML().then((html) => {
+                  if (isMounted.current) {
+                    lastContent.current = html;
+                    onReady(html);
+                  }
+                }).catch(() => {});
+              }
+            }
+
+            // Console log forwarding
+            if (data.type === 'console') {
+              const prefix = '[WebEditor]';
+              if (data.level === 'error') {
+                console.error(prefix, data.message);
+              } else if (data.level === 'warn') {
+                console.warn(prefix, data.message);
+              } else {
+                console.log(prefix, data.message);
+              }
+            }
+          } catch (e) {
+            // Not our message format, ignore
+          }
+        }}
       />
     </View>
   );

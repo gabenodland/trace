@@ -6,6 +6,9 @@ import { EntryListItem } from "./EntryListItem";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../shared/theme/themeBase";
 import { FAB_CLEARANCE } from "../../../components/layout/BottomNavBar";
+import { createScopedLogger, LogScopes } from "../../../shared/utils/logger";
+
+const log = createScopedLogger(LogScopes.EntryNav);
 
 interface Stream {
   stream_id: string;
@@ -144,7 +147,10 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
     return (
       <EntryListItem
         entry={item}
-        onPress={() => onEntryPress(item.entry_id)}
+        onPress={() => {
+          log.info('------- ENTRY CLICKED -------', { entryId: item.entry_id });
+          onEntryPress(item.entry_id);
+        }}
         onTagPress={onTagPress}
         onMentionPress={onMentionPress}
         onStreamPress={onStreamPress}

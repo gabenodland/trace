@@ -27,9 +27,6 @@
 
 import { useRef, useLayoutEffect } from "react";
 import { Animated, PanResponder, Dimensions, GestureResponderHandlers, Keyboard, DeviceEventEmitter } from "react-native";
-import { createScopedLogger, LogScopes } from "../utils/logger";
-
-const log = createScopedLogger(LogScopes.Navigation);
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SWIPE_THRESHOLD = SCREEN_WIDTH / 3; // Same as drawer
@@ -113,23 +110,20 @@ export function useSwipeBackGesture({
       onMoveShouldSetPanResponder: (_, gs) => {
         // Don't capture when disabled or modal is open
         if (!isEnabledRef.current || isModalOpenRef.current) {
-          log.debug('Swipe blocked', { isEnabled: isEnabledRef.current, isModalOpen: isModalOpenRef.current });
           return false;
         }
         // Require clear horizontal swipe to the right
         const shouldCapture = gs.dx > GESTURE_START_THRESHOLD && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5;
-        log.debug('Swipe check', { dx: gs.dx, dy: gs.dy, shouldCapture });
         if (shouldCapture) {
           // Dismiss keyboard immediately when swipe gesture is detected
           // Emit event for WebView editors to blur (Keyboard.dismiss alone doesn't work for WebViews)
-          log.debug('Dismissing keyboard');
           DeviceEventEmitter.emit('blurEditors');
           Keyboard.dismiss();
         }
         return shouldCapture;
       },
       onPanResponderGrant: () => {
-        log.debug('Swipe gesture granted');
+        // Gesture granted - no logging needed (too noisy)
       },
       onPanResponderMove: (_, gs) => {
         // Match drawer pattern: Just track the finger position directly
