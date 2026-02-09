@@ -39,6 +39,14 @@ import type { ActivePicker } from "../EntryPickers";
 
 const log = createScopedLogger('EntryForm', '📝');
 
+// Timing tracker for debugging load performance
+let loadStartTime: number | null = null;
+const logTiming = (step: string) => {
+  if (loadStartTime === null) return;
+  const elapsed = Math.round(performance.now() - loadStartTime);
+  log.info(`⏱️ ${step}`, { elapsedMs: elapsed });
+};
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -94,20 +102,6 @@ export interface ConflictCheckResult {
 /** Props for EntryFormProvider */
 export interface EntryFormProviderProps {
   children: ReactNode;
-  /** Entry ID when editing existing entry */
-  entryId?: string | null;
-  /** Initial stream ID from navigation */
-  initialStreamId?: string | null;
-  /** Initial stream name from navigation */
-  initialStreamName?: string;
-  /** Initial content from navigation */
-  initialContent?: string;
-  /** Initial date from calendar navigation */
-  initialDate?: string;
-  /** Entry data from React Query */
-  entry: Entry | null | undefined;
-  /** Whether entry is loading */
-  isLoadingEntry: boolean;
   /** Streams list */
   streams: Stream[];
   /** Settings */
@@ -117,8 +111,14 @@ export interface EntryFormProviderProps {
   };
   /** Current user ID */
   userId: string | null;
-  /** Photo count from query (for external detection) */
-  queryPhotoCount: number;
+}
+
+/** Options for creating a new entry */
+export interface NewEntryOptions {
+  streamId?: string | null;
+  streamName?: string;
+  content?: string;
+  date?: string;
 }
 
 /** Context value shape */
@@ -136,6 +136,18 @@ export interface EntryFormContextValue {
   tempEntryId: string;
   /** Entry data from React Query */
   entry: Entry | null | undefined;
+
+  // === Singleton Pattern ===
+  /**
+   * Set entry for editing (or null for new entry) - singleton pattern
+   * @param entryId - Entry ID to edit (will fetch via useEntry), or null for new entry
+   * @param options - Options for new entry (streamId, content, date)
+   */
+  setEntry: (entryId: string | null, options?: NewEntryOptions) => void;
+  /** Called when entry data is loaded (from useEntry in EntryScreenContent) */
+  onEntryLoaded: (entry: Entry) => void;
+  /** Clear the form - called when navigating away from capture screen */
+  clearEntry: () => void;
 
   // === Form Data ===
   formData: CaptureFormData;
@@ -156,8 +168,6 @@ export interface EntryFormContextValue {
   setBaseline: (data: CaptureFormData) => void;
   /** Mark form as clean after save */
   markClean: () => void;
-  /** Whether form is fully initialized */
-  isFormReady: boolean;
 
   // === Edit Mode ===
   /** Whether form is in edit mode (can be edited) */
@@ -377,45 +387,39 @@ function areDatesEqual(date1: string | null, date2: string | null): boolean {
 
 export function EntryFormProvider({
   children,
-  entryId,
-  initialStreamId,
-  initialStreamName,
-  initialContent,
-  initialDate,
-  entry,
-  isLoadingEntry,
   streams,
   settings,
   userId,
-  queryPhotoCount,
 }: EntryFormProviderProps) {
-  // Track when a new entry has been saved (for autosave transition)
+  // === Internal Entry State (singleton pattern) ===
+  // Entry is managed internally via setEntry() instead of props
+  const [entry, setEntryState] = useState<Entry | null>(null);
+  const [entryId, setEntryId] = useState<string | null>(null);
   const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
+
+  // New entry options (streamId, content, date for new entries)
+  const [newEntryOptions, setNewEntryOptions] = useState<NewEntryOptions>({});
 
   // Determine if editing
   const isEditing = !!entryId || !!savedEntryId;
   const effectiveEntryId = savedEntryId || entryId || null;
 
   // Temp ID for new entries
-  const [tempEntryId] = useState(() => entryId || Crypto.randomUUID());
+  const [tempEntryId, setTempEntryId] = useState(() => Crypto.randomUUID());
 
-  // Calculate initial values
-  const initialStrId = getInitialStreamId(isEditing, initialStreamId);
-  const initialEntryDate = getInitialEntryDate(initialDate);
+  // Calculate initial values based on newEntryOptions
+  const initialStrId = getInitialStreamId(isEditing, newEntryOptions.streamId);
+  const initialEntryDate = getInitialEntryDate(newEntryOptions.date);
 
-  // Build initial form data
-  const buildInitialFormData = (): CaptureFormData => {
-    if (entry) {
-      return buildFormDataFromEntry(entry, streams, initialEntryDate);
-    }
-
+  // Build initial form data for new entries
+  const buildInitialFormData = useCallback((): CaptureFormData => {
     return {
       title: "",
-      content: initialContent || "",
+      content: newEntryOptions.content || "",
       streamId: initialStrId,
       streamName:
-        !isEditing && initialStreamName && initialStrId !== null
-          ? initialStreamName
+        !isEditing && newEntryOptions.streamName && initialStrId !== null
+          ? newEntryOptions.streamName
           : null,
       status: "none",
       type: null,
@@ -423,37 +427,19 @@ export function EntryFormProvider({
       rating: 0,
       priority: 0,
       entryDate: initialEntryDate,
-      includeTime: !initialDate,
+      includeTime: !newEntryOptions.date,
       locationData: null,
       geocodeStatus: null,
       pendingPhotos: [],
     };
-  };
+  }, [isEditing, initialStrId, initialEntryDate, newEntryOptions]);
 
   // === Form Data State ===
   const [formData, setFormData] = useState<CaptureFormData>(buildInitialFormData);
 
   // Baseline for dirty tracking
-  const initialBaseline = useMemo(() => {
-    if (isEditing && entry) {
-      return JSON.parse(JSON.stringify(buildInitialFormData()));
-    }
-    return null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const baselineRef = useRef<CaptureFormData | null>(initialBaseline);
-  const [baselineVersion, setBaselineVersion] = useState(() =>
-    isEditing && entry ? 1 : 0
-  );
-
-  // Form ready state
-  const [isFormReady, setIsFormReady] = useState(() => {
-    if (!isEditing) return true;
-    return !!entry;
-  });
-
-  // Track if we've initialized from entry
-  const hasInitializedFromEntry = useRef(!!entry);
+  const baselineRef = useRef<CaptureFormData | null>(null);
+  const [baselineVersion, setBaselineVersion] = useState(0);
 
   // === Edit Mode State ===
   const [isEditMode, setIsEditMode] = useState(!isEditing);
@@ -658,6 +644,249 @@ export function EntryFormProvider({
   );
 
   // ============================================================================
+  // Singleton Pattern: setEntry
+  // ============================================================================
+
+  /**
+   * Set entry for editing (or null for new entry).
+   * This is the main API for the singleton pattern - called by navigation.
+   * For editing: pass entryId, form will be populated when onEntryLoaded is called.
+   * For new: pass null with options, form is ready immediately.
+   */
+  const setEntry = useCallback((newEntryId: string | null, options?: NewEntryOptions) => {
+    // Start timing for this load
+    loadStartTime = performance.now();
+    log.info('⏱️ setEntry START', {
+      entryId: newEntryId?.substring(0, 8) || 'new',
+      hasOptions: !!options,
+    });
+
+    // Reset all state
+    setIsFullScreen(false);
+
+    // Reset photo state
+    setPhotoCount(0);
+    setBaselinePhotoCount(null);
+    knownPhotoCountRef.current = null;
+    setExternalRefreshKey(0);
+    setPhotosCollapsed(false);
+
+    // Reset version tracking
+    knownVersionRef.current = null;
+    lastSaveTimeRef.current = 0;
+
+    // Reset save state
+    setIsSubmitting(false);
+    setIsSaving(false);
+    setSavedEntryId(null);
+
+    // Reset UI state
+    setActivePicker(null);
+
+    // Reset baseline
+    baselineRef.current = null;
+    setBaselineVersion(0);
+
+    // Clear previous entry state
+    setEntryState(null);
+
+    if (newEntryId) {
+      // Editing existing entry - set entryId, wait for onEntryLoaded
+      setEntryId(newEntryId);
+      setNewEntryOptions({});
+      setIsEditMode(false); // Start in view mode for existing entries
+
+      // Clear form data immediately to avoid dirty state from previous entry
+      // New content will be set when onEntryLoaded is called
+      // Note: We don't clear the editor here - the content swap effect handles that
+      // when the new entry's content arrives (prevents race conditions)
+      const emptyFormData: CaptureFormData = {
+        title: "",
+        content: "",
+        streamId: null,
+        streamName: null,
+        status: "none",
+        type: null,
+        dueDate: null,
+        rating: 0,
+        priority: 0,
+        entryDate: new Date().toISOString(),
+        includeTime: true,
+        locationData: null,
+        geocodeStatus: null,
+        pendingPhotos: [],
+      };
+      setFormData(emptyFormData);
+
+      log.debug('Waiting for entry to load', { entryId: newEntryId.substring(0, 8) });
+    } else {
+      // Creating new entry - form is ready immediately
+      setEntryId(null);
+      setNewEntryOptions(options || {});
+      setTempEntryId(Crypto.randomUUID());
+      setIsEditMode(true); // Start in edit mode for new entries
+
+      // Build form data for new entry
+      const initialStrId = getInitialStreamId(false, options?.streamId);
+      const initialEntryDate = getInitialEntryDate(options?.date);
+      const newFormData: CaptureFormData = {
+        title: "",
+        content: options?.content || "",
+        streamId: initialStrId,
+        streamName: options?.streamName && initialStrId !== null ? options.streamName : null,
+        status: "none",
+        type: null,
+        dueDate: null,
+        rating: 0,
+        priority: 0,
+        entryDate: initialEntryDate,
+        includeTime: !options?.date,
+        locationData: null,
+        geocodeStatus: null,
+        pendingPhotos: [],
+      };
+      setFormData(newFormData);
+      baselineRef.current = JSON.parse(JSON.stringify(newFormData));
+      setBaselineVersion(1);
+      editModeInitialContent.current = newFormData.content;
+      setBaselinePhotoCount(0);
+
+      // Set editor content for new entry (singleton pattern)
+      const { combineTitleAndBody } = require('@trace/core');
+      const editorContent = combineTitleAndBody(newFormData.title, newFormData.content);
+      log.info('Setting editor content for new entry', {
+        contentLength: editorContent.length,
+        hasInitialContent: !!options?.content,
+      });
+      editorRef.current?.setContent(editorContent);
+    }
+  }, []);
+
+  /**
+   * Called when entry data is loaded from useEntry hook.
+   * Populates the form with the entry data.
+   */
+  const onEntryLoaded = useCallback((loadedEntry: Entry) => {
+    // Only process if we're waiting for this entry
+    if (!entryId || loadedEntry.entry_id !== entryId) {
+      log.debug('Ignoring entry load - not the expected entry', {
+        expected: entryId?.substring(0, 8),
+        received: loadedEntry.entry_id.substring(0, 8),
+      });
+      return;
+    }
+
+    // Already loaded this entry (check by comparing entry object)
+    if (entry?.entry_id === loadedEntry.entry_id) {
+      return;
+    }
+
+    logTiming('onEntryLoaded START');
+    log.info('Entry loaded, populating form', {
+      entryId: loadedEntry.entry_id.substring(0, 8),
+      title: loadedEntry.title?.substring(0, 20) || '(no title)',
+      contentLength: loadedEntry.content?.length || 0,
+    });
+
+    // Store entry
+    setEntryState(loadedEntry);
+
+    // Build form data from entry
+    const newFormData = buildFormDataFromEntry(loadedEntry, streams, new Date().toISOString());
+    log.debug('Built form data from entry', {
+      formTitle: newFormData.title?.substring(0, 20) || '(empty)',
+      formContentLength: newFormData.content?.length || 0,
+      formContentPreview: newFormData.content?.substring(0, 50) || '(empty)',
+    });
+    setFormData(newFormData);
+    baselineRef.current = JSON.parse(JSON.stringify(newFormData));
+    setBaselineVersion(1);
+    editModeInitialContent.current = newFormData.content;
+
+    // Set editor content directly (singleton pattern - no remounting)
+    // Import combineTitleAndBody here to avoid circular deps
+    logTiming('setFormData done, building editor content');
+    const { combineTitleAndBody } = require('@trace/core');
+    const editorContent = combineTitleAndBody(newFormData.title, newFormData.content);
+    log.info('Setting editor content from onEntryLoaded', {
+      contentLength: editorContent.length,
+      contentPreview: editorContent.substring(0, 50),
+    });
+    logTiming('calling editorRef.setContent');
+    editorRef.current?.setContent(editorContent);
+    logTiming('editorRef.setContent returned');
+
+    // Initialize version tracking
+    if (loadedEntry.version) {
+      knownVersionRef.current = loadedEntry.version;
+    }
+  }, [entryId, entry, streams]);
+
+  /**
+   * Clear the form - called when navigating away from capture screen.
+   * Resets all state and clears the editor.
+   */
+  const clearEntry = useCallback(() => {
+    log.info('clearEntry called - resetting form');
+
+    // Clear editor content immediately
+    editorRef.current?.setContent('');
+
+    // Reset entry identity
+    setEntryId(null);
+    setEntryState(null);
+    setSavedEntryId(null);
+    setNewEntryOptions({});
+    setTempEntryId(Crypto.randomUUID());
+
+    // Reset form data
+    const emptyFormData: CaptureFormData = {
+      title: "",
+      content: "",
+      streamId: null,
+      streamName: null,
+      status: "none",
+      type: null,
+      dueDate: null,
+      rating: 0,
+      priority: 0,
+      entryDate: new Date().toISOString(),
+      includeTime: true,
+      locationData: null,
+      geocodeStatus: null,
+      pendingPhotos: [],
+    };
+    setFormData(emptyFormData);
+
+    // Reset baseline
+    baselineRef.current = null;
+    setBaselineVersion(0);
+
+    // Reset edit mode
+    setIsEditMode(false);
+    setIsFullScreen(false);
+    editModeInitialContent.current = null;
+
+    // Reset save state
+    setIsSubmitting(false);
+    setIsSaving(false);
+
+    // Reset photo state
+    setPhotoCount(0);
+    setBaselinePhotoCount(null);
+    knownPhotoCountRef.current = null;
+    setExternalRefreshKey(0);
+    setPhotosCollapsed(false);
+
+    // Reset version tracking
+    knownVersionRef.current = null;
+    lastSaveTimeRef.current = 0;
+
+    // Reset UI state
+    setActivePicker(null);
+  }, []);
+
+  // ============================================================================
   // Derived Values
   // ============================================================================
 
@@ -712,47 +941,9 @@ export function EntryFormProvider({
   // Effects
   // ============================================================================
 
-  // Initialize form from entry when it becomes available (async case)
-  useEffect(() => {
-    if (!isEditing || hasInitializedFromEntry.current || isFormReady) return;
-    if (!entry) return;
-
-    const newFormData = buildFormDataFromEntry(entry, streams, initialEntryDate);
-    setFormData(newFormData);
-    baselineRef.current = JSON.parse(JSON.stringify(newFormData));
-    setBaselineVersion((v) => v + 1);
-    hasInitializedFromEntry.current = true;
-    setIsFormReady(true);
-
-    log.debug('Async init from entry', { entryId: entry.entry_id?.substring(0, 8) });
-  }, [entry, isEditing, isFormReady, streams, initialEntryDate]);
-
-  // Initialize baseline for new entries
-  useEffect(() => {
-    if (!isEditing && baselinePhotoCount === null) {
-      setBaseline(formData);
-      setBaselinePhotoCount(0);
-      editModeInitialContent.current = formData.content;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // External photo detection
-  useEffect(() => {
-    if (!isEditing || !effectiveEntryId || !isFormReady || baselinePhotoCount === null)
-      return;
-
-    if (knownPhotoCountRef.current === null) {
-      knownPhotoCountRef.current = queryPhotoCount;
-      return;
-    }
-
-    if (queryPhotoCount !== knownPhotoCountRef.current) {
-      knownPhotoCountRef.current = queryPhotoCount;
-      setExternalRefreshKey((prev) => prev + 1);
-      setPhotoCount(queryPhotoCount);
-    }
-  }, [queryPhotoCount, isEditing, effectiveEntryId, isFormReady, baselinePhotoCount]);
+  // Note: Entry initialization is now handled by setEntry() (singleton pattern)
+  // No prop-based initialization effects needed
+  // External photo detection is handled by syncPhotoCount() called from EntryScreenContent
 
   // External sync detection - handles entry updates from other devices
   useEffect(() => {
@@ -887,6 +1078,11 @@ export function EntryFormProvider({
       tempEntryId,
       entry,
 
+      // Singleton Pattern
+      setEntry,
+      onEntryLoaded,
+      clearEntry,
+
       // Form Data
       formData,
       updateField,
@@ -899,7 +1095,6 @@ export function EntryFormProvider({
       isFormDirty,
       setBaseline,
       markClean,
-      isFormReady,
 
       // Edit Mode
       isEditMode,
@@ -962,6 +1157,9 @@ export function EntryFormProvider({
       effectiveEntryId,
       tempEntryId,
       entry,
+      setEntry,
+      onEntryLoaded,
+      clearEntry,
       formData,
       updateField,
       updateMultipleFields,
@@ -971,7 +1169,6 @@ export function EntryFormProvider({
       isFormDirty,
       setBaseline,
       markClean,
-      isFormReady,
       isEditMode,
       isFullScreen,
       enterEditMode,

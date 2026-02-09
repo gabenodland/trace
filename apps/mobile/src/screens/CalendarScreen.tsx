@@ -397,6 +397,7 @@ export function CalendarScreen() {
 
   // Navigation handlers
   const handleEntryPress = (entryId: string) => {
+    // EntryScreen fetches entry data itself (usually from React Query cache)
     navigate("capture", { entryId });
   };
 

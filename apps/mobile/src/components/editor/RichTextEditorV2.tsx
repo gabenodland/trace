@@ -32,12 +32,15 @@
  */
 
 import { useEffect, useRef, forwardRef, useImperativeHandle, useCallback, useMemo } from "react";
-import { View, StyleSheet, DeviceEventEmitter } from "react-native";
+import { View, StyleSheet, DeviceEventEmitter, Pressable } from "react-native";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { createScopedLogger } from "../../shared/utils/logger";
 import { EditorWebBridge, EditorWebBridgeRef } from "./EditorWebBridge";
 
 const log = createScopedLogger('RichTextEditorV2', '📝');
+
+// Track when setContent is called to measure WebView round-trip
+let setContentTimestamp: number | null = null;
 
 /**
  * Remove inline color styles from HTML to ensure theme colors are used
@@ -223,6 +226,13 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
   const handleL2Change = useCallback(async () => {
     if (!isMounted.current || !l2Ref.current) return;
 
+    // Measure WebView round-trip if we're tracking
+    if (setContentTimestamp !== null) {
+      const elapsed = Math.round(performance.now() - setContentTimestamp);
+      log.info('⏱️ WebView onChange fired', { elapsedFromSetContent: elapsed });
+      setContentTimestamp = null; // Only measure once per setContent
+    }
+
     // Mark as ready on first onChange
     if (!isReady.current) {
       isReady.current = true;
@@ -261,7 +271,8 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     // Content - with sanitization
     setContent: (html: string) => {
       const sanitized = sanitizeHtmlColors(html);
-      log.debug('setContent', { length: sanitized.length });
+      setContentTimestamp = performance.now();
+      log.info('⏱️ setContent called', { length: sanitized.length });
       lastKnownContent.current = sanitized;
       l2Ref.current?.setContent(sanitized);
     },
@@ -293,8 +304,13 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     }
   }, [editable]);
 
-  // TODO: Read-only tap detection
-  // This would need L2 to expose focus state or we need another approach
+  // Handle tap while in read-only mode
+  const handleReadOnlyTap = useCallback(() => {
+    if (!editable && onTapWhileReadOnly) {
+      log.debug('Tap detected in read-only mode');
+      onTapWhileReadOnly();
+    }
+  }, [editable, onTapWhileReadOnly]);
 
   // Listen for global blur event (swipe-back gesture)
   useEffect(() => {
@@ -313,6 +329,13 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
         customCSS={customCSS}
         backgroundColor={theme.colors.background.primary}
       />
+      {/* Tap overlay for read-only mode - intercepts taps to trigger edit mode */}
+      {!editable && onTapWhileReadOnly && (
+        <Pressable
+          style={styles.readOnlyOverlay}
+          onPress={handleReadOnlyTap}
+        />
+      )}
     </View>
   );
 });
@@ -320,5 +343,9 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  readOnlyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
   },
 });

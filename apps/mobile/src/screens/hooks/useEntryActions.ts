@@ -28,6 +28,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
 
   const handleEntryPress = (entryId: string) => {
+    // EntryScreen fetches entry data itself (usually from React Query cache)
     navigate("capture", { entryId });
   };
 

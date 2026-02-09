@@ -40,7 +40,6 @@ export function useAutosave(options: UseAutosaveOptions = {}): void {
   const {
     isEditing,
     isFormDirty,
-    isFormReady,
     isSubmitting,
     isSaving,
     formData,
@@ -85,12 +84,11 @@ export function useAutosave(options: UseAutosaveOptions = {}): void {
 
   useEffect(() => {
     // Autosave conditions:
-    // 1. Form is dirty (has changes compared to baseline)
-    // 2. Form is fully loaded (prevents autosave during sync reload)
-    // 3. Not currently submitting or saving (prevents re-entry during save)
-    // 4. Either editing existing entry OR new entry with actual content
+    // 1. Form is dirty (has changes compared to baseline - also false when loading since baseline is null)
+    // 2. Not currently submitting or saving (prevents re-entry during save)
+    // 3. Either editing existing entry OR new entry with actual content
     // Note: isEditMode is NOT required - attribute changes in view mode should also save
-    const shouldAutosave = isFormDirty && isFormReady && !isSubmitting && !isSaving && (isEditing || hasContent);
+    const shouldAutosave = isFormDirty && !isSubmitting && !isSaving && (isEditing || hasContent);
 
     if (!shouldAutosave) {
       // Clear all timers if conditions no longer met
@@ -138,7 +136,7 @@ export function useAutosave(options: UseAutosaveOptions = {}): void {
       }
       // Note: Don't clear max wait timer on content change - that's the point
     };
-  }, [isEditing, isFormDirty, isFormReady, isSubmitting, isSaving, hasContent, contentForDebounce, stableOnSave, delayMs, maxWaitMs, clearAllTimers]);
+  }, [isEditing, isFormDirty, isSubmitting, isSaving, hasContent, contentForDebounce, stableOnSave, delayMs, maxWaitMs, clearAllTimers]);
 
   // Cleanup max wait timer on unmount
   useEffect(() => {

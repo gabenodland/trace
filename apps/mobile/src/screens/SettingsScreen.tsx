@@ -347,7 +347,7 @@ export function SettingsScreen() {
 
           {/* RichTextEditorV2 Test (Layer 3) */}
           <TouchableOpacity
-            style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
             onPress={() => navigate("editorV2Test")}
             activeOpacity={0.7}
           >
@@ -355,6 +355,23 @@ export function SettingsScreen() {
               <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>RichTextEditor V2 (L3)</Text>
               <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
                 Full editor with onChange
+              </Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Data Fetch Test */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
+            onPress={() => navigate("dataFetchTest")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Data Fetch Test</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                Test SQLite query timing
               </Text>
             </View>
             <View style={styles.settingValue}>

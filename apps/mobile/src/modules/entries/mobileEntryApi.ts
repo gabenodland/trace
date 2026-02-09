@@ -184,6 +184,7 @@ export async function getEntries(filter?: MobileEntryFilter): Promise<Entry[]> {
  * Use { refreshFirst: true } before editing to ensure latest version
  */
 export async function getEntry(id: string, options?: ReadOptions): Promise<Entry | null> {
+  const startTime = performance.now();
   log.debug('Getting entry', { id, options });
 
   // Optionally refresh from server first (for editing)
@@ -194,7 +195,10 @@ export async function getEntry(id: string, options?: ReadOptions): Promise<Entry
     }
   }
 
-  return await localDB.getEntry(id);
+  const result = await localDB.getEntry(id);
+  const elapsed = Math.round(performance.now() - startTime);
+  log.info('⏱️ getEntry completed', { id: id.substring(0, 8), elapsedMs: elapsed });
+  return result;
 }
 
 /**

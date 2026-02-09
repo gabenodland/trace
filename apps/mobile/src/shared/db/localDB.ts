@@ -1032,7 +1032,9 @@ class LocalDatabase {
    * Get a single entry by ID
    */
   async getEntry(entryId: string): Promise<Entry | null> {
+    const t0 = performance.now();
     await this.init();
+    const t1 = performance.now();
     if (!this.db) throw new Error('Database not initialized');
 
     let query = 'SELECT * FROM entries WHERE entry_id = ?';
@@ -1043,11 +1045,35 @@ class LocalDatabase {
       params.push(this.currentUserId);
     }
 
+    // Debug: Check query plan and table size
+    try {
+      const countResult = await this.db.getFirstAsync<{count: number}>('SELECT COUNT(*) as count FROM entries');
+      const explainResult = await this.db.getAllAsync<any>(`EXPLAIN QUERY PLAN ${query}`, params);
+      console.log('[localDB] ⏱️ DEBUG', {
+        entryCount: countResult?.count,
+        query,
+        plan: JSON.stringify(explainResult)
+      });
+    } catch (e) {
+      console.log('[localDB] DEBUG failed', e);
+    }
+
     const row = await this.db.getFirstAsync<any>(query, params);
+    const t2 = performance.now();
 
     if (!row) return null;
 
-    return this.rowToEntry(row);
+    const result = this.rowToEntry(row);
+    const t3 = performance.now();
+
+    console.log('[localDB] ⏱️ getEntry timing', {
+      initMs: Math.round(t1 - t0),
+      queryMs: Math.round(t2 - t1),
+      rowToEntryMs: Math.round(t3 - t2),
+      totalMs: Math.round(t3 - t0),
+    });
+
+    return result;
   }
 
   /**

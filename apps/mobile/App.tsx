@@ -37,7 +37,7 @@ import { useSwipeBackGesture } from "./src/shared/hooks/useSwipeBackGesture";
 import { ErrorBoundary } from "./src/shared/components/ErrorBoundary";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
-import { EntryScreen } from "./src/modules/entries/components/EntryScreen";
+import { EntryScreen, type EntryScreenRef } from "./src/modules/entries/components/EntryScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
@@ -46,6 +46,7 @@ import { DatabaseInfoScreen } from "./src/screens/DatabaseInfoScreen";
 import { EditorTestScreen } from "./src/screens/EditorTestScreen";
 import { TenTapTestScreen } from "./src/screens/TenTapTestScreen";
 import { RichTextEditorV2TestScreen } from "./src/screens/RichTextEditorV2TestScreen";
+import { DataFetchTestScreen } from "./src/screens/DataFetchTestScreen";
 import { LocationsScreen } from "./src/screens/LocationsScreen";
 import { MapScreen } from "./src/screens/MapScreen";
 import { StreamsScreen } from "./src/screens/StreamsScreen";
@@ -349,6 +350,9 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
   // This remembers which main tab (inbox/map/calendar) the user was on
   const [lastMainView, setLastMainView] = useState<string>("inbox");
 
+  // Ref for persistent EntryScreen - navigation calls setEntry instead of passing props
+  const entryScreenRef = useRef<EntryScreenRef>(null);
+
   // Update lastMainView when on a main view, reset subScreenReady
   useEffect(() => {
     if (isOnMainView) {
@@ -394,6 +398,42 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
     return () => registerViewModeHandler(null);
   }, [registerViewModeHandler, navigate]);
 
+  // Track previous activeTab to detect navigation away from capture
+  const prevActiveTabRef = useRef<string>(activeTab);
+
+  // Persistent screen pattern: Call setEntry when navigating to EntryScreen
+  // EntryScreen stays mounted, we just tell it which entry to load
+  // When leaving capture, call clearEntry to reset the form
+  useEffect(() => {
+    const prevTab = prevActiveTabRef.current;
+    prevActiveTabRef.current = activeTab;
+
+    // Navigating TO capture - set up the entry
+    if (activeTab === "capture") {
+      // IMPORTANT: Set subScreenReady immediately for persistent screens
+      // Since EntryScreen is always mounted, onLayout might not fire on subsequent navigations
+      // This ensures z-order is correct for swipe-back gesture (main view above sub-screen)
+      setSubScreenReady(true);
+
+      // Get entryId from navParams (entry is fetched by EntryScreen)
+      const entryId = navParams.entryId || null;
+      const options = entryId ? undefined : {
+        streamId: navParams.initialStreamId,
+        streamName: navParams.initialStreamName,
+        content: navParams.initialContent,
+        date: navParams.initialDate,
+      };
+
+      // Call setEntry via ref - screen fetches entry data itself
+      console.log(`[App] ⏱️ NAVIGATION START - calling setEntry`, { entryId: entryId?.substring(0, 8) || 'new', timestamp: performance.now() });
+      entryScreenRef.current?.setEntry(entryId, options);
+    }
+    // Navigating AWAY from capture - clear the form
+    else if (prevTab === "capture") {
+      entryScreenRef.current?.clearEntry();
+    }
+  }, [activeTab, navParams]);
+
   // Helper: should a main view be visible?
   const shouldShowMainView = (viewName: string) => {
     if (isOnMainView) {
@@ -415,18 +455,9 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
     let boundaryName = activeTab;
 
     switch (activeTab) {
+      // EntryScreen is now rendered persistently below, not here
       case "capture":
-        boundaryName = "EntryScreen";
-        content = (
-          <EntryScreen
-            entryId={navParams.entryId}
-            initialStreamId={navParams.initialStreamId}
-            initialStreamName={navParams.initialStreamName}
-            initialContent={navParams.initialContent}
-            initialDate={navParams.initialDate}
-          />
-        );
-        break;
+        return null; // Handled by persistent EntryScreen layer
       case "account":
         boundaryName = "AccountScreen";
         content = <AccountScreen />;
@@ -454,6 +485,10 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
       case "editorV2Test":
         boundaryName = "RichTextEditorV2TestScreen";
         content = <RichTextEditorV2TestScreen />;
+        break;
+      case "dataFetchTest":
+        boundaryName = "DataFetchTestScreen";
+        content = <DataFetchTestScreen />;
         break;
       case "locations":
         boundaryName = "LocationsScreen";
@@ -541,7 +576,27 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
 
       {/* Sub-screen layer - on top initially, then below main view after it's laid out */}
       {/* zIndex 1 keeps it below main view (zIndex 2) after subScreenReady */}
-      {!isOnMainView && (
+      {/* Persistent EntryScreen layer - always mounted to avoid TenTap memory leaks */}
+      {/* Singleton pattern: editor instance stays alive, content is swapped via setContent() */}
+      <View
+        style={[
+          styles.screenLayer,
+          { backgroundColor: theme.colors.background.secondary, zIndex: activeTab === "capture" ? 1 : -1 },
+          activeTab !== "capture" && styles.screenHidden,
+        ]}
+        pointerEvents={activeTab === "capture" ? "auto" : "none"}
+        onLayout={activeTab === "capture" ? handleSubScreenLayout : undefined}
+      >
+        <ErrorBoundary name="EntryScreen" onBack={() => navigate(targetMainView)}>
+          <EntryScreen
+            ref={entryScreenRef}
+            isVisible={activeTab === "capture"}
+          />
+        </ErrorBoundary>
+      </View>
+
+      {/* Other sub-screens layer - mount/unmount as needed */}
+      {!isOnMainView && activeTab !== "capture" && subScreenContent && (
         <View
           style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary, zIndex: 1 }]}
           pointerEvents="auto"

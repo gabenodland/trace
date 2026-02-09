@@ -1,6 +1,6 @@
-import { useRef, useMemo, useCallback, useEffect, useState } from "react";
+import { useRef, useMemo, useCallback, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from "react";
 import { View, Text, TouchableOpacity, Alert, Animated } from "react-native";
-import { extractTagsAndMentions, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate, combineTitleAndBody, splitTitleAndBody } from "@trace/core";
+import { extractTagsAndMentions, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate, splitTitleAndBody } from "@trace/core";
 import { createLocation } from '../../locations/mobileLocationApi';
 import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
@@ -10,12 +10,12 @@ import { useNavigation } from "../../../shared/contexts/NavigationContext";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { useAuth } from "../../../shared/contexts/AuthContext";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
-import { RichTextEditor } from "../../../components/editor/RichTextEditor";
+import { RichTextEditorV2 } from "../../../components/editor/RichTextEditorV2";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { PhotoCapture, type PhotoCaptureRef } from "../../photos/components/PhotoCapture";
 import { PhotoGallery } from "../../photos/components/PhotoGallery";
 import { createAttachment } from "../../attachments/mobileAttachmentApi";
-import { EntryFormProvider, useEntryForm } from "./context/EntryFormContext";
+import { EntryFormProvider, useEntryForm, type NewEntryOptions } from "./context/EntryFormContext";
 import { useAutosave } from "./hooks/useAutosave";
 import { useGpsCapture } from "./hooks/useGpsCapture";
 import { useAutoGeocode } from "./hooks/useAutoGeocode";
@@ -33,70 +33,94 @@ import { createScopedLogger } from "../../../shared/utils/logger";
 
 const log = createScopedLogger('EntryScreen', '📄');
 
+/**
+ * Ref interface for EntryScreen singleton pattern
+ * Navigation calls setEntry() to populate the form instead of passing props
+ */
+export interface EntryScreenRef {
+  /** Set entry for editing by ID (or null with options for new entry) */
+  setEntry: (entryId: string | null, options?: NewEntryOptions) => void;
+  /** Clear the form - call when navigating away from capture screen */
+  clearEntry: () => void;
+}
+
 interface EntryScreenProps {
-  entryId?: string | null;
-  initialStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people";
-  initialStreamName?: string;
-  initialContent?: string;
-  initialDate?: string;
+  /** Whether this screen is currently visible */
+  isVisible?: boolean;
 }
 
 /**
- * EntryScreen - Entry point that provides context
- * Fetches data and wraps EntryScreenContent with EntryFormProvider
+ * EntryScreen - Persistent entry editor
+ *
+ * PERSISTENT SCREEN PATTERN:
+ * - Mounts once at app start and stays mounted (like main screens)
+ * - Navigation calls ref.setEntry(entryId) to load an entry
+ * - Screen fetches entry data itself via useEntry hook
+ * - No entry-related props that change - avoids remounts
+ *
+ * Usage from navigation:
+ *   entryScreenRef.current?.setEntry(entryId)  // Edit existing
+ *   entryScreenRef.current?.setEntry(null, { streamId })  // Create new
  */
-export function EntryScreen({ entryId, initialStreamId, initialStreamName, initialContent, initialDate }: EntryScreenProps = {}) {
-  // Track savedEntryId at this level for effectiveEntryId calculation
-  const [savedEntryId, setSavedEntryIdLocal] = useState<string | null>(null);
-  const effectiveEntryId = savedEntryId || entryId || null;
-
-  // Fetch data needed by the provider
+export const EntryScreen = forwardRef<EntryScreenRef, EntryScreenProps>(({ isVisible = true }, ref) => {
+  // Fetch data needed by the provider (these don't cause remounts)
   const { streams } = useStreams();
   const { data: savedLocations = [] } = useLocations();
   const { settings } = useSettings();
   const { user } = useAuth();
-  const { entry, isLoading: isLoadingEntry } = useEntry(effectiveEntryId);
-  const { attachments: queryAttachments } = useAttachments(effectiveEntryId);
+
+  // Refs to pass setEntry and clearEntry from context to parent
+  const setEntryRef = useRef<((entryId: string | null, options?: NewEntryOptions) => void) | null>(null);
+  const clearEntryRef = useRef<(() => void) | null>(null);
+
+  // Expose setEntry and clearEntry via ref for navigation to call
+  useImperativeHandle(ref, () => ({
+    setEntry: (entryId: string | null, options?: NewEntryOptions) => {
+      log.info('EntryScreen.setEntry called via ref', {
+        entryId: entryId?.substring(0, 8) || 'new',
+        hasOptions: !!options,
+      });
+      setEntryRef.current?.(entryId, options);
+    },
+    clearEntry: () => {
+      log.info('EntryScreen.clearEntry called via ref');
+      clearEntryRef.current?.();
+    },
+  }), []);
 
   return (
     <EntryFormProvider
-      entryId={entryId}
-      initialStreamId={initialStreamId}
-      initialStreamName={initialStreamName}
-      initialContent={initialContent}
-      initialDate={initialDate}
-      entry={entry}
-      isLoadingEntry={isLoadingEntry}
       streams={streams}
       settings={{
         captureGpsLocation: settings.captureGpsLocation,
         imageQuality: settings.imageQuality,
       }}
       userId={user?.id ?? null}
-      queryPhotoCount={queryAttachments.length}
     >
       <EntryScreenContent
         streams={streams}
         savedLocations={savedLocations}
-        initialStreamId={initialStreamId}
-        onSavedEntryIdChange={setSavedEntryIdLocal}
+        setEntryRef={setEntryRef}
+        clearEntryRef={clearEntryRef}
       />
     </EntryFormProvider>
   );
-}
+});
 
 interface EntryScreenContentProps {
   streams: ReturnType<typeof useStreams>['streams'];
   savedLocations: ReturnType<typeof useLocations>['data'];
-  initialStreamId?: string | null | "all" | "events" | "streams" | "tags" | "people";
-  onSavedEntryIdChange: (id: string | null) => void;
+  /** Ref to expose setEntry from context to parent */
+  setEntryRef: React.RefObject<((entryId: string | null, options?: NewEntryOptions) => void) | null>;
+  /** Ref to expose clearEntry from context to parent */
+  clearEntryRef: React.RefObject<(() => void) | null>;
 }
 
 /**
  * EntryScreenContent - Main content using context
  * All state comes from useEntryForm()
  */
-function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedEntryIdChange }: EntryScreenContentProps) {
+function EntryScreenContent({ streams, savedLocations, setEntryRef, clearEntryRef }: EntryScreenContentProps) {
   const theme = useTheme();
   const { navigate } = useNavigation();
 
@@ -110,14 +134,14 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     updateMultipleFields,
     setBaseline,
     markClean,
-    isFormReady,
     isFormDirty,
     // Editing state
     isEditing,
     effectiveEntryId,
     tempEntryId,
     savedEntryId,
-    setSavedEntryId: setSavedEntryIdContext,
+    setSavedEntryId,
+    entry,
     // Save state
     isSubmitting,
     setIsSubmitting,
@@ -129,6 +153,7 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     isFullScreen,
     setIsFullScreen,
     enterEditMode,
+    editModeInitialContent,
     // Photo tracking
     photoCount,
     setPhotoCount,
@@ -155,32 +180,60 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     updateKnownVersion,
     incrementKnownVersion,
     recordSaveTime,
+    // Singleton pattern
+    setEntry,
+    onEntryLoaded,
+    clearEntry,
   } = useEntryForm();
 
-  // Wrapper to sync savedEntryId to parent (for effectiveEntryId in data fetching)
-  const setSavedEntryId = useCallback((id: string | null) => {
-    setSavedEntryIdContext(id);
-    onSavedEntryIdChange(id);
-  }, [setSavedEntryIdContext, onSavedEntryIdChange]);
+  // Connect refs to context functions (allows parent to call setEntry/clearEntry)
+  useEffect(() => {
+    setEntryRef.current = setEntry;
+  }, [setEntry, setEntryRef]);
 
-  // Fetch entry data for conflict detection and error handling
-  const { entry, entryMutations: singleEntryMutations } = useEntry(effectiveEntryId || null);
+  useEffect(() => {
+    clearEntryRef.current = clearEntry;
+  }, [clearEntry, clearEntryRef]);
+
+  // Fetch entry data - this is the source of truth for editing
+  const { entry: fetchedEntry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(effectiveEntryId || null);
+
+  // Debug: Log immediately after useEntry to see if placeholderData works
+  if (effectiveEntryId) {
+    log.info('⏱️ useEntry returned', {
+      entryId: effectiveEntryId.substring(0, 8),
+      hasFetchedEntry: !!fetchedEntry,
+      isLoading: isLoadingEntry,
+      title: fetchedEntry?.title?.substring(0, 20) || '(none)',
+    });
+  }
+
+  // Use ref for onEntryLoaded to avoid effect re-triggering when callback changes
+  // (onEntryLoaded depends on `entry`, which changes when it's called - causing double invocation)
+  const onEntryLoadedRef = useRef(onEntryLoaded);
+  onEntryLoadedRef.current = onEntryLoaded;
+
+  // When entry is fetched, notify context to populate form
+  // useLayoutEffect runs synchronously before paint - reduces perceived load time
+  useLayoutEffect(() => {
+    if (fetchedEntry && effectiveEntryId) {
+      log.info('⏱️ fetchedEntry arrived in effect', {
+        entryId: fetchedEntry.entry_id?.substring(0, 8),
+        title: fetchedEntry.title?.substring(0, 20) || '(no title)',
+        contentLength: fetchedEntry.content?.length || 0,
+      });
+      onEntryLoadedRef.current(fetchedEntry);
+    }
+  }, [fetchedEntry, effectiveEntryId]);
   const { entryMutations } = useEntries();
   const { attachments: queryAttachments } = useAttachments(effectiveEntryId || null);
 
   const photoCaptureRef = useRef<PhotoCaptureRef>(null);
 
-  // Stable initial content for edit mode - prevents cursor jumping
-  const editModeInitialContent = useRef<string | null>(null);
-
-  // Keyboard height tracking with scroll-to-cursor on show
+  // Keyboard height tracking
   const keyboardHeight = useKeyboardHeight({
     onShow: () => {
-      if (editorRef.current && !activePicker) {
-        setTimeout(() => {
-          editorRef.current?.scrollToCursor();
-        }, 300);
-      }
+      // TenTap handles scroll-to-cursor automatically on focus
     },
   });
 
@@ -205,20 +258,8 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     formData
   ), [showRating, showPriority, showStatus, showType, showDueDate, showLocation, showPhotos, formData]);
 
-  // Title-first editor: combine title + body for editor
-  const editorValue = useMemo(() => {
-    return combineTitleAndBody(formData.title, formData.content);
-  }, [formData.title, formData.content]);
-
-  // Log editorValue changes to debug timing issues
-  useEffect(() => {
-    log.info('editorValue changed', {
-      length: editorValue.length,
-      isFormReady,
-      isEditing,
-      preview: editorValue.substring(0, 50),
-    });
-  }, [editorValue, isFormReady, isEditing]);
+  // Editor content is now set directly by context (setEntry, onEntryLoaded, clearEntry)
+  // No content swap effect needed here - the singleton pattern manages content in one place
 
   const handleEditorChange = useCallback((html: string) => {
     const { title, body } = splitTitleAndBody(html);
@@ -277,16 +318,16 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     }
   }, []);
 
-  // Set baseline photo count for editing after initial load
+  // Set baseline photo count for editing after entry loads
   useEffect(() => {
-    if (isEditing && isFormReady && baselinePhotoCount === null) {
+    if (isEditing && entry && baselinePhotoCount === null) {
       const actualPhotoCount = queryAttachments.length;
       setBaselinePhotoCount(actualPhotoCount);
       if (photoCount !== actualPhotoCount) {
         syncPhotoCount(actualPhotoCount);
       }
     }
-  }, [isEditing, isFormReady, baselinePhotoCount, queryAttachments.length, photoCount, syncPhotoCount]);
+  }, [isEditing, entry, baselinePhotoCount, queryAttachments.length, photoCount, syncPhotoCount]);
 
   // Apply default status for new entries with initial stream
   useEffect(() => {
@@ -300,18 +341,25 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     }
   }, [isEditing, formData.streamId, formData.status, streams, updateField]);
 
-  // Apply templates when form loads with initial stream
+  // Apply templates when form loads with initial stream (singleton pattern)
+  // Templates are applied once when setEntry creates a new entry with a streamId
   const hasAppliedInitialTemplateRef = useRef(false);
+  const lastFormStreamIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (isEditing) return;
-    if (hasAppliedInitialTemplateRef.current) return;
     if (streams.length === 0) return;
+    if (!formData.streamId) return;
 
-    const specialStreamValues = ["all", "events", "streams", "tags", "people", null, undefined];
-    const hasValidStreamFromView = initialStreamId && !specialStreamValues.includes(initialStreamId as any);
-    if (!hasValidStreamFromView) return;
+    // Reset template tracking when switching to a different stream or new entry
+    if (formData.streamId !== lastFormStreamIdRef.current) {
+      lastFormStreamIdRef.current = formData.streamId;
+      hasAppliedInitialTemplateRef.current = false;
+    }
 
-    const selectedStream = streams.find(s => s.stream_id === initialStreamId);
+    if (hasAppliedInitialTemplateRef.current) return;
+
+    const selectedStream = streams.find(s => s.stream_id === formData.streamId);
     if (!selectedStream) return;
 
     hasAppliedInitialTemplateRef.current = true;
@@ -343,32 +391,17 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     if (selectedStream.entry_use_status && selectedStream.entry_default_status && selectedStream.entry_default_status !== "none") {
       updateField("status", selectedStream.entry_default_status);
     }
-  }, [isEditing, streams, initialStreamId, formData.title, formData.content, updateField]);
+  }, [isEditing, streams, formData.streamId, formData.title, formData.content, updateField]);
 
-  // Called when RichTextEditor is ready
-  const handleEditorReady = useCallback((editorContent: string) => {
-    log.info('handleEditorReady called', {
-      editorContentLength: editorContent.length,
+  // Called when RichTextEditorV2 is ready
+  // Content is set by context (setEntry/onEntryLoaded), so we just log here
+  const handleEditorReady = useCallback(() => {
+    log.info('handleEditorReady called (V2)', {
       isEditing,
-      isFormReady,
-      formDataContentLength: formData.content.length,
+      hasEntry: !!entry,
+      effectiveEntryId: effectiveEntryId?.substring(0, 8) || 'new',
     });
-
-    if (!isEditing) {
-      setTimeout(() => {
-        editorRef.current?.requestFocusSync();
-      }, 100);
-      return;
-    }
-
-    if (!isFormReady) return;
-
-    if (formData.content !== editorContent) {
-      updateField("content", editorContent);
-      const syncedData = { ...formData, content: editorContent };
-      setBaseline(syncedData);
-    }
-  }, [isEditing, isFormReady, formData, setBaseline, updateField, editorRef]);
+  }, [isEditing, entry, effectiveEntryId]);
 
   // Save handler
   const handleSave = useCallback(async (isAutosave = false) => {
@@ -380,7 +413,7 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     }
 
     // Conflict detection
-    const conflictResult = checkForConflict(entry);
+    const conflictResult = checkForConflict(entry ?? null);
     if (entry && conflictResult?.hasConflict) {
       const { currentVersion, conflictDevice: lastDevice } = conflictResult;
 
@@ -638,17 +671,17 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
     );
   }, [isEditing, singleEntryMutations, navigate]);
 
-  // Loading state
-  if (isEditing && !isFormReady) {
-    return (
-      <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
-        <Text style={[styles.loadingText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading...</Text>
-      </View>
-    );
-  }
+  // REMOVED: Loading state return
+  // We no longer return early for loading - this was causing the editor to unmount/remount!
+  // The editor stays mounted, and content is set via setContent() when form is ready.
+  // The loading state is now handled by keeping the editor rendered but waiting for content.
 
-  // Error state - entry not found
-  if (isEditing && !entry && !savedEntryId) {
+  // Error state - entry not found (only show after loading completes)
+  // IMPORTANT: Use fetchedEntry (from useEntry) NOT entry (from context)
+  // Context entry is set asynchronously via onEntryLoaded, but useEntry's
+  // cached data is available immediately - so check fetchedEntry to avoid
+  // a timing window where we show error before onEntryLoaded runs.
+  if (isEditing && !isLoadingEntry && !fetchedEntry && !savedEntryId) {
     return (
       <View style={[styles.container, styles.loadingContainer, { backgroundColor: theme.colors.background.primary }]}>
         <Text style={[styles.errorText, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.medium }]}>Entry not found</Text>
@@ -750,18 +783,16 @@ function EntryScreenContent({ streams, savedLocations, initialStreamId, onSavedE
           />
         )}
 
-        {/* Editor */}
+        {/* Editor - Singleton pattern: RichTextEditorV2 stays mounted, content swapped via setContent() */}
         <View style={[
           styles.editorContainer,
           isFullScreen && styles.fullScreenEditor
         ]}>
-          <RichTextEditor
+          <RichTextEditorV2
             ref={editorRef}
-            value={editorValue}
             onChange={handleEditorChange}
-            placeholder="What's on your mind? Use #tags and @mentions..."
             editable={isEditMode}
-            onPress={enterEditMode}
+            onTapWhileReadOnly={enterEditMode}
             onReady={handleEditorReady}
           />
         </View>

@@ -60,12 +60,24 @@ function useEntryQuery(id: string | null, options?: { refreshFirst?: boolean }) 
       if (!id) return undefined;
       // Look for this entry in any cached entries list
       const entriesQueries = queryClient.getQueriesData<Entry[]>({ queryKey: ['entries'] });
-      for (const [, entries] of entriesQueries) {
+      console.log('[useEntryQuery] ⏱️ placeholderData checking cache', {
+        entryId: id.substring(0, 8),
+        cachedQueryCount: entriesQueries.length,
+      });
+      for (const [queryKey, entries] of entriesQueries) {
         if (entries) {
           const found = entries.find(e => e.entry_id === id);
-          if (found) return found;
+          if (found) {
+            console.log('[useEntryQuery] ⏱️ FOUND in cache!', {
+              entryId: id.substring(0, 8),
+              queryKey: JSON.stringify(queryKey),
+              title: found.title?.substring(0, 20),
+            });
+            return found;
+          }
         }
       }
+      console.log('[useEntryQuery] ⏱️ NOT found in any cache');
       return undefined;
     },
     // staleTime: 0 means always refetch in background, but placeholderData shows instantly
