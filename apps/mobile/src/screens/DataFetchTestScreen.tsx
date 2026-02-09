@@ -7,10 +7,10 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Platform } from 'react-native';
 import { SecondaryHeader } from '../components/layout/SecondaryHeader';
 import { localDB } from '../shared/db/localDB';
-import { getEntry } from '../modules/entries/mobileEntryApi';
+import { getEntryWithRelations } from '../modules/entries/mobileEntryApi';
 import { Icon } from '../shared/components';
 import { useTheme } from '../shared/contexts/ThemeContext';
-import type { Entry } from '@trace/core';
+import type { EntryWithRelations } from '../modules/entries/EntryWithRelationsTypes';
 
 interface TimingResult {
   step: string;
@@ -18,7 +18,7 @@ interface TimingResult {
 }
 
 interface FetchResult {
-  entry: Entry | null;
+  entry: EntryWithRelations | null;
   timings: TimingResult[];
   totalMs: number;
   error?: string;
@@ -65,10 +65,10 @@ export function DataFetchTestScreen() {
     logTiming('Start fetch');
 
     try {
-      // This uses the same getEntry that EntryScreen uses
-      // which goes through mobileEntryApi -> localDB.getEntry
-      const entry = await getEntry(entryId);
-      logTiming('getEntry returned');
+      // Test the new getEntryWithRelations function
+      // which fetches entry + stream + attachments
+      const entry = await getEntryWithRelations(entryId);
+      logTiming('getEntryWithRelations returned');
 
       const totalMs = Math.round(performance.now() - t0);
 
@@ -102,7 +102,7 @@ export function DataFetchTestScreen() {
 
       <View style={[styles.statsBar, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
         <Text style={[styles.statsText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>
-          {entries.length} entries loaded • Tap to fetch by ID
+          {entries.length} entries loaded • Tap to test EntryWithRelations
         </Text>
       </View>
 

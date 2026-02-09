@@ -17,6 +17,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 // Import directly from syncApi to avoid circular dependency through sync/index.ts
 import { triggerPushSync, refreshEntryFromServer } from '../../shared/sync/syncApi';
 import { createScopedLogger } from '../../shared/utils/logger';
+import type { EntryWithRelations } from './EntryWithRelationsTypes';
 
 const log = createScopedLogger('EntryApi');
 
@@ -199,6 +200,42 @@ export async function getEntry(id: string, options?: ReadOptions): Promise<Entry
   const elapsed = Math.round(performance.now() - startTime);
   log.info('⏱️ getEntry completed', { id: id.substring(0, 8), elapsedMs: elapsed });
   return result;
+}
+
+/**
+ * Get entry with all relations (Stream and Attachments)
+ * This is the unified interface used by EntryScreen
+ * Fetches entry, stream, and attachments in parallel
+ */
+export async function getEntryWithRelations(id: string, options?: ReadOptions): Promise<EntryWithRelations | null> {
+  log.debug('Getting entry with relations', { id });
+
+  // Fetch entry first
+  const entry = await getEntry(id, options);
+  if (!entry) {
+    return null;
+  }
+
+  // Fetch stream and attachments in parallel
+  const [stream, attachments] = await Promise.all([
+    entry.stream_id ? localDB.getStream(entry.stream_id) : Promise.resolve(undefined),
+    localDB.getAttachmentsForEntry(id),
+  ]);
+
+  // Combine into EntryWithRelations
+  const entryWithRelations: EntryWithRelations = {
+    ...entry,
+    stream,
+    attachments,
+  };
+
+  log.debug('Entry with relations fetched', {
+    id: id.substring(0, 8),
+    hasStream: !!stream,
+    attachmentCount: attachments.length,
+  });
+
+  return entryWithRelations;
 }
 
 /**

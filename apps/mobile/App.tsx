@@ -38,6 +38,7 @@ import { ErrorBoundary } from "./src/shared/components/ErrorBoundary";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { EntryScreen, type EntryScreenRef } from "./src/modules/entries/components/EntryScreen";
+import { EntryManagementScreen, type EntryManagementScreenRef } from "./src/modules/entries/components/EntryManagementScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
@@ -353,6 +354,9 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
   // Ref for persistent EntryScreen - navigation calls setEntry instead of passing props
   const entryScreenRef = useRef<EntryScreenRef>(null);
 
+  // Ref for persistent EntryManagementScreen (new refactored entry editor)
+  const entryManagementRef = useRef<EntryManagementScreenRef>(null);
+
   // Update lastMainView when on a main view, reset subScreenReady
   useEffect(() => {
     if (isOnMainView) {
@@ -431,6 +435,32 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
     // Navigating AWAY from capture - clear the form
     else if (prevTab === "capture") {
       entryScreenRef.current?.clearEntry();
+    }
+
+    // Navigating TO entryManagement - set up the entry
+    if (activeTab === "entryManagement") {
+      setSubScreenReady(true);
+
+      // Get entryId from navParams (new refactored screen)
+      const entryId = navParams.entryId || null;
+
+      if (entryId) {
+        // Edit existing entry
+        entryManagementRef.current?.setEntry(entryId);
+      } else {
+        // Create new entry with optional pre-fill
+        const options = {
+          streamId: navParams.initialStreamId,
+          streamName: navParams.initialStreamName,
+          content: navParams.initialContent,
+          date: navParams.initialDate,
+        };
+        entryManagementRef.current?.createNewEntry(options);
+      }
+    }
+    // Navigating AWAY from entryManagement - clear the form
+    else if (prevTab === "entryManagement") {
+      entryManagementRef.current?.clearEntry();
     }
   }, [activeTab, navParams]);
 
@@ -591,6 +621,25 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
           <EntryScreen
             ref={entryScreenRef}
             isVisible={activeTab === "capture"}
+          />
+        </ErrorBoundary>
+      </View>
+
+      {/* Persistent EntryManagementScreen layer - new refactored entry editor */}
+      {/* Always mounted, shown/hidden based on activeTab */}
+      <View
+        style={[
+          styles.screenLayer,
+          { backgroundColor: theme.colors.background.secondary, zIndex: activeTab === "entryManagement" ? 1 : -1 },
+          activeTab !== "entryManagement" && styles.screenHidden,
+        ]}
+        pointerEvents={activeTab === "entryManagement" ? "auto" : "none"}
+        onLayout={activeTab === "entryManagement" ? handleSubScreenLayout : undefined}
+      >
+        <ErrorBoundary name="EntryManagementScreen" onBack={() => navigate(targetMainView)}>
+          <EntryManagementScreen
+            ref={entryManagementRef}
+            isVisible={activeTab === "entryManagement"}
           />
         </ErrorBoundary>
       </View>

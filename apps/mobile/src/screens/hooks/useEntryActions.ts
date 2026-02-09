@@ -28,8 +28,9 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
 
   const handleEntryPress = (entryId: string) => {
-    // EntryScreen fetches entry data itself (usually from React Query cache)
-    navigate("capture", { entryId });
+    // Navigate to new EntryManagementScreen for viewing entry as JSON
+    // App.tsx will call entryManagementRef.setEntry(entryId)
+    navigate("entryManagement", { entryId });
   };
 
   const handleMoveEntry = (entryId: string) => {
@@ -103,7 +104,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
   const handleCopyEntry = async (entryId: string) => {
     try {
       const newEntryId = await entryMutations.copyEntry(entryId);
-      navigate("capture", { entryId: newEntryId });
+      navigate("entryManagement", { entryId: newEntryId });
     } catch (error) {
       log.error("Failed to copy entry", error);
       Alert.alert("Error", "Failed to copy entry");
