@@ -43,8 +43,12 @@ interface BottomSheetProps {
   showGrabber?: boolean;
   /** Allow swipe down to dismiss */
   swipeToDismiss?: boolean;
+  /** Where swipe gesture is active: "grabber" (default) or "full" sheet. Use "grabber" when content has scrollable areas */
+  swipeArea?: "grabber" | "full";
   /** Dismiss keyboard when opening (default: true). Set to false to allow sheet to appear over keyboard */
   dismissKeyboard?: boolean;
+  /** Use Modal wrapper (default: true). Set to false to render inline for z-order control (parent view can slide over sheet) */
+  useModal?: boolean;
 }
 
 export function BottomSheet({
@@ -54,7 +58,9 @@ export function BottomSheet({
   height = "auto",
   showGrabber = true,
   swipeToDismiss = true,
+  swipeArea = "grabber",
   dismissKeyboard = true,
+  useModal = true,
 }: BottomSheetProps) {
   const dynamicTheme = useTheme();
 
@@ -145,67 +151,89 @@ export function BottomSheet({
 
   if (!visible) return null;
 
-  return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="none"
-      statusBarTranslucent={true}
-      onRequestClose={closeSheet}
-    >
-      <View style={styles.container}>
-        {/* Backdrop */}
-        <Animated.View
-          style={[
-            styles.backdrop,
-            { opacity: backdropOpacity },
-          ]}
-        >
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={closeSheet}
-          />
-        </Animated.View>
+  // Shared content for both modal and inline rendering
+  const sheetContent = (
+    <View style={[styles.container, !useModal && styles.inlineContainer]}>
+      {/* Backdrop */}
+      <Animated.View
+        style={[
+          styles.backdrop,
+          { opacity: backdropOpacity },
+        ]}
+      >
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={closeSheet}
+        />
+      </Animated.View>
 
-        {/* Sheet */}
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: dynamicTheme.colors.background.primary,
-              height: sheetHeight,
-              maxHeight: SCREEN_HEIGHT * 0.95,
-              transform: [{ translateY }],
-            },
-          ]}
-          {...(swipeToDismiss ? panResponder.panHandlers : {})}
-        >
-          {/* Grabber bar */}
-          {showGrabber && (
-            <View style={styles.grabberContainer}>
-              <View
-                style={[
-                  styles.grabber,
-                  { backgroundColor: dynamicTheme.colors.border.medium },
-                ]}
-              />
-            </View>
-          )}
-
-          {/* Content */}
-          <View style={styles.content}>
-            {children}
+      {/* Sheet */}
+      <Animated.View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: dynamicTheme.colors.background.primary,
+            height: sheetHeight,
+            maxHeight: SCREEN_HEIGHT * 0.95,
+            transform: [{ translateY }],
+          },
+        ]}
+        {...(swipeToDismiss && swipeArea === "full" ? panResponder.panHandlers : {})}
+      >
+        {/* Grabber bar - pan handlers on grabber when swipeArea="grabber" to avoid scroll conflicts */}
+        {showGrabber && (
+          <View
+            style={styles.grabberContainer}
+            {...(swipeToDismiss && swipeArea === "grabber" ? panResponder.panHandlers : {})}
+          >
+            <View
+              style={[
+                styles.grabber,
+                { backgroundColor: dynamicTheme.colors.border.medium },
+              ]}
+            />
           </View>
-        </Animated.View>
-      </View>
-    </Modal>
+        )}
+
+        {/* Content */}
+        <View style={styles.content}>
+          {children}
+        </View>
+      </Animated.View>
+    </View>
   );
+
+  // Render with or without Modal wrapper
+  if (useModal) {
+    return (
+      <Modal
+        visible={visible}
+        transparent={true}
+        animationType="none"
+        statusBarTranslucent={true}
+        onRequestClose={closeSheet}
+      >
+        {sheetContent}
+      </Modal>
+    );
+  }
+
+  // Inline rendering - respects parent z-order
+  return sheetContent;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  inlineContainer: {
+    // For non-modal rendering, position absolutely to cover parent
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

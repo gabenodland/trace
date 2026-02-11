@@ -1,4 +1,14 @@
 /**
+ * @deprecated This context has been replaced by direct state in EntryManagementScreen.
+ * Do not use for new code. This file will be removed once EntryScreen.tsx is deleted.
+ *
+ * EntryManagementScreen uses:
+ * - Direct useState in the component (simpler, easier to debug)
+ * - Refs for cross-component communication (avoids re-render cascade)
+ * - Props/parameters pattern for extracted hooks
+ *
+ * ---
+ * Original description:
  * EntryFormContext - Unified state management for EntryScreen
  *
  * Consolidates ALL entry editing state into a single context:

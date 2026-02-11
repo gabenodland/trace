@@ -4,7 +4,7 @@ import { Icon } from "../shared/components";
 import { getAppVersion, getBuildNumber } from "../config/appVersionService";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { useTheme } from "../shared/contexts/ThemeContext";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { UnitSystemSelector } from "../components/settings/UnitSystemSelector";
 import { ImageQualitySelector } from "../components/settings/ImageQualitySelector";
@@ -18,7 +18,7 @@ import { logger } from "../shared/utils/logger";
 export function SettingsScreen() {
   const { settings, updateSettings } = useSettings();
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
 
   const [showUnitSelector, setShowUnitSelector] = useState(false);
   const [showImageQualitySelector, setShowImageQualitySelector] = useState(false);

@@ -14,7 +14,7 @@
 import { useState, useRef, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { useTheme } from "../shared/contexts/ThemeContext";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { EditorWebBridge, EditorWebBridgeRef } from "../components/editor/EditorWebBridge";
 
@@ -22,7 +22,7 @@ const SAMPLE_CONTENT = `<h1 class="entry-title">Test Entry</h1><p>This content w
 
 export function TenTapTestScreen() {
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const [log, setLog] = useState<string[]>([]);
   const [changeCount, setChangeCount] = useState(0);
   const editorRef = useRef<EditorWebBridgeRef>(null);

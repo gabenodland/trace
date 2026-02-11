@@ -1,4 +1,12 @@
 /**
+ * @deprecated This hook uses EntryFormContext which is being replaced.
+ * Do not use for new code. Will be deleted once EntryScreen.tsx is removed.
+ *
+ * For EntryManagementScreen, GPS logic is handled inline or will be extracted
+ * to a new hook using props/refs pattern instead of Context.
+ *
+ * ---
+ * Original description:
  * useGpsCapture - GPS capture logic for EntryScreen
  *
  * Handles:

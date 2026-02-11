@@ -40,9 +40,10 @@ interface PhotoGalleryProps {
   onCollapsedChange?: (collapsed: boolean) => void; // Callback when collapsed state changes
   onTakePhoto?: () => void; // Callback to open camera
   onGallery?: () => void; // Callback to open gallery
+  photoSize?: number; // Size of photo thumbnails (default: 100)
 }
 
-export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoDelete, pendingPhotos, collapsible, isCollapsed, onCollapsedChange, onTakePhoto, onGallery }: PhotoGalleryProps) {
+export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoDelete, pendingPhotos, collapsible, isCollapsed, onCollapsedChange, onTakePhoto, onGallery, photoSize = 100 }: PhotoGalleryProps) {
   const dynamicTheme = useTheme();
   const [photos, setPhotos] = useState<Attachment[]>([]);
   const [photoUris, setPhotoUris] = useState<Record<string, string>>({});
@@ -238,7 +239,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.container}
+          style={[styles.container, { maxHeight: photoSize + 8 }]}
           contentContainerStyle={styles.contentContainer}
         >
           {displayPhotos.map((photo, index) => {
@@ -247,7 +248,10 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
             return (
               <TouchableOpacity
                 key={photo.photoId}
-                style={[styles.photoContainer, { backgroundColor: dynamicTheme.colors.background.tertiary }]}
+                style={[
+                  styles.photoContainer,
+                  { backgroundColor: dynamicTheme.colors.background.tertiary, width: photoSize, height: photoSize }
+                ]}
                 onPress={() => handlePhotoPress(index)}
                 activeOpacity={0.8}
               >
@@ -266,42 +270,66 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
             );
           })}
 
-          {/* Add Photo buttons - stacked camera + gallery */}
+          {/* Add Photo buttons - side by side for small, stacked for larger */}
           {(onTakePhoto || onGallery) && (
-            <View style={styles.addPhotoButtonsContainer}>
+            <View style={[
+              styles.addPhotoButtonsContainer,
+              photoSize <= 50 && { flexDirection: 'row' }
+            ]}>
               {/* Camera button */}
               {onTakePhoto && (
                 <TouchableOpacity
-                  style={[styles.addPhotoButton, { borderColor: dynamicTheme.colors.border.medium, backgroundColor: dynamicTheme.colors.background.secondary }]}
+                  style={[
+                    styles.addPhotoButton,
+                    {
+                      borderColor: dynamicTheme.colors.border.medium,
+                      backgroundColor: dynamicTheme.colors.background.secondary,
+                      // Side by side for small, stacked for larger
+                      width: photoSize <= 50 ? (photoSize - 4) / 2 : photoSize,
+                      height: photoSize <= 50 ? photoSize : (photoSize - 4) / 2,
+                    }
+                  ]}
                   onPress={onTakePhoto}
                   activeOpacity={0.7}
                 >
-                  <Icon name="CustomCamera" size={20} color={dynamicTheme.colors.text.tertiary} />
+                  <Icon name="CustomCamera" size={Math.max(14, photoSize * 0.2)} color={dynamicTheme.colors.text.tertiary} />
                 </TouchableOpacity>
               )}
 
               {/* Gallery button */}
               {onGallery && (
                 <TouchableOpacity
-                  style={[styles.addPhotoButton, { borderColor: dynamicTheme.colors.border.medium, backgroundColor: dynamicTheme.colors.background.secondary }]}
+                  style={[
+                    styles.addPhotoButton,
+                    {
+                      borderColor: dynamicTheme.colors.border.medium,
+                      backgroundColor: dynamicTheme.colors.background.secondary,
+                      // Side by side for small, stacked for larger
+                      width: photoSize <= 50 ? (photoSize - 4) / 2 : photoSize,
+                      height: photoSize <= 50 ? photoSize : (photoSize - 4) / 2,
+                    }
+                  ]}
                   onPress={onGallery}
                   activeOpacity={0.7}
                 >
-                  <Icon name="CustomGallery" size={20} color={dynamicTheme.colors.text.tertiary} />
+                  <Icon name="CustomGallery" size={Math.max(14, photoSize * 0.2)} color={dynamicTheme.colors.text.tertiary} />
                 </TouchableOpacity>
               )}
             </View>
           )}
         </ScrollView>
 
-        {/* Minimal collapse chevron */}
+        {/* Floating collapse button - overlays on right side */}
         {collapsible && onCollapsedChange && (
           <TouchableOpacity
-            style={styles.collapseButton}
+            style={[
+              styles.collapseButton,
+              { backgroundColor: dynamicTheme.colors.background.tertiary }
+            ]}
             onPress={() => onCollapsedChange(true)}
             activeOpacity={0.7}
           >
-            <Icon name="ChevronUp" size={14} color={dynamicTheme.colors.text.tertiary} />
+            <Icon name="ChevronUp" size={16} color={dynamicTheme.colors.text.secondary} />
           </TouchableOpacity>
         )}
       </View>
@@ -342,18 +370,14 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
 
 const styles = StyleSheet.create({
   galleryWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: themeBase.spacing.sm,
+    position: 'relative',
   },
   container: {
-    marginBottom: themeBase.spacing.sm,
     maxHeight: 108,
-    flex: 1,
   },
   contentContainer: {
     paddingLeft: themeBase.spacing.lg,
-    paddingRight: themeBase.spacing.sm,
+    paddingRight: 44, // Extra space for floating collapse button
     gap: themeBase.spacing.sm,
     alignItems: 'center',
   },
@@ -390,8 +414,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   collapseButton: {
-    paddingHorizontal: themeBase.spacing.sm,
-    paddingVertical: 4,
-    marginRight: themeBase.spacing.sm,
+    position: 'absolute',
+    right: themeBase.spacing.md,
+    top: '50%',
+    marginTop: -14, // Half of button height (28/2) to center vertically
+    padding: 6,
+    borderRadius: themeBase.borderRadius.sm,
   },
 });

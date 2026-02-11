@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import { View, StyleSheet, BackHandler } from "react-native";
 import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES, getActiveFilterInfo } from "@trace/core";
 import { Icon } from "../shared/components";
@@ -6,7 +6,7 @@ import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
@@ -24,8 +24,13 @@ import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useDrawerGestures, useFilteredEntries, useEntryActions } from "./hooks";
 
-export function EntryListScreen() {
-  const { navigate } = useNavigation();
+// Render counter to track re-renders
+let entryListRenderCount = 0;
+
+export const EntryListScreen = memo(function EntryListScreen() {
+  entryListRenderCount++;
+  console.log(`[EntryListScreen] 🔄 RENDER #${entryListRenderCount}`, { timestamp: Date.now() });
+  const navigate = useNavigate();
   const theme = useTheme();
   const { user, isOffline } = useAuth();
   const { streams } = useStreams();
@@ -374,7 +379,7 @@ export function EntryListScreen() {
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

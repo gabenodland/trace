@@ -10,7 +10,7 @@
  * Supports gesture-driven drawer control via DrawerControl interface.
  */
 
-import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useMemo, type ReactNode } from "react";
 import type { Region } from "react-native-maps";
 
 /** View modes for the primary screen */
@@ -99,7 +99,14 @@ interface DrawerProviderProps {
   children: ReactNode;
 }
 
+// Render tracking for DrawerProvider
+let drawerProviderRenderCount = 0;
+let prevDrawerState: any = {};
+
 export function DrawerProvider({ children }: DrawerProviderProps) {
+  drawerProviderRenderCount++;
+  const renderNum = drawerProviderRenderCount;
+
   const [isOpen, setIsOpen] = useState(false);
   const [onStreamSelect, setOnStreamSelect] = useState<StreamSelectHandler>(null);
   const [onStreamLongPress, setOnStreamLongPress] = useState<StreamLongPressHandler>(null);
@@ -166,35 +173,80 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
     }
   }, []);
 
+  // Track what's changing to debug re-renders
+  const changes: string[] = [];
+  if (prevDrawerState.isOpen !== isOpen) changes.push('isOpen');
+  if (prevDrawerState.onStreamSelect !== onStreamSelect) changes.push('onStreamSelect');
+  if (prevDrawerState.onStreamLongPress !== onStreamLongPress) changes.push('onStreamLongPress');
+  if (prevDrawerState.selectedStreamId !== selectedStreamId) changes.push('selectedStreamId');
+  if (prevDrawerState.selectedStreamName !== selectedStreamName) changes.push('selectedStreamName');
+  if (prevDrawerState.viewMode !== viewMode) changes.push('viewMode');
+  if (prevDrawerState.onViewModeChange !== onViewModeChange) changes.push('onViewModeChange');
+  if (prevDrawerState.mapRegion !== mapRegion) changes.push('mapRegion');
+  if (prevDrawerState.calendarDate !== calendarDate) changes.push('calendarDate');
+  if (prevDrawerState.calendarZoom !== calendarZoom) changes.push('calendarZoom');
+  if (prevDrawerState.drawerControl !== drawerControl) changes.push('drawerControl');
+  console.log(`[DrawerProvider] 🔄 RENDER #${renderNum} changes: ${changes.length > 0 ? changes.join(', ') : 'NONE'}`);
+  prevDrawerState = {
+    isOpen, onStreamSelect, onStreamLongPress, selectedStreamId, selectedStreamName,
+    viewMode, onViewModeChange, mapRegion, calendarDate, calendarZoom, drawerControl
+  };
+
+  // Memoize context value to prevent unnecessary re-renders of consumers
+  const contextValue = useMemo(() => ({
+    isOpen,
+    openDrawer,
+    closeDrawer,
+    toggleDrawer,
+    onStreamSelect,
+    registerStreamHandler,
+    onStreamLongPress,
+    registerStreamLongPressHandler,
+    selectedStreamId,
+    selectedStreamName,
+    setSelectedStreamId,
+    setSelectedStreamName,
+    viewMode,
+    setViewMode,
+    onViewModeChange,
+    registerViewModeHandler,
+    mapRegion,
+    setMapRegion,
+    calendarDate,
+    setCalendarDate,
+    calendarZoom,
+    setCalendarZoom,
+    drawerControl,
+    registerDrawerControl,
+  }), [
+    isOpen,
+    openDrawer,
+    closeDrawer,
+    toggleDrawer,
+    onStreamSelect,
+    registerStreamHandler,
+    onStreamLongPress,
+    registerStreamLongPressHandler,
+    selectedStreamId,
+    selectedStreamName,
+    setSelectedStreamId,
+    setSelectedStreamName,
+    viewMode,
+    setViewMode,
+    onViewModeChange,
+    registerViewModeHandler,
+    mapRegion,
+    setMapRegion,
+    calendarDate,
+    setCalendarDate,
+    calendarZoom,
+    setCalendarZoom,
+    drawerControl,
+    registerDrawerControl,
+  ]);
+
   return (
-    <DrawerContext.Provider
-      value={{
-        isOpen,
-        openDrawer,
-        closeDrawer,
-        toggleDrawer,
-        onStreamSelect,
-        registerStreamHandler,
-        onStreamLongPress,
-        registerStreamLongPressHandler,
-        selectedStreamId,
-        selectedStreamName,
-        setSelectedStreamId,
-        setSelectedStreamName,
-        viewMode,
-        setViewMode,
-        onViewModeChange,
-        registerViewModeHandler,
-        mapRegion,
-        setMapRegion,
-        calendarDate,
-        setCalendarDate,
-        calendarZoom,
-        setCalendarZoom,
-        drawerControl,
-        registerDrawerControl,
-      }}
-    >
+    <DrawerContext.Provider value={contextValue}>
       {children}
     </DrawerContext.Provider>
   );

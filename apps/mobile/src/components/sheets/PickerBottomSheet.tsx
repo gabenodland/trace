@@ -36,6 +36,8 @@ interface PickerBottomSheetProps {
   secondaryAction?: PickerAction;
   /** Dismiss keyboard when opening (default: false for pickers). Set to true to dismiss keyboard */
   dismissKeyboard?: boolean;
+  /** Where swipe gesture is active: "grabber" or "full" sheet. Use "grabber" when content has scrollable areas. Default: "full" */
+  swipeArea?: "grabber" | "full";
 }
 
 export function PickerBottomSheet({
@@ -48,6 +50,7 @@ export function PickerBottomSheet({
   primaryAction,
   secondaryAction,
   dismissKeyboard = false,
+  swipeArea = "full",
 }: PickerBottomSheetProps) {
   const dynamicTheme = useTheme();
 
@@ -58,9 +61,11 @@ export function PickerBottomSheet({
       visible={visible}
       onClose={onClose}
       height={height}
+      swipeArea={swipeArea}
       showGrabber={true}
       swipeToDismiss={true}
       dismissKeyboard={dismissKeyboard}
+      useModal={false}
     >
       <View style={styles.container}>
         {/* Header */}

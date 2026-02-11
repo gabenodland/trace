@@ -9,7 +9,7 @@ import { useState, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { WebView } from "react-native-webview";
 import { useTheme } from "../shared/contexts/ThemeContext";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 
 // Our custom editor bundle - just the HTML string
@@ -21,7 +21,7 @@ const SAMPLE_ENTRY_HTML = `<h1 class="entry-title">Morning Reflection</h1><p>Tod
 
 export function EditorTestScreen() {
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const [key, setKey] = useState(0);
   const webviewRef = useRef<WebView>(null);
   const pendingContentRef = useRef<string | null>(null);

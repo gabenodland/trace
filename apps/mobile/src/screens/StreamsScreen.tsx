@@ -14,12 +14,12 @@ const log = createScopedLogger(LogScopes.Streams);
 import { Icon } from "../shared/components";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import type { Stream } from "@trace/core";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { useTheme } from "../shared/contexts/ThemeContext";
 
 export function StreamsScreen() {
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const theme = useTheme();
   const { streams, isLoading, streamMutations } = useStreams();
 

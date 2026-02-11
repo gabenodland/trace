@@ -25,7 +25,7 @@
  * ```
  */
 
-import { useRef, useLayoutEffect } from "react";
+import { useRef } from "react";
 import { Animated, PanResponder, Dimensions, GestureResponderHandlers, Keyboard, DeviceEventEmitter } from "react-native";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -69,10 +69,6 @@ export function useSwipeBackGesture({
   const isEnabledRef = useRef(isEnabled);
   isEnabledRef.current = isEnabled;
 
-  // Track modal state via ref for pan responder
-  const isModalOpenRef = useRef(isModalOpen);
-  isModalOpenRef.current = isModalOpen;
-
   // Track callbacks via refs to avoid stale closures in PanResponder
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
@@ -83,47 +79,48 @@ export function useSwipeBackGesture({
   // Track previous isEnabled to detect changes
   const prevIsEnabledRef = useRef(isEnabled);
 
-  // Reset animation when enabled state changes
-  // IMPORTANT: useLayoutEffect runs synchronously before paint
-  useLayoutEffect(() => {
-    const prevIsEnabled = prevIsEnabledRef.current;
-    prevIsEnabledRef.current = isEnabled;
-
-    // Skip if this is the initial render (value already set correctly in useRef)
-    if (prevIsEnabled === isEnabled) {
-      return;
-    }
+  // CRITICAL: Set translateX synchronously during render when entering sub-screen
+  // This ensures the value is set BEFORE the Animated.View evaluates its transform
+  // We only do this for the false->true transition (entering sub-screen)
+  // The true->false transition is handled by the swipe animation completing to 0
+  if (prevIsEnabledRef.current !== isEnabled) {
+    console.log('[useSwipeBackGesture] isEnabled changed:', {
+      from: prevIsEnabledRef.current,
+      to: isEnabled,
+    });
 
     if (isEnabled) {
-      // Sub-screen: main view off-screen to left
+      // Entering sub-screen: immediately move main view off-screen
+      console.log('[useSwipeBackGesture] Setting translateX to -SCREEN_WIDTH (sync)');
       mainViewTranslateX.setValue(-SCREEN_WIDTH);
-    } else {
-      // Main view: visible
-      mainViewTranslateX.setValue(0);
     }
-  }, [isEnabled]);
+    // Note: Don't set to 0 here - the swipe-back animation handles the return to 0
+
+    prevIsEnabledRef.current = isEnabled;
+  }
 
   const panResponder = useRef(
     PanResponder.create({
       // Don't capture initial touch - let children handle taps
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) => {
-        // Don't capture when disabled or modal is open
-        if (!isEnabledRef.current || isModalOpenRef.current) {
+        // Don't capture when disabled
+        if (!isEnabledRef.current) {
+          console.log('[useSwipeBackGesture] onMoveShouldSet: BLOCKED (disabled)');
           return false;
         }
         // Require clear horizontal swipe to the right
         const shouldCapture = gs.dx > GESTURE_START_THRESHOLD && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5;
         if (shouldCapture) {
-          // Dismiss keyboard immediately when swipe gesture is detected
-          // Emit event for WebView editors to blur (Keyboard.dismiss alone doesn't work for WebViews)
-          DeviceEventEmitter.emit('blurEditors');
+          console.log('[useSwipeBackGesture] onMoveShouldSet: CAPTURING swipe');
+          // Dismiss keyboard and blur all editors immediately
           Keyboard.dismiss();
+          DeviceEventEmitter.emit('blurEditors');
         }
         return shouldCapture;
       },
       onPanResponderGrant: () => {
-        // Gesture granted - no logging needed (too noisy)
+        console.log('[useSwipeBackGesture] onPanResponderGrant: gesture started');
       },
       onPanResponderMove: (_, gs) => {
         // Match drawer pattern: Just track the finger position directly
@@ -132,21 +129,27 @@ export function useSwipeBackGesture({
         mainViewTranslateX.setValue(newX);
       },
       onPanResponderRelease: async (_, gs) => {
+        console.log('[useSwipeBackGesture] onPanResponderRelease:', { dx: gs.dx, vx: gs.vx, threshold: SWIPE_THRESHOLD });
+
         if (gs.dx > SWIPE_THRESHOLD || gs.vx > VELOCITY_THRESHOLD) {
           // Past threshold - check if we can go back (use ref to get latest callback)
           const canGoBack = checkBeforeBackRef.current ? await checkBeforeBackRef.current() : true;
+          console.log('[useSwipeBackGesture] Past threshold, canGoBack:', canGoBack);
 
           if (canGoBack) {
             // Complete slide-in animation then navigate
+            console.log('[useSwipeBackGesture] Animating to 0 then navigating back');
             Animated.timing(mainViewTranslateX, {
               toValue: 0,
               duration: 150,
               useNativeDriver: true,
             }).start(() => {
+              console.log('[useSwipeBackGesture] Animation complete, calling onBack');
               onBackRef.current();  // Use ref to get latest callback
             });
           } else {
             // User cancelled (e.g., discard dialog) - snap back
+            console.log('[useSwipeBackGesture] Cancelled, snapping back');
             Animated.timing(mainViewTranslateX, {
               toValue: -SCREEN_WIDTH,
               duration: 150,
@@ -155,6 +158,7 @@ export function useSwipeBackGesture({
           }
         } else {
           // Not past threshold - snap back
+          console.log('[useSwipeBackGesture] Not past threshold, snapping back');
           Animated.timing(mainViewTranslateX, {
             toValue: -SCREEN_WIDTH,
             duration: 150,

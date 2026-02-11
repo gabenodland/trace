@@ -17,7 +17,7 @@
 import { useState, useRef, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { useTheme } from "../shared/contexts/ThemeContext";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { RichTextEditorV2, RichTextEditorV2Ref } from "../components/editor/RichTextEditorV2";
 
@@ -25,7 +25,7 @@ const SAMPLE_CONTENT = `<h1 class="entry-title">Test Entry Title</h1><p>This con
 
 export function RichTextEditorV2TestScreen() {
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const [log, setLog] = useState<string[]>([]);
   const [changeCount, setChangeCount] = useState(0);
   const [isReady, setIsReady] = useState(false);

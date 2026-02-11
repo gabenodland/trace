@@ -208,6 +208,24 @@ const EditorWithContent = ({ initialContent }: { initialContent: string }) => {
         case 'redo':
           editor.commands.redo();
           break;
+
+        case 'clearHistory':
+          // Legacy - use clearHistoryNow instead
+          console.log('[AdvancedEditor] clearHistory - use clearHistoryNow instead');
+          break;
+
+        case 'clearHistoryNow':
+          // TODO: Not yet implemented - need proper ProseMirror history clearing
+          console.log('[AdvancedEditor] clearHistoryNow - NOT IMPLEMENTED');
+          break;
+
+        case 'setContentAndClearHistory':
+          // TODO: History clearing not yet working - just set content for now
+          if (payload?.content !== undefined) {
+            editor.commands.setContent(payload.content);
+            console.log('[AdvancedEditor] setContentAndClearHistory - content set (history NOT cleared)');
+          }
+          break;
       }
     };
 

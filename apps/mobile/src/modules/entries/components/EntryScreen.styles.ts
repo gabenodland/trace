@@ -39,6 +39,7 @@ export const styles = StyleSheet.create({
   },
   headerTitleContainer: {
     flex: 1,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 4,
@@ -81,10 +82,10 @@ export const styles = StyleSheet.create({
     textAlignVertical: "center",
   },
   headerSaveButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    width: 24,
     minHeight: 32,
     justifyContent: "center",
+    alignItems: "center",
   },
   headerSaveButtonDisabled: {
     opacity: 0.5,

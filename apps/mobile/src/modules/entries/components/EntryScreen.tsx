@@ -1,3 +1,17 @@
+/**
+ * @deprecated This screen has been replaced by EntryManagementScreen.
+ * Use EntryManagementScreen for all new code. This file will be removed once
+ * the migration is complete and EntryManagementScreen is stable.
+ *
+ * EntryManagementScreen uses:
+ * - Direct useState instead of EntryFormContext (simpler, easier to debug)
+ * - Refs for cross-component communication instead of Context
+ * - Props/parameters pattern for extracted hooks
+ *
+ * This screen uses the old pattern:
+ * - EntryFormContext for all state (heavy indirection)
+ * - Context-based hooks (useGpsCapture, useAutoGeocode, useAutosave)
+ */
 import { useRef, useMemo, useCallback, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from "react";
 import { View, Text, TouchableOpacity, Alert, Animated } from "react-native";
 import { extractTagsAndMentions, locationToCreateInput, type EntryStatus, applyTitleTemplate, applyContentTemplate, splitTitleAndBody } from "@trace/core";
@@ -6,7 +20,7 @@ import { useEntries, useEntry } from "../mobileEntryHooks";
 import { useStreams } from "../../streams/mobileStreamHooks";
 import { useLocations } from "../../locations/mobileLocationHooks";
 import { useAttachments } from "../../attachments/mobileAttachmentHooks";
-import { useNavigation } from "../../../shared/contexts/NavigationContext";
+import { useNavigate } from "../../../shared/navigation";
 import { useSettings } from "../../../shared/contexts/SettingsContext";
 import { useAuth } from "../../../shared/contexts/AuthContext";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
@@ -122,7 +136,7 @@ interface EntryScreenContentProps {
  */
 function EntryScreenContent({ streams, savedLocations, setEntryRef, clearEntryRef }: EntryScreenContentProps) {
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
 
   // Get ALL state from context
   const {
@@ -230,10 +244,13 @@ function EntryScreenContent({ streams, savedLocations, setEntryRef, clearEntryRe
 
   const photoCaptureRef = useRef<PhotoCaptureRef>(null);
 
-  // Keyboard height tracking
+  // Keyboard height tracking - also detects when user taps into editor
+  // Using keyboard show event because Android WebView needs native touch for keyboard
   const keyboardHeight = useKeyboardHeight({
     onShow: () => {
-      // TenTap handles scroll-to-cursor automatically on focus
+      if (!isEditMode) {
+        enterEditMode();
+      }
     },
   });
 
@@ -792,7 +809,6 @@ function EntryScreenContent({ streams, savedLocations, setEntryRef, clearEntryRe
             ref={editorRef}
             onChange={handleEditorChange}
             editable={isEditMode}
-            onTapWhileReadOnly={enterEditMode}
             onReady={handleEditorReady}
           />
         </View>

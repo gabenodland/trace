@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ScrollView } from "react-native";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { useLocationsWithCounts } from "../modules/locations/mobileLocationHooks";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { SubBar } from "../components/layout/SubBar";
@@ -27,7 +27,7 @@ interface LocationNode {
 
 export function LocationsScreen() {
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
 
   // Use hook for locations with counts instead of direct localDB call
   const { data: locationsData, isLoading } = useLocationsWithCounts();

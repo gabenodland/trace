@@ -3,7 +3,7 @@
 // Initialize core FIRST - before any other @trace/core imports
 import "./src/config/initializeCore";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated, Linking as RNLinking, Modal, TouchableOpacity } from "react-native";
@@ -28,7 +28,7 @@ import { Exo2_400Regular, Exo2_500Medium, Exo2_600SemiBold, Exo2_700Bold } from 
 import * as Linking from "expo-linking";
 import { setSession } from "@trace/core";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
-import { NavigationProvider, BeforeBackHandler, useNavigation } from "./src/shared/contexts/NavigationContext";
+import { useNavigationState } from "./src/shared/navigation";
 import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
 import { ThemeProvider, useTheme } from "./src/shared/contexts/ThemeContext";
 import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/DrawerContext";
@@ -37,7 +37,6 @@ import { useSwipeBackGesture } from "./src/shared/hooks/useSwipeBackGesture";
 import { ErrorBoundary } from "./src/shared/components/ErrorBoundary";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
-import { EntryScreen, type EntryScreenRef } from "./src/modules/entries/components/EntryScreen";
 import { EntryManagementScreen, type EntryManagementScreenRef } from "./src/modules/entries/components/EntryManagementScreen";
 import { EntryListScreen } from "./src/screens/EntryListScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
@@ -72,84 +71,18 @@ const queryClient = new QueryClient({
 /**
  * AuthGate - Shows login/signup when not authenticated, main app when authenticated
  *
- * Navigation is simple:
- * - Main views (list/map/calendar) are tracked via DrawerContext.viewMode
- * - Sub-screens (entry, settings, profile) just track current screen
- * - Back from any sub-screen returns to the main view
- * - No history stack needed
+ * Navigation state is now managed by NavigationContext to avoid re-render cascade.
+ * When navigate() is called, only components using useNavigation() re-render,
+ * not the entire AuthGate tree.
  */
 function AuthGate() {
-  console.log('[AuthGate] Starting...');
   const { isAuthenticated, isLoading, user } = useAuth();
-  console.log('[AuthGate] useAuth returned', { isAuthenticated, isLoading, hasUser: !!user });
   const [showSignUp, setShowSignUp] = useState(false);
-  const [activeTab, setActiveTab] = useState("inbox");
-  const [navParams, setNavParams] = useState<Record<string, any>>({});
   const [dbInitialized, setDbInitialized] = useState(false);
 
   // Version check state
   const [versionStatus, setVersionStatus] = useState<VersionStatus | null>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
-
-  // Before back handler for screens to intercept back navigation
-  const beforeBackHandlerRef = useRef<BeforeBackHandler | null>(null);
-
-  // Track if a fullscreen modal is open (disables swipe-back gesture)
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // Ref to store current main view screen (updated by AppContent based on viewMode)
-  const mainViewScreenRef = useRef<string>("inbox");
-
-  const setBeforeBackHandler = useCallback((handler: BeforeBackHandler | null) => {
-    beforeBackHandlerRef.current = handler;
-  }, []);
-
-  const checkBeforeBack = useCallback(async (): Promise<boolean> => {
-    if (beforeBackHandlerRef.current) {
-      return await beforeBackHandlerRef.current();
-    }
-    return true; // No handler, proceed with back
-  }, []);
-
-  // Callback for AppContent to update main view screen based on viewMode
-  const setMainViewScreen = useCallback((screen: string) => {
-    mainViewScreenRef.current = screen;
-  }, []);
-
-  // Track current activeTab via ref for use in stable callbacks
-  const activeTabRef = useRef(activeTab);
-  activeTabRef.current = activeTab;
-
-  // Main view screens - back from these exits app
-  const mainViewScreens = ["inbox", "map", "calendar"];
-
-  // Handle back navigation - always returns to main view
-  // Using refs to avoid recreating callback when state changes
-  const handleBackAsync = useCallback(async () => {
-    const isOnMainView = mainViewScreens.includes(activeTabRef.current);
-    if (isOnMainView) return; // Already on main view
-
-    // Check if screen allows back navigation
-    const canGoBack = await checkBeforeBack();
-    if (!canGoBack) {
-      return; // Screen blocked back navigation
-    }
-
-    // Go back to main view using the current viewMode
-    setNavParams({});
-    setActiveTab(mainViewScreenRef.current);
-  }, [checkBeforeBack]);
-
-  // Handle navigation - simple screen change, no history stack
-  const handleNavigate = useCallback((tabId: string, params?: Record<string, any>) => {
-    // Handle "back" navigation specially - go to main view
-    if (tabId === "back") {
-      handleBackAsync();
-      return;
-    }
-    setActiveTab(tabId);
-    setNavParams(params || {});
-  }, [handleBackAsync]);
 
   // Track initialization state to prevent duplicate initialization
   const hasInitializedRef = useRef(false);
@@ -189,27 +122,6 @@ function AuthGate() {
         hasInitializedRef.current = false;
       });
   }, [isAuthenticated]);
-
-  // Compute isOnMainView for backHandler effect
-  const isOnMainView = mainViewScreens.includes(activeTab);
-
-  // Handle Android back button and iOS swipe-back gesture
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // If on main view, allow default behavior (exit app)
-      if (isOnMainView) {
-        return false;
-      }
-
-      // On sub-screen, go back to main view
-      handleBackAsync();
-      return true;
-    });
-
-    return () => backHandler.remove();
-  }, [isAuthenticated, isOnMainView]);
 
   // Check app version on startup
   useEffect(() => {
@@ -254,23 +166,12 @@ function AuthGate() {
     }
   };
 
-  // User is authenticated - show main app with new navigation
+  // User is authenticated - show main app
+  // Navigation state is managed by NavigationService singleton
   return (
     <>
       <DrawerProvider>
-        <NavigationProvider
-          navigate={handleNavigate}
-          setBeforeBackHandler={setBeforeBackHandler}
-          checkBeforeBack={checkBeforeBack}
-          isModalOpen={isModalOpen}
-          setIsModalOpen={setIsModalOpen}
-        >
-          <AppContent
-            activeTab={activeTab}
-            navParams={navParams}
-            setMainViewScreen={setMainViewScreen}
-          />
-        </NavigationProvider>
+        <AppContent />
       </DrawerProvider>
 
       {/* Update Modal */}
@@ -312,25 +213,41 @@ function AuthGate() {
 }
 
 /**
- * AppContent - Inner component that uses drawer context
+ * AppContent - Inner component that uses navigation and drawer context
  * Handles view mode changes and renders the app content
  *
  * Main view screens (inbox, map, calendar) stay mounted for instant back navigation.
- * Sub-screens (capture, settings, etc.) mount/unmount as needed.
+ * EntryManagementScreen stays mounted (persistent singleton pattern).
+ * Other sub-screens (settings, etc.) mount/unmount as needed.
  *
  * Swipe-back gesture: When on a sub-screen, swiping right from anywhere brings
  * the main view sliding in from the left (iOS-style back navigation).
+ *
+ * NOTE: activeTab and navParams come from NavigationService singleton.
+ * This means only AppContent re-renders on navigation, not AuthGate.
  */
-interface AppContentProps {
-  activeTab: string;
-  navParams: Record<string, any>;
-  setMainViewScreen: (screen: string) => void;
-}
-
-function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps) {
-  const { navigate, checkBeforeBack, isModalOpen } = useNavigation();
+function AppContent() {
+  // Get navigation state - this is the ONLY place that re-renders on nav
+  const { activeTab, navParams, navigate, goBack, checkBeforeBack, isModalOpen, isOnMainView } = useNavigationState();
+  console.log('[AppContent] 🔄 RENDER', { activeTab, isOnMainView });
   const { registerViewModeHandler, viewMode } = useDrawer();
   const theme = useTheme();
+
+  // Handle Android back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // If on main view, allow default behavior (exit app)
+      if (isOnMainView) {
+        return false;
+      }
+
+      // On sub-screen, go back to main view
+      goBack();
+      return true;
+    });
+
+    return () => backHandler.remove();
+  }, [isOnMainView, goBack]);
 
   // Map viewMode to screen name
   const screenMap: Record<ViewMode, string> = {
@@ -338,10 +255,6 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
     map: "map",
     calendar: "calendar",
   };
-
-  // Main view screens that stay mounted
-  const mainViewScreens = ["inbox", "map", "calendar"];
-  const isOnMainView = mainViewScreens.includes(activeTab);
 
   // Track if sub-screen has been laid out (for z-order control)
   // Once laid out, we flip z-order so main view is on top for swipe-back
@@ -351,19 +264,25 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
   // This remembers which main tab (inbox/map/calendar) the user was on
   const [lastMainView, setLastMainView] = useState<string>("inbox");
 
-  // Ref for persistent EntryScreen - navigation calls setEntry instead of passing props
-  const entryScreenRef = useRef<EntryScreenRef>(null);
+  // Lazy mount: Only mount screens after first visit (reduces startup renders)
+  // Screens stay mounted after first visit for instant back navigation
+  const [visitedScreens, setVisitedScreens] = useState<Set<string>>(() => new Set(["inbox"]));
 
-  // Ref for persistent EntryManagementScreen (new refactored entry editor)
+  // Ref for persistent EntryManagementScreen (entry editor)
   const entryManagementRef = useRef<EntryManagementScreenRef>(null);
 
   // Update lastMainView when on a main view, reset subScreenReady
+  // Also track visited screens for lazy mounting
   useEffect(() => {
     if (isOnMainView) {
       setSubScreenReady(false);
       setLastMainView(activeTab);
+      // Mark screen as visited (for lazy mounting)
+      if (!visitedScreens.has(activeTab)) {
+        setVisitedScreens(prev => new Set(prev).add(activeTab));
+      }
     }
-  }, [isOnMainView, activeTab]);
+  }, [isOnMainView, activeTab, visitedScreens]);
 
   // Callback for when sub-screen layout completes
   const handleSubScreenLayout = useCallback(() => {
@@ -389,11 +308,6 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
     isModalOpen,
   });
 
-  // Keep main view screen ref in sync with viewMode
-  useEffect(() => {
-    setMainViewScreen(screenMap[viewMode]);
-  }, [viewMode, setMainViewScreen]);
-
   // Register view mode handler to navigate when mode changes
   useEffect(() => {
     registerViewModeHandler((mode: ViewMode) => {
@@ -402,50 +316,38 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
     return () => registerViewModeHandler(null);
   }, [registerViewModeHandler, navigate]);
 
-  // Track previous activeTab to detect navigation away from capture
+  // Track previous activeTab to detect navigation away from entryManagement
   const prevActiveTabRef = useRef<string>(activeTab);
 
-  // Persistent screen pattern: Call setEntry when navigating to EntryScreen
-  // EntryScreen stays mounted, we just tell it which entry to load
-  // When leaving capture, call clearEntry to reset the form
+  // Helper: "capture" is legacy alias for "entryManagement"
+  const isEntryScreen = activeTab === "entryManagement" || activeTab === "capture";
+  const wasEntryScreen = (tab: string) => tab === "entryManagement" || tab === "capture";
+  console.log('[AppContent] isEntryScreen:', isEntryScreen, 'activeTab:', activeTab, 'subScreenReady:', subScreenReady, 'visitedScreens:', Array.from(visitedScreens));
+
+  // Persistent screen pattern: Call setEntry when navigating to EntryManagementScreen
+  // Screen stays mounted, we just tell it which entry to load
+  // When leaving, call clearEntry to reset
   useEffect(() => {
     const prevTab = prevActiveTabRef.current;
     prevActiveTabRef.current = activeTab;
 
-    // Navigating TO capture - set up the entry
-    if (activeTab === "capture") {
-      // IMPORTANT: Set subScreenReady immediately for persistent screens
-      // Since EntryScreen is always mounted, onLayout might not fire on subsequent navigations
-      // This ensures z-order is correct for swipe-back gesture (main view above sub-screen)
-      setSubScreenReady(true);
-
-      // Get entryId from navParams (entry is fetched by EntryScreen)
-      const entryId = navParams.entryId || null;
-      const options = entryId ? undefined : {
-        streamId: navParams.initialStreamId,
-        streamName: navParams.initialStreamName,
-        content: navParams.initialContent,
-        date: navParams.initialDate,
-      };
-
-      // Call setEntry via ref - screen fetches entry data itself
-      console.log(`[App] ⏱️ NAVIGATION START - calling setEntry`, { entryId: entryId?.substring(0, 8) || 'new', timestamp: performance.now() });
-      entryScreenRef.current?.setEntry(entryId, options);
-    }
-    // Navigating AWAY from capture - clear the form
-    else if (prevTab === "capture") {
-      entryScreenRef.current?.clearEntry();
-    }
+    console.log('[AppContent] 🔧 setEntry effect:', {
+      prevTab,
+      activeTab,
+      isEntryScreen,
+      navParams,
+      hasRef: !!entryManagementRef.current,
+    });
 
     // Navigating TO entryManagement - set up the entry
-    if (activeTab === "entryManagement") {
-      setSubScreenReady(true);
-
-      // Get entryId from navParams (new refactored screen)
+    if (isEntryScreen) {
+      // Note: subScreenReady is set by handleSubScreenLayout when the screen renders
       const entryId = navParams.entryId || null;
+      console.log('[AppContent] 🔧 Setting up entry screen:', { entryId, activeTab, navParams });
 
       if (entryId) {
         // Edit existing entry
+        console.log('[AppContent] 🔧 Calling setEntry with:', entryId, 'ref exists:', !!entryManagementRef.current);
         entryManagementRef.current?.setEntry(entryId);
       } else {
         // Create new entry with optional pre-fill
@@ -459,7 +361,7 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
       }
     }
     // Navigating AWAY from entryManagement - clear the form
-    else if (prevTab === "entryManagement") {
+    else if (wasEntryScreen(prevTab)) {
       entryManagementRef.current?.clearEntry();
     }
   }, [activeTab, navParams]);
@@ -473,9 +375,21 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
       // On sub-screen - ALWAYS show the target main view
       // It's off-screen due to translateX, but keeping it visible (opacity: 1)
       // ensures Android renders it and it's ready for instant swipe-back
-      return targetMainView === viewName;
+      const result = targetMainView === viewName;
+      console.log(`[shouldShowMainView] viewName=${viewName}, targetMainView=${targetMainView}, result=${result}`);
+      return result;
     }
   };
+
+  // Debug: log swipe-back state
+  console.log('[AppContent] Swipe state:', {
+    isOnMainView,
+    isEntryScreen,
+    targetMainView,
+    lastMainView,
+    subScreenReady,
+    activeTab
+  });
 
   // Memoize sub-screen content to prevent re-renders during swipe gesture
   const subScreenContent = useMemo(() => {
@@ -485,9 +399,10 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
     let boundaryName = activeTab;
 
     switch (activeTab) {
-      // EntryScreen is now rendered persistently below, not here
-      case "capture":
-        return null; // Handled by persistent EntryScreen layer
+      // EntryManagementScreen is rendered persistently below, not here
+      case "entryManagement":
+      case "capture": // Legacy alias
+        return null; // Handled by persistent EntryManagementScreen layer
       case "account":
         boundaryName = "AccountScreen";
         content = <AccountScreen />;
@@ -553,15 +468,17 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
       {...panHandlers}
     >
       {/* Main views layer - slides in from left during swipe-back */}
-      {/* Rendered FIRST (bottom layer) so sub-screen is always on top */}
+      {/* Always on top when on entry screen (for swipe-back), otherwise normal layer */}
       <Animated.View
         style={[
           styles.screenLayer,
           {
             backgroundColor: theme.colors.background.secondary,
             transform: [{ translateX: isOnMainView ? 0 : mainViewTranslateX }],
-            // After sub-screen renders, put main view on top for swipe-back
-            zIndex: subScreenReady ? 2 : 0,
+            // For persistent EntryManagementScreen: always on top when visible (for swipe-back)
+            // Main views are off-screen (translateX) so entry is visible, but main views slide in on swipe
+            // For other sub-screens: use subScreenReady to prevent flash on initial render
+            zIndex: isEntryScreen ? 2 : (subScreenReady ? 2 : 0),
           },
         ]}
         pointerEvents={isOnMainView ? "auto" : "none"}
@@ -578,74 +495,59 @@ function AppContent({ activeTab, navParams, setMainViewScreen }: AppContentProps
             <EntryListScreen />
           </ErrorBoundary>
         </View>
-        <View
-          style={[
-            styles.screenLayer,
-            { backgroundColor: theme.colors.background.secondary },
-            !shouldShowMainView("map") && styles.screenHidden,
-          ]}
-          pointerEvents={activeTab === "map" ? "auto" : "none"}
-        >
-          <ErrorBoundary name="MapScreen">
-            <MapScreen isVisible={activeTab === "map"} />
-          </ErrorBoundary>
-        </View>
-        <View
-          style={[
-            styles.screenLayer,
-            { backgroundColor: theme.colors.background.secondary },
-            !shouldShowMainView("calendar") && styles.screenHidden,
-          ]}
-          pointerEvents={activeTab === "calendar" ? "auto" : "none"}
-        >
-          <ErrorBoundary name="CalendarScreen">
-            <CalendarScreen />
-          </ErrorBoundary>
-        </View>
+        {/* Lazy mount: Only render after first visit */}
+        {visitedScreens.has("map") && (
+          <View
+            style={[
+              styles.screenLayer,
+              { backgroundColor: theme.colors.background.secondary },
+              !shouldShowMainView("map") && styles.screenHidden,
+            ]}
+            pointerEvents={activeTab === "map" ? "auto" : "none"}
+          >
+            <ErrorBoundary name="MapScreen">
+              <MapScreen isVisible={activeTab === "map"} />
+            </ErrorBoundary>
+          </View>
+        )}
+        {/* Lazy mount: Only render after first visit */}
+        {visitedScreens.has("calendar") && (
+          <View
+            style={[
+              styles.screenLayer,
+              { backgroundColor: theme.colors.background.secondary },
+              !shouldShowMainView("calendar") && styles.screenHidden,
+            ]}
+            pointerEvents={activeTab === "calendar" ? "auto" : "none"}
+          >
+            <ErrorBoundary name="CalendarScreen">
+              <CalendarScreen />
+            </ErrorBoundary>
+          </View>
+        )}
       </Animated.View>
 
-      {/* Sub-screen layer - on top initially, then below main view after it's laid out */}
-      {/* zIndex 1 keeps it below main view (zIndex 2) after subScreenReady */}
-      {/* Persistent EntryScreen layer - always mounted to avoid TenTap memory leaks */}
-      {/* Singleton pattern: editor instance stays alive, content is swapped via setContent() */}
-      <View
-        style={[
-          styles.screenLayer,
-          { backgroundColor: theme.colors.background.secondary, zIndex: activeTab === "capture" ? 1 : -1 },
-          activeTab !== "capture" && styles.screenHidden,
-        ]}
-        pointerEvents={activeTab === "capture" ? "auto" : "none"}
-        onLayout={activeTab === "capture" ? handleSubScreenLayout : undefined}
-      >
-        <ErrorBoundary name="EntryScreen" onBack={() => navigate(targetMainView)}>
-          <EntryScreen
-            ref={entryScreenRef}
-            isVisible={activeTab === "capture"}
-          />
-        </ErrorBoundary>
-      </View>
-
-      {/* Persistent EntryManagementScreen layer - new refactored entry editor */}
+      {/* Persistent EntryManagementScreen layer - entry editor */}
       {/* Always mounted, shown/hidden based on activeTab */}
       <View
         style={[
           styles.screenLayer,
-          { backgroundColor: theme.colors.background.secondary, zIndex: activeTab === "entryManagement" ? 1 : -1 },
-          activeTab !== "entryManagement" && styles.screenHidden,
+          { backgroundColor: theme.colors.background.secondary, zIndex: isEntryScreen ? 1 : -1 },
+          !isEntryScreen && styles.screenHidden,
         ]}
-        pointerEvents={activeTab === "entryManagement" ? "auto" : "none"}
-        onLayout={activeTab === "entryManagement" ? handleSubScreenLayout : undefined}
+        pointerEvents={isEntryScreen ? "auto" : "none"}
+        onLayout={isEntryScreen ? handleSubScreenLayout : undefined}
       >
         <ErrorBoundary name="EntryManagementScreen" onBack={() => navigate(targetMainView)}>
           <EntryManagementScreen
             ref={entryManagementRef}
-            isVisible={activeTab === "entryManagement"}
+            isVisible={isEntryScreen}
           />
         </ErrorBoundary>
       </View>
 
       {/* Other sub-screens layer - mount/unmount as needed */}
-      {!isOnMainView && activeTab !== "capture" && subScreenContent && (
+      {!isOnMainView && !isEntryScreen && subScreenContent && (
         <View
           style={[styles.screenLayer, { backgroundColor: theme.colors.background.secondary, zIndex: 1 }]}
           pointerEvents="auto"

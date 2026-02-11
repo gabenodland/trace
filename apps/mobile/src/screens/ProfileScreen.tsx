@@ -25,7 +25,7 @@ import {
 } from "react-native";
 import { Icon } from "../shared/components";
 import { useAuth } from "../shared/contexts/AuthContext";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { useSync } from "../shared/sync";
 import { createScopedLogger } from "../shared/utils/logger";
@@ -43,7 +43,7 @@ const log = createScopedLogger("ProfileScreen");
 
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const { sync } = useSync();
   const theme = useTheme();
 

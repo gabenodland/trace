@@ -1,4 +1,12 @@
 /**
+ * @deprecated This hook uses EntryFormContext which is being replaced.
+ * Do not use for new code. Will be deleted once EntryScreen.tsx is removed.
+ *
+ * For EntryManagementScreen, use useEntryManagementPhotos.ts instead,
+ * which uses props/refs pattern.
+ *
+ * ---
+ * Original description:
  * useEntryPhotos - Photo handling for entry editing
  *
  * Handles:

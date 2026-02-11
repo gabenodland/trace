@@ -7,7 +7,7 @@
 
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, StatusBar, Linking, Alert } from "react-native";
 import { useTheme } from "../shared/contexts/ThemeContext";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { useSubscription } from "../shared/hooks/useSubscription";
 import { themeBase } from "../shared/theme/themeBase";
 import { Icon } from "../shared/components";
@@ -62,7 +62,7 @@ function FeatureIcon({ icon, color }: { icon: string; color: string }) {
 
 export function SubscriptionScreen() {
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const { isPro, isDevMode, expiresAt, tier } = useSubscription();
 
   const isSubscribed = isPro || isDevMode;

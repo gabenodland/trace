@@ -8,7 +8,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, ScrollView, Alert } from 'react-native';
 import { getThemeOptions } from '../../shared/theme/themes';
 import { useTheme } from '../../shared/contexts/ThemeContext';
-import { useNavigation } from '../../shared/contexts/NavigationContext';
+import { useNavigate } from '../../shared/navigation';
 import { useSubscription } from '../../shared/hooks/useSubscription';
 import { Icon } from '../../shared/components';
 
@@ -26,7 +26,7 @@ export function ThemeSelector({
   onClose,
 }: ThemeSelectorProps) {
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const { isPro } = useSubscription();
   const themeOptions = getThemeOptions();
 

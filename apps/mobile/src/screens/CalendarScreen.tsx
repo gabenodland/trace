@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, memo } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder, Dimensions } from "react-native";
 import { Icon } from "../shared/components/Icon";
 import type { Entry, EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
@@ -19,7 +19,7 @@ import {
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
@@ -70,9 +70,10 @@ function formatDateKey(date: Date): string {
 
 type ZoomLevel = "day" | "month" | "year";
 
-export function CalendarScreen() {
+export const CalendarScreen = memo(function CalendarScreen() {
+  console.log('[CalendarScreen] 🔄 RENDER');
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const {
     registerStreamHandler,
     selectedStreamId,
@@ -990,7 +991,7 @@ export function CalendarScreen() {
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

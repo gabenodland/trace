@@ -25,7 +25,7 @@
  * - Log prefix: [EditorWebBridge]
  */
 
-import { forwardRef, useImperativeHandle, useEffect, useMemo } from "react";
+import { forwardRef, useImperativeHandle, useEffect, useMemo, useRef } from "react";
 import { View, StyleSheet } from "react-native";
 import {
   RichText,
@@ -59,6 +59,9 @@ export interface EditorWebBridgeRef {
   // History
   undo: () => void;
   redo: () => void;
+  clearHistory: () => void;
+  /** Set content without adding to undo history - use when loading entries */
+  setContentAndClearHistory: (html: string) => void;
 }
 
 interface EditorWebBridgeProps {
@@ -105,6 +108,18 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
       onChange,
     });
 
+    // Track previous CSS to detect theme changes
+    const previousCSSRef = useRef(customCSS);
+
+    // Re-inject CSS when theme changes (customCSS prop changes)
+    useEffect(() => {
+      if (customCSS && customCSS !== previousCSSRef.current) {
+        console.log('[EditorWebBridge] Theme changed, injecting new CSS');
+        editor.injectCSS(customCSS, 'theme-styles');
+        previousCSSRef.current = customCSS;
+      }
+    }, [customCSS, editor]);
+
     // Expose TenTap's native methods directly
     useImperativeHandle(ref, () => ({
       // Content
@@ -142,6 +157,20 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
       // History
       undo: () => editor.undo(),
       redo: () => editor.redo(),
+      clearHistory: () => {
+        // Inject JS to call our custom command handler
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) {
+          console.log('[EditorWebBridge] clearHistory called');
+          webview.injectJavaScript(`window.editorCommand('clearHistory');true;`);
+        }
+      },
+      setContentAndClearHistory: (html: string) => {
+        // TODO: History clearing not yet implemented
+        // For now, just set content using TenTap's reliable method
+        console.log('[EditorWebBridge] setContentAndClearHistory called', { length: html.length });
+        editor.setContent(html);
+      },
     }), [editor]);
 
     return (

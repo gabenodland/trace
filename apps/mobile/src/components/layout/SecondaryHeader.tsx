@@ -11,7 +11,7 @@
 
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from "react-native";
 import { Icon } from "../../shared/components/Icon";
-import { useNavigation } from "../../shared/contexts/NavigationContext";
+import { useNavigate } from "../../shared/navigation";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import type { ReactNode } from "react";
 
@@ -27,7 +27,7 @@ interface SecondaryHeaderProps {
 }
 
 export function SecondaryHeader({ title, rightAction, onBack, children }: SecondaryHeaderProps) {
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const theme = useTheme();
 
   const handleBack = () => {

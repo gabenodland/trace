@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef } from "react";
+import { createContext, useContext, useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
@@ -203,35 +203,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user?.id]);
 
-  // Auth mutations
-  const signInWithEmail = async (email: string, password: string) => {
+  // Auth mutations - wrapped in useCallback for stable references
+  const signInWithEmail = useCallback(async (email: string, password: string) => {
     return await signInWithEmailApi({ email, password });
-  };
+  }, []);
 
-  const signUpWithEmail = async (email: string, password: string) => {
+  const signUpWithEmail = useCallback(async (email: string, password: string) => {
     return await signUpWithEmailApi({ email, password });
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await signOutApi();
     if (queryClient) {
       queryClient.clear();
       log.info("Cleared query cache on sign out");
     }
-  };
+  }, [queryClient]);
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = useCallback(async () => {
     return await handleMobileGoogleOAuth();
-  };
+  }, []);
 
-  const value: AuthContextType = {
+  // Memoize authMutations object for stable reference
+  const authMutations = useMemo(() => ({
+    signInWithEmail,
+    signUpWithEmail,
+    signOut,
+  }), [signInWithEmail, signUpWithEmail, signOut]);
+
+  // Memoize context value to prevent unnecessary re-renders of consumers
+  const value = useMemo<AuthContextType>(() => ({
     session,
     user,
     isLoading,
     loading: isLoading,
     isAuthenticated: !!user,
     isOffline,
-    authMutations: { signInWithEmail, signUpWithEmail, signOut },
+    authMutations,
     signInWithEmail,
     signUpWithEmail,
     signOut,
@@ -239,7 +247,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authHelpers,
     setSession,
     setUser,
-  };
+  }), [
+    session,
+    user,
+    isLoading,
+    isOffline,
+    authMutations,
+    signInWithEmail,
+    signUpWithEmail,
+    signOut,
+    signInWithGoogle,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

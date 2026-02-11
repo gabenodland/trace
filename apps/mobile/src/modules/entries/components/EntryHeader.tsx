@@ -15,6 +15,9 @@ interface EntryHeaderProps {
   isFullScreen: boolean;
   isSaving: boolean; // For save indicator (includes autosave, unlike isSubmitting which is manual only)
   isDirty: boolean;
+  // Entry status
+  isPinned?: boolean;
+  isArchived?: boolean;
   // Form data
   entryDate: string;
   includeTime: boolean;
@@ -24,6 +27,8 @@ interface EntryHeaderProps {
   onTimePress: () => void;
   onAddTime: () => void;
   onToggleFullScreen: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
   // Refs
   editorRef: React.RefObject<any>;
 }
@@ -33,6 +38,8 @@ export function EntryHeader({
   isFullScreen,
   isSaving,
   isDirty,
+  isPinned = false,
+  isArchived = false,
   entryDate,
   includeTime,
   onBack,
@@ -40,6 +47,8 @@ export function EntryHeader({
   onTimePress,
   onAddTime,
   onToggleFullScreen,
+  onUndo,
+  onRedo,
   editorRef,
 }: EntryHeaderProps) {
   const theme = useTheme();
@@ -71,12 +80,23 @@ export function EntryHeader({
         </TouchableOpacity>
       </View>
 
-      {/* Center: Date & Time */}
+      {/* Center: Date & Time (or Undo/Redo in full screen) */}
       {isFullScreen ? (
         <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerDateText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>
-            Full Screen
-          </Text>
+          <TouchableOpacity
+            onPress={onUndo}
+            style={{ padding: 8, marginRight: 16 }}
+            disabled={!onUndo}
+          >
+            <Icon name="Undo2" size={20} color={onUndo ? theme.colors.text.secondary : theme.colors.text.tertiary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onRedo}
+            style={{ padding: 8 }}
+            disabled={!onRedo}
+          >
+            <Icon name="Redo2" size={20} color={onRedo ? theme.colors.text.secondary : theme.colors.text.tertiary} />
+          </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.headerDateContainer}>
@@ -128,20 +148,34 @@ export function EntryHeader({
         </View>
       )}
 
-      {/* Right side: Status indicator (in edit mode) + Attributes menu */}
+      {/* Right side: Pinned/Archived icons + Status indicator (in edit mode) + Attributes menu */}
       <View style={styles.headerRightContainer}>
-        {/* Status indicator - orange when dirty, red when saving, green checkmark briefly after save */}
-        {isEditMode && (
-          <View style={styles.headerSaveButton}>
-            {isSaving ? (
+        {/* Pinned indicator */}
+        {isPinned && (
+          <View style={{ marginRight: 6 }}>
+            <Icon name="Pin" size={14} color={theme.colors.text.tertiary} />
+          </View>
+        )}
+
+        {/* Archived indicator */}
+        {isArchived && (
+          <View style={{ marginRight: 6 }}>
+            <Icon name="Archive" size={14} color={theme.colors.text.tertiary} />
+          </View>
+        )}
+
+        {/* Status indicator - always reserve space, show content only in edit mode */}
+        <View style={styles.headerSaveButton}>
+          {isEditMode && (
+            isSaving ? (
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
             ) : showSavedCheck ? (
               <Icon name="Check" size={14} color="#22c55e" />
             ) : isDirty ? (
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f97316' }} />
-            ) : null}
-          </View>
-        )}
+            ) : null
+          )}
+        </View>
 
         {/* Fullscreen toggle button - chevron down (V) when normal, chevron up (^) when fullscreen */}
         <TouchableOpacity

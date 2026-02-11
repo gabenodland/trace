@@ -105,6 +105,7 @@ export function TimePicker({
       visible={visible}
       onClose={onClose}
       title="Set Time"
+      swipeArea="grabber"
       primaryAction={{
         label: "Save",
         onPress: handleSave,

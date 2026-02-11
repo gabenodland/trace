@@ -25,7 +25,7 @@ import {
   getStatusLabel,
 } from "@trace/core";
 import { supabase } from "@trace/core/src/shared/supabase";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { StatusConfigModal } from "../modules/streams/components/StatusConfigModal";
@@ -43,7 +43,7 @@ interface StreamPropertiesScreenProps {
 }
 
 export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: StreamPropertiesScreenProps) {
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const theme = useTheme();
   const { streams, streamMutations } = useStreams();
 

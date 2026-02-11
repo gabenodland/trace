@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Clipboard, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase, reverseGeocode, parseMapboxHierarchy, findNearbyLocation, geocodeResponseToEntryFields } from '@trace/core';
-import { useNavigation } from '../shared/contexts/NavigationContext';
+import { useNavigate } from '../shared/navigation';
 import { SecondaryHeader } from '../components/layout/SecondaryHeader';
 import { localDB } from '../shared/db/localDB';
 import { useSync, getSyncStatus, triggerPushSync } from '../shared/sync';
@@ -27,7 +27,7 @@ interface CloudCounts {
 }
 
 export function DatabaseInfoScreen() {
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const { sync, forcePull } = useSync();
   const [activeTab, setActiveTab] = useState<TabType>('status');
   const [entries, setEntries] = useState<any[]>([]);

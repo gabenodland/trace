@@ -16,7 +16,7 @@ import { useState, useEffect } from "react";
 import { Icon } from "../shared/components";
 import { getDefaultAvatarUrl } from "@trace/core";
 import { useAuth } from "../shared/contexts/AuthContext";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSubscription } from "../shared/hooks/useSubscription";
@@ -56,7 +56,7 @@ function AccountRow({ icon, label, onPress, showChevron = true, destructive = fa
 
 export function AccountScreen() {
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { profile, isOffline } = useMobileProfile(user?.id);
   const { isPro, isDevMode, expiresAt } = useSubscription();

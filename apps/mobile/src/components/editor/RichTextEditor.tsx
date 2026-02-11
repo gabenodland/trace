@@ -1,3 +1,13 @@
+/**
+ * @deprecated This component has been replaced by RichTextEditorV2.
+ * Use RichTextEditorV2 for all new code. This file will be removed once
+ * EntryScreen.tsx migration to EntryManagementScreen.tsx is complete.
+ *
+ * RichTextEditorV2 was built from scratch with:
+ * - Better undo/redo history management
+ * - Cleaner WebView bridge communication
+ * - Proper theme switching support
+ */
 import { useEffect, useRef, forwardRef, useImperativeHandle, useMemo } from "react";
 import { View, StyleSheet, DeviceEventEmitter } from "react-native";
 import {

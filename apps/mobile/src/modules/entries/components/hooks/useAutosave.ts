@@ -1,4 +1,12 @@
 /**
+ * @deprecated This hook uses EntryFormContext which is being replaced.
+ * Do not use for new code. Will be deleted once EntryScreen.tsx is removed.
+ *
+ * For EntryManagementScreen, autosave logic is in useEntryManagement.ts
+ * using refs pattern instead of Context.
+ *
+ * ---
+ * Original description:
  * useAutosave - Debounced autosave hook for EntryScreen
  *
  * Handles automatic saving of entries after a configurable delay.

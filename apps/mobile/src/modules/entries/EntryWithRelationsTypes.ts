@@ -11,11 +11,14 @@ import type { Attachment } from '@trace/core';
 /**
  * Entry with all relations embedded
  * Used as the single source of truth for EntryScreen
+ *
+ * Note: We use Omit to remove the raw `attachments: Json` field from Entry
+ * and replace it with properly typed `attachments: Attachment[]`
  */
-export interface EntryWithRelations extends Entry {
+export interface EntryWithRelations extends Omit<Entry, 'attachments'> {
   /** Embedded stream object (readonly, from stream_id) */
   stream?: Stream;
 
-  /** Array of attachment/photo objects */
-  attachments?: Attachment[];
+  /** Array of attachment/photo objects (replaces Entry.attachments: Json) */
+  attachments: Attachment[];
 }

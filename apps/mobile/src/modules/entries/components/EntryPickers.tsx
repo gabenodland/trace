@@ -6,7 +6,7 @@
 import { useEffect } from "react";
 import type { Stream, Location as LocationType, EntryStatus } from "@trace/core";
 import { applyTitleTemplate, applyContentTemplate } from "@trace/core";
-import { useNavigation } from "../../../shared/contexts/NavigationContext";
+import { setIsModalOpen } from "../../../shared/navigation";
 import { StreamPicker } from "../../streams/components/StreamPicker";
 import { LocationPicker } from "../../locations/components/LocationPicker";
 import {
@@ -100,7 +100,7 @@ export function EntryPickers({
   onTakePhoto,
   onOpenGallery,
 }: EntryPickersProps) {
-  const { setIsModalOpen } = useNavigation();
+  // setIsModalOpen imported directly from navigation module (no hook needed)
 
   // Track fullscreen modals (disables swipe-back gesture)
   // Note: We don't dismiss keyboard - pickers should appear over it to avoid disrupting typing flow

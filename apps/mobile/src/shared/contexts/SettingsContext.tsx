@@ -5,7 +5,7 @@
  * All settings are stored as a single JSON object for efficient persistence.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createScopedLogger, LogScopes } from '../utils/logger';
 import {
@@ -183,7 +183,8 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     });
   }, [setStreamSortPreference]);
 
-  const value: SettingsContextValue = {
+  // Memoize context value to prevent unnecessary re-renders of consumers
+  const value = useMemo<SettingsContextValue>(() => ({
     settings,
     updateSettings,
     resetSettings,
@@ -193,7 +194,17 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     getStreamFilter,
     setStreamFilter,
     resetStreamFilter,
-  };
+  }), [
+    settings,
+    updateSettings,
+    resetSettings,
+    isLoaded,
+    getStreamSortPreference,
+    setStreamSortPreference,
+    getStreamFilter,
+    setStreamFilter,
+    resetStreamFilter,
+  ]);
 
   return (
     <SettingsContext.Provider value={value}>

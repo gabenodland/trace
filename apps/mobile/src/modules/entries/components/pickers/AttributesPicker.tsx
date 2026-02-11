@@ -42,6 +42,8 @@ interface AttributesPickerProps {
   rating: number;
   priority: number;
   ratingType?: RatingType;
+  isPinned?: boolean;
+  isArchived?: boolean;
   // Callbacks
   onShowLocationPicker: () => void;
   onShowStatusPicker: () => void;
@@ -51,6 +53,9 @@ interface AttributesPickerProps {
   onShowPriorityPicker: () => void;
   onTakePhoto: () => void;
   onGallery: () => void;
+  onPinToggle?: () => void;
+  onArchiveToggle?: () => void;
+  onDuplicate?: () => void;
   onDelete: () => void;
 }
 
@@ -72,6 +77,8 @@ export function AttributesPicker({
   rating,
   priority,
   ratingType = 'stars',
+  isPinned = false,
+  isArchived = false,
   onShowLocationPicker,
   onShowStatusPicker,
   onShowTypePicker,
@@ -80,6 +87,9 @@ export function AttributesPicker({
   onShowPriorityPicker,
   onTakePhoto,
   onGallery,
+  onPinToggle,
+  onArchiveToggle,
+  onDuplicate,
   onDelete,
 }: AttributesPickerProps) {
   const dynamicTheme = useTheme();
@@ -281,18 +291,72 @@ export function AttributesPicker({
         )}
 
         {/* ACTIONS Section */}
-        {isEditing && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionHeader, { color: dynamicTheme.colors.text.tertiary, fontFamily: dynamicTheme.typography.fontFamily.semibold }]}>
-              ACTIONS
-            </Text>
+        <View style={styles.section}>
+          <Text style={[styles.sectionHeader, { color: dynamicTheme.colors.text.tertiary, fontFamily: dynamicTheme.typography.fontFamily.semibold }]}>
+            ACTIONS
+          </Text>
 
-            {/* Delete Entry */}
+          {/* Pin/Unpin Entry */}
+          {onPinToggle && (
             <TouchableOpacity
               style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
               onPress={() => {
+                onPinToggle();
                 onClose();
-                setTimeout(() => onDelete(), 100);
+              }}
+            >
+              <View style={styles.optionIcon}>
+                <Icon name={isPinned ? "PinOff" : "Pin"} size={16} color={dynamicTheme.colors.text.primary} />
+              </View>
+              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
+                {isPinned ? "Unpin Entry" : "Pin Entry"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Archive/Unarchive Entry */}
+          {onArchiveToggle && (
+            <TouchableOpacity
+              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
+              onPress={() => {
+                onArchiveToggle();
+                onClose();
+              }}
+            >
+              <View style={styles.optionIcon}>
+                <Icon name={isArchived ? "ArchiveRestore" : "Archive"} size={16} color={dynamicTheme.colors.text.primary} />
+              </View>
+              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
+                {isArchived ? "Unarchive Entry" : "Archive Entry"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Duplicate Entry */}
+          {onDuplicate && isEditing && (
+            <TouchableOpacity
+              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
+              onPress={() => {
+                onDuplicate();
+                onClose();
+              }}
+            >
+              <View style={styles.optionIcon}>
+                <Icon name="Copy" size={16} color={dynamicTheme.colors.text.primary} />
+              </View>
+              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
+                Duplicate Entry
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Delete Entry */}
+          {isEditing && (
+            <TouchableOpacity
+              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
+              onPress={() => {
+                onDelete();
+                onClose();
               }}
             >
               <View style={styles.optionIcon}>
@@ -302,8 +366,8 @@ export function AttributesPicker({
                 Delete Entry
               </Text>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
       </ScrollView>
     </PickerBottomSheet>
   );

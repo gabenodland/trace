@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, PanResponder, Dimensions } from "react-native";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
 
 const log = createScopedLogger(LogScopes.Map);
 import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
-import { useNavigation } from "../shared/contexts/NavigationContext";
+import { useNavigate } from "../shared/navigation";
 import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
@@ -101,9 +101,19 @@ interface MapScreenProps {
   isVisible?: boolean;
 }
 
-export function MapScreen({ isVisible = true }: MapScreenProps) {
+// Render counter and previous state for tracking re-renders (module-level for sync comparison)
+let mapScreenRenderCount = 0;
+let prevMapState: any = {};
+
+export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreenProps) {
+  mapScreenRenderCount++;
+  const renderNum = mapScreenRenderCount;
+  console.log(`[MapScreen] 🔄 RENDER #${renderNum}`, { isVisible, timestamp: Date.now() });
+
+  // Minimal hooks that must always run (React rules)
   const theme = useTheme();
-  const { navigate } = useNavigation();
+  const navigate = useNavigate();
+  const drawerState = useDrawer();
   const {
     registerStreamHandler,
     selectedStreamId,
@@ -116,10 +126,13 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
     drawerControl,
     viewMode,
     setViewMode,
-  } = useDrawer();
-  const { user } = useAuth();
+  } = drawerState;
+  const authState = useAuth();
+  const { user } = authState;
   const { profile } = useMobileProfile(user?.id);
   const { streams } = useStreams();
+
+  // Change detection will happen after ALL hooks are called (see below)
 
   // Avatar data for TopBar
   const displayName = profile?.name || (profile?.username ? `@${profile.username}` : null) || user?.email || null;
@@ -203,6 +216,26 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
   // Title for TopBar
   const title = selectedStreamName;
   const { data: locationsData } = useLocations();
+
+  // NOW do sync change detection - AFTER all hooks
+  const changes: string[] = [];
+  if (prevMapState.isVisible !== isVisible) changes.push('isVisible');
+  if (prevMapState.theme !== theme) changes.push('theme');
+  if (prevMapState.drawerState !== drawerState) changes.push('drawerState');
+  if (prevMapState.viewMode !== viewMode) changes.push('viewMode');
+  if (prevMapState.selectedStreamId !== selectedStreamId) changes.push('selectedStreamId');
+  if (prevMapState.user !== user) changes.push('user');
+  if (prevMapState.profile !== profile) changes.push('profile');
+  if (prevMapState.streams !== streams) changes.push('streams');
+  if (prevMapState.allEntriesFromHook !== allEntriesFromHook) changes.push('entries');
+  if (prevMapState.locationsData !== locationsData) changes.push('locationsData');
+  if (prevMapState.isFetching !== isFetching) changes.push('isFetching');
+  if (prevMapState.isLoading !== isLoading) changes.push('isLoading');
+  console.log(`[MapScreen] #${renderNum} SYNC changes: ${changes.length > 0 ? changes.join(', ') : 'NONE DETECTED'}`);
+  prevMapState = {
+    isVisible, theme, drawerState, viewMode, selectedStreamId,
+    user, profile, streams, allEntriesFromHook, locationsData, isFetching, isLoading
+  };
 
   // Filter entries to only those with GPS coordinates
   const allEntries = useMemo(() => {
@@ -406,6 +439,10 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
 
   // Update visible entries when region changes
   const handleRegionChange = useCallback((newRegion: Region) => {
+    console.log(`[MapScreen] handleRegionChange called`, { isVisible });
+    // Skip expensive work when not visible
+    if (!isVisible) return;
+
     // Use ref for comparison to avoid callback recreation
     const prevRegion = regionRef.current;
 
@@ -445,36 +482,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
     });
 
     setVisibleEntries(visible);
-  }, [entries]); // Remove region from dependencies
-
-  // Recalculate visible entries when entries change (e.g., stream filter changed)
-  useEffect(() => {
-    const currentRegion = regionRef.current;
-
-    // Filter entries within the visible region
-    const visible = entries.filter(entry => {
-      const lat = entry.entry_latitude!;
-      const lng = entry.entry_longitude!;
-      const latDelta = currentRegion.latitudeDelta / 2;
-      const lngDelta = currentRegion.longitudeDelta / 2;
-
-      return (
-        lat >= currentRegion.latitude - latDelta &&
-        lat <= currentRegion.latitude + latDelta &&
-        lng >= currentRegion.longitude - lngDelta &&
-        lng <= currentRegion.longitude + lngDelta
-      );
-    });
-
-    // Sort by date (newest first)
-    visible.sort((a, b) => {
-      const dateA = new Date(a.entry_date || a.created_at).getTime();
-      const dateB = new Date(b.entry_date || b.created_at).getTime();
-      return dateB - dateA;
-    });
-
-    setVisibleEntries(visible);
-  }, [entries]);
+  }, [entries, isVisible]); // Skip when not visible
 
   // Go to user's current location
   const goToCurrentLocation = async () => {
@@ -857,7 +865,7 @@ export function MapScreen({ isVisible = true }: MapScreenProps) {
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

@@ -6,9 +6,11 @@
  *
  * PROPS:
  * - onChange: (html: string) => void - Content change callback (NOT L2's signal)
- * - editable?: boolean - Read-only mode
- * - onTapWhileReadOnly?: () => void - Tap in read-only callback
+ * - editable?: boolean - Read-only mode (blurs editor when false)
  * - onReady?: () => void - Editor ready callback
+ *
+ * NOTE: Edit mode is detected via keyboard show event in parent screen,
+ * not via tap overlay. This ensures native touch reaches WebView for keyboard.
  *
  * KEY CONCEPTS:
  * - Generates theme CSS from ThemeContext, passes to L2
@@ -32,7 +34,7 @@
  */
 
 import { useEffect, useRef, forwardRef, useImperativeHandle, useCallback, useMemo } from "react";
-import { View, StyleSheet, DeviceEventEmitter, Pressable } from "react-native";
+import { View, StyleSheet, DeviceEventEmitter } from "react-native";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { createScopedLogger } from "../../shared/utils/logger";
 import { EditorWebBridge, EditorWebBridgeRef } from "./EditorWebBridge";
@@ -82,15 +84,16 @@ export interface RichTextEditorV2Ref {
   // History
   undo: () => void;
   redo: () => void;
+  clearHistory: () => void;
+  /** Set content without adding to undo history - use when loading entries */
+  setContentAndClearHistory: (html: string) => void;
 }
 
 interface RichTextEditorV2Props {
   /** Called when content changes (provides HTML) */
   onChange?: (html: string) => void;
-  /** Whether the editor is editable */
+  /** Whether the editor is editable (blurs when false) */
   editable?: boolean;
-  /** Called when user taps the editor while in read-only mode */
-  onTapWhileReadOnly?: () => void;
   /** Called when editor is ready */
   onReady?: () => void;
 }
@@ -98,7 +101,6 @@ interface RichTextEditorV2Props {
 export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2Props>(({
   onChange,
   editable = true,
-  onTapWhileReadOnly,
   onReady,
 }, ref) => {
   const theme = useTheme();
@@ -287,7 +289,7 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
 
     // Focus
     focus: () => {
-      log.debug('focus called');
+      log.debug('focus called', { isReady: isReady.current });
       l2Ref.current?.focus();
     },
     blur: () => l2Ref.current?.blur(),
@@ -295,6 +297,15 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     // History
     undo: () => l2Ref.current?.undo(),
     redo: () => l2Ref.current?.redo(),
+    clearHistory: () => {
+      log.debug('clearHistory called');
+      l2Ref.current?.clearHistory();
+    },
+    setContentAndClearHistory: (html: string) => {
+      log.debug('setContentAndClearHistory called', { length: html.length });
+      lastKnownContent.current = html;
+      l2Ref.current?.setContentAndClearHistory(html);
+    },
   }), []);
 
   // Handle read-only mode - blur when becoming read-only
@@ -304,18 +315,11 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     }
   }, [editable]);
 
-  // Handle tap while in read-only mode
-  const handleReadOnlyTap = useCallback(() => {
-    if (!editable && onTapWhileReadOnly) {
-      log.debug('Tap detected in read-only mode');
-      onTapWhileReadOnly();
-    }
-  }, [editable, onTapWhileReadOnly]);
-
   // Listen for global blur event (swipe-back gesture)
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('blurEditors', () => {
       if (!isMounted.current) return;
+      log.debug('Received blurEditors event, blurring');
       l2Ref.current?.blur();
     });
     return () => subscription.remove();
@@ -329,13 +333,7 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
         customCSS={customCSS}
         backgroundColor={theme.colors.background.primary}
       />
-      {/* Tap overlay for read-only mode - intercepts taps to trigger edit mode */}
-      {!editable && onTapWhileReadOnly && (
-        <Pressable
-          style={styles.readOnlyOverlay}
-          onPress={handleReadOnlyTap}
-        />
-      )}
+      {/* No overlay - let native touches go directly to WebView for keyboard to appear */}
     </View>
   );
 });
@@ -343,9 +341,5 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  readOnlyOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
   },
 });

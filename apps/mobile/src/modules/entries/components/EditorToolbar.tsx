@@ -1,15 +1,20 @@
 /**
  * EditorToolbar - Bottom toolbar for rich text editing
  * Extracted from EntryScreen for maintainability
+ *
+ * Takes an editor ref directly since toolbar and editor are tightly coupled.
  */
 
 import { View, Text, TouchableOpacity } from "react-native";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { Icon } from "../../../shared/components";
 import { styles } from "./EntryScreen.styles";
+import type { RichTextEditorV2Ref } from "../../../components/editor/RichTextEditorV2";
 
 interface EditorToolbarProps {
-  editorRef: React.RefObject<any>;
+  /** Reference to the RichTextEditorV2 for formatting commands */
+  editorRef: React.RefObject<RichTextEditorV2Ref | null>;
+  /** Called when user taps Done to exit edit/fullscreen mode */
   onDone: () => void;
 }
 

@@ -1,4 +1,12 @@
 /**
+ * @deprecated This hook uses EntryFormContext which is being replaced.
+ * Do not use for new code. Will be deleted once EntryScreen.tsx is removed.
+ *
+ * For EntryManagementScreen, back navigation is handled inline using
+ * the props/refs pattern.
+ *
+ * ---
+ * Original description:
  * useEntryNavigation - Manages back navigation with auto-save behavior
  *
  * Handles:
@@ -12,7 +20,7 @@
  */
 
 import { useEffect, useRef, useCallback } from "react";
-import { useNavigation } from "../../../../shared/contexts/NavigationContext";
+import { useNavigate, setBeforeBackHandler } from "../../../../shared/navigation";
 import { useDrawer } from "../../../../shared/contexts/DrawerContext";
 import { useEntryForm } from "../context/EntryFormContext";
 import { createScopedLogger } from "../../../../shared/utils/logger";
@@ -23,7 +31,7 @@ const log = createScopedLogger('EntryNav', '⬅️');
  * Manages back navigation with auto-save behavior.
  */
 export function useEntryNavigation() {
-  const { navigate, setBeforeBackHandler } = useNavigation();
+  const navigate = useNavigate();
   const { viewMode } = useDrawer();
 
   // Get state from context
