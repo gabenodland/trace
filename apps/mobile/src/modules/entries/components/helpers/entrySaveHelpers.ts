@@ -1,6 +1,15 @@
 import { extractTagsAndMentions, locationToCreateInput, type Location as LocationType } from "@trace/core";
 import { createLocation } from '../../../locations/mobileLocationApi';
-import type { GeocodeStatus } from "../context/EntryFormContext";
+
+/** Geocode status for tracking how location hierarchy data was obtained */
+export type GeocodeStatus =
+  | "pending"
+  | "success"
+  | "snapped"
+  | "no_data"
+  | "error"
+  | "manual"
+  | null;
 
 /**
  * GPS fields for entry save operations
