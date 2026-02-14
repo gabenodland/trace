@@ -62,6 +62,8 @@ export interface EditorWebBridgeRef {
   clearHistory: () => void;
   /** Set content without adding to undo history - use when loading entries */
   setContentAndClearHistory: (html: string) => void;
+  /** Reload the WebView - use when WebView becomes unresponsive */
+  reloadWebView: () => void;
 }
 
 interface EditorWebBridgeProps {
@@ -161,15 +163,34 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
         // Inject JS to call our custom command handler
         const webview = (editor as any).webviewRef?.current;
         if (webview) {
-          console.log('[EditorWebBridge] clearHistory called');
+          console.log('[EditorWebBridge] clearHistory: Injecting command to WebView');
           webview.injectJavaScript(`window.editorCommand('clearHistory');true;`);
+        } else {
+          console.warn('[EditorWebBridge] clearHistory: webview ref not available');
         }
       },
       setContentAndClearHistory: (html: string) => {
-        // TODO: History clearing not yet implemented
-        // For now, just set content using TenTap's reliable method
-        console.log('[EditorWebBridge] setContentAndClearHistory called', { length: html.length });
-        editor.setContent(html);
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) {
+          console.log('[EditorWebBridge] setContentAndClearHistory called', { length: html.length });
+          // Escape the HTML for safe injection into JavaScript
+          const escapedHtml = JSON.stringify(html);
+          const script = `window.editorCommand('setContentAndClearHistory', { html: ${escapedHtml} });true;`;
+          console.log('[EditorWebBridge] Injecting setContentAndClearHistory script');
+          webview.injectJavaScript(script);
+        } else {
+          console.warn('[EditorWebBridge] setContentAndClearHistory: webview ref not available, falling back to setContent');
+          editor.setContent(html);
+        }
+      },
+      reloadWebView: () => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) {
+          console.log('[EditorWebBridge] reloadWebView called');
+          webview.reload();
+        } else {
+          console.warn('[EditorWebBridge] reloadWebView: webview ref not available');
+        }
       },
     }), [editor]);
 

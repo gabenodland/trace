@@ -944,6 +944,9 @@ export function useLocationPicker({
     setModeOverride('select');
     setUI(prev => ({ ...prev, showingDetails: false }));
     setPreviewMarker(null);
+    // Clear list selection highlighting
+    setSelectedListItemId(null);
+    setIsSelectedLocationHighlighted(false);
     // Clear the location name but keep coordinates and other geo data
     // This makes the "Selected Point" card show "Current Point" instead of the old name
     setSelection(prev => ({

@@ -22,6 +22,7 @@
  */
 
 import { render } from 'preact/compat';
+import { useEffect } from 'preact/hooks';
 import { EditorContent } from '@tiptap/react';
 import {
   useTenTap,
@@ -40,9 +41,10 @@ import {
 } from '@10play/tentap-editor/web';
 import Text from '@tiptap/extension-text';
 import Paragraph from '@tiptap/extension-paragraph';
-import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Extension, Editor } from '@tiptap/core';
+import { Plugin, PluginKey, EditorState } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { DOMParser } from '@tiptap/pm/model';
 
 // Local extensions for title-first schema
 import { Title } from './extensions/Title';
@@ -96,8 +98,125 @@ declare global {
   interface Window {
     initialContent: string;
     dynamicHeight?: boolean;
+    editorCommand: (command: string, payload?: any) => void;
+    __editorInstance: Editor | null;
   }
 }
+
+// Global editor reference for commands injected from React Native
+window.__editorInstance = null;
+
+/**
+ * Command handler for React Native to call via injectJavaScript
+ *
+ * Commands:
+ * - clearHistory: Clears undo/redo history while keeping current content
+ * - setContentAndClearHistory: Sets new content with fresh history (for loading entries)
+ */
+window.editorCommand = (command: string, payload?: any) => {
+  const editor = window.__editorInstance;
+  console.log('[WebEditor] editorCommand called:', { command, hasPayload: !!payload, hasEditor: !!editor });
+
+  if (!editor) {
+    console.error('[WebEditor] editorCommand: No editor instance available');
+    return;
+  }
+
+  try {
+    switch (command) {
+      case 'clearHistory': {
+        console.log('[WebEditor] clearHistory: Creating fresh state with current doc');
+        const { state, view } = editor;
+        const { doc, schema, plugins } = state;
+
+        // Log current history state before clearing
+        const canUndoBefore = editor.can().undo();
+        const canRedoBefore = editor.can().redo();
+        console.log('[WebEditor] clearHistory: Before -', { canUndo: canUndoBefore, canRedo: canRedoBefore });
+
+        // Create fresh state with same doc but no history
+        const newState = EditorState.create({
+          doc,
+          schema,
+          plugins,
+        });
+
+        // Update the view with fresh state
+        view.updateState(newState);
+
+        // Verify history was cleared
+        const canUndoAfter = editor.can().undo();
+        const canRedoAfter = editor.can().redo();
+        console.log('[WebEditor] clearHistory: After -', { canUndo: canUndoAfter, canRedo: canRedoAfter });
+
+        // Notify React Native
+        if (window.ReactNativeWebView?.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'historyCleared',
+            canUndo: canUndoAfter,
+            canRedo: canRedoAfter,
+          }));
+        }
+        break;
+      }
+
+      case 'setContentAndClearHistory': {
+        const html = payload?.html || '';
+        console.log('[WebEditor] setContentAndClearHistory: Setting content with fresh history', {
+          htmlLength: html.length,
+          preview: html.substring(0, 100)
+        });
+
+        const { view, schema } = editor;
+
+        // Parse HTML into ProseMirror document
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        const doc = DOMParser.fromSchema(schema).parse(tempDiv);
+
+        console.log('[WebEditor] setContentAndClearHistory: Parsed doc', {
+          nodeCount: doc.childCount,
+          firstChild: doc.firstChild?.type.name,
+        });
+
+        // Create fresh state with new doc and no history
+        const newState = EditorState.create({
+          doc,
+          schema,
+          plugins: editor.state.plugins,
+        });
+
+        // Update the view
+        view.updateState(newState);
+
+        // Verify
+        const canUndo = editor.can().undo();
+        const canRedo = editor.can().redo();
+        console.log('[WebEditor] setContentAndClearHistory: Complete -', { canUndo, canRedo });
+
+        // Notify React Native
+        if (window.ReactNativeWebView?.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'contentSetWithClearedHistory',
+            canUndo,
+            canRedo,
+            docLength: doc.content.size,
+          }));
+        }
+        break;
+      }
+
+      default:
+        console.warn('[WebEditor] editorCommand: Unknown command:', command);
+    }
+  } catch (err: any) {
+    console.error('[WebEditor] editorCommand error:', {
+      command,
+      error: err?.message || String(err),
+      stack: err?.stack,
+    });
+  }
+};
 
 // Web-side debug logging - shows in Metro console
 console.log('[WebEditor] Bundle loaded');
@@ -197,6 +316,26 @@ function TiptapEditor() {
       ],
     },
   });
+
+  // Store editor reference globally for commands from React Native
+  useEffect(() => {
+    if (editor) {
+      console.log('[WebEditor] Storing editor instance globally');
+      window.__editorInstance = editor;
+
+      // Notify that editor is ready for commands
+      if (window.ReactNativeWebView?.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'editorCommandsReady',
+        }));
+      }
+    }
+
+    return () => {
+      console.log('[WebEditor] Clearing global editor instance');
+      window.__editorInstance = null;
+    };
+  }, [editor]);
 
   if (!editor) {
     console.log('[WebEditor] Editor not ready yet (null)');

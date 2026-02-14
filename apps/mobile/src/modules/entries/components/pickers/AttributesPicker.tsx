@@ -57,6 +57,8 @@ interface AttributesPickerProps {
   onArchiveToggle?: () => void;
   onDuplicate?: () => void;
   onDelete: () => void;
+  // Developer callbacks (shown only in __DEV__ mode)
+  onReloadEditor?: () => void;
 }
 
 export function AttributesPicker({
@@ -91,6 +93,7 @@ export function AttributesPicker({
   onArchiveToggle,
   onDuplicate,
   onDelete,
+  onReloadEditor,
 }: AttributesPickerProps) {
   const dynamicTheme = useTheme();
 
@@ -368,6 +371,31 @@ export function AttributesPicker({
             </TouchableOpacity>
           )}
         </View>
+
+        {/* DEVELOPER Section - only in dev builds */}
+        {__DEV__ && onReloadEditor && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionHeader, { color: dynamicTheme.colors.text.tertiary, fontFamily: dynamicTheme.typography.fontFamily.semibold }]}>
+              DEVELOPER
+            </Text>
+
+            {/* Reload Editor */}
+            <TouchableOpacity
+              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
+              onPress={() => {
+                onReloadEditor();
+                onClose();
+              }}
+            >
+              <View style={styles.optionIcon}>
+                <Icon name="RefreshCw" size={16} color={dynamicTheme.colors.text.secondary} />
+              </View>
+              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>
+                Reload Editor (Debug)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </PickerBottomSheet>
   );

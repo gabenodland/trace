@@ -75,6 +75,8 @@ export function useEntryManagementEffects(options: UseEntryManagementEffectsOpti
   const hasAttemptedGpsCaptureRef = useRef(false);
   // Track if geocode has been attempted for current coordinates
   const lastGeocodedCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  // Track if snap was attempted with non-empty savedLocations (allows retry if locations load late)
+  const hasAttemptedSnapWithLocationsRef = useRef(false);
   // Track if template has been applied for current stream
   const lastTemplateStreamIdRef = useRef<string | null>(null);
 
@@ -82,6 +84,7 @@ export function useEntryManagementEffects(options: UseEntryManagementEffectsOpti
   useEffect(() => {
     hasAttemptedGpsCaptureRef.current = false;
     lastGeocodedCoordsRef.current = null;
+    hasAttemptedSnapWithLocationsRef.current = false;
     lastTemplateStreamIdRef.current = null;
   }, [entryId, isNewEntry]);
 
@@ -161,19 +164,35 @@ export function useEntryManagementEffects(options: UseEntryManagementEffectsOpti
     if (!entry) return;
     // Skip if no coordinates
     if (entry.entry_latitude == null || entry.entry_longitude == null) return;
-    // Skip if already has address data
-    if (entry.city || entry.region || entry.country) return;
-    // Skip if we already geocoded these coordinates
+
     const lat = entry.entry_latitude;
     const lng = entry.entry_longitude;
-    if (lastGeocodedCoordsRef.current &&
+
+    // Check if we should attempt snapping (even if already geocoded)
+    // This allows late-loaded savedLocations to snap entries that were already geocoded
+    const hasSavedLocations = savedLocations.length > 0;
+    const alreadySnapped = entry.geocode_status === 'snapped';
+    const shouldAttemptSnap = hasSavedLocations && !alreadySnapped && !hasAttemptedSnapWithLocationsRef.current;
+
+    // Skip if already has address data AND we've already tried snapping with locations available
+    if ((entry.city || entry.region || entry.country) && !shouldAttemptSnap) return;
+
+    // Skip if we already geocoded these exact coordinates (unless we need to retry snap)
+    const sameCoords = lastGeocodedCoordsRef.current &&
         Math.abs(lastGeocodedCoordsRef.current.lat - lat) < 0.00001 &&
-        Math.abs(lastGeocodedCoordsRef.current.lng - lng) < 0.00001) {
+        Math.abs(lastGeocodedCoordsRef.current.lng - lng) < 0.00001;
+    if (sameCoords && !shouldAttemptSnap) {
       return;
     }
 
     lastGeocodedCoordsRef.current = { lat, lng };
-    log.debug('Auto-geocoding coordinates', { lat, lng });
+
+    // If savedLocations is available, mark that we've attempted snap with locations
+    if (hasSavedLocations) {
+      hasAttemptedSnapWithLocationsRef.current = true;
+    }
+
+    log.debug('Auto-geocoding coordinates', { lat, lng, hasSavedLocations, shouldAttemptSnap });
 
     (async () => {
       try {
@@ -205,7 +224,12 @@ export function useEntryManagementEffects(options: UseEntryManagementEffectsOpti
           return;
         }
 
-        // No snap match - call reverse geocode API
+        // No snap match - only call reverse geocode if we don't already have address data
+        if (entry.city || entry.region || entry.country) {
+          log.debug('No snap match, but already have geocoded data');
+          return;
+        }
+
         const netState = await NetInfo.fetch();
         if (!netState.isConnected) {
           log.debug('No network, skipping geocode');
@@ -234,7 +258,7 @@ export function useEntryManagementEffects(options: UseEntryManagementEffectsOpti
         log.error('Geocoding failed', err);
       }
     })();
-  }, [entry?.entry_latitude, entry?.entry_longitude, entry?.city, entry?.region, entry?.country, savedLocations, setEntry]);
+  }, [entry?.entry_latitude, entry?.entry_longitude, entry?.city, entry?.region, entry?.country, entry?.geocode_status, savedLocations, setEntry]);
 
   // =========================================================================
   // Stream Templates

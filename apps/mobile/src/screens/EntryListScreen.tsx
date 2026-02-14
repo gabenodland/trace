@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import { View, StyleSheet, BackHandler } from "react-native";
 import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES, getActiveFilterInfo } from "@trace/core";
-import { Icon } from "../shared/components";
+import { Icon, Snackbar, useSnackbar } from "../shared/components";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
+import { subscribeToToast } from "../shared/services/toastService";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
@@ -64,6 +65,17 @@ export const EntryListScreen = memo(function EntryListScreen() {
 
   // Ref for scrolling list to top after filter apply
   const entryListRef = useRef<EntryListRef>(null);
+
+  // Snackbar for showing toast messages (e.g., from entry screen)
+  const { message: snackbarMessage, opacity: snackbarOpacity, showSnackbar } = useSnackbar();
+
+  // Subscribe to toast events (from other screens like EntryManagementScreen)
+  useEffect(() => {
+    const unsubscribe = subscribeToToast((message) => {
+      showSnackbar(message);
+    });
+    return unsubscribe;
+  }, [showSnackbar]);
 
   // Per-stream view preferences from settings (sort + display mode + filter)
   const { getStreamSortPreference, setStreamSortPreference, getStreamFilter, resetStreamFilter } = useSettings();
@@ -369,14 +381,20 @@ export const EntryListScreen = memo(function EntryListScreen() {
         entries={sortedEntries}
       />
 
-      <BottomNavBar
-        viewMode={viewMode}
-        onViewModeChange={handleViewModeChange}
-        onAddPress={handleAddEntry}
-        onAccountPress={() => navigate("account")}
-        avatarUrl={avatarUrl}
-        displayName={displayName}
-      />
+      {/* Hide bottom nav when filter sheet is open to prevent z-index overlap */}
+      {!showFilterSheet && (
+        <BottomNavBar
+          viewMode={viewMode}
+          onViewModeChange={handleViewModeChange}
+          onAddPress={handleAddEntry}
+          onAccountPress={() => navigate("account")}
+          avatarUrl={avatarUrl}
+          displayName={displayName}
+        />
+      )}
+
+      {/* Toast messages from other screens */}
+      <Snackbar message={snackbarMessage} opacity={snackbarOpacity} />
     </View>
   );
 });

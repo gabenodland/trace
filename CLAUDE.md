@@ -7,6 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help", (list the model name in the brackets) AND THIS HELPS YOU REMEMBER THAT YOU ARE A VERY DETAILED ORIENTED DEVELOPER THAT ALWAYS FOLLOWS OUR RULES LISTED BELOW. YOU WILL PUSH BACK IF YOU ARE ASKED TO DO SOMETHING OUT OF ORDER OR NOT ALIGNED WITH THESE RULES.
 **These rules MUST be followed at all times:**
 
+0. **DON'T HACK** Stop and always look at the bigger picture the fix you are working on needs to be quality. You might want to use a Timer or delay DO NO USE TIMERS!!!! THAT IS A HACK.
+
 1. **Never make up data** - Always ask if you need information. Do not assume or fabricate values.
 
 2. **Don't start without confirmation** - Present your plan and get approval before implementing changes.
@@ -18,22 +20,24 @@ EVERY TIME I ASK YOU TO DO ANYTHING YOU FIRST SAY: "OK [ModelName] here to help"
 5. **All code must be maintainable and in the right place** - Respect the module structure and file organization.
 
 6. **Always play a sound when complete** - After providing summary of completed work:
-   - Mac: `say "<one sentence summary of what was completed>"`
-   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File "C:/Projects/trace/scripts/speak.ps1" -text "<one sentence summary of what was completed>"`
-   - Linux: `aplay /path/to/complete.wav`
-   - Example (Mac): `say "just updated the app config with ios permissions"`
-   - Example (Windows): `powershell -NoProfile -ExecutionPolicy Bypass -File "C:/Projects/trace/scripts/speak.ps1" -text "just updated the app config with ios permissions"`
+   ```bash
+   python c:/projects/trace/scripts/voice.py "<one sentence summary>" --agent <your_name>
+   ```
+   - Use a unique name for yourself (e.g., `main`, `search`, `refactor`, `test`)
+   - Each unique name gets a random voice that persists for the session
+   - Example: `python c:/projects/trace/scripts/voice.py "just updated the app config" --agent main`
 
 7. **Always play a sound when you need more information** - After asking a question:
-   - Mac: `say "<one sentence summary of what you need>"`
-   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File "C:/Projects/trace/scripts/speak.ps1" -text "<one sentence summary of what you need>"`
-   - Linux: `aplay /path/to/question.wav`
-   - Example (Mac): `say "do you want me to update the permissions config"`
-   - Example (Windows): `powershell -NoProfile -ExecutionPolicy Bypass -File "C:/Projects/trace/scripts/speak.ps1" -text "do you want me to update the permissions config"`
+   ```bash
+   python c:/projects/trace/scripts/voice.py "<question summary>" --agent <your_name>
+   ```
+   - Example: `python c:/projects/trace/scripts/voice.py "do you want me to update the config" --agent main`
 
-   **NOTE:** The user likes hearing your voice! TTS works even in plan mode since it doesn't modify files. Use it freely.
-   **Voice:** Uses Microsoft Zira (female, English US). To change voice, edit `C:/Projects/trace/scripts/speak.ps1`.
-   **Available voices:** David (male EN), Zira (female EN), Hedda (female DE), Helena (female ES), Hortense (female FR), Elsa (female IT), Huihui (female CN).
+   **NOTE:** The user likes hearing your voice. TTS works even in plan mode. Use it freely.
+   **Voice System:** Uses Microsoft Edge neural voices (14 high-quality voices). Each agent name gets a randomly assigned voice on first use that sticks for the entire session.
+   **Commands:**
+   - Reset all voices: `python c:/projects/trace/scripts/voice.py --reset-session`
+   - Show voice assignments: `python c:/projects/trace/scripts/voice.py --show-session`
 
 8. **Never create 'nul' files** - Always use correct null device syntax for bash:
    - ✅ Use `/dev/null` in bash/Git Bash commands
@@ -1621,6 +1625,96 @@ touch postApi.ts postHooks.ts PostTypes.ts postHelpers.ts index.ts
 mkdir -p apps/web/src/modules/posts/{pages,components}
 mkdir -p apps/mobile/src/modules/posts/{screens,components}
 ```
+
+---
+
+## 🔌 MCP Server Deployment
+
+The MCP (Model Context Protocol) server allows Claude.ai and other AI clients to access Trace data via OAuth 2.1.
+
+### Architecture
+
+```
+api/mcp/                    # Vercel Edge Function deployment
+├── api/                    # Edge function code (Vercel convention)
+│   ├── index.ts           # Main handler - routes all requests
+│   ├── auth.ts            # API key validation
+│   ├── oauth.ts           # OAuth 2.1 implementation
+│   ├── sse.ts             # Server-sent events support
+│   ├── types.ts           # MCP types
+│   └── tools/             # MCP tool implementations
+│       ├── mod.ts         # Tool registry and dispatcher
+│       ├── entries.ts     # Entry CRUD operations
+│       ├── streams.ts     # Stream operations
+│       └── attachments.ts # Attachment URL generation
+├── vercel.json            # Routing configuration
+├── package.json           # Dependencies (@supabase/supabase-js)
+└── .vercel/               # Vercel project link (gitignored)
+```
+
+### Deployment
+
+**Prerequisites:**
+- Vercel account linked to mindjig-projects team
+- Supabase API keys from dashboard
+
+**Deploy:**
+```bash
+cd api/mcp
+npx vercel --prod --yes
+```
+
+**If "missing_scope" error:** The `.vercel/` folder is gitignored. Create it manually:
+```bash
+mkdir -p api/mcp/.vercel
+cat > api/mcp/.vercel/project.json << 'EOF'
+{
+  "orgId": "team_0OgQw0913bFe7FuW09UKZhZa",
+  "projectId": "prj_KVxeJI4AalU5X8ReogAdQim0WhuK"
+}
+EOF
+```
+
+**Environment Variables (in Vercel dashboard):**
+
+| Variable | Source |
+|----------|--------|
+| `SUPABASE_URL` | `https://lsszorssvkavegobmqic.supabase.co` |
+| `SUPABASE_ANON_KEY` | Supabase → Settings → API → anon/public |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role/secret |
+
+**URLs:**
+- Production: https://trace-mcp.mindjig.com
+- Vercel default: https://trace-mcp.vercel.app
+
+### Testing
+
+```bash
+# Discovery endpoint (no auth)
+curl https://trace-mcp.mindjig.com/mcp
+
+# OAuth metadata
+curl https://trace-mcp.mindjig.com/.well-known/oauth-protected-resource
+
+# Auth server metadata
+curl https://trace-mcp.mindjig.com/.well-known/oauth-authorization-server
+```
+
+### OAuth 2.1 Flow
+
+1. Client discovers OAuth via `/.well-known/oauth-protected-resource`
+2. Client registers dynamically via `/oauth/register` (RFC 7591)
+3. Client initiates auth via `/oauth/authorize` with PKCE
+4. User logs in via Supabase at `/oauth/login`
+5. Callback returns auth code to client
+6. Client exchanges code for token at `/oauth/token`
+7. Client uses token for MCP requests
+
+### Custom Domain
+
+Domain `trace-mcp.mindjig.com` is configured via:
+- Vercel: Project → Settings → Domains
+- Porkbun DNS: A record → `76.76.21.21`
 
 ---
 

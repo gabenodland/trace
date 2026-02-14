@@ -87,6 +87,8 @@ export interface RichTextEditorV2Ref {
   clearHistory: () => void;
   /** Set content without adding to undo history - use when loading entries */
   setContentAndClearHistory: (html: string) => void;
+  /** Reload the WebView - use when WebView becomes unresponsive */
+  reloadWebView: () => void;
 }
 
 interface RichTextEditorV2Props {
@@ -274,7 +276,15 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     setContent: (html: string) => {
       const sanitized = sanitizeHtmlColors(html);
       setContentTimestamp = performance.now();
-      log.info('⏱️ setContent called', { length: sanitized.length });
+      // Log stack trace when content is empty or very short (likely a clear operation)
+      if (sanitized.length < 50) {
+        log.warn('setContent with short/empty content', {
+          length: sanitized.length,
+          stack: new Error().stack?.split('\n').slice(1, 5).join(' <- ')
+        });
+      } else {
+        log.info('⏱️ setContent called', { length: sanitized.length });
+      }
       lastKnownContent.current = sanitized;
       l2Ref.current?.setContent(sanitized);
     },
@@ -306,6 +316,14 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
       lastKnownContent.current = html;
       l2Ref.current?.setContentAndClearHistory(html);
     },
+    reloadWebView: () => {
+      log.info('reloadWebView called - reloading editor WebView');
+      // Reset ready state so onReady fires again after reload
+      isReady.current = false;
+      l2Ref.current?.reloadWebView();
+      // After reload, we'll need to restore content via setContent
+      // The caller should call setContent after reload completes
+    },
   }), []);
 
   // Handle read-only mode - blur when becoming read-only
@@ -324,6 +342,7 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     });
     return () => subscription.remove();
   }, []);
+
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>

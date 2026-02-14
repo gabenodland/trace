@@ -97,3 +97,4 @@ secrets.txt
 login.txt
 *.md.local
 
+.mcp.json

@@ -1,0 +1,19 @@
+{
+  "name": "@trace-app/mcp-proxy",
+  "version": "1.0.0",
+  "description": "MCP proxy for Trace app - allows Claude Code to connect to Trace via stdio transport",
+  "main": "index.js",
+  "bin": {
+    "trace-mcp-proxy": "./index.js"
+  },
+  "keywords": ["mcp", "claude", "trace", "proxy"],
+  "author": "Trace",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trace-app/mcp-proxy"
+  }
+}

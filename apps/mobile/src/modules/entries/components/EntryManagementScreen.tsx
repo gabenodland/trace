@@ -41,6 +41,7 @@ import type { EntryStatus, Location, LocationEntity } from '@trace/core';
 import { useSettings } from '../../../shared/contexts/SettingsContext';
 import { useStreams } from '../../streams/mobileStreamHooks';
 import { useLocations } from '../../locations/mobileLocationHooks';
+import { emitToast } from '../../../shared/services/toastService';
 
 const log = createScopedLogger('EntryManagement', '📝');
 
@@ -78,6 +79,15 @@ interface EntryManagementScreenProps {
  */
 function buildNewEntry(options?: NewEntryOptions, userId?: string): EntryWithRelations {
   const now = new Date().toISOString();
+
+  // Normalize stream_id: "all", "no-stream", and other filter values should be null
+  // Only valid UUIDs should be set as stream_id
+  const streamId = options?.streamId;
+  const isValidStreamId = streamId &&
+    streamId !== 'all' &&
+    streamId !== 'no-stream' &&
+    !streamId.includes(':'); // Exclude filter prefixes like "tag:", "location:", "geo:"
+
   return {
     entry_id: `temp-${Math.random().toString(36).substring(7)}`,
     user_id: userId || '',
@@ -85,7 +95,7 @@ function buildNewEntry(options?: NewEntryOptions, userId?: string): EntryWithRel
     content: options?.content || '',
     tags: [],
     mentions: [],
-    stream_id: options?.streamId || null,
+    stream_id: isValidStreamId ? streamId : null,
     stream: undefined,
     attachments: [],
     status: 'none',
@@ -226,6 +236,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       setOriginalEntry,
       entryId,
       isNewEntry,
+      setIsNewEntry,
       isDirty,
       editorRef,
       showSnackbar,
@@ -238,9 +249,11 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     // Keyboard height tracking - also detects when user taps into editor
     // Using keyboard show event instead of overlay tap because Android WebView
     // requires native touch (not programmatic focus) to show keyboard
+    // IMPORTANT: Only enter edit mode if this screen is visible - otherwise we would
+    // steal focus from other screens (e.g., CreateApiKeyModal in Settings)
     const keyboardHeight = useKeyboardHeight({
       onShow: () => {
-        if (!isEditMode) {
+        if (!isEditMode && isVisible) {
           log.debug('Keyboard shown, entering edit mode');
           setIsEditMode(true);
           setIsFullScreen(true);
@@ -272,6 +285,18 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         }
       }
     }, [isVisible, isEditMode, isDirty, entry, handleAutosave]);
+
+    // Track if we need to restore content after manual reload
+    const pendingResumeRestore = useRef<string | null>(null);
+
+    // Called when editor becomes ready (including after manual reload)
+    const handleEditorReady = useCallback(() => {
+      if (pendingResumeRestore.current) {
+        log.info('Editor ready after reload, restoring content', { length: pendingResumeRestore.current.length });
+        editorRef.current?.setContent(pendingResumeRestore.current);
+        pendingResumeRestore.current = null;
+      }
+    }, []);
 
     // =========================================================================
     // GPS Auto-Capture, Auto-Geocode, and Stream Templates
@@ -412,6 +437,20 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       );
     }, [entry, isNewEntry, showSnackbar]);
 
+    // Handler to reload the editor WebView (for debugging unresponsive editor)
+    const handleReloadEditor = useCallback(() => {
+      log.info('Manual editor reload triggered from menu');
+
+      // Store content to restore (will be picked up by onEditorReady)
+      if (entry) {
+        const html = combineTitleAndBody(entry.title || '', entry.content || '');
+        pendingResumeRestore.current = html;
+      }
+
+      editorRef.current?.reloadWebView();
+      showSnackbar('Editor reloading...');
+    }, [entry, showSnackbar]);
+
     // Handle editor content changes - split title from body
     const handleContentChange = useCallback((html: string) => {
       const { title, body } = splitTitleAndBody(html);
@@ -505,7 +544,8 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         editorRef.current?.setContentAndClearHistory(editorContent);
       },
       clearEntry: () => {
-        log.debug('clearEntry: hiding and resetting screen');
+        // Log stack trace to identify what's calling clearEntry
+        log.info('clearEntry called', { stack: new Error().stack?.split('\n').slice(1, 5).join(' <- ') });
         // Dismiss keyboard and blur editor first
         Keyboard.dismiss();
         editorRef.current?.blur();
@@ -611,8 +651,10 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     }, [updateEntryField]);
 
     const handleStreamChange = useCallback((streamId: string | null, _streamName: string | null) => {
-      updateEntryField('stream_id', streamId);
-    }, [updateEntryField]);
+      // Update both stream_id and the stream object for UI display
+      const stream = streamId ? streams.find(s => s.stream_id === streamId) : undefined;
+      setEntry(prev => prev ? { ...prev, stream_id: streamId, stream } : prev);
+    }, [streams]);
 
     const handleStatusChange = useCallback((status: EntryStatus) => {
       updateEntryField('status', status);
@@ -679,6 +721,10 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         const result = await handleSave();
         if (!result.success) {
           log.warn('handleBack: save failed, navigating anyway', { error: result.error });
+          // If new entry was empty, show toast on entry list
+          if (isNewEntry && result.error === 'Empty entry') {
+            emitToast('Entry not saved');
+          }
         }
       }
 
@@ -760,6 +806,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
             ref={editorRef}
             onChange={handleContentChange}
             editable={isEditMode}
+            onReady={handleEditorReady}
           />
         </View>
 
@@ -888,6 +935,8 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           onArchiveToggle={handleArchiveToggle}
           onDuplicate={handleDuplicate}
           onDelete={handleDelete}
+          // Developer callbacks
+          onReloadEditor={handleReloadEditor}
         />
 
         {/* Snackbar for notifications */}

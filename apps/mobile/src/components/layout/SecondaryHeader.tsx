@@ -68,8 +68,8 @@ export function SecondaryHeader({ title, rightAction, onBack, children }: Second
 
 const styles = StyleSheet.create({
   container: {
-    height: 110,
-    paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
+    height: 116,
+    paddingTop: Platform.OS === "ios" ? 60 : (StatusBar.currentHeight || 0) + 16,
     paddingHorizontal: 20,
     paddingBottom: 12,
     flexDirection: "row",

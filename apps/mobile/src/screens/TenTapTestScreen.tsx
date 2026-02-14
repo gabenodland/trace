@@ -18,7 +18,11 @@ import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { EditorWebBridge, EditorWebBridgeRef } from "../components/editor/EditorWebBridge";
 
-const SAMPLE_CONTENT = `<h1 class="entry-title">Test Entry</h1><p>This content was set via setContent().</p><ul><li><p>Item 1</p></li><li><p>Item 2</p></li></ul>`;
+const SAMPLE_CONTENT_A = `<h1 class="entry-title">Entry A - Morning Notes</h1><p>This is Entry A content.</p><ul><li><p>Item A1</p></li><li><p>Item A2</p></li></ul>`;
+const SAMPLE_CONTENT_B = `<h1 class="entry-title">Entry B - Evening Notes</h1><p>This is Entry B content.</p><ol><li><p>Item B1</p></li><li><p>Item B2</p></li></ol>`;
+
+// For backwards compatibility
+const SAMPLE_CONTENT = SAMPLE_CONTENT_A;
 
 export function TenTapTestScreen() {
   const theme = useTheme();
@@ -106,6 +110,44 @@ export function TenTapTestScreen() {
   const handleOutdent = () => {
     editorRef.current?.lift();
     addLog("lift() called (outdent)");
+  };
+
+  // History handlers
+  const handleUndo = () => {
+    editorRef.current?.undo();
+    addLog("undo() called");
+  };
+
+  const handleRedo = () => {
+    editorRef.current?.redo();
+    addLog("redo() called");
+  };
+
+  const handleClearHistory = () => {
+    addLog("clearHistory() calling...");
+    editorRef.current?.clearHistory();
+    addLog("clearHistory() injected - check WebView logs");
+  };
+
+  // Simulate loading Entry A (with history clear)
+  const handleLoadEntryA = () => {
+    addLog("Loading Entry A with setContentAndClearHistory...");
+    editorRef.current?.setContentAndClearHistory(SAMPLE_CONTENT_A);
+    addLog("Entry A loaded - undo should be disabled");
+  };
+
+  // Simulate loading Entry B (with history clear)
+  const handleLoadEntryB = () => {
+    addLog("Loading Entry B with setContentAndClearHistory...");
+    editorRef.current?.setContentAndClearHistory(SAMPLE_CONTENT_B);
+    addLog("Entry B loaded - undo should be disabled");
+  };
+
+  // Set content WITHOUT clearing history (old behavior - for comparison)
+  const handleSetContentNoHistoryClear = () => {
+    addLog("setContent (NO history clear)...");
+    editorRef.current?.setContent(SAMPLE_CONTENT_B);
+    addLog("Content set - undo WILL go back to previous content");
   };
 
   return (
@@ -200,6 +242,56 @@ export function TenTapTestScreen() {
               onPress={handleOutdent}
             >
               <Text style={styles.buttonText}>← Outdent</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* History Controls - THE MAIN TEST SECTION */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary, borderWidth: 2, borderColor: theme.colors.functional.accent }]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.functional.accent }]}>History Controls (Testing Undo Fix)</Text>
+          <Text style={[styles.info, { color: theme.colors.text.secondary, marginBottom: 12 }]}>
+            Test: Load Entry A → type → Load Entry B → Undo should NOT go back to Entry A
+          </Text>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.colors.interactive.secondary }]}
+              onPress={handleUndo}
+            >
+              <Text style={styles.buttonText}>↩ Undo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.colors.interactive.secondary }]}
+              onPress={handleRedo}
+            >
+              <Text style={styles.buttonText}>↪ Redo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.colors.functional.overdue }]}
+              onPress={handleClearHistory}
+            >
+              <Text style={styles.buttonText}>Clear History</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.buttonRow, { marginTop: 8 }]}>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.colors.functional.accent }]}
+              onPress={handleLoadEntryA}
+            >
+              <Text style={styles.buttonText}>Load Entry A</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.colors.functional.accent }]}
+              onPress={handleLoadEntryB}
+            >
+              <Text style={styles.buttonText}>Load Entry B</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.buttonRow, { marginTop: 8 }]}>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.colors.border.dark }]}
+              onPress={handleSetContentNoHistoryClear}
+            >
+              <Text style={styles.buttonText}>Set B (no clear) - OLD BUG</Text>
             </TouchableOpacity>
           </View>
         </View>

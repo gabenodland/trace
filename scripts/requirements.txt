@@ -1,0 +1,6 @@
+# Dependencies for scripts in this directory
+# Install with: pip install -r scripts/requirements.txt
+
+# Voice TTS (voice.py)
+edge-tts>=6.1.0
+filelock>=3.0.0

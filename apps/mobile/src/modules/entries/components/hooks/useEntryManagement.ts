@@ -43,6 +43,7 @@ interface UseEntryManagementProps {
   setOriginalEntry: React.Dispatch<React.SetStateAction<EntryWithRelations | null>>;
   entryId: string | null;
   isNewEntry: boolean;
+  setIsNewEntry: React.Dispatch<React.SetStateAction<boolean>>;
   isDirty: boolean;
   editorRef: React.RefObject<RichTextEditorV2Ref | null>;
   showSnackbar: (message: string) => void;
@@ -85,6 +86,7 @@ export function useEntryManagement({
   setOriginalEntry,
   entryId,
   isNewEntry,
+  setIsNewEntry,
   isDirty,
   editorRef,
   showSnackbar,
@@ -159,12 +161,11 @@ export function useEntryManagement({
       const contentToSave = body;
       const titleToSave = title || entry.title || null;
 
-      // Check if entry has content worth saving
+      // Check if entry has content worth saving - silently skip empty new entries
       const photoCount = entry.attachments?.length || 0;
       if (isNewEntry && !hasUserContent(titleToSave || '', contentToSave, photoCount)) {
-        if (!isAutosave) {
-          Alert.alert('Empty Entry', 'Please add a title, content, or photo before saving');
-        }
+        // No dialog - just return failure, caller will handle navigation
+        log.debug('Skipping save for empty new entry');
         return { success: false, error: 'Empty entry' };
       }
 
@@ -257,6 +258,9 @@ export function useEntryManagement({
         setEntry(updatedEntry);
         setOriginalEntry(updatedEntry);
 
+        // CRITICAL: Mark as no longer new to prevent duplicate creates on subsequent saves
+        setIsNewEntry(false);
+
         // Update version tracking
         knownVersionRef.current = 1;
         recordSaveTime();
@@ -343,6 +347,8 @@ export function useEntryManagement({
         queryClient.invalidateQueries({ queryKey: ['tags'] });
         queryClient.invalidateQueries({ queryKey: ['mentions'] });
         queryClient.invalidateQueries({ queryKey: ['locationHierarchy'] });
+        queryClient.invalidateQueries({ queryKey: ['streams'] });
+        queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
 
         log.info('Entry updated successfully', { entryId: entry.entry_id });
         if (!isAutosave) {
@@ -368,7 +374,7 @@ export function useEntryManagement({
         setIsSubmitting(false);
       }
     }
-  }, [entry, user?.id, isNewEntry, isSaving, editorRef, setEntry, setOriginalEntry, showSnackbar, recordSaveTime, queryClient]);
+  }, [entry, user?.id, isNewEntry, setIsNewEntry, isSaving, editorRef, setEntry, setOriginalEntry, showSnackbar, recordSaveTime, queryClient]);
 
   const handleSave = useCallback(async (): Promise<SaveResult> => {
     return performSave(false);
@@ -572,7 +578,7 @@ export function useEntryManagement({
       lastSaveTimeRef.current = 0; // Prevent spam
       Alert.alert(
         'Sync Conflict',
-        `Your recent changes may have been overwritten by ${editingDevice}.`,
+        `Your recent changes may have been overwritten by ${editingDevice}.\n\nTip: You may be able to use Undo to restore your last change.`,
         [{ text: 'OK' }]
       );
     } else {

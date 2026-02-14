@@ -2,7 +2,7 @@
  * Image Quality Selector - Modal for choosing photo compression quality
  */
 
-import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, Platform, StatusBar } from 'react-native';
 import { type ImageQuality, IMAGE_QUALITY_OPTIONS } from '@trace/core';
 import { useTheme } from '../../shared/contexts/ThemeContext';
 import { Icon } from '../../shared/components';
@@ -94,7 +94,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 16,
+    paddingBottom: 16,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',

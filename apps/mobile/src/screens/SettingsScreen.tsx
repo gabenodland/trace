@@ -14,6 +14,7 @@ import { UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
 import { getThemeOptions } from "../shared/theme/themes";
 import { getFontOptions } from "../shared/theme/fonts";
 import { logger } from "../shared/utils/logger";
+import { ApiKeysSection } from "../modules/settings/components/ApiKeysSection";
 
 export function SettingsScreen() {
   const { settings, updateSettings } = useSettings();
@@ -182,6 +183,9 @@ export function SettingsScreen() {
             </View>
           </TouchableOpacity>
         </View>
+
+        {/* Integrations Section - API Keys for MCP */}
+        <ApiKeysSection />
 
         {/* Legal Section */}
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
