@@ -201,6 +201,44 @@ export function sortEntries<T extends BaseEntry>(
 }
 
 /**
+ * Extract pinned entries into a separate section for grouped views.
+ * When showPinnedFirst is true, pinned entries are pulled out of their normal
+ * groups and placed in a "Pinned" section at the top of the list.
+ * Pinned entries are sorted by date (newest first) within the section.
+ */
+function extractPinnedSection<T extends BaseEntry>(
+  entries: T[],
+  showPinnedFirst: boolean
+): { pinnedSection: EntrySection<T> | null; remaining: T[] } {
+  if (!showPinnedFirst) {
+    return { pinnedSection: null, remaining: entries };
+  }
+
+  const pinned = entries.filter((e) => e.is_pinned);
+  const remaining = entries.filter((e) => !e.is_pinned);
+
+  if (pinned.length === 0) {
+    return { pinnedSection: null, remaining };
+  }
+
+  // Sort pinned entries by date (newest first)
+  const sortedPinned = [...pinned].sort(
+    (a, b) =>
+      new Date(b.entry_date || b.created_at).getTime() -
+      new Date(a.entry_date || a.created_at).getTime()
+  );
+
+  return {
+    pinnedSection: {
+      title: "Pinned",
+      count: sortedPinned.length,
+      data: sortedPinned,
+    },
+    remaining,
+  };
+}
+
+/**
  * Group entries by status into sections
  */
 export function groupEntriesByStatus<T extends BaseEntry>(
@@ -208,7 +246,8 @@ export function groupEntriesByStatus<T extends BaseEntry>(
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
 ): EntrySection<T>[] {
-  const sorted = sortEntries(entries, "status", undefined, order, showPinnedFirst);
+  const { pinnedSection, remaining } = extractPinnedSection(entries, showPinnedFirst);
+  const sorted = sortEntries(remaining, "status", undefined, order, false);
   const groups = new Map<string, T[]>();
 
   for (const entry of sorted) {
@@ -233,6 +272,7 @@ export function groupEntriesByStatus<T extends BaseEntry>(
     }
   }
 
+  if (pinnedSection) sections.unshift(pinnedSection);
   return sections;
 }
 
@@ -244,7 +284,8 @@ export function groupEntriesByType<T extends BaseEntry>(
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
 ): EntrySection<T>[] {
-  const sorted = sortEntries(entries, "type", undefined, order, showPinnedFirst);
+  const { pinnedSection, remaining } = extractPinnedSection(entries, showPinnedFirst);
+  const sorted = sortEntries(remaining, "type", undefined, order, false);
   const groups = new Map<string, T[]>();
 
   for (const entry of sorted) {
@@ -274,6 +315,7 @@ export function groupEntriesByType<T extends BaseEntry>(
     }
   }
 
+  if (pinnedSection) sections.unshift(pinnedSection);
   return sections;
 }
 
@@ -286,7 +328,8 @@ export function groupEntriesByStream<T extends BaseEntry>(
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
 ): EntrySection<T>[] {
-  const sorted = sortEntries(entries, "stream", streamMap, order, showPinnedFirst);
+  const { pinnedSection, remaining } = extractPinnedSection(entries, showPinnedFirst);
+  const sorted = sortEntries(remaining, "stream", streamMap, order, false);
   const groups = new Map<string, T[]>();
 
   for (const entry of sorted) {
@@ -316,6 +359,7 @@ export function groupEntriesByStream<T extends BaseEntry>(
     }
   }
 
+  if (pinnedSection) sections.unshift(pinnedSection);
   return sections;
 }
 
@@ -389,7 +433,8 @@ export function groupEntriesByDueDate<T extends BaseEntry>(
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
 ): EntrySection<T>[] {
-  const sorted = sortEntries(entries, "due_date", undefined, order, showPinnedFirst);
+  const { pinnedSection, remaining } = extractPinnedSection(entries, showPinnedFirst);
+  const sorted = sortEntries(remaining, "due_date", undefined, order, false);
   const groups = new Map<DueDateBucket, T[]>();
 
   for (const entry of sorted) {
@@ -414,6 +459,7 @@ export function groupEntriesByDueDate<T extends BaseEntry>(
     }
   }
 
+  if (pinnedSection) sections.unshift(pinnedSection);
   return sections;
 }
 
@@ -425,10 +471,12 @@ export function groupEntriesByPriority<T extends BaseEntry>(
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
 ): EntrySection<T>[] {
+  const { pinnedSection, remaining } = extractPinnedSection(entries, showPinnedFirst);
+
   const entriesWithPriority: T[] = [];
   const entriesWithoutPriority: T[] = [];
 
-  for (const entry of entries) {
+  for (const entry of remaining) {
     if (entry.priority && entry.priority > 0) {
       entriesWithPriority.push(entry);
     } else {
@@ -437,20 +485,12 @@ export function groupEntriesByPriority<T extends BaseEntry>(
   }
 
   const sortedWithPriority = [...entriesWithPriority].sort((a, b) => {
-    if (showPinnedFirst) {
-      if (a.is_pinned && !b.is_pinned) return -1;
-      if (!a.is_pinned && b.is_pinned) return 1;
-    }
     const priorityA = a.priority || 0;
     const priorityB = b.priority || 0;
     return order === "asc" ? priorityA - priorityB : priorityB - priorityA;
   });
 
   const sortedWithoutPriority = [...entriesWithoutPriority].sort((a, b) => {
-    if (showPinnedFirst) {
-      if (a.is_pinned && !b.is_pinned) return -1;
-      if (!a.is_pinned && b.is_pinned) return 1;
-    }
     return (
       new Date(b.entry_date || b.created_at).getTime() -
       new Date(a.entry_date || a.created_at).getTime()
@@ -475,6 +515,7 @@ export function groupEntriesByPriority<T extends BaseEntry>(
     });
   }
 
+  if (pinnedSection) sections.unshift(pinnedSection);
   return sections;
 }
 
@@ -552,11 +593,13 @@ export function groupEntriesByRating<T extends BaseEntry>(
   showPinnedFirst: boolean = false,
   streamById?: Record<string, Stream> | null
 ): EntrySection<T>[] {
+  const { pinnedSection, remaining } = extractPinnedSection(entries, showPinnedFirst);
+
   // First sort entries by rating
-  const sorted = sortEntries(entries, "rating", undefined, order, showPinnedFirst);
+  const sorted = sortEntries(remaining, "rating", undefined, order, false);
 
   // Determine display mode based on stream rating types
-  const displayMode = determineRatingDisplayMode(entries, streamById);
+  const displayMode = determineRatingDisplayMode(remaining, streamById);
 
   // Group by rating
   const groups = new Map<number, T[]>();
@@ -600,6 +643,7 @@ export function groupEntriesByRating<T extends BaseEntry>(
     }
   }
 
+  if (pinnedSection) sections.unshift(pinnedSection);
   return sections;
 }
 

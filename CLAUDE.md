@@ -102,3 +102,4 @@ Full patterns with examples: `packages/core/CLAUDE.md`
 | Android builds, versioning, editor | `apps/mobile/CLAUDE.md` |
 | Database migrations | `supabase/CLAUDE.md` |
 | MCP server deployment | `api/mcp/CLAUDE.md` |
+| Trace Backlog (bugs/features) | `/backlog` skill — stream ID `4ccd4c59` |

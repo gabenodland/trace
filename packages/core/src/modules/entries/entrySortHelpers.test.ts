@@ -6,6 +6,7 @@ import {
   groupEntriesByStream,
   groupEntriesByPriority,
   groupEntriesByRating,
+  groupEntriesByDueDate,
   groupEntries,
   filterEntriesBySearch,
   getRatingLabel,
@@ -215,8 +216,9 @@ describe("entrySortHelpers", () => {
     it("uses workflow order for sections", () => {
       const sections = groupEntriesByStatus(entries, "desc");
       const titles = sections.map((s) => s.title);
-      // Todo should come before Done in workflow order
-      expect(titles.indexOf("Todo")).toBeLessThan(titles.indexOf("Done"));
+      // "To Do" should come before "Done" in workflow order
+      expect(titles.indexOf("To Do")).toBeGreaterThanOrEqual(0);
+      expect(titles.indexOf("To Do")).toBeLessThan(titles.indexOf("Done"));
     });
   });
 
@@ -398,6 +400,121 @@ describe("entrySortHelpers", () => {
       it("returns decimal format for non-whole", () => {
         expect(getRatingLabel(7.5, "10base")).toBe("7.5/10");
       });
+    });
+  });
+
+  describe("pinned section in grouped modes", () => {
+    const entries = [
+      createEntry({ entry_id: "1", type: "bug", status: "todo", is_pinned: true, entry_date: "2024-01-15" }),
+      createEntry({ entry_id: "2", type: "bug", status: "todo", is_pinned: false, entry_date: "2024-01-14" }),
+      createEntry({ entry_id: "3", type: "feature", status: "done", is_pinned: true, entry_date: "2024-01-10" }),
+      createEntry({ entry_id: "4", type: "feature", status: "done", is_pinned: false, entry_date: "2024-01-13" }),
+    ];
+
+    it("groupEntriesByType creates Pinned section at top when showPinnedFirst is true", () => {
+      const sections = groupEntriesByType(entries, "desc", true);
+      expect(sections[0].title).toBe("Pinned");
+      expect(sections[0].count).toBe(2);
+      expect(sections[0].data.every((e) => e.is_pinned)).toBe(true);
+    });
+
+    it("groupEntriesByType excludes pinned entries from type groups", () => {
+      const sections = groupEntriesByType(entries, "desc", true);
+      const nonPinnedSections = sections.filter((s) => s.title !== "Pinned");
+      for (const section of nonPinnedSections) {
+        expect(section.data.every((e) => !e.is_pinned)).toBe(true);
+      }
+    });
+
+    it("groupEntriesByType has no Pinned section when showPinnedFirst is false", () => {
+      const sections = groupEntriesByType(entries, "desc", false);
+      expect(sections.find((s) => s.title === "Pinned")).toBeUndefined();
+    });
+
+    it("groupEntriesByType has no Pinned section when no entries are pinned", () => {
+      const unpinned = entries.map((e) => ({ ...e, is_pinned: false }));
+      const sections = groupEntriesByType(unpinned, "desc", true);
+      expect(sections.find((s) => s.title === "Pinned")).toBeUndefined();
+    });
+
+    it("groupEntriesByStatus creates Pinned section at top", () => {
+      const sections = groupEntriesByStatus(entries, "desc", true);
+      expect(sections[0].title).toBe("Pinned");
+      expect(sections[0].count).toBe(2);
+    });
+
+    it("groupEntriesByStream creates Pinned section at top", () => {
+      const streamEntries = [
+        createEntry({ entry_id: "1", stream_id: "s1", is_pinned: true }),
+        createEntry({ entry_id: "2", stream_id: "s1", is_pinned: false }),
+        createEntry({ entry_id: "3", stream_id: "s2", is_pinned: false }),
+      ];
+      const streamMap = { s1: "Work", s2: "Personal" };
+      const sections = groupEntriesByStream(streamEntries, streamMap, "desc", true);
+      expect(sections[0].title).toBe("Pinned");
+      expect(sections[0].count).toBe(1);
+    });
+
+    it("groupEntriesByPriority creates Pinned section at top", () => {
+      const priorityEntries = [
+        createEntry({ entry_id: "1", priority: 3, is_pinned: true }),
+        createEntry({ entry_id: "2", priority: 1, is_pinned: false }),
+        createEntry({ entry_id: "3", priority: 0, is_pinned: false }),
+      ];
+      const sections = groupEntriesByPriority(priorityEntries, "desc", true);
+      expect(sections[0].title).toBe("Pinned");
+      expect(sections[0].count).toBe(1);
+    });
+
+    it("groupEntriesByRating creates Pinned section at top", () => {
+      const ratingEntries = [
+        createEntry({ entry_id: "1", rating: 8, is_pinned: true }),
+        createEntry({ entry_id: "2", rating: 6, is_pinned: false }),
+        createEntry({ entry_id: "3", rating: 0, is_pinned: false }),
+      ];
+      const sections = groupEntriesByRating(ratingEntries, "desc", true);
+      expect(sections[0].title).toBe("Pinned");
+      expect(sections[0].count).toBe(1);
+    });
+
+    it("groupEntriesByDueDate creates Pinned section at top", () => {
+      const dueDateEntries = [
+        createEntry({ entry_id: "1", due_date: "2024-12-01", is_pinned: true }),
+        createEntry({ entry_id: "2", due_date: "2024-12-01", is_pinned: false }),
+        createEntry({ entry_id: "3", due_date: null, is_pinned: false }),
+      ];
+      const sections = groupEntriesByDueDate(dueDateEntries, "desc", true);
+      expect(sections[0].title).toBe("Pinned");
+      expect(sections[0].count).toBe(1);
+    });
+
+    it("pinned section entries are sorted by date (newest first)", () => {
+      const sections = groupEntriesByType(entries, "desc", true);
+      const pinnedSection = sections[0];
+      expect(pinnedSection.title).toBe("Pinned");
+      // entry_id "1" has date 2024-01-15, entry_id "3" has date 2024-01-10
+      expect(pinnedSection.data[0].entry_id).toBe("1");
+      expect(pinnedSection.data[1].entry_id).toBe("3");
+    });
+
+    it("groupEntries dispatcher forwards showPinnedFirst", () => {
+      const sections = groupEntries(entries, "status", undefined, "desc", true);
+      expect(sections[0].title).toBe("Pinned");
+      expect(sections[0].count).toBe(2);
+    });
+
+    it("total entry count is preserved across all sections", () => {
+      const sections = groupEntriesByType(entries, "desc", true);
+      const totalCount = sections.reduce((sum, s) => sum + s.data.length, 0);
+      expect(totalCount).toBe(entries.length);
+    });
+
+    it("handles all entries pinned", () => {
+      const allPinned = entries.map((e) => ({ ...e, is_pinned: true }));
+      const sections = groupEntriesByType(allPinned, "desc", true);
+      expect(sections.length).toBe(1);
+      expect(sections[0].title).toBe("Pinned");
+      expect(sections[0].count).toBe(allPinned.length);
     });
   });
 
