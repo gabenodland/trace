@@ -8,7 +8,8 @@
  */
 
 import { useMemo, useDeferredValue } from 'react';
-import type { Entry, EntrySection, EntrySortMode, EntrySortOrder, Stream, StreamViewFilter, DueDatePreset } from '@trace/core';
+import type { EntrySection, EntrySortMode, EntrySortOrder, Stream, StreamViewFilter, DueDatePreset } from '@trace/core';
+import type { EntryWithRelations } from '../../modules/entries/EntryWithRelationsTypes';
 import {
   sortEntries,
   groupEntriesByStatus,
@@ -104,7 +105,7 @@ function matchesEntryDateRange(entryDate: string | null, startDate: string | nul
  * photo_count is calculated via SQL subquery when entries are fetched
  * Falls back to checking content for attachment references (legacy entries without photo_count)
  */
-function entryHasPhotos(entry: Entry): boolean {
+function entryHasPhotos(entry: EntryWithRelations): boolean {
   // Use photo_count from entry (calculated in SQL query)
   if (entry.photo_count !== undefined) {
     return entry.photo_count > 0;
@@ -115,7 +116,7 @@ function entryHasPhotos(entry: Entry): boolean {
 }
 
 interface UseFilteredEntriesOptions {
-  entries: Entry[];
+  entries: EntryWithRelations[];
   streams: Stream[];
   sortMode: EntrySortMode;
   orderMode: EntrySortOrder;
@@ -162,7 +163,7 @@ export function useFilteredEntries({
   }, [entries, sortMode, streamMap, orderMode, showPinnedFirst]);
 
   // Compute sections when sorting by status, type, stream, priority, rating, or due date
-  const entrySections = useMemo((): EntrySection[] | undefined => {
+  const entrySections = useMemo((): EntrySection<EntryWithRelations>[] | undefined => {
     if (sortMode === 'status') {
       return groupEntriesByStatus(entries, orderMode, showPinnedFirst);
     }
@@ -187,7 +188,7 @@ export function useFilteredEntries({
   // Filter function that applies all settings drawer filters
   // Uses deferredFilter so UI updates instantly, filtering catches up
   const applyFilters = useMemo(() => {
-    return (entry: Entry): boolean => {
+    return (entry: EntryWithRelations): boolean => {
       // Archive filter (default: hide archived)
       if (!deferredFilter.showArchived && entry.is_archived) return false;
 
@@ -284,11 +285,11 @@ export function useFilteredEntries({
 
   // Filter sections by settings drawer filter + search query
   // Uses deferred values so UI updates instantly, filtering catches up
-  const filteredSections = useMemo((): EntrySection[] | undefined => {
+  const filteredSections = useMemo((): EntrySection<EntryWithRelations>[] | undefined => {
     if (!entrySections) return undefined;
 
     // Filter function that applies both settings filter and search query
-    const filterEntry = (entry: Entry) => {
+    const filterEntry = (entry: EntryWithRelations) => {
       // Apply settings drawer filters
       if (!applyFilters(entry)) return false;
 

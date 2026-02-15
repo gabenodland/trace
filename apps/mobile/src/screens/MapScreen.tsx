@@ -23,7 +23,8 @@ import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { Icon } from "../shared/components/Icon";
-import type { Entry, EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
+import type { EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
+import type { EntryWithRelations } from "../modules/entries/EntryWithRelationsTypes";
 import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, sortEntries } from "@trace/core";
 
 // Cluster entries that are close together
@@ -31,7 +32,7 @@ interface EntryCluster {
   id: string;
   latitude: number;
   longitude: number;
-  entries: Entry[];
+  entries: EntryWithRelations[];
   count: number;
 }
 
@@ -261,8 +262,8 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   };
 
   const [region, setRegion] = useState<Region>(persistedRegion || defaultRegion);
-  const [visibleEntries, setVisibleEntries] = useState<Entry[]>([]);
-  const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
+  const [visibleEntries, setVisibleEntries] = useState<EntryWithRelations[]>([]);
+  const [selectedEntry, setSelectedEntry] = useState<EntryWithRelations | null>(null);
   const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
   const [isMapExpanded, setIsMapExpanded] = useState(true); // true = full height (300), false = half height (150)
@@ -273,7 +274,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   const pendingFitRef = useRef(false); // Track if we need to fit when data settles
   const fitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Debounce fit operations
   const lastEntriesKeyRef = useRef<string>(""); // Track entries by stable key to avoid unnecessary refits
-  const entriesRef = useRef<Entry[]>([]); // Ref to access current entries without dependency
+  const entriesRef = useRef<EntryWithRelations[]>([]); // Ref to access current entries without dependency
 
   // entries is now the same as allEntries (filtering already done by hook)
   const entries = allEntries;
@@ -363,7 +364,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   }, [selectedStreamId, entriesKey, isFetching, isMapReady, isVisible]);
 
   // Calculate map bounds to fit all entries
-  const calculateBounds = (entries: Entry[]): Region => {
+  const calculateBounds = (entries: EntryWithRelations[]): Region => {
     if (entries.length === 0) {
       return region;
     }

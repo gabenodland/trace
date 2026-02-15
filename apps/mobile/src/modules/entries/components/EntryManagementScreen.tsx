@@ -13,7 +13,7 @@
  */
 
 import { useRef, useImperativeHandle, forwardRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Keyboard, Alert } from 'react-native';
+import { View, Text, StyleSheet, Keyboard, Alert, AppState, AppStateStatus } from 'react-native';
 import { EntryHeader } from './EntryHeader';
 import { AttributeBar } from './AttributeBar';
 import { EditorToolbar } from './EditorToolbar';
@@ -44,6 +44,29 @@ import { useLocations } from '../../locations/mobileLocationHooks';
 import { emitToast } from '../../../shared/services/toastService';
 
 const log = createScopedLogger('EntryManagement', '📝');
+
+/**
+ * getHTML with timeout — returns null if WebView doesn't respond.
+ * Used to detect dead/unready WebViews.
+ */
+function getHTMLWithTimeout(
+  editorRef: React.RefObject<RichTextEditorV2Ref | null>,
+  timeoutMs: number
+): Promise<string | null> {
+  if (!editorRef.current) return Promise.resolve(null);
+  return Promise.race([
+    editorRef.current.getHTML(),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+}
+
+/**
+ * Strip HTML tags and normalize whitespace to get plain text for comparison.
+ * Used to verify content was applied despite Tiptap's HTML normalization.
+ */
+function stripHtmlToText(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+}
 
 /**
  * Options for creating a new entry
@@ -162,6 +185,10 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [activePicker, setActivePicker] = useState<EntryPickerType>(null);
+
+    // Content ready flag - hides content area until data + editor content are confirmed
+    // Prevents blocky progressive loading (attributes → photos → editor popping in one by one)
+    const [isContentReady, setIsContentReady] = useState(false);
 
     // Photo gallery collapsed state - when collapsed, photos show in AttributeBar
     const [isGalleryCollapsed, setIsGalleryCollapsed] = useState(false);
@@ -286,16 +313,25 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       }
     }, [isVisible, isEditMode, isDirty, entry, handleAutosave]);
 
-    // Track if we need to restore content after manual reload
+    // Track what to restore after WebView reload (manual reload of new/unsaved entry)
     const pendingResumeRestore = useRef<string | null>(null);
 
-    // Called when editor becomes ready (including after manual reload)
+    // Called when editor becomes ready (including after reload)
     const handleEditorReady = useCallback(() => {
+      log.info('🔄 handleEditorReady fired', {
+        hasPendingResumeRestore: !!pendingResumeRestore.current,
+        pendingResumeRestoreLength: pendingResumeRestore.current?.length || 0,
+      });
+
+      // New entry or manual reload - restore from React state
       if (pendingResumeRestore.current) {
-        log.info('Editor ready after reload, restoring content', { length: pendingResumeRestore.current.length });
+        log.info('🔄 Editor ready after reload, restoring content from state', { length: pendingResumeRestore.current.length });
         editorRef.current?.setContent(pendingResumeRestore.current);
         pendingResumeRestore.current = null;
+        return;
       }
+
+      log.debug('🔄 handleEditorReady: no pending restore (normal startup)');
     }, []);
 
     // =========================================================================
@@ -437,19 +473,105 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       );
     }, [entry, isNewEntry, showSnackbar]);
 
-    // Handler to reload the editor WebView (for debugging unresponsive editor)
-    const handleReloadEditor = useCallback(() => {
-      log.info('Manual editor reload triggered from menu');
+    // =========================================================================
+    // WebView Recovery - handles dead WebView after app resume
+    // =========================================================================
 
-      // Store content to restore (will be picked up by onEditorReady)
-      if (entry) {
-        const html = combineTitleAndBody(entry.title || '', entry.content || '');
-        pendingResumeRestore.current = html;
+    /**
+     * Reload the editor WebView and restore content.
+     * - If entry is saved (has real ID): reload from DB (autosave has latest)
+     * - If entry is new (temp ID): restore from current React state
+     * - If no entry loaded: just reload WebView (ready for next use)
+     */
+    const handleEditorReload = useCallback(async (source: 'manual' | 'recovery') => {
+      log.info(`🔄 handleEditorReload (${source})`, {
+        hasEntry: !!entry,
+        isNew: isNewEntry,
+        entryId: entryId?.substring(0, 8),
+        hasEditorRef: !!editorRef.current,
+      });
+
+      if (!entry || !entryId) {
+        log.info('🔄 No entry loaded, just reloading WebView');
+        editorRef.current?.reloadWebView();
+        if (source === 'manual') {
+          showSnackbar('Editor reloaded');
+        }
+        return;
       }
 
+      // Store content to restore after reload completes
+      const html = combineTitleAndBody(entry.title || '', entry.content || '');
+      log.info('🔄 Setting pendingResumeRestore before reload', { length: html.length });
+      pendingResumeRestore.current = html;
       editorRef.current?.reloadWebView();
-      showSnackbar('Editor reloading...');
-    }, [entry, showSnackbar]);
+      if (source === 'manual') {
+        showSnackbar('Editor reloading...');
+      }
+    }, [entry, entryId, isNewEntry, showSnackbar]);
+
+    // Manual reload handler (for debug menu)
+    const handleReloadEditor = useCallback(() => {
+      handleEditorReload('manual');
+    }, [handleEditorReload]);
+
+    /**
+     * Check if WebView is responsive by calling getHTML with timeout.
+     * Returns true if responsive, false if dead/unresponsive.
+     */
+    const checkWebViewHealth = useCallback(async (): Promise<boolean> => {
+      log.info('🏥 Health check: starting', { hasEditorRef: !!editorRef.current });
+      if (!editorRef.current) return true; // No editor, nothing to check
+
+      try {
+        const timeoutPromise = new Promise<null>((_, reject) => {
+          setTimeout(() => reject(new Error('timeout')), 500);
+        });
+
+        const startMs = performance.now();
+        const htmlPromise = editorRef.current.getHTML();
+        const result = await Promise.race([htmlPromise, timeoutPromise]);
+        const elapsedMs = Math.round(performance.now() - startMs);
+
+        // Check if result is valid (not null/empty from a dead WebView)
+        if (result === null || result === undefined) {
+          log.warn('🏥 Health check: WebView returned null/undefined - DEAD', { elapsedMs });
+          return false;
+        }
+
+        log.info('🏥 Health check: WebView ALIVE', { elapsedMs, resultLength: String(result).length });
+        return true;
+      } catch (error) {
+        log.warn('🏥 Health check: FAILED (timeout or error)', {
+          error: error instanceof Error ? error.message : 'unknown'
+        });
+        return false;
+      }
+    }, []);
+
+    // AppState listener - check WebView health when app resumes
+    useEffect(() => {
+      const handleAppStateChange = async (nextState: AppStateStatus) => {
+        log.info('🔄 AppState changed', { nextState, isVisible: isVisibleRef.current, entryId: entryId?.substring(0, 8) || null });
+
+        if (nextState === 'active' && isVisibleRef.current) {
+          log.info('🔄 App resumed on visible entry screen, checking WebView health');
+
+          const isHealthy = await checkWebViewHealth();
+
+          if (!isHealthy) {
+            log.warn('🔄 WebView DEAD after resume, triggering recovery', { entryId: entryId?.substring(0, 8) });
+            emitToast('Editor recovering...');
+            handleEditorReload('recovery');
+          } else {
+            log.info('🔄 WebView healthy after resume, no action needed');
+          }
+        }
+      };
+
+      const subscription = AppState.addEventListener('change', handleAppStateChange);
+      return () => subscription.remove();
+    }, [checkWebViewHealth, handleEditorReload, entryId]);
 
     // Handle editor content changes - split title from body
     const handleContentChange = useCallback((html: string) => {
@@ -464,6 +586,69 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         return { ...prev, title: newTitle, content: newContent };
       });
     }, []);
+
+    /**
+     * Verify editor content was applied. Three cases:
+     * 1. getHTML returns non-null, text matches expected → done (happy path).
+     * 2. getHTML returns null → WebView dead → reload once, poll until alive, re-set.
+     * 3. getHTML returns non-null, text does NOT match → set was lost → re-set and re-verify.
+     */
+    const verifyEditorContent = (content: string, onVerified: () => void) => {
+      const expectedText = stripHtmlToText(content);
+      let reloaded = false;
+      let resets = 0;
+      const MAX_RESETS = 3;
+      const MAX_RELOAD_POLLS = 30;
+
+      const poll = async (attempt: number) => {
+        const html = await getHTMLWithTimeout(editorRef, 80);
+
+        if (html === null) {
+          // WebView dead — reload once, then poll until alive
+          if (!reloaded) {
+            log.warn(`⚡ verify: WebView dead (attempt ${attempt}) — reloading`);
+            editorRef.current?.reloadWebView();
+            reloaded = true;
+          }
+          if (attempt < MAX_RELOAD_POLLS) {
+            setTimeout(() => poll(attempt + 1), 100);
+          } else {
+            log.error(`⚡ verify: GAVE UP waiting for WebView after ${attempt} attempts`);
+            onVerified(); // Show content anyway — don't leave user staring at blank
+          }
+          return;
+        }
+
+        // WebView alive — compare text content
+        const actualText = stripHtmlToText(html);
+
+        if (actualText === expectedText) {
+          // Content matches — done
+          if (reloaded || resets > 0) {
+            log.info(`⚡ verify: content confirmed (attempt ${attempt}, reloaded=${reloaded}, resets=${resets})`);
+          }
+          onVerified();
+          return;
+        }
+
+        // Content mismatch — re-set (limited retries)
+        if (resets < MAX_RESETS) {
+          resets++;
+          log.warn(`⚡ verify: content mismatch (attempt ${attempt}, reset ${resets}/${MAX_RESETS}), re-setting`, {
+            expectedLen: expectedText.length,
+            actualLen: actualText.length,
+          });
+          editorRef.current?.setContentAndClearHistory(content);
+          // Wait for set to propagate through bridge, then re-verify
+          setTimeout(() => poll(attempt + 1), 200);
+        } else {
+          log.error(`⚡ verify: content still mismatched after ${resets} resets — giving up`);
+          onVerified(); // Show content anyway
+        }
+      };
+
+      setTimeout(() => poll(1), 100);
+    };
 
     // Load entry directly
     const loadEntryDirect = async (id: string) => {
@@ -489,10 +674,18 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         if (data.version) {
           initializeVersion(data.version);
         }
-        // Set editor content without adding to undo history - prevents undo to blank
+        // Set editor content without adding to undo history
         const editorContent = combineTitleAndBody(data.title || '', data.content || '');
         log.debug('Setting editor content (no history)', { length: editorContent.length });
         editorRef.current?.setContentAndClearHistory(editorContent);
+
+        // Verify content was applied — handles dead/fresh WebView recovery
+        // Content area stays hidden (isContentReady=false) until verified
+        verifyEditorContent(editorContent, () => {
+          setIsContentReady(true);
+          setIsLoading(false);
+        });
+
         log.debug('loadEntryDirect complete', {
           entryId: id.substring(0, 8),
           totalMs: fetchTime,
@@ -502,9 +695,9 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
-        log.error('Failed to load entry', err);
-      } finally {
+        setIsContentReady(true); // Show error state
         setIsLoading(false);
+        log.error('Failed to load entry', err);
       }
     };
 
@@ -519,8 +712,9 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         setIsEditMode(false);
         setIsFullScreen(false);
 
-        // Set loading state immediately for instant feedback
+        // Set loading state immediately - content hidden until verified
         setIsLoading(true);
+        setIsContentReady(false);
         setError(null);
         setIsNewEntry(false);
         setEntryIdState(id);
@@ -532,6 +726,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       createNewEntry: (options?: NewEntryOptions) => {
         log.info('createNewEntry: creating new entry', { streamId: options?.streamId });
         setIsNewEntry(true);
+        setIsContentReady(true);
         setEntryIdState(null);
         setError(null);
         const newEntry = buildNewEntry(options);
@@ -544,8 +739,9 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         editorRef.current?.setContentAndClearHistory(editorContent);
       },
       clearEntry: () => {
+        setIsContentReady(true);
         // Log stack trace to identify what's calling clearEntry
-        log.info('clearEntry called', { stack: new Error().stack?.split('\n').slice(1, 5).join(' <- ') });
+        log.info('clearEntry called');
         // Dismiss keyboard and blur editor first
         Keyboard.dismiss();
         editorRef.current?.blur();
@@ -758,56 +954,58 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           editorRef={editorRef}
         />
 
-        {/* Attribute Bar - shows stream and attributes */}
-        {entry && !isFullScreen && (
-          <AttributeBar
-            entry={entry}
-            onStreamPress={handleStreamPress}
-            onStatusPress={handleStatusPress}
-            onRatingPress={handleRatingPress}
-            onPriorityPress={handlePriorityPress}
-            onLocationPress={handleLocationPress}
-            onDueDatePress={handleDueDatePress}
-            onPhotosPress={() => setIsGalleryCollapsed(false)}
-            onMorePress={handleMorePress}
-            photoCount={isGalleryCollapsed ? photoCount : undefined}
-          />
-        )}
+        {/* Content area - hidden until data + editor content verified to prevent blocky loading */}
+        <View style={[styles.contentArea, { opacity: isContentReady ? 1 : 0 }]}>
+          {/* Attribute Bar - shows stream and attributes */}
+          {entry && !isFullScreen && (
+            <AttributeBar
+              entry={entry}
+              onStreamPress={handleStreamPress}
+              onStatusPress={handleStatusPress}
+              onRatingPress={handleRatingPress}
+              onPriorityPress={handlePriorityPress}
+              onLocationPress={handleLocationPress}
+              onDueDatePress={handleDueDatePress}
+              onPhotosPress={() => setIsGalleryCollapsed(false)}
+              onMorePress={handleMorePress}
+              photoCount={isGalleryCollapsed ? photoCount : undefined}
+            />
+          )}
 
-        {/* Photo Gallery - shows between attribute bar and editor */}
-        {entry && !isFullScreen && (
-          <PhotoGallery
-            entryId={entry.entry_id}
-            refreshKey={photoCount}
-            onPhotoDelete={handleDeletePhoto}
-            onTakePhoto={handleTakePhoto}
-            onGallery={handleGallery}
-            collapsible={true}
-            isCollapsed={isGalleryCollapsed}
-            onCollapsedChange={setIsGalleryCollapsed}
-          />
-        )}
+          {/* Photo Gallery - shows between attribute bar and editor */}
+          {entry && !isFullScreen && (
+            <PhotoGallery
+              entryId={entry.entry_id}
+              attachments={entry.attachments}
+              onPhotoDelete={handleDeletePhoto}
+              onTakePhoto={handleTakePhoto}
+              onGallery={handleGallery}
+              collapsible={true}
+              isCollapsed={isGalleryCollapsed}
+              onCollapsedChange={setIsGalleryCollapsed}
+            />
+          )}
 
-        {error && (
-          <View style={styles.centerContainer}>
-            <Text style={[styles.errorText, { color: theme.colors.functional.overdue }]}>{error}</Text>
+          {error && (
+            <View style={styles.centerContainer}>
+              <Text style={[styles.errorText, { color: theme.colors.functional.overdue }]}>{error}</Text>
+            </View>
+          )}
+
+          {/* Rich Text Editor - ALWAYS MOUNTED for performance */}
+          <View style={[
+            styles.editorContainer,
+            { backgroundColor: theme.colors.background.primary },
+            isEditMode ? { paddingBottom: 60 } : { paddingBottom: 0 },
+            keyboardHeight > 0 && { paddingBottom: keyboardHeight + 80 }
+          ]}>
+            <RichTextEditorV2
+              ref={editorRef}
+              onChange={handleContentChange}
+              editable={isEditMode}
+              onReady={handleEditorReady}
+            />
           </View>
-        )}
-
-        {/* Rich Text Editor - ALWAYS MOUNTED for performance */}
-        {/* Matches EntryScreen pattern: paddingBottom 60 in edit mode, + keyboardHeight + 80 when keyboard showing */}
-        <View style={[
-          styles.editorContainer,
-          { backgroundColor: theme.colors.background.primary },
-          isEditMode ? { paddingBottom: 60 } : { paddingBottom: 0 },
-          keyboardHeight > 0 && { paddingBottom: keyboardHeight + 80 }
-        ]}>
-          <RichTextEditorV2
-            ref={editorRef}
-            onChange={handleContentChange}
-            editable={isEditMode}
-            onReady={handleEditorReady}
-          />
         </View>
 
         {/* Editor Toolbar - uses BottomBar component (matches EntryScreen pattern) */}
@@ -950,6 +1148,9 @@ EntryManagementScreen.displayName = 'EntryManagementScreen';
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  contentArea: {
     flex: 1,
   },
   centerContainer: {

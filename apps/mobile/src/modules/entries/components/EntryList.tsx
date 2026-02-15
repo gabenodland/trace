@@ -1,7 +1,8 @@
 import { View, Text, FlatList, SectionList, StyleSheet, ActivityIndicator } from "react-native";
 import { useState, useRef, forwardRef, useImperativeHandle } from "react";
-import type { Entry, Stream as FullStream, EntrySection, EntryDisplayMode } from "@trace/core";
+import type { Stream as FullStream, EntrySection, EntryDisplayMode } from "@trace/core";
 import { getStreamAttributeVisibility } from "@trace/core";
+import type { EntryWithRelations } from "../EntryWithRelationsTypes";
 import { EntryListItem } from "./EntryListItem";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../shared/theme/themeBase";
@@ -21,8 +22,8 @@ interface Location {
 }
 
 interface EntryListProps {
-  entries: Entry[];
-  sections?: EntrySection[]; // Optional sections for grouped display
+  entries: EntryWithRelations[];
+  sections?: EntrySection<EntryWithRelations>[]; // Optional sections for grouped display
   isLoading: boolean;
   onEntryPress: (entryId: string) => void;
   onTagPress?: (tag: string) => void;
@@ -56,8 +57,8 @@ export interface EntryListRef {
 export const EntryList = forwardRef<EntryListRef, EntryListProps>(function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, onArchive, ListHeaderComponent, streams, locations, currentStreamId, displayMode, fullStreams, entryCount, totalCount }, ref) {
   const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
-  const flatListRef = useRef<FlatList<Entry>>(null);
-  const sectionListRef = useRef<SectionList<Entry, EntrySection>>(null);
+  const flatListRef = useRef<FlatList<EntryWithRelations>>(null);
+  const sectionListRef = useRef<SectionList<EntryWithRelations, EntrySection<EntryWithRelations>>>(null);
 
   // Expose scrollToTop method via ref
   useImperativeHandle(ref, () => ({
@@ -139,7 +140,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
   }, {} as Record<string, FullStream>);
 
   // Render a single entry item
-  const renderEntryItem = (item: Entry) => {
+  const renderEntryItem = (item: EntryWithRelations) => {
     // Get attribute visibility for this entry's stream
     const stream = item.stream_id && fullStreamMap ? fullStreamMap[item.stream_id] : null;
     const attributeVisibility = getStreamAttributeVisibility(stream);
@@ -172,7 +173,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
   };
 
   // Render section header (only if title is not empty)
-  const renderSectionHeader = ({ section }: { section: EntrySection }) => {
+  const renderSectionHeader = ({ section }: { section: EntrySection<EntryWithRelations> }) => {
     // Don't render header for empty titles (e.g., priority entries without label)
     if (section.title === '') {
       return null;
@@ -199,7 +200,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
   if (sections && sections.length > 0) {
     const emptyMessage = getEmptyMessage();
     return (
-      <SectionList
+      <SectionList<EntryWithRelations, EntrySection<EntryWithRelations>>
         ref={sectionListRef}
         sections={sections}
         keyExtractor={(item) => item.entry_id}
@@ -227,7 +228,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
   if (CombinedHeader) {
     const emptyMessage = getEmptyMessage();
     return (
-      <FlatList
+      <FlatList<EntryWithRelations>
         ref={flatListRef}
         data={entries}
         keyExtractor={(item) => item.entry_id}
@@ -264,7 +265,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
   }
 
   return (
-    <FlatList
+    <FlatList<EntryWithRelations>
       ref={flatListRef}
       data={entries}
       keyExtractor={(item) => item.entry_id}

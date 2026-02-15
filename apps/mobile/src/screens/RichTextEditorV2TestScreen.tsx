@@ -43,10 +43,7 @@ export function RichTextEditorV2TestScreen() {
     addLog(`onChange: ${html.length} chars`);
   }, []);
 
-  const handleReady = useCallback(() => {
-    setIsReady(true);
-    addLog('Editor ready');
-  }, []);
+  // handleReady replaced by handleReadyWrapped below (supports reload tests)
 
   const handleClear = () => {
     addLog("Clearing content...");
@@ -58,6 +55,104 @@ export function RichTextEditorV2TestScreen() {
     addLog("Setting sample content...");
     editorRef.current?.setContent(SAMPLE_CONTENT);
   };
+
+  // === RELOAD + SET simulations (reproduces activity recreation bug) ===
+
+  // Simulate: reload then immediately set content (0ms gap)
+  const handleReloadThenSetImmediate = () => {
+    addLog("=== RELOAD → SET (0ms) ===");
+    setIsReady(false);
+    editorRef.current?.reloadWebView();
+    addLog("reloadWebView() called, now calling setContentAndClearHistory...");
+    editorRef.current?.setContentAndClearHistory(SAMPLE_CONTENT);
+    addLog("setContentAndClearHistory() called immediately after reload");
+  };
+
+  // Simulate: reload then set content after 500ms delay
+  const handleReloadThenSet500 = () => {
+    addLog("=== RELOAD → SET (500ms) ===");
+    setIsReady(false);
+    editorRef.current?.reloadWebView();
+    addLog("reloadWebView() called, waiting 500ms...");
+    setTimeout(() => {
+      addLog("500ms elapsed, calling setContentAndClearHistory...");
+      editorRef.current?.setContentAndClearHistory(SAMPLE_CONTENT);
+      addLog("setContentAndClearHistory() called");
+    }, 500);
+  };
+
+  // Simulate: reload then wait for onReady then set content
+  const pendingSetAfterReady = useRef(false);
+  const handleReloadThenWaitReady = () => {
+    addLog("=== RELOAD → WAIT READY → SET ===");
+    setIsReady(false);
+    pendingSetAfterReady.current = true;
+    editorRef.current?.reloadWebView();
+    addLog("reloadWebView() called, waiting for onReady...");
+  };
+
+  // Simulate: reload, wait 10ms, set content, then poll with timeout on getHTML
+  const handleReloadSetGetHTML = () => {
+    const t0 = performance.now();
+    const elapsed = () => `${Math.round(performance.now() - t0)}ms`;
+
+    // getHTML with timeout — returns null if WebView doesn't respond
+    const getHTMLWithTimeout = (ms: number): Promise<string | null> => {
+      return Promise.race([
+        editorRef.current?.getHTML() ?? Promise.resolve(null),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+      ]);
+    };
+
+    addLog("=== RELOAD → 10ms → SET → VERIFY @100ms ===");
+    setIsReady(false);
+    editorRef.current?.reloadWebView();
+    addLog(`[${elapsed()}] reloadWebView() called`);
+
+    setTimeout(() => {
+      addLog(`[${elapsed()}] calling setContentAndClearHistory...`);
+      editorRef.current?.setContentAndClearHistory(SAMPLE_CONTENT);
+      addLog(`[${elapsed()}] setContentAndClearHistory() called`);
+
+      const verify = async (attempt: number) => {
+        addLog(`[${elapsed()}] verify #${attempt}...`);
+        const html = await getHTMLWithTimeout(80);
+        if (html === null) {
+          addLog(`[${elapsed()}] getHTML timed out (WebView not ready)`);
+          editorRef.current?.setContentAndClearHistory(SAMPLE_CONTENT);
+          if (attempt < 50) {
+            setTimeout(() => verify(attempt + 1), 100);
+          } else {
+            addLog(`[${elapsed()}] GAVE UP after 50 attempts`);
+          }
+        } else if (html.length < 50) {
+          addLog(`[${elapsed()}] too short (${html.length}), re-setting...`);
+          editorRef.current?.setContentAndClearHistory(SAMPLE_CONTENT);
+          if (attempt < 50) {
+            setTimeout(() => verify(attempt + 1), 100);
+          } else {
+            addLog(`[${elapsed()}] GAVE UP after 50 attempts`);
+          }
+        } else {
+          addLog(`[${elapsed()}] OK! ${html.substring(0, 60)}...`);
+        }
+      };
+
+      setTimeout(() => verify(1), 100);
+    }, 10);
+  };
+
+  // Hook into onReady for the wait-for-ready test
+  const handleReadyWrapped = useCallback(() => {
+    setIsReady(true);
+    addLog('Editor ready');
+    if (pendingSetAfterReady.current) {
+      pendingSetAfterReady.current = false;
+      addLog("onReady fired! Now calling setContentAndClearHistory...");
+      editorRef.current?.setContentAndClearHistory(SAMPLE_CONTENT);
+      addLog("setContentAndClearHistory() called after onReady");
+    }
+  }, []);
 
   const handleGetHTML = async () => {
     addLog("Getting HTML...");
@@ -190,6 +285,40 @@ export function RichTextEditorV2TestScreen() {
           </View>
         </View>
 
+        {/* Reload + Set Tests (Activity Recreation Simulation) */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary }]}>Reload + Set Tests</Text>
+          <Text style={[styles.info, { color: theme.colors.text.tertiary, marginBottom: 8 }]}>
+            Simulates activity recreation: reload WebView then set content
+          </Text>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#c0392b' }]}
+              onPress={handleReloadThenSetImmediate}
+            >
+              <Text style={styles.buttonText}>Reload → Set (0ms)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#e67e22' }]}
+              onPress={handleReloadThenSet500}
+            >
+              <Text style={styles.buttonText}>Reload → Set (500ms)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#27ae60' }]}
+              onPress={handleReloadThenWaitReady}
+            >
+              <Text style={styles.buttonText}>Reload → Wait Ready → Set</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#8e44ad' }]}
+              onPress={handleReloadSetGetHTML}
+            >
+              <Text style={styles.buttonText}>Reload → Set → GetHTML</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Formatting Controls */}
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary }]}>
           <Text style={[styles.cardTitle, { color: theme.colors.text.primary }]}>Formatting</Text>
@@ -286,7 +415,7 @@ export function RichTextEditorV2TestScreen() {
             <RichTextEditorV2
               ref={editorRef}
               onChange={handleChange}
-              onReady={handleReady}
+              onReady={handleReadyWrapped}
             />
           </View>
         </View>

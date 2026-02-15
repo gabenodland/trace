@@ -28,13 +28,14 @@ import { Exo2_400Regular, Exo2_500Medium, Exo2_600SemiBold, Exo2_700Bold } from 
 import * as Linking from "expo-linking";
 import { setSession } from "@trace/core";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
-import { useNavigationState } from "./src/shared/navigation";
+import { useNavigationState, getNavigationVersion } from "./src/shared/navigation";
 import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
 import { ThemeProvider, useTheme } from "./src/shared/contexts/ThemeContext";
 import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/DrawerContext";
 import { StreamDrawer } from "./src/components/drawer";
 import { useSwipeBackGesture } from "./src/shared/hooks/useSwipeBackGesture";
 import { ErrorBoundary } from "./src/shared/components/ErrorBoundary";
+import { createScopedLogger } from "./src/shared/utils/logger";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
 import SignUpScreen from "./src/modules/auth/screens/SignUpScreen";
 import { EntryManagementScreen, type EntryManagementScreenRef } from "./src/modules/entries/components/EntryManagementScreen";
@@ -226,10 +227,12 @@ function AuthGate() {
  * NOTE: activeTab and navParams come from NavigationService singleton.
  * This means only AppContent re-renders on navigation, not AuthGate.
  */
+const log = createScopedLogger('AppContent', '🎯');
+
 function AppContent() {
   // Get navigation state - this is the ONLY place that re-renders on nav
   const { activeTab, navParams, navigate, goBack, checkBeforeBack, isModalOpen, isOnMainView } = useNavigationState();
-  console.log('[AppContent] 🔄 RENDER', { activeTab, isOnMainView });
+  log.debug('RENDER', { activeTab, isOnMainView });
   const { registerViewModeHandler, viewMode } = useDrawer();
   const theme = useTheme();
 
@@ -318,36 +321,47 @@ function AppContent() {
 
   // Track previous activeTab to detect navigation away from entryManagement
   const prevActiveTabRef = useRef<string>(activeTab);
+  // Track navigation version to distinguish intentional navigation from remount artifacts
+  const lastNavVersionRef = useRef<number>(getNavigationVersion());
 
   // Helper: "capture" is legacy alias for "entryManagement"
   const isEntryScreen = activeTab === "entryManagement" || activeTab === "capture";
   const wasEntryScreen = (tab: string) => tab === "entryManagement" || tab === "capture";
-  console.log('[AppContent] isEntryScreen:', isEntryScreen, 'activeTab:', activeTab, 'subScreenReady:', subScreenReady, 'visitedScreens:', Array.from(visitedScreens));
+  log.debug('Screen state', { isEntryScreen, activeTab, subScreenReady, visitedScreens: Array.from(visitedScreens) });
 
   // Persistent screen pattern: Call setEntry when navigating to EntryManagementScreen
   // Screen stays mounted, we just tell it which entry to load
-  // When leaving, call clearEntry to reset
+  // When leaving, call clearEntry to reset (only on intentional navigation)
   useEffect(() => {
     const prevTab = prevActiveTabRef.current;
     prevActiveTabRef.current = activeTab;
 
-    console.log('[AppContent] 🔧 setEntry effect:', {
+    // Check if this state change was caused by an intentional navigate()/goBack() call
+    // vs. a remount-induced state change (e.g., activity recreation)
+    const currentNavVersion = getNavigationVersion();
+    const isIntentionalNavigation = currentNavVersion !== lastNavVersionRef.current;
+    lastNavVersionRef.current = currentNavVersion;
+
+    log.info('setEntry effect fired', {
       prevTab,
       activeTab,
       isEntryScreen,
+      isIntentionalNavigation,
+      currentNavVersion,
+      lastNavVersion: lastNavVersionRef.current - 1, // Show what it was before update
       navParams,
       hasRef: !!entryManagementRef.current,
     });
 
     // Navigating TO entryManagement - set up the entry
     if (isEntryScreen) {
-      // Note: subScreenReady is set by handleSubScreenLayout when the screen renders
       const entryId = navParams.entryId || null;
-      console.log('[AppContent] 🔧 Setting up entry screen:', { entryId, activeTab, navParams });
+      log.info('Setting up entry screen', { entryId, activeTab, navParams, isIntentionalNavigation });
 
       if (entryId) {
-        // Edit existing entry
-        console.log('[AppContent] 🔧 Calling setEntry with:', entryId, 'ref exists:', !!entryManagementRef.current);
+        // Single code path — loadEntryDirect inside setEntry will verify+retry
+        // if the WebView is dead/fresh (activity recreation, zombie WebView)
+        log.info('Calling setEntry', { entryId: entryId.substring(0, 8), isIntentionalNavigation, hasRef: !!entryManagementRef.current });
         entryManagementRef.current?.setEntry(entryId);
       } else {
         // Create new entry with optional pre-fill
@@ -360,9 +374,19 @@ function AppContent() {
         entryManagementRef.current?.createNewEntry(options);
       }
     }
-    // Navigating AWAY from entryManagement - clear the form
-    else if (wasEntryScreen(prevTab)) {
+    // Navigating AWAY from entryManagement - clear ONLY on intentional navigation
+    // This prevents clearing when activity recreation causes a spurious activeTab change
+    else if (wasEntryScreen(prevTab) && isIntentionalNavigation) {
+      log.info('Intentional navigation away - calling clearEntry');
       entryManagementRef.current?.clearEntry();
+    }
+    else if (wasEntryScreen(prevTab) && !isIntentionalNavigation) {
+      log.warn('BLOCKED spurious clearEntry - no intentional navigation detected', {
+        prevTab,
+        activeTab,
+        currentNavVersion,
+        lastNavVersion: lastNavVersionRef.current - 1
+      });
     }
   }, [activeTab, navParams]);
 
@@ -382,7 +406,7 @@ function AppContent() {
   };
 
   // Debug: log swipe-back state
-  console.log('[AppContent] Swipe state:', {
+  log.debug('Swipe state', {
     isOnMainView,
     isEntryScreen,
     targetMainView,

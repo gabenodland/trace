@@ -1,7 +1,8 @@
 import type { Entry, EntryStatus, StreamAttributeVisibility, EntryDisplayMode, RatingType } from "@trace/core";
+import type { EntryWithRelations } from "../../EntryWithRelationsTypes";
 
 export interface EntryListItemProps {
-  entry: Entry;
+  entry: EntryWithRelations;
   onPress: () => void;
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;
@@ -24,7 +25,7 @@ export interface EntryListItemProps {
 }
 
 export interface EntryListItemCommonProps {
-  entry: Entry;
+  entry: EntryWithRelations;
   streamName?: string | null;
   locationName?: string | null;
   currentStreamId?: string | null; // ID of the stream being viewed (to hide redundant stream badge)

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, memo } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder, Dimensions } from "react-native";
 import { Icon } from "../shared/components/Icon";
-import type { Entry, EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
+import type { EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
 import {
   ENTRY_DISPLAY_MODES,
   DEFAULT_DISPLAY_MODE,
@@ -16,6 +16,7 @@ import {
   groupEntriesByRating,
   groupEntriesByDueDate,
 } from "@trace/core";
+import type { EntryWithRelations } from "../modules/entries/EntryWithRelationsTypes";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
@@ -47,7 +48,7 @@ const CALENDAR_DATE_FIELDS: CalendarDateFieldOption[] = [
 ];
 
 // Helper to get date from entry based on selected field
-function getEntryDate(entry: Entry, field: CalendarDateField): Date | null {
+function getEntryDate(entry: EntryWithRelations, field: CalendarDateField): Date | null {
   switch (field) {
     case 'entry_date':
       return new Date(entry.entry_date || entry.created_at);
@@ -328,7 +329,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
   }, [filteredEntriesForYear, sortMode, streamMap, orderMode, showPinnedFirst]);
 
   // Compute sections for day view when sorting by status, type, stream, etc.
-  const entrySections = useMemo((): EntrySection[] | undefined => {
+  const entrySections = useMemo((): EntrySection<EntryWithRelations>[] | undefined => {
     if (sortMode === 'status') {
       return groupEntriesByStatus(filteredEntries, orderMode, showPinnedFirst);
     }
@@ -351,7 +352,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
   }, [filteredEntries, sortMode, streamMap, streamById, orderMode, showPinnedFirst]);
 
   // Compute sections for month view
-  const entrySectionsForMonth = useMemo((): EntrySection[] | undefined => {
+  const entrySectionsForMonth = useMemo((): EntrySection<EntryWithRelations>[] | undefined => {
     if (sortMode === 'status') {
       return groupEntriesByStatus(filteredEntriesForMonth, orderMode, showPinnedFirst);
     }
@@ -374,7 +375,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
   }, [filteredEntriesForMonth, sortMode, streamMap, streamById, orderMode, showPinnedFirst]);
 
   // Compute sections for year view
-  const entrySectionsForYear = useMemo((): EntrySection[] | undefined => {
+  const entrySectionsForYear = useMemo((): EntrySection<EntryWithRelations>[] | undefined => {
     if (sortMode === 'status') {
       return groupEntriesByStatus(filteredEntriesForYear, orderMode, showPinnedFirst);
     }

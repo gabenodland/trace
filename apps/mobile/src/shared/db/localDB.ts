@@ -7,7 +7,7 @@
  */
 
 import * as SQLite from 'expo-sqlite';
-import { Entry, CreateEntryInput, LocationEntity, CreateLocationInput } from '@trace/core';
+import { Entry, CreateEntryInput, LocationEntity, CreateLocationInput, Attachment } from '@trace/core';
 import { createScopedLogger, LogScopes } from '../utils/logger';
 
 const log = createScopedLogger(LogScopes.Database);
@@ -2521,21 +2521,60 @@ class LocalDatabase {
   }
 
   /**
+   * Get all attachments for multiple entries (bulk query)
+   * More efficient than calling getAttachmentsForEntry multiple times
+   */
+  async getAttachmentsForEntries(entryIds: string[]): Promise<Attachment[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Return empty array if no entry IDs provided
+    if (!entryIds || entryIds.length === 0) {
+      return [];
+    }
+
+    // SQLite has a limit on the number of variables in a single query.
+    // Batch into chunks of 500 to avoid hitting the limit with large entry sets.
+    const BATCH_SIZE = 500;
+    const allAttachments: Attachment[] = [];
+
+    for (let i = 0; i < entryIds.length; i += BATCH_SIZE) {
+      const batch = entryIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(', ');
+
+      let query = `SELECT * FROM attachments WHERE entry_id IN (${placeholders}) AND (sync_action IS NULL OR sync_action != ?)`;
+      const params: (string | number)[] = [...batch, 'delete'];
+
+      if (this.currentUserId) {
+        query += ' AND user_id = ?';
+        params.push(this.currentUserId);
+      }
+
+      query += ' ORDER BY entry_id, position ASC';
+
+      const attachments = await this.db.getAllAsync<Attachment>(query, params);
+      allAttachments.push(...attachments);
+    }
+
+    return allAttachments;
+  }
+
+  /**
    * Get a single attachment by ID
    */
-  async getAttachment(attachmentId: string): Promise<any | null> {
+  async getAttachment(attachmentId: string): Promise<Attachment | null> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
     let query = 'SELECT * FROM attachments WHERE attachment_id = ?';
-    const params: any[] = [attachmentId];
+    const params: (string | number)[] = [attachmentId];
 
     if (this.currentUserId) {
       query += ' AND user_id = ?';
       params.push(this.currentUserId);
     }
 
-    const attachment = await this.db.getFirstAsync<any>(query, params);
+    const attachment = await this.db.getFirstAsync<Attachment>(query, params);
     return attachment || null;
   }
 

@@ -18,6 +18,7 @@ export {
   checkBeforeBack,
   setIsModalOpen,
   getIsModalOpen,
+  getNavigationVersion,
   type ScreenName,
   type MainScreen,
   type SettingsScreen,

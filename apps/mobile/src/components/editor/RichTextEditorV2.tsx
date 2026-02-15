@@ -240,7 +240,7 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     // Mark as ready on first onChange
     if (!isReady.current) {
       isReady.current = true;
-      log.info('Editor ready (via L2 onChange)');
+      log.info('🔄 Editor ready (via L2 onChange) - calling onReady callback', { hasOnReady: !!onReady });
       onReady?.();
     }
 
@@ -276,15 +276,7 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     setContent: (html: string) => {
       const sanitized = sanitizeHtmlColors(html);
       setContentTimestamp = performance.now();
-      // Log stack trace when content is empty or very short (likely a clear operation)
-      if (sanitized.length < 50) {
-        log.warn('setContent with short/empty content', {
-          length: sanitized.length,
-          stack: new Error().stack?.split('\n').slice(1, 5).join(' <- ')
-        });
-      } else {
-        log.info('⏱️ setContent called', { length: sanitized.length });
-      }
+      log.info('setContent called', { length: sanitized.length });
       lastKnownContent.current = sanitized;
       l2Ref.current?.setContent(sanitized);
     },
@@ -317,12 +309,11 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
       l2Ref.current?.setContentAndClearHistory(html);
     },
     reloadWebView: () => {
-      log.info('reloadWebView called - reloading editor WebView');
+      log.info('🔄 reloadWebView called - resetting isReady and reloading');
       // Reset ready state so onReady fires again after reload
       isReady.current = false;
       l2Ref.current?.reloadWebView();
-      // After reload, we'll need to restore content via setContent
-      // The caller should call setContent after reload completes
+      log.info('🔄 reloadWebView: webview.reload() called, waiting for onReady...');
     },
   }), []);
 

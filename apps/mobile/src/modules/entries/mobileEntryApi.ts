@@ -11,7 +11,7 @@
  *                                  SyncService (background)
  */
 
-import { Entry, CreateEntryInput, EntryFilter } from '@trace/core';
+import { Entry, CreateEntryInput, EntryFilter, Attachment } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
 import * as FileSystem from 'expo-file-system/legacy';
 // Import directly from syncApi to avoid circular dependency through sync/index.ts
@@ -178,6 +178,48 @@ function generateUUID(): string {
 export async function getEntries(filter?: MobileEntryFilter): Promise<Entry[]> {
   log.debug('Getting entries', { filter });
   return await localDB.getAllEntries(filter);
+}
+
+/**
+ * Get entries with all relations (Attachments)
+ * More efficient than getEntries + separate attachment queries
+ * Used by list screens to load entries with photos in a single query
+ */
+export async function getEntriesWithRelations(filter?: MobileEntryFilter): Promise<EntryWithRelations[]> {
+  log.debug('Getting entries with relations', { filter });
+
+  // Fetch entries
+  const entries = await localDB.getAllEntries(filter);
+
+  if (entries.length === 0) {
+    return [];
+  }
+
+  // Fetch all attachments for these entries in a single bulk query
+  const entryIds = entries.map(e => e.entry_id);
+  const allAttachments = await localDB.getAttachmentsForEntries(entryIds);
+
+  // Group attachments by entry_id
+  const attachmentsByEntry: Record<string, Attachment[]> = {};
+  for (const att of allAttachments) {
+    if (!attachmentsByEntry[att.entry_id]) {
+      attachmentsByEntry[att.entry_id] = [];
+    }
+    attachmentsByEntry[att.entry_id].push(att);
+  }
+
+  // Map entries to EntryWithRelations
+  const entriesWithRelations: EntryWithRelations[] = entries.map(entry => ({
+    ...entry,
+    attachments: attachmentsByEntry[entry.entry_id] || [],
+  }));
+
+  log.debug('Entries with relations fetched', {
+    entryCount: entries.length,
+    attachmentCount: allAttachments.length,
+  });
+
+  return entriesWithRelations;
 }
 
 /**

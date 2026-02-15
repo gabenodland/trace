@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Alert } from 'react-native';
 import type { Entry } from '@trace/core';
+import type { EntryWithRelations } from '../../modules/entries/EntryWithRelationsTypes';
 import { createScopedLogger, LogScopes } from '../../shared/utils/logger';
 
 const log = createScopedLogger(LogScopes.Entry);
@@ -20,7 +21,7 @@ interface EntryMutations {
 interface UseEntryActionsOptions {
   entryMutations: EntryMutations;
   navigate: (screen: string, params?: Record<string, unknown>) => void;
-  entries: Entry[];
+  entries: EntryWithRelations[];
 }
 
 export function useEntryActions({ entryMutations, navigate, entries }: UseEntryActionsOptions) {

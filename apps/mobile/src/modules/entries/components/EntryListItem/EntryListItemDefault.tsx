@@ -163,6 +163,7 @@ export function EntryListItemDefault({
             {displayMode === 'flow' && onPhotosCollapsedChange && onPhotoCountChange && (
               <PhotoGallery
                 entryId={entry.entry_id}
+                attachments={entry.attachments}
                 collapsible={false}
                 isCollapsed={photosCollapsed}
                 onCollapsedChange={onPhotosCollapsedChange}
@@ -224,6 +225,7 @@ export function EntryListItemDefault({
               {onPhotosCollapsedChange && onPhotoCountChange && (
                 <PhotoGallery
                   entryId={entry.entry_id}
+                  attachments={entry.attachments}
                   collapsible={false}
                   isCollapsed={photosCollapsed}
                   onCollapsedChange={onPhotosCollapsedChange}

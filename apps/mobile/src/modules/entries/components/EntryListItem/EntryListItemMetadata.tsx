@@ -7,13 +7,14 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import type { Entry, PriorityCategory, RatingType, EntryDisplayMode } from "@trace/core";
 import { formatRatingDisplay, getLocationLabel, getPriorityInfo, getStatusLabel, getStatusColor } from "@trace/core";
+import type { EntryWithRelations } from "../../EntryWithRelationsTypes";
 import { Icon } from "../../../../shared/components/Icon";
 import { StatusIcon } from "../../../../shared/components/StatusIcon";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
 
 interface MetadataProps {
-  entry: Entry;
+  entry: EntryWithRelations;
   streamName?: string | null;
   locationName?: string | null;
   currentStreamId?: string | null;

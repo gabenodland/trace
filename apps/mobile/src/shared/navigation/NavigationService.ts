@@ -8,6 +8,9 @@
  * - Settings screens mount/unmount as needed
  */
 
+import { createScopedLogger } from '../utils/logger';
+const log = createScopedLogger('Navigation', '🧭');
+
 export type MainScreen = 'inbox' | 'map' | 'calendar' | 'entryManagement';
 export type SettingsScreen = 'account' | 'profile' | 'settings' | 'debug' | 'editorTest' |
   'tenTapTest' | 'editorV2Test' | 'dataFetchTest' | 'locations' | 'streams' |
@@ -49,6 +52,10 @@ const state: NavigationState = {
 // Single listener (AppContent) that gets notified on screen changes
 let listener: NavigationListener | null = null;
 
+// Navigation version counter - increments on every intentional navigate/goBack call
+// Used by AppContent to distinguish real navigation from remount-induced state changes
+let navigationVersion = 0;
+
 /**
  * Subscribe to navigation changes (only AppContent should use this)
  */
@@ -76,6 +83,14 @@ export function navigate(screen: ScreenName, params: NavigationParams = {}): voi
     return;
   }
 
+  navigationVersion++;
+
+  log.info(`navigate to ${screen}`, {
+    from: state.activeScreen,
+    params,
+    navVersion: navigationVersion,
+  });
+
   // Update last main view if navigating to a main view
   if (MAIN_VIEW_SCREENS.includes(screen as MainScreen)) {
     state.lastMainView = screen as MainScreen;
@@ -84,7 +99,6 @@ export function navigate(screen: ScreenName, params: NavigationParams = {}): voi
   state.activeScreen = screen;
   state.navParams = params;
 
-  console.log(`[NavigationService] navigate to ${screen}`, params);
   notifyListener();
 }
 
@@ -105,10 +119,12 @@ export async function goBack(): Promise<void> {
     }
   }
 
+  navigationVersion++;
+
   state.activeScreen = state.lastMainView;
   state.navParams = {};
 
-  console.log(`[NavigationService] goBack to ${state.lastMainView}`);
+  log.info(`goBack to ${state.lastMainView}`);
   notifyListener();
 }
 
@@ -169,4 +185,13 @@ export function setIsModalOpen(open: boolean): void {
  */
 export function getIsModalOpen(): boolean {
   return state.isModalOpen;
+}
+
+/**
+ * Get the current navigation version counter.
+ * Increments on every intentional navigate() or goBack() call.
+ * Used by AppContent to distinguish real navigation from remount-induced state changes.
+ */
+export function getNavigationVersion(): number {
+  return navigationVersion;
 }

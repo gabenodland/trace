@@ -1,13 +1,14 @@
 import { View, Text, StyleSheet } from "react-native";
 import { useState } from "react";
-import type { Entry, Stream, EntrySection, EntryDisplayMode } from "@trace/core";
+import type { Stream, EntrySection, EntryDisplayMode } from "@trace/core";
 import { getStreamAttributeVisibility } from "@trace/core";
+import type { EntryWithRelations } from "../EntryWithRelationsTypes";
 import { EntryListItem } from "./EntryListItem";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 
 interface EntryListContentProps {
-  entries: Entry[];
-  sections?: EntrySection[] | null;
+  entries: EntryWithRelations[];
+  sections?: EntrySection<EntryWithRelations>[] | null;
   emptyMessage?: string;
   displayMode?: EntryDisplayMode;
   streamMap?: Record<string, string> | null;
@@ -52,7 +53,7 @@ export function EntryListContent({
   const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
-  const renderEntry = (entry: Entry) => {
+  const renderEntry = (entry: EntryWithRelations) => {
     // Get attribute visibility for this entry's stream
     const stream = entry.stream_id && streamById ? streamById[entry.stream_id] : null;
     const attributeVisibility = getStreamAttributeVisibility(stream);

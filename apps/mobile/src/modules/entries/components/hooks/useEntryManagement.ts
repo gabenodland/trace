@@ -175,7 +175,7 @@ export function useEntryManagement({
       // Build location fields
       const locationData = buildLocationFromEntry(entry);
       const gpsFields = buildGpsFields(locationData);
-      const geocodeStatus = entry.geocode_status as any ?? null;
+      const geocodeStatus = entry.geocode_status ?? null;
       const locationHierarchyFields = buildLocationHierarchyFields(locationData, geocodeStatus);
 
       // Get or create location record
@@ -325,20 +325,15 @@ export function useEntryManagement({
         // Patch React Query caches
         queryClient.setQueryData(['entry', entry.entry_id], updatedEntry);
 
-        const entryForCache: Entry = {
-          ...updatedEntry,
-          attachments: undefined,
-          stream: undefined,
-        } as unknown as Entry;
-
         queryClient.setQueriesData(
           { queryKey: ['entries'] },
-          (oldData: Entry[] | undefined) => {
+          (oldData: EntryWithRelations[] | undefined) => {
             if (!oldData) return oldData;
             const index = oldData.findIndex(e => e.entry_id === entry.entry_id);
             if (index === -1) return oldData;
             const newData = [...oldData];
-            newData[index] = entryForCache;
+            // updatedEntry already has correct attachments from entry state
+            newData[index] = updatedEntry;
             return newData;
           }
         );

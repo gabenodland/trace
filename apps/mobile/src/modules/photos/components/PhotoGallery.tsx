@@ -31,10 +31,11 @@ interface PendingPhoto {
 
 interface PhotoGalleryProps {
   entryId: string;
-  refreshKey?: number; // Change this to trigger a reload
+  refreshKey?: number; // Change this to trigger a reload (deprecated - use attachments prop)
   onPhotoCountChange?: (count: number) => void;
   onPhotoDelete?: (photoId: string) => void;
   pendingPhotos?: PendingPhoto[]; // For new entries: photos stored in state (not DB yet)
+  attachments?: Attachment[]; // For existing entries: attachments from parent (no query needed)
   collapsible?: boolean; // Enable collapse/expand functionality
   isCollapsed?: boolean; // Controlled collapsed state
   onCollapsedChange?: (collapsed: boolean) => void; // Callback when collapsed state changes
@@ -43,7 +44,7 @@ interface PhotoGalleryProps {
   photoSize?: number; // Size of photo thumbnails (default: 100)
 }
 
-export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoDelete, pendingPhotos, collapsible, isCollapsed, onCollapsedChange, onTakePhoto, onGallery, photoSize = 100 }: PhotoGalleryProps) {
+export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoDelete, pendingPhotos, attachments, collapsible, isCollapsed, onCollapsedChange, onTakePhoto, onGallery, photoSize = 100 }: PhotoGalleryProps) {
   const dynamicTheme = useTheme();
   const [photos, setPhotos] = useState<Attachment[]>([]);
   const [photoUris, setPhotoUris] = useState<Record<string, string>>({});
@@ -58,12 +59,11 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
   // Track if we've ever loaded photos - used to avoid showing loading spinner on refresh
   const hasInitializedRef = useRef(false);
 
-  // Load photos for this entry (reload when entryId or refreshKey changes)
-  // OR use pending photos if provided (for new entries)
+  // Load photos for this entry
+  // Priority: pendingPhotos (new entry) > attachments (from parent) > query DB (fallback)
   useEffect(() => {
     if (pendingPhotos !== undefined) {
       // Use pending photos (new entry, not saved to DB yet)
-      // Note: No logging here to avoid noise on every render
       setLoading(false);
       hasInitializedRef.current = true;
 
@@ -78,7 +78,52 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
       return;
     }
 
-    // Load from DB (existing entry)
+    if (attachments !== undefined) {
+      // Use attachments from parent - data already available, no DB query needed
+      // Build URIs directly from attachment data (local_path) for instant display
+      const sorted = [...attachments].sort((a, b) => (a.position || 0) - (b.position || 0));
+
+      hasInitializedRef.current = true;
+      setLoading(false);
+      setPhotos(sorted);
+      onPhotoCountChange?.(sorted.length);
+
+      // Build URIs synchronously from local_path (already on disk)
+      const uris: Record<string, string> = {};
+      const downloadStatus: Record<string, boolean> = {};
+      for (const photo of sorted) {
+        if (photo.local_path) {
+          uris[photo.attachment_id] = photo.local_path;
+          downloadStatus[photo.attachment_id] = true;
+        }
+      }
+      setPhotoUris(uris);
+      setPhotoDownloadStatus(downloadStatus);
+
+      // For photos without local_path (cloud-only), resolve URIs in background
+      const cloudPhotos = sorted.filter(p => !p.local_path);
+      if (cloudPhotos.length > 0) {
+        let mounted = true;
+        const resolveCloudUris = async () => {
+          const cloudUris: Record<string, string> = {};
+          await Promise.all(cloudPhotos.map(async (photo) => {
+            if (!mounted) return;
+            const uri = await getAttachmentUri(photo.attachment_id);
+            if (uri) {
+              cloudUris[photo.attachment_id] = uri;
+            }
+          }));
+          if (!mounted) return;
+          // Merge cloud URIs with existing local URIs
+          setPhotoUris(prev => ({ ...prev, ...cloudUris }));
+        };
+        resolveCloudUris();
+        return () => { mounted = false; };
+      }
+      return;
+    }
+
+    // Fallback: Load from DB (for backward compatibility)
     let mounted = true;
     const loadKey = `${entryId}-${refreshKey ?? 0}`;
 
@@ -99,7 +144,7 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
     return () => {
       mounted = false;
     };
-  }, [entryId, refreshKey, pendingPhotos]);
+  }, [entryId, refreshKey, pendingPhotos, attachments]);
 
   const loadPhotos = async (mounted: boolean = true, retryCount: number = 0, isRefresh: boolean = false) => {
     try {

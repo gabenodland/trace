@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import {
   createEntry,
-  getEntries,
+  getEntriesWithRelations,
   getEntry,
   updateEntry,
   deleteEntry,
@@ -22,19 +22,24 @@ import {
   MobileEntryFilter,
 } from './mobileEntryApi';
 import { CreateEntryInput, Entry, buildLocationTree, type LocationTreeNode } from '@trace/core';
+import type { EntryWithRelations } from './EntryWithRelationsTypes';
 // Import entryHelpers as namespace for filtering utilities
 import * as entryHelpers from '@trace/core/src/modules/entries/entryHelpers';
+import { createScopedLogger, LogScopes } from '../../shared/utils/logger';
+
+const log = createScopedLogger(LogScopes.Entry);
 
 // Re-export types for consumers
 export type { MobileEntryFilter } from './mobileEntryApi';
 
 /**
- * Internal: Query hook for fetching entries from local SQLite
+ * Internal: Query hook for fetching entries with relations from local SQLite
+ * Returns entries with attachments embedded (no separate photo queries needed)
  */
 function useEntriesQuery(filter?: MobileEntryFilter) {
   return useQuery({
     queryKey: ['entries', filter],
-    queryFn: () => getEntries(filter),
+    queryFn: () => getEntriesWithRelations(filter),
     // Override global staleTime to ensure list always shows fresh data
     staleTime: 0,
   });
@@ -59,8 +64,9 @@ function useEntryQuery(id: string | null, options?: { refreshFirst?: boolean }) 
     placeholderData: () => {
       if (!id) return undefined;
       // Look for this entry in any cached entries list
-      const entriesQueries = queryClient.getQueriesData<Entry[]>({ queryKey: ['entries'] });
-      console.log('[useEntryQuery] ⏱️ placeholderData checking cache', {
+      // Note: Cache now contains EntryWithRelations[] - cast down to Entry for placeholder
+      const entriesQueries = queryClient.getQueriesData<EntryWithRelations[]>({ queryKey: ['entries'] });
+      log.debug('placeholderData checking cache', {
         entryId: id.substring(0, 8),
         cachedQueryCount: entriesQueries.length,
       });
@@ -68,16 +74,19 @@ function useEntryQuery(id: string | null, options?: { refreshFirst?: boolean }) 
         if (entries) {
           const found = entries.find(e => e.entry_id === id);
           if (found) {
-            console.log('[useEntryQuery] ⏱️ FOUND in cache!', {
+            log.debug('FOUND in cache', {
               entryId: id.substring(0, 8),
               queryKey: JSON.stringify(queryKey),
               title: found.title?.substring(0, 20),
             });
-            return found;
+            // Strip EntryWithRelations-specific fields for Entry placeholder.
+            // Temporary — real Entry data from getEntry() replaces it.
+            const { stream, attachments, ...baseFields } = found;
+            return { ...baseFields, attachments: attachments as unknown as Entry['attachments'] } as Entry;
           }
         }
       }
-      console.log('[useEntryQuery] ⏱️ NOT found in any cache');
+      log.debug('NOT found in any cache');
       return undefined;
     },
     // staleTime: 0 means always refetch in background, but placeholderData shows instantly
@@ -121,16 +130,21 @@ function useUpdateEntryMutation() {
       queryClient.setQueryData(['entry', updatedEntry.entry_id], updatedEntry);
 
       // Patch the entry in all entries list caches (smooth update, no flash)
+      // Note: Cache now contains EntryWithRelations[], preserve attachments
       queryClient.setQueriesData(
         { queryKey: ['entries'] },
-        (oldData: Entry[] | undefined) => {
+        (oldData: EntryWithRelations[] | undefined) => {
           if (!oldData) return oldData;
 
           const index = oldData.findIndex(e => e.entry_id === updatedEntry.entry_id);
           if (index === -1) return oldData;
 
           const newData = [...oldData];
-          newData[index] = updatedEntry;
+          // Preserve attachments from cached entry
+          newData[index] = {
+            ...updatedEntry,
+            attachments: oldData[index].attachments,
+          };
           return newData;
         }
       );
@@ -159,9 +173,10 @@ function useDeleteEntryMutation() {
       queryClient.removeQueries({ queryKey: ['entry', deletedId] });
 
       // Remove from all entries list caches (smooth removal, no flash)
+      // Note: Cache now contains EntryWithRelations[]
       queryClient.setQueriesData(
         { queryKey: ['entries'] },
-        (oldData: Entry[] | undefined) => {
+        (oldData: EntryWithRelations[] | undefined) => {
           if (!oldData) return oldData;
           return oldData.filter(e => e.entry_id !== deletedId);
         }
@@ -193,16 +208,21 @@ function useArchiveEntryMutation() {
       queryClient.setQueryData(['entry', updatedEntry.entry_id], updatedEntry);
 
       // Patch the entry in all entries list caches (smooth update, no flash)
+      // Note: Cache now contains EntryWithRelations[], preserve attachments
       queryClient.setQueriesData(
         { queryKey: ['entries'] },
-        (oldData: Entry[] | undefined) => {
+        (oldData: EntryWithRelations[] | undefined) => {
           if (!oldData) return oldData;
 
           const index = oldData.findIndex(e => e.entry_id === updatedEntry.entry_id);
           if (index === -1) return oldData;
 
           const newData = [...oldData];
-          newData[index] = updatedEntry;
+          // Preserve attachments from cached entry
+          newData[index] = {
+            ...updatedEntry,
+            attachments: oldData[index].attachments,
+          };
           return newData;
         }
       );
