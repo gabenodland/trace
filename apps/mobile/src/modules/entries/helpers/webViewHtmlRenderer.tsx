@@ -46,6 +46,10 @@ function sanitizeHtmlColors(html: string): string {
  * Supports task lists with checkboxes, proper indentation, etc.
  */
 export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlRendererProps) {
+  // Don't render anything for empty content — avoids whitespace from the WebView's default height
+  const stripped = html.replace(/<[^>]*>/g, '').trim();
+  if (!stripped) return null;
+
   const theme = useTheme();
   const [photoUris, setPhotoUris] = useState<Record<string, string>>({});
   const [photoIds, setPhotoIds] = useState<string[]>([]);
@@ -267,6 +271,11 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
           }
         }
 
+        // Wait for web fonts to load before measuring — fixes cutoff with h1/h2 tags
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(sendHeight);
+        }
+
         // Send height after content loads
         window.onload = sendHeight;
 
@@ -280,6 +289,7 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
         setTimeout(sendHeight, 50);
         setTimeout(sendHeight, 150);
         setTimeout(sendHeight, 300);
+        setTimeout(sendHeight, 600);
       </script>
     </body>
     </html>
