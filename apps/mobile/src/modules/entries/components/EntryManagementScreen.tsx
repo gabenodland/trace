@@ -850,6 +850,11 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       setActivePicker('dueDate');
     }, []);
 
+    const handleTypePress = useCallback(() => {
+      Keyboard.dismiss();
+      setActivePicker('type');
+    }, []);
+
     const handleMorePress = useCallback(() => {
       Keyboard.dismiss();
       setActivePicker('entryOptions');
@@ -984,6 +989,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
             <AttributeBar
               entry={entry}
               onStreamPress={handleStreamPress}
+              onTypePress={handleTypePress}
               onStatusPress={handleStatusPress}
               onRatingPress={handleRatingPress}
               onPriorityPress={handlePriorityPress}

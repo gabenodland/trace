@@ -1,6 +1,10 @@
 /**
  * AttributeBar - Shows and allows editing of entry attributes
- * Simpler version of MetadataBar for EntryManagementScreen
+ *
+ * Display logic:
+ * - Entry IN a stream: show all stream-enabled attributes (values + "Set X" placeholders for unset)
+ * - Entry NOT in a stream: only show attributes that already have values (use ... menu to add)
+ * - Unsupported attributes (value set but stream disabled): show in muted color with strikethrough
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
@@ -13,11 +17,17 @@ import {
   formatRatingDisplay,
   getPriorityInfo,
   getLocationLabel,
+  isLegacyType,
   type EntryStatus,
   type RatingType,
   type PriorityCategory,
 } from '@trace/core';
+import { getEntryFieldVisibility, getUnsupportedFieldFlags } from './helpers/entryVisibility';
+import { buildLocationFromEntry } from './helpers/entryLocationHelpers';
 import type { EntryWithRelations } from '../EntryWithRelationsTypes';
+
+const UNSUPPORTED_COLOR = '#9ca3af';
+const LEGACY_TYPE_COLOR = '#f59e0b';
 
 interface AttributeBarProps {
   entry: EntryWithRelations;
@@ -27,6 +37,7 @@ interface AttributeBarProps {
   onPriorityPress: () => void;
   onLocationPress: () => void;
   onDueDatePress: () => void;
+  onTypePress: () => void;
   onPhotosPress?: () => void;
   onMorePress: () => void;
   photoCount?: number;
@@ -40,24 +51,22 @@ export function AttributeBar({
   onPriorityPress,
   onLocationPress,
   onDueDatePress,
+  onTypePress,
   onPhotosPress = () => {},
   onMorePress,
   photoCount,
 }: AttributeBarProps) {
   const theme = useTheme();
 
-  // Stream settings determine which attributes are enabled
-  // Default to true when no stream (all attributes available)
   const stream = entry.stream;
-  const showStatus = stream?.entry_use_status ?? true;
-  const showRating = stream?.entry_use_rating ?? true;
-  const showPriority = stream?.entry_use_priority ?? true;
-  const showLocation = stream?.entry_use_location ?? true;
-  const showDueDate = stream?.entry_use_duedates ?? true;
-  const showPhotos = stream?.entry_use_photos ?? true;
+  const inStream = !!stream;
   const ratingType: RatingType = (stream?.entry_rating_type as RatingType) ?? 'stars';
+  const availableTypes: string[] = (stream?.entry_types as string[]) ?? [];
 
-  // Extract location data
+  // Visibility from stream config
+  const visibility = getEntryFieldVisibility(stream ?? null);
+
+  // Location data
   const hasLocation = !!(entry.place_name || entry.city || entry.entry_latitude);
   const locationLabel = hasLocation
     ? getLocationLabel({
@@ -69,8 +78,54 @@ export function AttributeBar({
       })
     : null;
 
+  // Unsupported flags (value set but stream doesn't support the attribute)
+  // Only compute when in a stream — no-stream entries can't have "unsupported" attributes
+  const locationData = buildLocationFromEntry(entry);
+  const unsupported = inStream
+    ? getUnsupportedFieldFlags(visibility, {
+        status: (entry.status as EntryStatus) ?? 'none',
+        type: entry.type ?? null,
+        dueDate: entry.due_date ?? null,
+        rating: entry.rating ?? 0,
+        priority: entry.priority ?? 0,
+        locationData,
+      })
+    : { unsupportedStatus: false, unsupportedType: false, unsupportedDueDate: false, unsupportedRating: false, unsupportedPriority: false, unsupportedLocation: false };
+
   // Priority info
   const priorityInfo = entry.priority > 0 ? getPriorityInfo(entry.priority) : null;
+
+  // Should an attribute be visible?
+  // Has value (even if unsupported) OR in a stream with attribute enabled (placeholder)
+  const shouldShowType =
+    ((visibility.showType || unsupported.unsupportedType) && !!entry.type) ||
+    (inStream && visibility.showType && !entry.type);
+  const shouldShowStatus =
+    ((visibility.showStatus || unsupported.unsupportedStatus) && entry.status !== 'none') ||
+    (inStream && visibility.showStatus && entry.status === 'none');
+  const shouldShowRating =
+    ((visibility.showRating || unsupported.unsupportedRating) && entry.rating > 0) ||
+    (inStream && visibility.showRating && entry.rating === 0);
+  const shouldShowPriority =
+    ((visibility.showPriority || unsupported.unsupportedPriority) && entry.priority > 0) ||
+    (inStream && visibility.showPriority && entry.priority === 0);
+  const shouldShowLocation =
+    ((visibility.showLocation || unsupported.unsupportedLocation) && hasLocation) ||
+    (inStream && visibility.showLocation && !hasLocation);
+  const shouldShowDueDate =
+    ((visibility.showDueDate || unsupported.unsupportedDueDate) && !!entry.due_date) ||
+    (inStream && visibility.showDueDate && !entry.due_date);
+  const shouldShowPhotos = visibility.showPhotos && (photoCount ?? 0) > 0;
+
+  // Precompute type color (avoid calling function multiple times in JSX)
+  const computedTypeColor = (() => {
+    if (unsupported.unsupportedType) return UNSUPPORTED_COLOR;
+    if (entry.type && isLegacyType(entry.type, availableTypes)) return LEGACY_TYPE_COLOR;
+    return entry.type ? theme.colors.text.primary : theme.colors.text.disabled;
+  })();
+
+  // Photo count with safe default
+  const photos = photoCount ?? 0;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary, borderBottomColor: theme.colors.border.light }]}>
@@ -86,26 +141,62 @@ export function AttributeBar({
                 stream ? { color: theme.colors.text.primary } : { color: theme.colors.text.disabled },
               ]}
               numberOfLines={1}
+              ellipsizeMode="tail"
             >
               {stream?.name || 'No Stream'}
             </Text>
           </View>
         </TouchableOpacity>
 
+        {/* Type */}
+        {shouldShowType && (
+          <>
+            <Text style={[styles.divider, { color: theme.colors.text.tertiary }]}>·</Text>
+            <TouchableOpacity style={styles.attribute} onPress={onTypePress}>
+              <View style={styles.attributeContent}>
+                <Icon name="Folder" size={12} color={computedTypeColor} />
+                <Text
+                  style={[
+                    styles.attributeText,
+                    entry.type
+                      ? { fontFamily: theme.typography.fontFamily.medium, color: computedTypeColor }
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                    unsupported.unsupportedType && styles.unsupportedText,
+                  ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {entry.type || 'Set Type'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
+
         {/* Status */}
-        {showStatus && (
+        {shouldShowStatus && (
           <>
             <Text style={[styles.divider, { color: theme.colors.text.tertiary }]}>·</Text>
             <TouchableOpacity style={styles.attribute} onPress={onStatusPress}>
               <View style={styles.attributeContent}>
-                <StatusIcon status={entry.status as EntryStatus} size={12} />
+                <StatusIcon
+                  status={entry.status as EntryStatus}
+                  size={12}
+                  color={unsupported.unsupportedStatus ? UNSUPPORTED_COLOR : undefined}
+                />
                 <Text
                   style={[
                     styles.attributeText,
-                    { fontFamily: theme.typography.fontFamily.medium },
-                    entry.status !== 'none' ? { color: theme.colors.text.primary } : { color: theme.colors.text.disabled },
+                    entry.status !== 'none'
+                      ? {
+                          fontFamily: theme.typography.fontFamily.medium,
+                          color: unsupported.unsupportedStatus ? UNSUPPORTED_COLOR : theme.colors.text.primary,
+                        }
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                    unsupported.unsupportedStatus && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
                   {entry.status !== 'none' ? getStatusLabel(entry.status as EntryStatus) : 'Set Status'}
                 </Text>
@@ -115,21 +206,37 @@ export function AttributeBar({
         )}
 
         {/* Rating */}
-        {showRating && (
+        {shouldShowRating && (
           <>
             <Text style={[styles.divider, { color: theme.colors.text.tertiary }]}>·</Text>
             <TouchableOpacity style={styles.attribute} onPress={onRatingPress}>
               <View style={styles.attributeContent}>
-                <Icon name="Star" size={12} color={entry.rating > 0 ? theme.colors.text.primary : theme.colors.text.disabled} />
+                <Icon
+                  name="Star"
+                  size={12}
+                  color={
+                    entry.rating > 0
+                      ? unsupported.unsupportedRating ? UNSUPPORTED_COLOR : theme.colors.text.primary
+                      : theme.colors.text.disabled
+                  }
+                />
                 <Text
                   style={[
                     styles.attributeText,
-                    { fontFamily: theme.typography.fontFamily.medium },
-                    entry.rating > 0 ? { color: theme.colors.text.primary } : { color: theme.colors.text.disabled },
+                    entry.rating > 0
+                      ? {
+                          fontFamily: theme.typography.fontFamily.medium,
+                          color: unsupported.unsupportedRating ? UNSUPPORTED_COLOR : theme.colors.text.primary,
+                        }
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                    unsupported.unsupportedRating && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
-                  {entry.rating > 0 ? formatRatingDisplay(entry.rating, ratingType) : 'Rate'}
+                  {entry.rating > 0
+                    ? formatRatingDisplay(entry.rating, ratingType)
+                    : ratingType === 'stars' ? 'Rate ☆/5' : ratingType === 'decimal_whole' ? 'Rate ?/10' : 'Rate ?.?/10'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -137,7 +244,7 @@ export function AttributeBar({
         )}
 
         {/* Priority */}
-        {showPriority && (
+        {shouldShowPriority && (
           <>
             <Text style={[styles.divider, { color: theme.colors.text.tertiary }]}>·</Text>
             <TouchableOpacity style={styles.attribute} onPress={onPriorityPress}>
@@ -147,21 +254,29 @@ export function AttributeBar({
                   size={12}
                   color={
                     priorityInfo
-                      ? theme.colors.priority[priorityInfo.category as PriorityCategory]
+                      ? unsupported.unsupportedPriority
+                        ? UNSUPPORTED_COLOR
+                        : theme.colors.priority[priorityInfo.category as PriorityCategory]
                       : theme.colors.text.disabled
                   }
                 />
                 <Text
                   style={[
                     styles.attributeText,
-                    { fontFamily: theme.typography.fontFamily.medium },
                     priorityInfo
-                      ? { color: theme.colors.priority[priorityInfo.category as PriorityCategory] }
-                      : { color: theme.colors.text.disabled },
+                      ? {
+                          fontFamily: theme.typography.fontFamily.medium,
+                          color: unsupported.unsupportedPriority
+                            ? UNSUPPORTED_COLOR
+                            : theme.colors.priority[priorityInfo.category as PriorityCategory],
+                        }
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                    unsupported.unsupportedPriority && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
-                  {priorityInfo?.label || 'Priority'}
+                  {priorityInfo?.label || 'Set Priority'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -169,21 +284,35 @@ export function AttributeBar({
         )}
 
         {/* Location */}
-        {showLocation && (
+        {shouldShowLocation && (
           <>
             <Text style={[styles.divider, { color: theme.colors.text.tertiary }]}>·</Text>
             <TouchableOpacity style={styles.attribute} onPress={onLocationPress}>
               <View style={styles.attributeContent}>
-                <Icon name="MapPin" size={12} color={hasLocation ? theme.colors.text.primary : theme.colors.text.disabled} />
+                <Icon
+                  name="MapPin"
+                  size={12}
+                  color={
+                    hasLocation
+                      ? unsupported.unsupportedLocation ? UNSUPPORTED_COLOR : theme.colors.text.primary
+                      : theme.colors.text.disabled
+                  }
+                />
                 <Text
                   style={[
                     styles.attributeText,
-                    { fontFamily: theme.typography.fontFamily.medium },
-                    hasLocation ? { color: theme.colors.text.primary } : { color: theme.colors.text.disabled },
+                    hasLocation
+                      ? {
+                          fontFamily: theme.typography.fontFamily.medium,
+                          color: unsupported.unsupportedLocation ? UNSUPPORTED_COLOR : theme.colors.text.primary,
+                        }
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                    unsupported.unsupportedLocation && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
-                  {locationLabel || 'Location'}
+                  {locationLabel || 'Set Location'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -191,45 +320,59 @@ export function AttributeBar({
         )}
 
         {/* Due Date */}
-        {showDueDate && (
+        {shouldShowDueDate && (
           <>
             <Text style={[styles.divider, { color: theme.colors.text.tertiary }]}>·</Text>
             <TouchableOpacity style={styles.attribute} onPress={onDueDatePress}>
               <View style={styles.attributeContent}>
-                <Icon name="CalendarClock" size={12} color={entry.due_date ? theme.colors.text.primary : theme.colors.text.disabled} />
+                <Icon
+                  name="CalendarClock"
+                  size={12}
+                  color={
+                    entry.due_date
+                      ? unsupported.unsupportedDueDate ? UNSUPPORTED_COLOR : theme.colors.text.primary
+                      : theme.colors.text.disabled
+                  }
+                />
                 <Text
                   style={[
                     styles.attributeText,
-                    { fontFamily: theme.typography.fontFamily.medium },
-                    entry.due_date ? { color: theme.colors.text.primary } : { color: theme.colors.text.disabled },
+                    entry.due_date
+                      ? {
+                          fontFamily: theme.typography.fontFamily.medium,
+                          color: unsupported.unsupportedDueDate ? UNSUPPORTED_COLOR : theme.colors.text.primary,
+                        }
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                    unsupported.unsupportedDueDate && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
                   {entry.due_date
                     ? new Date(entry.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                    : 'Due Date'}
+                    : 'Set Due Date'}
                 </Text>
               </View>
             </TouchableOpacity>
           </>
         )}
 
-        {/* Photos - only shown when gallery is collapsed (photoCount is defined) */}
-        {showPhotos && photoCount !== undefined && (
+        {/* Photos - only shown when gallery is collapsed and has photos */}
+        {shouldShowPhotos && (
           <>
             <Text style={[styles.divider, { color: theme.colors.text.tertiary }]}>·</Text>
             <TouchableOpacity style={styles.attribute} onPress={onPhotosPress}>
               <View style={styles.attributeContent}>
-                <Icon name="Image" size={12} color={photoCount > 0 ? theme.colors.text.primary : theme.colors.text.disabled} />
+                <Icon name="Image" size={12} color={theme.colors.text.primary} />
                 <Text
                   style={[
                     styles.attributeText,
-                    { fontFamily: theme.typography.fontFamily.medium },
-                    photoCount > 0 ? { color: theme.colors.text.primary } : { color: theme.colors.text.disabled },
+                    { fontFamily: theme.typography.fontFamily.medium, color: theme.colors.text.primary },
                   ]}
                   numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
-                  {photoCount > 0 ? `${photoCount} Photo${photoCount !== 1 ? 's' : ''}` : 'Photos'}
+                  {`${photos} ${photos === 1 ? 'photo' : 'photos'}`}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -278,6 +421,9 @@ const styles = StyleSheet.create({
   },
   attributeText: {
     fontSize: 13,
+  },
+  unsupportedText: {
+    textDecorationLine: 'line-through',
   },
   divider: {
     fontSize: 12,
