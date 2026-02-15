@@ -593,17 +593,30 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     }, []);
 
     /**
-     * Verify editor content was applied. Three cases:
-     * 1. getHTML returns non-null, text matches expected → done (happy path).
-     * 2. getHTML returns null → WebView dead → reload once, poll until alive, re-set.
-     * 3. getHTML returns non-null, text does NOT match → set was lost → re-set and re-verify.
+     * Verify editor content was applied. Checks:
+     * 1. getHTML returns null → WebView dead → reload once, poll until alive, re-set.
+     * 2. No visible text expected (empty/image-only entry) → skip verification, done.
+     * 3. Editor text length is within tolerance of expected → content loaded, done.
+     * 4. Editor empty or wrong content (stale from previous entry) → re-set.
+     *
+     * Uses length-proximity instead of exact string comparison — Tiptap normalizes
+     * HTML (entities, whitespace, Unicode) so roundtripped text may differ by a few
+     * chars. Tolerance catches normalization while still detecting stale/missing content.
      */
     const verifyEditorContent = (content: string, onVerified: () => void) => {
       const expectedText = stripHtmlToText(content);
+
+      // No visible text content — nothing to verify
+      if (expectedText.length === 0) {
+        onVerified();
+        return;
+      }
+
       let reloaded = false;
       let resets = 0;
       const MAX_RESETS = 3;
       const MAX_RELOAD_POLLS = 30;
+      const tolerance = Math.max(20, Math.round(expectedText.length * 0.1));
 
       const poll = async (attempt: number) => {
         const html = await getHTMLWithTimeout(editorRef, 80);
@@ -619,16 +632,17 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
             setTimeout(() => poll(attempt + 1), 100);
           } else {
             log.error(`⚡ verify: GAVE UP waiting for WebView after ${attempt} attempts`);
-            onVerified(); // Show content anyway — don't leave user staring at blank
+            onVerified();
           }
           return;
         }
 
-        // WebView alive — compare text content
+        // WebView alive — check text length is within tolerance of expected
         const actualText = stripHtmlToText(html);
+        const lenDiff = Math.abs(actualText.length - expectedText.length);
 
-        if (actualText === expectedText) {
-          // Content matches — done
+        if (actualText.length > 0 && lenDiff <= tolerance) {
+          // Content loaded — length is close enough (Tiptap normalization tolerance)
           if (reloaded || resets > 0) {
             log.info(`⚡ verify: content confirmed (attempt ${attempt}, reloaded=${reloaded}, resets=${resets})`);
           }
@@ -636,19 +650,23 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           return;
         }
 
-        // Content mismatch — re-set (limited retries)
+        // Editor empty or content length too different (stale/wrong content) — re-set
         if (resets < MAX_RESETS) {
           resets++;
           log.warn(`⚡ verify: content mismatch (attempt ${attempt}, reset ${resets}/${MAX_RESETS}), re-setting`, {
             expectedLen: expectedText.length,
             actualLen: actualText.length,
+            lenDiff,
+            tolerance,
           });
           editorRef.current?.setContentAndClearHistory(content);
-          // Wait for set to propagate through bridge, then re-verify
           setTimeout(() => poll(attempt + 1), 200);
         } else {
-          log.error(`⚡ verify: content still mismatched after ${resets} resets — giving up`);
-          onVerified(); // Show content anyway
+          log.error(`⚡ verify: content still mismatched after ${resets} resets — giving up`, {
+            expectedLen: expectedText.length,
+            actualLen: actualText.length,
+          });
+          onVerified();
         }
       };
 
