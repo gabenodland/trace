@@ -25,12 +25,11 @@ import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useDrawerGestures, useFilteredEntries, useEntryActions } from "./hooks";
 
-// Render counter to track re-renders
-let entryListRenderCount = 0;
+interface EntryListScreenProps {
+  scrollRestoreKey?: number;
+}
 
-export const EntryListScreen = memo(function EntryListScreen() {
-  entryListRenderCount++;
-  console.log(`[EntryListScreen] 🔄 RENDER #${entryListRenderCount}`, { timestamp: Date.now() });
+export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey = 0 }: EntryListScreenProps) {
   const navigate = useNavigate();
   const theme = useTheme();
   const { user, isOffline } = useAuth();
@@ -65,6 +64,15 @@ export const EntryListScreen = memo(function EntryListScreen() {
 
   // Ref for scrolling list to top after filter apply
   const entryListRef = useRef<EntryListRef>(null);
+
+  // Restore scroll position when navigating back to this screen
+  // Android's native ScrollView loses its offset when a parent Animated.View
+  // transform changes (translateX for swipe-back gesture)
+  useEffect(() => {
+    if (scrollRestoreKey > 0) {
+      entryListRef.current?.restoreScrollPosition();
+    }
+  }, [scrollRestoreKey]);
 
   // Snackbar for showing toast messages (e.g., from entry screen)
   const { message: snackbarMessage, opacity: snackbarOpacity, showSnackbar } = useSnackbar();

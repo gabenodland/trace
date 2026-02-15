@@ -1,5 +1,5 @@
 import { View, Text, FlatList, SectionList, StyleSheet, ActivityIndicator } from "react-native";
-import { useState, useRef, forwardRef, useImperativeHandle } from "react";
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from "react";
 import type { Stream as FullStream, EntrySection, EntryDisplayMode } from "@trace/core";
 import { getStreamAttributeVisibility } from "@trace/core";
 import type { EntryWithRelations } from "../EntryWithRelationsTypes";
@@ -52,6 +52,7 @@ interface EntryListProps {
 /** Methods exposed via ref */
 export interface EntryListRef {
   scrollToTop: () => void;
+  restoreScrollPosition: () => void;
 }
 
 export const EntryList = forwardRef<EntryListRef, EntryListProps>(function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, onArchive, ListHeaderComponent, streams, locations, currentStreamId, displayMode, fullStreams, entryCount, totalCount }, ref) {
@@ -59,12 +60,39 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList<EntryWithRelations>>(null);
   const sectionListRef = useRef<SectionList<EntryWithRelations, EntrySection<EntryWithRelations>>>(null);
+  const scrollOffsetRef = useRef(0);
+  const isSectionedRef = useRef(!!sections?.length);
 
-  // Expose scrollToTop method via ref
+  // Reset saved scroll offset when switching between flat and sectioned list
+  useEffect(() => {
+    const isSectioned = !!sections?.length;
+    if (isSectioned !== isSectionedRef.current) {
+      scrollOffsetRef.current = 0;
+      isSectionedRef.current = isSectioned;
+    }
+  }, [!!sections?.length]);
+
+  // Track scroll offset for restoration after navigation
+  const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+  }, []);
+
+  // Expose scroll methods via ref
   useImperativeHandle(ref, () => ({
     scrollToTop: () => {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       sectionListRef.current?.scrollToLocation({ sectionIndex: 0, itemIndex: 0, animated: true });
+    },
+    restoreScrollPosition: () => {
+      const offset = scrollOffsetRef.current;
+      if (offset > 0) {
+        // Use requestAnimationFrame to let native layout settle after transform change
+        requestAnimationFrame(() => {
+          flatListRef.current?.scrollToOffset({ offset, animated: false });
+          // SectionList doesn't have scrollToOffset, use underlying ScrollView
+          (sectionListRef.current as any)?.getScrollResponder?.()?.scrollTo?.({ y: offset, animated: false });
+        });
+      }
     },
   }), []);
 
@@ -220,6 +248,8 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         }
         stickySectionHeadersEnabled={false}
         removeClippedSubviews={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={100}
       />
     );
   }
@@ -246,6 +276,8 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
           </View>
         }
         removeClippedSubviews={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={100}
       />
     );
   }
@@ -273,6 +305,8 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={CombinedHeader}
       removeClippedSubviews={false}
+      onScroll={handleScroll}
+      scrollEventThrottle={100}
     />
   );
 });

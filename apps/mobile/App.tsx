@@ -274,6 +274,10 @@ function AppContent() {
   // Ref for persistent EntryManagementScreen (entry editor)
   const entryManagementRef = useRef<EntryManagementScreenRef>(null);
 
+  // Counter to trigger scroll restoration in EntryListScreen
+  // Only increments when navigating BACK to inbox (not away from it)
+  const [scrollRestoreKey, setScrollRestoreKey] = useState(0);
+
   // Update lastMainView when on a main view, reset subScreenReady
   // Also track visited screens for lazy mounting
   useEffect(() => {
@@ -379,6 +383,11 @@ function AppContent() {
     else if (wasEntryScreen(prevTab) && isIntentionalNavigation) {
       log.info('Intentional navigation away - calling clearEntry');
       entryManagementRef.current?.clearEntry();
+      // Trigger scroll restoration in EntryListScreen (Android loses scroll
+      // offset when parent Animated.View transform changes)
+      if (activeTab === 'inbox') {
+        setScrollRestoreKey(k => k + 1);
+      }
     }
     else if (wasEntryScreen(prevTab) && !isIntentionalNavigation) {
       log.warn('BLOCKED spurious clearEntry - no intentional navigation detected', {
@@ -498,7 +507,7 @@ function AppContent() {
           styles.screenLayer,
           {
             backgroundColor: theme.colors.background.secondary,
-            transform: [{ translateX: isOnMainView ? 0 : mainViewTranslateX }],
+            transform: [{ translateX: mainViewTranslateX }],
             // For persistent EntryManagementScreen: always on top when visible (for swipe-back)
             // Main views are off-screen (translateX) so entry is visible, but main views slide in on swipe
             // For other sub-screens: use subScreenReady to prevent flash on initial render
@@ -516,7 +525,7 @@ function AppContent() {
           pointerEvents={activeTab === "inbox" ? "auto" : "none"}
         >
           <ErrorBoundary name="EntryListScreen">
-            <EntryListScreen />
+            <EntryListScreen scrollRestoreKey={scrollRestoreKey} />
           </ErrorBoundary>
         </View>
         {/* Lazy mount: Only render after first visit */}
