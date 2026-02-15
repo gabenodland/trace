@@ -9,8 +9,9 @@ import {
   groupEntries,
   filterEntriesBySearch,
   getRatingLabel,
+  type EntrySection,
 } from "./entrySortHelpers";
-import type { Entry } from "./EntryTypes";
+import type { Entry, BaseEntry } from "./EntryTypes";
 
 // Helper to create mock entry
 const createEntry = (overrides: Partial<Entry> = {}): Entry => ({
@@ -397,6 +398,107 @@ describe("entrySortHelpers", () => {
       it("returns decimal format for non-whole", () => {
         expect(getRatingLabel(7.5, "10base")).toBe("7.5/10");
       });
+    });
+  });
+
+  describe("generic type support", () => {
+    // Simulates EntryWithRelations: extends BaseEntry with different attachments type
+    interface TestEntrySubtype extends BaseEntry {
+      attachments: { id: string; url: string }[];
+      stream?: { name: string };
+    }
+
+    const createSubtypeEntry = (overrides: Partial<TestEntrySubtype> = {}): TestEntrySubtype => ({
+      entry_id: "test-entry-id",
+      user_id: "test-user-id",
+      stream_id: null,
+      title: "",
+      content: "<p>Test content</p>",
+      entry_date: "2024-01-15",
+      created_at: "2024-01-15T10:00:00Z",
+      updated_at: "2024-01-15T10:00:00Z",
+      status: "none",
+      priority: 0,
+      rating: 0,
+      due_date: null,
+      completed_at: null,
+      type: null,
+      is_pinned: false,
+      is_archived: false,
+      tags: [],
+      mentions: [],
+      entry_latitude: null,
+      entry_longitude: null,
+      location_radius: null,
+      location_id: null,
+      place_name: null,
+      address: null,
+      neighborhood: null,
+      postal_code: null,
+      city: null,
+      subdivision: null,
+      region: null,
+      country: null,
+      attachments: [],
+      ...overrides,
+    });
+
+    it("sortEntries preserves subtype in return value", () => {
+      const entries: TestEntrySubtype[] = [
+        createSubtypeEntry({ entry_id: "1", title: "Zebra", attachments: [{ id: "a1", url: "/a1.jpg" }] }),
+        createSubtypeEntry({ entry_id: "2", title: "Apple" }),
+      ];
+
+      const sorted = sortEntries(entries, "title", undefined, "asc");
+
+      // Return type is TestEntrySubtype[], not Entry[]
+      expect(sorted[0].title).toBe("Apple");
+      expect(sorted[1].title).toBe("Zebra");
+      // Subtype-specific field is preserved
+      expect(sorted[1].attachments).toEqual([{ id: "a1", url: "/a1.jpg" }]);
+    });
+
+    it("groupEntriesByStatus returns sections with subtype data", () => {
+      const entries: TestEntrySubtype[] = [
+        createSubtypeEntry({ entry_id: "1", status: "todo", stream: { name: "Work" } }),
+        createSubtypeEntry({ entry_id: "2", status: "done" }),
+      ];
+
+      const sections: EntrySection<TestEntrySubtype>[] = groupEntriesByStatus(entries);
+
+      expect(sections.length).toBeGreaterThan(0);
+      // Data in sections retains subtype fields
+      const todoSection = sections.find(s => s.title === "To Do");
+      expect(todoSection?.data[0]?.stream?.name).toBe("Work");
+    });
+
+    it("groupEntries routes correctly with subtype", () => {
+      const entries: TestEntrySubtype[] = [
+        createSubtypeEntry({ entry_id: "1", status: "todo" }),
+        createSubtypeEntry({ entry_id: "2", status: "done" }),
+      ];
+
+      const sections = groupEntries(entries, "status");
+      expect(sections.length).toBeGreaterThan(0);
+      // Each section's data is TestEntrySubtype[]
+      for (const section of sections) {
+        for (const entry of section.data) {
+          expect(entry).toHaveProperty("attachments");
+        }
+      }
+    });
+
+    it("filterEntriesBySearch preserves subtype", () => {
+      const entries: TestEntrySubtype[] = [
+        createSubtypeEntry({ entry_id: "1", title: "Meeting Notes", attachments: [{ id: "a1", url: "/photo.jpg" }] }),
+        createSubtypeEntry({ entry_id: "2", title: "Shopping List" }),
+      ];
+
+      const filtered = filterEntriesBySearch(entries, "meeting");
+
+      expect(filtered).toHaveLength(1);
+      // Subtype field preserved
+      expect(filtered[0].attachments).toEqual([{ id: "a1", url: "/photo.jpg" }]);
     });
   });
 });

@@ -67,7 +67,12 @@ export function getStatusCategory(status: EntryStatus): StatusCategory {
   return getStatusInfo(status)?.category || "none";
 }
 
-export interface Entry {
+/**
+ * BaseEntry contains all entry fields except `attachments`.
+ * Used as the generic constraint for sort/group helpers so they work
+ * with both `Entry` (attachments: Json) and `EntryWithRelations` (attachments: Attachment[]).
+ */
+export interface BaseEntry {
   entry_id: string;
   user_id: string;
   title: string | null;
@@ -108,7 +113,6 @@ export interface Entry {
   type: string | null; // User-defined type from stream's entry_types
   due_date: string | null;
   completed_at: string | null;
-  attachments: Json;
   // Priority, rating, and pinning fields
   priority: number; // Integer priority level for sorting (default: 0)
   rating: number; // Decimal rating from 0.00 to 5.00 (default: 0.00)
@@ -128,6 +132,10 @@ export interface Entry {
   last_edited_device?: string | null; // Device name that last edited
   // Computed field for filtering (not in database, calculated on fetch)
   photo_count?: number; // Number of attachments for this entry
+}
+
+export interface Entry extends BaseEntry {
+  attachments: Json;
 }
 
 export interface CreateEntryInput {

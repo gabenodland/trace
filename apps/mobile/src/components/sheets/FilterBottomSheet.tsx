@@ -27,7 +27,7 @@ import {
   DEFAULT_STREAM_VIEW_FILTER,
   extractAttachmentIds,
   getActiveFilterInfo,
-  type Entry,
+  type BaseEntry,
   type PriorityLevel,
   type PriorityCategory,
   type DueDatePreset,
@@ -43,7 +43,7 @@ interface FilterBottomSheetProps {
   /** Called when Apply is pressed - syncs filters and closes sheet */
   onApply?: () => void;
   /** Entries to calculate live filter count */
-  entries?: Entry[];
+  entries?: BaseEntry[];
 }
 
 // NO debounce - sync only on close for maximum performance

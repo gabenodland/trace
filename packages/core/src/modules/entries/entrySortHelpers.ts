@@ -1,19 +1,20 @@
 /**
  * Sorting and grouping helpers for entry lists
  */
-import type { Entry, EntryStatus } from "./EntryTypes";
+import type { Entry, BaseEntry, EntryStatus } from "./EntryTypes";
 import type { Stream } from "../streams/StreamTypes";
 import { getStatusLabel } from "./EntryTypes";
 import { decimalToStars } from "./ratingHelpers";
 import type { EntrySortMode, EntrySortOrder, EntryGroupMode } from "./EntryDisplayTypes";
 
 /**
- * Section data for grouped entry lists
+ * Section data for grouped entry lists.
+ * Generic over T so sections can hold Entry, EntryWithRelations, or any BaseEntry subtype.
  */
-export interface EntrySection {
+export interface EntrySection<T extends BaseEntry = Entry> {
   title: string;
   count: number;
-  data: Entry[];
+  data: T[];
 }
 
 /**
@@ -44,13 +45,13 @@ function getStatusSortIndex(status: EntryStatus): number {
  * Sort entries based on sort mode and order
  * Pinned entries can optionally appear first, controlled by showPinnedFirst parameter
  */
-export function sortEntries(
-  entries: Entry[],
+export function sortEntries<T extends BaseEntry>(
+  entries: T[],
   sortMode: EntrySortMode,
   streamMap?: Record<string, string>,
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
-): Entry[] {
+): T[] {
   const sorted = [...entries];
   const multiplier = order === "asc" ? -1 : 1;
 
@@ -202,13 +203,13 @@ export function sortEntries(
 /**
  * Group entries by status into sections
  */
-export function groupEntriesByStatus(
-  entries: Entry[],
+export function groupEntriesByStatus<T extends BaseEntry>(
+  entries: T[],
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
-): EntrySection[] {
+): EntrySection<T>[] {
   const sorted = sortEntries(entries, "status", undefined, order, showPinnedFirst);
-  const groups = new Map<string, Entry[]>();
+  const groups = new Map<string, T[]>();
 
   for (const entry of sorted) {
     const status = entry.status || "none";
@@ -218,7 +219,7 @@ export function groupEntriesByStatus(
     groups.get(status)!.push(entry);
   }
 
-  const sections: EntrySection[] = [];
+  const sections: EntrySection<T>[] = [];
   const statusOrder = order === "asc" ? [...STATUS_ORDER].reverse() : STATUS_ORDER;
 
   for (const status of statusOrder) {
@@ -238,13 +239,13 @@ export function groupEntriesByStatus(
 /**
  * Group entries by type into sections
  */
-export function groupEntriesByType(
-  entries: Entry[],
+export function groupEntriesByType<T extends BaseEntry>(
+  entries: T[],
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
-): EntrySection[] {
+): EntrySection<T>[] {
   const sorted = sortEntries(entries, "type", undefined, order, showPinnedFirst);
-  const groups = new Map<string, Entry[]>();
+  const groups = new Map<string, T[]>();
 
   for (const entry of sorted) {
     const type = entry.type || "";
@@ -261,7 +262,7 @@ export function groupEntriesByType(
     return a.localeCompare(b) * (order === "asc" ? 1 : -1);
   });
 
-  const sections: EntrySection[] = [];
+  const sections: EntrySection<T>[] = [];
   for (const type of types) {
     const sectionEntries = groups.get(type);
     if (sectionEntries && sectionEntries.length > 0) {
@@ -279,14 +280,14 @@ export function groupEntriesByType(
 /**
  * Group entries by stream into sections
  */
-export function groupEntriesByStream(
-  entries: Entry[],
+export function groupEntriesByStream<T extends BaseEntry>(
+  entries: T[],
   streamMap: Record<string, string> | undefined,
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
-): EntrySection[] {
+): EntrySection<T>[] {
   const sorted = sortEntries(entries, "stream", streamMap, order, showPinnedFirst);
-  const groups = new Map<string, Entry[]>();
+  const groups = new Map<string, T[]>();
 
   for (const entry of sorted) {
     const streamName = entry.stream_id && streamMap ? streamMap[entry.stream_id] || "" : "";
@@ -303,7 +304,7 @@ export function groupEntriesByStream(
     return a.localeCompare(b) * (order === "asc" ? 1 : -1);
   });
 
-  const sections: EntrySection[] = [];
+  const sections: EntrySection<T>[] = [];
   for (const stream of streams) {
     const sectionEntries = groups.get(stream);
     if (sectionEntries && sectionEntries.length > 0) {
@@ -383,13 +384,13 @@ function getDueDateBucket(dueDate: string | null | undefined): DueDateBucket {
 /**
  * Group entries by due date into sections
  */
-export function groupEntriesByDueDate(
-  entries: Entry[],
+export function groupEntriesByDueDate<T extends BaseEntry>(
+  entries: T[],
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
-): EntrySection[] {
+): EntrySection<T>[] {
   const sorted = sortEntries(entries, "due_date", undefined, order, showPinnedFirst);
-  const groups = new Map<DueDateBucket, Entry[]>();
+  const groups = new Map<DueDateBucket, T[]>();
 
   for (const entry of sorted) {
     const bucket = getDueDateBucket(entry.due_date);
@@ -399,7 +400,7 @@ export function groupEntriesByDueDate(
     groups.get(bucket)!.push(entry);
   }
 
-  const sections: EntrySection[] = [];
+  const sections: EntrySection<T>[] = [];
   const bucketOrder = order === "asc" ? [...DUE_DATE_ORDER].reverse() : DUE_DATE_ORDER;
 
   for (const bucket of bucketOrder) {
@@ -419,13 +420,13 @@ export function groupEntriesByDueDate(
 /**
  * Group entries by priority into sections
  */
-export function groupEntriesByPriority(
-  entries: Entry[],
+export function groupEntriesByPriority<T extends BaseEntry>(
+  entries: T[],
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false
-): EntrySection[] {
-  const entriesWithPriority: Entry[] = [];
-  const entriesWithoutPriority: Entry[] = [];
+): EntrySection<T>[] {
+  const entriesWithPriority: T[] = [];
+  const entriesWithoutPriority: T[] = [];
 
   for (const entry of entries) {
     if (entry.priority && entry.priority > 0) {
@@ -456,7 +457,7 @@ export function groupEntriesByPriority(
     );
   });
 
-  const sections: EntrySection[] = [];
+  const sections: EntrySection<T>[] = [];
 
   if (sortedWithPriority.length > 0) {
     sections.push({
@@ -482,7 +483,7 @@ export function groupEntriesByPriority(
  * Returns 'stars' if all are stars, '10base' if any use decimal rating
  */
 function determineRatingDisplayMode(
-  entries: Entry[],
+  entries: BaseEntry[],
   streamById?: Record<string, Stream> | null
 ): "stars" | "10base" {
   if (!streamById) return "stars";
@@ -545,12 +546,12 @@ function getRatingGroupKey(rating: number, displayMode: "stars" | "10base"): num
  * Returns sections in rating order (highest first for desc) with count
  * Automatically uses 10-base display when entries have mixed rating types
  */
-export function groupEntriesByRating(
-  entries: Entry[],
+export function groupEntriesByRating<T extends BaseEntry>(
+  entries: T[],
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false,
   streamById?: Record<string, Stream> | null
-): EntrySection[] {
+): EntrySection<T>[] {
   // First sort entries by rating
   const sorted = sortEntries(entries, "rating", undefined, order, showPinnedFirst);
 
@@ -558,7 +559,7 @@ export function groupEntriesByRating(
   const displayMode = determineRatingDisplayMode(entries, streamById);
 
   // Group by rating
-  const groups = new Map<number, Entry[]>();
+  const groups = new Map<number, T[]>();
 
   for (const entry of sorted) {
     const rating = entry.rating || 0;
@@ -576,7 +577,7 @@ export function groupEntriesByRating(
   });
 
   // Convert to sections
-  const sections: EntrySection[] = [];
+  const sections: EntrySection<T>[] = [];
 
   for (const groupKey of groupKeys) {
     const groupEntries = groups.get(groupKey);
@@ -605,14 +606,14 @@ export function groupEntriesByRating(
 /**
  * Group entries based on group mode
  */
-export function groupEntries(
-  entries: Entry[],
+export function groupEntries<T extends BaseEntry>(
+  entries: T[],
   groupMode: EntryGroupMode,
   streamMap?: Record<string, string>,
   order: EntrySortOrder = "desc",
   showPinnedFirst: boolean = false,
   streamById?: Record<string, Stream> | null
-): EntrySection[] {
+): EntrySection<T>[] {
   switch (groupMode) {
     case "status":
       return groupEntriesByStatus(entries, order, showPinnedFirst);
@@ -635,7 +636,7 @@ export function groupEntries(
 /**
  * Filter entries by search query
  */
-export function filterEntriesBySearch(entries: Entry[], query: string): Entry[] {
+export function filterEntriesBySearch<T extends BaseEntry>(entries: T[], query: string): T[] {
   if (!query.trim()) return entries;
 
   const lowerQuery = query.toLowerCase();
