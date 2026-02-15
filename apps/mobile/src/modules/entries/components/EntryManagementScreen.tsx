@@ -753,6 +753,13 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         setEntryIdState(null);
         setError(null);
         const newEntry = buildNewEntry(options);
+        // Resolve stream for AttributeBar display and attribute config
+        if (newEntry.stream_id) {
+          newEntry.stream = streams.find(s => s.stream_id === newEntry.stream_id);
+          if (!newEntry.stream) {
+            log.warn('createNewEntry: stream not found in loaded streams', { streamId: newEntry.stream_id });
+          }
+        }
         setEntry(newEntry);
         setOriginalEntry(newEntry);
         setIsLoading(false);
