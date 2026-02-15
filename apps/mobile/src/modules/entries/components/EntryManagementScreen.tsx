@@ -101,7 +101,9 @@ interface EntryManagementScreenProps {
  * Build a new entry object with defaults
  */
 function buildNewEntry(options?: NewEntryOptions, userId?: string): EntryWithRelations {
-  const now = new Date().toISOString();
+  const d = new Date();
+  d.setMilliseconds(0); // Ensure ms=0 (ms=100 is the "hide time" sentinel)
+  const now = d.toISOString();
 
   // Normalize stream_id: "all", "no-stream", and other filter values should be null
   // Only valid UUIDs should be set as stream_id
@@ -123,7 +125,7 @@ function buildNewEntry(options?: NewEntryOptions, userId?: string): EntryWithRel
     attachments: [],
     status: 'none',
     type: null,
-    entry_date: options?.date || now.split('T')[0], // YYYY-MM-DD format
+    entry_date: options?.date || now, // Full ISO with time — new entries default to current date+time
     created_at: now,
     updated_at: now,
     entry_latitude: null,
@@ -270,8 +272,11 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       exitEditMode,
     });
 
-    // Derive includeTime from entry_date format (has time component if includes 'T')
-    const includeTime = entry?.entry_date?.includes('T') ?? false;
+    // Derive includeTime from milliseconds flag (ms=100 means "hide time")
+    // This survives DB round-trips since timestamptz has microsecond precision
+    const includeTime = entry?.entry_date
+      ? new Date(entry.entry_date).getMilliseconds() !== 100
+      : false;
 
     // Keyboard height tracking - also detects when user taps into editor
     // Using keyboard show event instead of overlay tap because Android WebView
@@ -772,7 +777,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
 
     // === Picker Handlers (inline) ===
     // Track when we're removing time (to coordinate with date change callback)
-    const removingTimeRef = useRef(false);
+
 
     // Press handlers - open pickers
     const handleDatePress = useCallback(() => {
@@ -826,20 +831,13 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     }, []);
 
     // Change handlers - update entry fields
+    // TimePicker handles the ms=100 flag directly — just pass through
     const handleEntryDateChange = useCallback((newDate: string) => {
-      if (removingTimeRef.current) {
-        removingTimeRef.current = false;
-        const dateOnly = newDate.split('T')[0];
-        updateEntryField('entry_date', dateOnly);
-      } else {
-        updateEntryField('entry_date', newDate);
-      }
+      updateEntryField('entry_date', newDate);
     }, [updateEntryField]);
 
-    const handleIncludeTimeChange = useCallback((include: boolean) => {
-      if (!include) {
-        removingTimeRef.current = true;
-      }
+    const handleIncludeTimeChange = useCallback((_include: boolean) => {
+      // No-op: ms=100 flag in the ISO string is the source of truth
     }, []);
 
     const handleTypeChange = useCallback((type: string | null) => {

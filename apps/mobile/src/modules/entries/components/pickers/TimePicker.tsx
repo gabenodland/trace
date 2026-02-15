@@ -50,7 +50,15 @@ export function TimePicker({
   includeTime,
 }: TimePickerProps) {
   const dynamicTheme = useTheme();
-  const date = new Date(entryDate);
+
+  // Parse time from entryDate — if date-only (no 'T'), use current local time
+  // This avoids the UTC midnight bug where new Date('YYYY-MM-DD') = midnight UTC = 6PM CST
+  const getLocalDate = (dateStr: string) => {
+    if (dateStr.includes('T')) return new Date(dateStr);
+    return new Date(); // Date-only string: default to current time
+  };
+
+  const date = getLocalDate(entryDate);
 
   // Local state for hour/minute/period selection
   const [selectedHour, setSelectedHour] = useState(() => {
@@ -65,7 +73,7 @@ export function TimePicker({
   // Reset selection when picker opens
   useEffect(() => {
     if (visible) {
-      const d = new Date(entryDate);
+      const d = getLocalDate(entryDate);
       const h = d.getHours();
       setSelectedHour(h === 0 ? 12 : h > 12 ? h - 12 : h);
       setSelectedMinute(d.getMinutes());
@@ -97,6 +105,14 @@ export function TimePicker({
     onClose();
   };
 
+  const handleSetNow = () => {
+    const now = new Date();
+    const h = now.getHours();
+    setSelectedHour(h === 0 ? 12 : h > 12 ? h - 12 : h);
+    setSelectedMinute(now.getMinutes());
+    setSelectedPeriod(h >= 12 ? "PM" : "AM");
+  };
+
   // Format the currently selected time for display
   const formattedTime = `${selectedHour}:${selectedMinute.toString().padStart(2, "0")} ${selectedPeriod}`;
 
@@ -118,7 +134,10 @@ export function TimePicker({
               icon: <RemoveIcon color={dynamicTheme.colors.functional.overdue} />,
               onPress: handleRemove,
             }
-          : undefined
+          : {
+              label: "Now",
+              onPress: handleSetNow,
+            }
       }
     >
       {/* Current time display */}
