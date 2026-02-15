@@ -29,6 +29,7 @@ export function CaptureForm() {
   const [includeTime, setIncludeTime] = useState(true); // Whether to show/include time in entry_date
   const [showEntryDatePicker, setShowEntryDatePicker] = useState(false);
   const isLocalChange = useRef(false);
+  const hasLoadedEntry = useRef<string | null>(null);
 
   const { entryMutations } = useEntries();
   const { entry, isLoading: isLoadingEntry, entryMutations: singleEntryMutations } = useEntry(entryId);
@@ -69,9 +70,10 @@ export function CaptureForm() {
     },
   });
 
-  // Load entry data when editing
+  // Load entry data when editing (runs once per entry to prevent clobbering unsaved edits)
   useEffect(() => {
-    if (entry && isEditing && editor) {
+    if (entry && isEditing && editor && hasLoadedEntry.current !== entry.entry_id) {
+      hasLoadedEntry.current = entry.entry_id;
       setTitle(entry.title || "");
       editor.commands.setContent(entry.content || '');
       setStreamId(entry.stream_id || null);
@@ -90,20 +92,23 @@ export function CaptureForm() {
         setIncludeTime(date.getMilliseconds() !== 100);
       }
 
-      // Look up stream name from streams list
-      if (entry.stream_id && streams.length > 0) {
-        const stream = streams.find(s => s.stream_id === entry.stream_id);
-        setStreamName(stream?.name || null);
-      } else {
-        setStreamName(null);
-      }
-
       // Set location if available
       if (entry.location_lat && entry.location_lng) {
         setCaptureLocation(true);
       }
     }
-  }, [entry, isEditing, editor, streams]);
+  }, [entry, isEditing, editor]);
+
+  // Resolve stream name on initial load (StreamPicker handles user-initiated changes)
+  useEffect(() => {
+    if (!isEditing) return;
+    if (entry?.stream_id && streams.length > 0) {
+      const stream = streams.find(s => s.stream_id === entry.stream_id);
+      setStreamName(stream?.name || null);
+    } else {
+      setStreamName(null);
+    }
+  }, [entry?.stream_id, streams, isEditing]);
 
   const handleSave = async () => {
     if (!editor) return;
