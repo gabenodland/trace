@@ -5,7 +5,7 @@ Uses Microsoft's free neural text-to-speech voices.
 
 Fixed voice per model:
   sonnet → en-US-MichelleNeural (US female)
-  haiku  → en-IN-PrabhatNeural (Indian male)
+  haiku  → en-US-BrianMultilingualNeural (US male multilingual)
   opus   → en-GB-RyanNeural (British male)
 
 Usage:
@@ -30,7 +30,7 @@ SPEECH_LOCK_FILE = Path(tempfile.gettempdir()) / "claude_voice_speech.lock"
 # Fixed voice per model prefix
 MODEL_VOICES = {
     "sonnet": "en-US-MichelleNeural",
-    "haiku": "en-IN-PrabhatNeural",
+    "haiku": "en-US-BrianMultilingualNeural",
     "opus": "en-GB-RyanNeural",
 }
 

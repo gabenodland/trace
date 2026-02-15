@@ -83,6 +83,22 @@ export function extractBody(html: string): string {
 }
 
 /**
+ * Strip only <h1 class="entry-title"> from content start.
+ * Unlike extractBody, this does NOT fall back to stripping arbitrary h1 tags.
+ * Use this when loading entry.content into an editor that has a separate title field,
+ * to prevent showing the embedded title duplicate without destroying legitimate user h1s.
+ */
+export function stripEntryTitleFromContent(html: string): string {
+  if (!html) return '';
+  const trimmed = html.trim();
+  const match = trimmed.match(/^<h1[^>]*class="[^"]*entry-title[^"]*"[^>]*>[\s\S]*?<\/h1>/i);
+  if (match) {
+    return trimmed.substring(match[0].length).trim();
+  }
+  return trimmed;
+}
+
+/**
  * Check if content has a valid title-first structure
  */
 export function hasTitleStructure(html: string): boolean {

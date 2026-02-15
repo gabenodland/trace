@@ -10,6 +10,7 @@ export {
   combineTitleAndBody,
   extractTitle,
   extractBody,
+  stripEntryTitleFromContent,
   hasTitleStructure,
   getTitleCSS,
 } from './editorHelpers';

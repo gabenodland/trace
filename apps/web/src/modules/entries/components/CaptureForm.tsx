@@ -73,7 +73,7 @@ export function CaptureForm() {
   useEffect(() => {
     if (entry && isEditing && editor) {
       setTitle(entry.title || "");
-      editor.commands.setContent(entry.content);
+      editor.commands.setContent(entry.content || '');
       setStreamId(entry.stream_id || null);
       setStatus(entry.status);
       setDueDate(entry.due_date);
@@ -106,19 +106,13 @@ export function CaptureForm() {
   }, [entry, isEditing, editor, streams]);
 
   const handleSave = async () => {
-    if (!editor) {
-      console.log("No editor");
-      return;
-    }
+    if (!editor) return;
 
     const content = editor.getHTML();
     const textContent = editor.getText().trim();
 
-    console.log("Saving entry...", { content, textContent, isEditing });
-
     // Check if there's actual text content (not just empty HTML)
     if (!textContent || textContent.length === 0) {
-      console.log("No content to save");
       alert("Please add some content before saving");
       return;
     }
@@ -130,7 +124,6 @@ export function CaptureForm() {
 
       if (isEditing) {
         // Update existing entry
-        console.log("Updating entry...");
         await singleEntryMutations.updateEntry({
           title: title.trim() || null,
           content,
@@ -141,7 +134,6 @@ export function CaptureForm() {
           status,
           due_date: dueDate,
         });
-        console.log("Entry updated successfully");
       } else {
         // Create new entry
         // Get GPS coordinates if available and enabled
@@ -163,11 +155,10 @@ export function CaptureForm() {
             longitude = position.coords.longitude;
             accuracy = position.coords.accuracy;
           } catch (geoError) {
-            console.log("Location not available:", geoError);
+            // Location unavailable — continue without it
           }
         }
 
-        console.log("Creating entry...");
         await entryMutations.createEntry({
           title: title.trim() || null,
           content,
@@ -181,8 +172,6 @@ export function CaptureForm() {
           status,
           due_date: dueDate,
         });
-        console.log("Entry created successfully");
-
         // Clear form only when creating
         setTitle("");
         editor.commands.setContent("");

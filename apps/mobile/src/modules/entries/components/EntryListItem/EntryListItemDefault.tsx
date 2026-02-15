@@ -62,7 +62,7 @@ export function EntryListItemDefault({
   const theme = useTheme();
 
   // Format content based on display mode (title mode doesn't need content formatting)
-  const formattedContent = displayMode !== 'title' ? getFormattedContent(entry.content, displayMode) : null;
+  const formattedContent = displayMode !== 'title' ? getFormattedContent(entry.content || '', displayMode) : null;
   const maxLines = displayMode !== 'title' ? getDisplayModeLines(displayMode) : 0;
 
   return (
@@ -88,7 +88,7 @@ export function EntryListItemDefault({
           isCompletedStatus(entry.status) && styles.strikethrough,
           styles.firstLineText
         ]} numberOfLines={displayMode === 'title' || !entry.title ? 1 : undefined}>
-          {entry.title || getFirstLineOfText(entry.content)}
+          {entry.title || getFirstLineOfText(entry.content || '')}
         </Text>
 
         {/* Map Pin Button - only shown when onSelectOnMap is provided (MapScreen) */}

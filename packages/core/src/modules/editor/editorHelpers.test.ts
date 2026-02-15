@@ -5,6 +5,7 @@ import {
   extractTitle,
   extractBody,
   hasTitleStructure,
+  stripEntryTitleFromContent,
 } from "./editorHelpers";
 
 // ============================================
@@ -187,6 +188,52 @@ describe("hasTitleStructure", () => {
 
   it("handles whitespace before h1", () => {
     expect(hasTitleStructure("  <h1>Title</h1>")).toBe(true);
+  });
+});
+
+// ============================================
+// stripEntryTitleFromContent TESTS
+// ============================================
+
+describe("stripEntryTitleFromContent", () => {
+  it("strips h1.entry-title from content start", () => {
+    const html = '<h1 class="entry-title">Title</h1><p>Body text</p>';
+    expect(stripEntryTitleFromContent(html)).toBe("<p>Body text</p>");
+  });
+
+  it("does NOT strip arbitrary h1 at start (preserves user headings)", () => {
+    const html = "<h1>My Heading</h1><p>Body text</p>";
+    expect(stripEntryTitleFromContent(html)).toBe("<h1>My Heading</h1><p>Body text</p>");
+  });
+
+  it("does NOT strip h1 with different class", () => {
+    const html = '<h1 class="custom">Heading</h1><p>Body</p>';
+    expect(stripEntryTitleFromContent(html)).toBe('<h1 class="custom">Heading</h1><p>Body</p>');
+  });
+
+  it("handles entry-title with extra classes", () => {
+    const html = '<h1 class="entry-title extra-class">Title</h1><p>Body</p>';
+    expect(stripEntryTitleFromContent(html)).toBe("<p>Body</p>");
+  });
+
+  it("handles empty/null input", () => {
+    expect(stripEntryTitleFromContent("")).toBe("");
+    expect(stripEntryTitleFromContent(null as any)).toBe("");
+    expect(stripEntryTitleFromContent(undefined as any)).toBe("");
+  });
+
+  it("returns content unchanged when no h1 present", () => {
+    expect(stripEntryTitleFromContent("<p>Just body</p>")).toBe("<p>Just body</p>");
+  });
+
+  it("handles content that is only an entry-title h1", () => {
+    const html = '<h1 class="entry-title">Just a title</h1>';
+    expect(stripEntryTitleFromContent(html)).toBe("");
+  });
+
+  it("handles whitespace around html", () => {
+    const html = '  <h1 class="entry-title">Title</h1><p>Body</p>  ';
+    expect(stripEntryTitleFromContent(html)).toBe("<p>Body</p>");
   });
 });
 

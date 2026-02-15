@@ -116,7 +116,7 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
       overflow: visible;
     }
     #content {
-      display: block;
+      display: flow-root;
     }
     body {
       font-family: ${webFontFamily};
@@ -145,6 +145,10 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
       font-size: 20px;
       font-weight: 700;
       margin: 6px 0 4px 0;
+    }
+    /* Remove top margin from first element to prevent extra space and margin collapsing */
+    #content > :first-child {
+      margin-top: 0;
     }
 
     /* Regular list styling */
