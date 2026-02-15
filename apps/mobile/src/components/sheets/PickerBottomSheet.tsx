@@ -65,7 +65,7 @@ export function PickerBottomSheet({
       showGrabber={true}
       swipeToDismiss={true}
       dismissKeyboard={dismissKeyboard}
-      useModal={false}
+      useModal={true}
     >
       <View style={styles.container}>
         {/* Header */}

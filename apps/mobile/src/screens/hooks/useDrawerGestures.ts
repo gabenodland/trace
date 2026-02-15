@@ -4,7 +4,7 @@
  */
 
 import { useRef, useEffect } from 'react';
-import { PanResponder, Dimensions } from 'react-native';
+import { PanResponder, Dimensions, Keyboard } from 'react-native';
 import type { DrawerControl } from '../../shared/contexts/DrawerContext';
 
 interface UseDrawerGesturesOptions {
@@ -51,7 +51,9 @@ export function useDrawerGestures({ drawerControl }: UseDrawerGesturesOptions) {
       },
       onMoveShouldSetPanResponder: () => false,
       onPanResponderGrant: () => {
-        // No setup needed
+        if (isSwipingDrawer.current) {
+          Keyboard.dismiss();
+        }
       },
       onPanResponderMove: (_, gestureState) => {
         if (isSwipingDrawer.current) {

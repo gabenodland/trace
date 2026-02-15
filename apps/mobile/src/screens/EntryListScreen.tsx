@@ -381,17 +381,14 @@ export const EntryListScreen = memo(function EntryListScreen() {
         entries={sortedEntries}
       />
 
-      {/* Hide bottom nav when filter sheet is open to prevent z-index overlap */}
-      {!showFilterSheet && (
-        <BottomNavBar
-          viewMode={viewMode}
-          onViewModeChange={handleViewModeChange}
-          onAddPress={handleAddEntry}
-          onAccountPress={() => navigate("account")}
-          avatarUrl={avatarUrl}
-          displayName={displayName}
-        />
-      )}
+      <BottomNavBar
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+        onAddPress={handleAddEntry}
+        onAccountPress={() => navigate("account")}
+        avatarUrl={avatarUrl}
+        displayName={displayName}
+      />
 
       {/* Toast messages from other screens */}
       <Snackbar message={snackbarMessage} opacity={snackbarOpacity} />
