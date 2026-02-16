@@ -13,6 +13,7 @@
  */
 
 import { useRef, useImperativeHandle, forwardRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { View, Text, StyleSheet, Keyboard, Alert, AppState, AppStateStatus } from 'react-native';
 import { EntryHeader } from './EntryHeader';
 import { AttributeBar } from './AttributeBar';
@@ -173,6 +174,7 @@ function buildNewEntry(options?: NewEntryOptions, userId?: string): EntryWithRel
 export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryManagementScreenProps>(
   ({ isVisible = true }, ref) => {
     const theme = useTheme();
+    const queryClient = useQueryClient();
     const { settings } = useSettings();
     const { streams } = useStreams();
     const locationsQuery = useLocations();
@@ -197,6 +199,8 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
 
     // Ref for RichTextEditorV2
     const editorRef = useRef<RichTextEditorV2Ref>(null);
+    // Tracks current entryId for staleness guard (survives async boundaries unlike state)
+    const entryIdRef = useRef<string | null>(null);
 
     // Compute isDirty by comparing current entry to original
     const isDirty = useMemo(() => {
@@ -670,56 +674,98 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         }
       };
 
-      setTimeout(() => poll(1), 100);
+      setTimeout(() => poll(1), 50);
     };
 
-    // Load entry directly
-    const loadEntryDirect = async (id: string) => {
-      const startTime = performance.now();
-      log.debug('loadEntryDirect started', { entryId: id.substring(0, 8) });
+    // Find entry in React Query list cache (synchronous — no DB call)
+    const findEntryInListCache = (id: string): EntryWithRelations | undefined => {
+      const entriesQueries = queryClient.getQueriesData<EntryWithRelations[]>({ queryKey: ['entries'] });
+      for (const [, entries] of entriesQueries) {
+        if (entries) {
+          const found = entries.find(e => e.entry_id === id);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
 
-      // Note: isLoading, error, isNewEntry, entryId already set by setEntry caller
+    // Load entry directly — fetches fresh data from SQLite (or prefetch cache)
+    // If hadCacheHit is true, the entry is already displayed from list cache
+    const loadEntryDirect = async (id: string, hadCacheHit: boolean, clickTime: number) => {
+      const startTime = performance.now();
+      log.info('⏱️ loadEntryDirect started', {
+        entryId: id.substring(0, 8),
+        hadCacheHit,
+        sinceClickMs: Math.round(startTime - clickTime),
+      });
+
       try {
         const data = await getEntryWithRelations(id);
         const fetchTime = Math.round(performance.now() - startTime);
 
+        // Staleness guard: user navigated to a different entry while we were fetching
+        if (entryIdRef.current !== id) {
+          log.info('⏱️ loadEntryDirect: STALE — entry changed during fetch', {
+            fetchedId: id.substring(0, 8),
+            currentId: entryIdRef.current?.substring(0, 8),
+            fetchMs: fetchTime,
+          });
+          return;
+        }
+
         if (!data) {
-          setError('Entry not found');
-          setEntry(null);
+          if (!hadCacheHit) {
+            setError('Entry not found');
+            setEntry(null);
+          }
           log.warn('⏱️ Entry not found', { entryId: id.substring(0, 8), fetchMs: fetchTime });
           return;
         }
 
+        // Update state with fresh (authoritative) data
         setEntry(data);
         setOriginalEntry(data);
         setLastFetchMs(fetchTime);
-        // Initialize version tracking for conflict detection
+        // Prime React Query cache so useEntry(entryId) in useEntryManagement
+        // doesn't trigger a redundant SQLite fetch
+        const { stream: _s, ...entryForCache } = data;
+        queryClient.setQueryData(['entry', id], entryForCache);
         if (data.version) {
           initializeVersion(data.version);
         }
-        // Set editor content without adding to undo history
-        const editorContent = combineTitleAndBody(data.title || '', data.content || '');
-        log.debug('Setting editor content (no history)', { length: editorContent.length });
-        editorRef.current?.setContentAndClearHistory(editorContent);
 
-        // Verify content was applied — handles dead/fresh WebView recovery
-        // Content area stays hidden (isContentReady=false) until verified
-        verifyEditorContent(editorContent, () => {
-          setIsContentReady(true);
-          setIsLoading(false);
-        });
+        if (!hadCacheHit) {
+          // No cache — set editor content and gate visibility on verification
+          const editorContent = combineTitleAndBody(data.title || '', data.content || '');
+          log.debug('Setting editor content (no history)', { length: editorContent.length });
+          editorRef.current?.setContentAndClearHistory(editorContent);
+          verifyEditorContent(editorContent, () => {
+            setIsContentReady(true);
+            setIsLoading(false);
+            log.info('⏱️ DISPLAY READY (no cache)', {
+              entryId: id.substring(0, 8),
+              sinceClickMs: Math.round(performance.now() - clickTime),
+            });
+          });
+        }
+        // Cache hit: editor already set by the ref's setEntry — don't touch it.
+        // Only metadata (entry state, stream, attachments, version) is updated above.
 
-        log.debug('loadEntryDirect complete', {
+        log.info('⏱️ loadEntryDirect complete', {
           entryId: id.substring(0, 8),
-          totalMs: fetchTime,
+          fetchMs: fetchTime,
+          sinceClickMs: Math.round(performance.now() - clickTime),
+          hadCacheHit,
           hasStream: !!data.stream,
           attachmentCount: data.attachments?.length || 0,
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
-        setIsContentReady(true); // Show error state
-        setIsLoading(false);
+        if (!hadCacheHit) {
+          const message = err instanceof Error ? err.message : String(err);
+          setError(message);
+          setIsContentReady(true); // Show error state
+          setIsLoading(false);
+        }
         log.error('Failed to load entry', err);
       }
     };
@@ -727,24 +773,59 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     // Expose ref API for navigation
     useImperativeHandle(ref, () => ({
       setEntry: (id: string) => {
-        log.debug('setEntry called', { entryId: id.substring(0, 8) });
+        const t0 = performance.now();
+        log.info('⏱️ setEntry called', { entryId: id.substring(0, 8) });
 
         // Always start in read-only mode - dismiss keyboard and blur editor
         Keyboard.dismiss();
         editorRef.current?.blur();
         setIsEditMode(false);
         setIsFullScreen(false);
-
-        // Set loading state immediately - content hidden until verified
-        setIsLoading(true);
-        setIsContentReady(false);
         setError(null);
         setIsNewEntry(false);
         setEntryIdState(id);
+        entryIdRef.current = id;
         setActivePicker(null);
 
-        // Fetch directly - the query itself is fast (~15ms)
-        loadEntryDirect(id);
+        // Try list cache for instant display (synchronous — no DB hit, no blank screen)
+        const cached = findEntryInListCache(id);
+        if (cached) {
+          // Clone to avoid mutating React Query cache references
+          const entry = { ...cached };
+          // Resolve stream from loaded streams if missing in list cache
+          if (!entry.stream && entry.stream_id) {
+            entry.stream = streams.find(s => s.stream_id === entry.stream_id);
+          }
+          setEntry(entry);
+          setOriginalEntry(entry);
+          const { stream: _s, ...cachedForQuery } = entry;
+          queryClient.setQueryData(['entry', id], cachedForQuery);
+          if (entry.version) {
+            initializeVersion(entry.version);
+          }
+          const editorContent = combineTitleAndBody(entry.title || '', entry.content || '');
+          editorRef.current?.setContentAndClearHistory(editorContent);
+          // Show immediately — all state updates batched into one render
+          setIsContentReady(true);
+          setIsLoading(false);
+          const cacheMs = Math.round(performance.now() - t0);
+          log.info('⏱️ CACHE HIT — instant display', {
+            entryId: id.substring(0, 8),
+            cacheLookupMs: cacheMs,
+            hasStream: !!entry.stream,
+            editorContentLen: editorContent.length,
+          });
+          // Cache hit: done. useEntry hook handles background freshness via sync subscription.
+        } else {
+          // No cache — show loading state, clear old entry
+          setEntry(null);
+          setIsLoading(true);
+          setIsContentReady(false);
+          log.info('⏱️ CACHE MISS — loading from DB', { entryId: id.substring(0, 8) });
+
+          // Fetch from SQLite
+          loadEntryDirect(id, false, t0);
+        }
       },
       createNewEntry: (options?: NewEntryOptions) => {
         log.info('createNewEntry: creating new entry', { streamId: options?.streamId });
@@ -769,7 +850,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         editorRef.current?.setContentAndClearHistory(editorContent);
       },
       clearEntry: () => {
-        setIsContentReady(true);
+        setIsContentReady(false);
         // Log stack trace to identify what's calling clearEntry
         log.info('clearEntry called');
         // Dismiss keyboard and blur editor first
@@ -777,6 +858,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         editorRef.current?.blur();
         // Reset all state
         setEntryIdState(null);
+        entryIdRef.current = null;
         setIsNewEntry(false);
         setEntry(null);
         setOriginalEntry(null);
@@ -962,7 +1044,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     };
 
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background.secondary, opacity: isContentReady ? 1 : 0 }]}>
         <EntryHeader
           isEditMode={!!entry}
           isFullScreen={isFullScreen}
@@ -982,25 +1064,24 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           editorRef={editorRef}
         />
 
-        {/* Content area - hidden until data + editor content verified to prevent blocky loading */}
-        <View style={[styles.contentArea, { opacity: isContentReady ? 1 : 0 }]}>
-          {/* Attribute Bar - shows stream and attributes */}
-          {entry && !isFullScreen && (
-            <AttributeBar
-              entry={entry}
-              onStreamPress={handleStreamPress}
-              onTypePress={handleTypePress}
-              onStatusPress={handleStatusPress}
-              onRatingPress={handleRatingPress}
-              onPriorityPress={handlePriorityPress}
-              onLocationPress={handleLocationPress}
-              onDueDatePress={handleDueDatePress}
-              onPhotosPress={() => setIsGalleryCollapsed(false)}
-              onMorePress={handleMorePress}
-              photoCount={isGalleryCollapsed ? photoCount : undefined}
-            />
-          )}
+        {/* Attribute Bar - shown immediately when entry data is available (no editor verification needed) */}
+        {entry && !isFullScreen && (
+          <AttributeBar
+            entry={entry}
+            onStreamPress={handleStreamPress}
+            onTypePress={handleTypePress}
+            onStatusPress={handleStatusPress}
+            onRatingPress={handleRatingPress}
+            onPriorityPress={handlePriorityPress}
+            onLocationPress={handleLocationPress}
+            onDueDatePress={handleDueDatePress}
+            onPhotosPress={() => setIsGalleryCollapsed(false)}
+            onMorePress={handleMorePress}
+            photoCount={isGalleryCollapsed ? photoCount : undefined}
+          />
+        )}
 
+        <View style={styles.contentArea}>
           {/* Photo Gallery - shows between attribute bar and editor */}
           {entry && !isFullScreen && (
             <PhotoGallery

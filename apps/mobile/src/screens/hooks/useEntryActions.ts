@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Alert } from 'react-native';
 import type { Entry } from '@trace/core';
 import type { EntryWithRelations } from '../../modules/entries/EntryWithRelationsTypes';
+import { startPushAnimation, isPushAnimating } from '../../shared/hooks/useSwipeBackGesture';
 import { createScopedLogger, LogScopes } from '../../shared/utils/logger';
 
 const log = createScopedLogger(LogScopes.Entry);
@@ -29,9 +30,18 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
 
   const handleEntryPress = (entryId: string) => {
-    // Navigate to new EntryManagementScreen for viewing entry as JSON
-    // App.tsx will call entryManagementRef.setEntry(entryId)
-    navigate("entryManagement", { entryId });
+    // Guard against double-tap during animation window
+    if (isPushAnimating()) return;
+
+    // Start slide animation immediately on press (native thread, no JS overhead).
+    // Navigate fires 100ms in — the main view is already ~60% off-screen by then
+    // (due to ease curve), so any frame drop from React's layout work is less visible.
+    // This overlaps React's render pipeline with the tail of the animation,
+    // so content appears almost immediately when the animation completes.
+    startPushAnimation();
+    setTimeout(() => {
+      navigate("entryManagement", { entryId });
+    }, 100);
   };
 
   const handleMoveEntry = (entryId: string) => {

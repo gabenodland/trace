@@ -224,6 +224,17 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     a {
       color: ${theme.colors.functional.accent} !important;
     }
+    /* Thin, theme-aware scrollbar — subtle on all themes */
+    ::-webkit-scrollbar {
+      width: 3px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: ${theme.colors.border.light};
+      border-radius: 3px;
+    }
   `, [theme]);
 
   // L2's onChange is just a signal - we call getHTML to get content

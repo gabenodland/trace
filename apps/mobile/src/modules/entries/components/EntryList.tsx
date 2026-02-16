@@ -250,6 +250,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         removeClippedSubviews={false}
         onScroll={handleScroll}
         scrollEventThrottle={100}
+        indicatorStyle={theme.isDark ? 'white' : 'black'}
       />
     );
   }
@@ -278,6 +279,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         removeClippedSubviews={false}
         onScroll={handleScroll}
         scrollEventThrottle={100}
+        indicatorStyle={theme.isDark ? 'white' : 'black'}
       />
     );
   }
@@ -307,6 +309,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
       removeClippedSubviews={false}
       onScroll={handleScroll}
       scrollEventThrottle={100}
+      indicatorStyle={theme.isDark ? 'white' : 'black'}
     />
   );
 });

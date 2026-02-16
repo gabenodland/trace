@@ -26,7 +26,7 @@
  */
 
 import { useRef } from "react";
-import { Animated, PanResponder, Dimensions, GestureResponderHandlers, Keyboard, DeviceEventEmitter } from "react-native";
+import { Animated, Easing, PanResponder, Dimensions, GestureResponderHandlers, Keyboard, DeviceEventEmitter } from "react-native";
 import { createScopedLogger, LogScopes } from "../utils/logger";
 
 const log = createScopedLogger(LogScopes.Navigation);
@@ -36,6 +36,49 @@ const SWIPE_THRESHOLD = SCREEN_WIDTH / 3; // Same as drawer
 const VELOCITY_THRESHOLD = 0.5; // Same as drawer
 const GESTURE_START_THRESHOLD = 10; // When to recognize gesture
 const SWIPE_MULTIPLIER = 2; // 2x multiplier - makes swipe feel more responsive
+const PUSH_ANIMATION_DURATION = 200; // Duration of forward push animation
+// iOS UINavigationController push curve: fast start, gentle deceleration
+const PUSH_EASING = Easing.bezier(0.25, 0.1, 0.25, 1.0);
+
+// Module-level ref: allows press handlers to start push animation before navigate()
+// This gives the animation a head start before React's heavy render/layout work begins.
+let _mainViewTranslateX: Animated.Value | null = null;
+let _pushAnimationRunning = false;
+
+/** Whether a push animation is currently in flight */
+export function isPushAnimating(): boolean {
+  return _pushAnimationRunning;
+}
+
+/**
+ * Start the push animation immediately (call from press handler BEFORE navigate).
+ * The animation runs on the native thread while JS is free.
+ * @param onComplete - Called after animation finishes. Use to trigger navigate()
+ *   so React's heavy layout work never competes with the animation.
+ */
+export function startPushAnimation(onComplete?: () => void) {
+  if (_mainViewTranslateX && !_pushAnimationRunning) {
+    _pushAnimationRunning = true;
+    log.debug('[SwipeBack] startPushAnimation: starting from press handler');
+    // Safety timeout: reset flag if animation callback never fires (e.g., unmount)
+    const safetyTimer = setTimeout(() => {
+      if (_pushAnimationRunning) {
+        log.warn('[SwipeBack] Safety timeout: resetting _pushAnimationRunning');
+        _pushAnimationRunning = false;
+      }
+    }, PUSH_ANIMATION_DURATION + 500);
+    Animated.timing(_mainViewTranslateX, {
+      toValue: -SCREEN_WIDTH,
+      duration: PUSH_ANIMATION_DURATION,
+      easing: PUSH_EASING,
+      useNativeDriver: true,
+    }).start(() => {
+      clearTimeout(safetyTimer);
+      _pushAnimationRunning = false;
+      onComplete?.();
+    });
+  }
+}
 
 interface UseSwipeBackGestureOptions {
   /** Whether swipe-back is enabled (typically false when on main view) */
@@ -68,6 +111,9 @@ export function useSwipeBackGesture({
   const initialTranslateX = isEnabled ? -SCREEN_WIDTH : 0;
   const mainViewTranslateX = useRef(new Animated.Value(initialTranslateX)).current;
 
+  // Expose to module-level so startPushAnimation() can access it
+  _mainViewTranslateX = mainViewTranslateX;
+
   // Refs for pan responder (avoid stale closures)
   const isEnabledRef = useRef(isEnabled);
   isEnabledRef.current = isEnabled;
@@ -93,9 +139,19 @@ export function useSwipeBackGesture({
     });
 
     if (isEnabled) {
-      // Entering sub-screen: immediately move main view off-screen
-      log.debug('[SwipeBack] Setting translateX to -SCREEN_WIDTH (sync)');
-      mainViewTranslateX.setValue(-SCREEN_WIDTH);
+      if (_pushAnimationRunning) {
+        // Animation already started from press handler — let it continue
+        log.debug('[SwipeBack] Push animation already running from press handler, skipping');
+      } else {
+        // Fallback: start animation now (e.g., navigate called without startPushAnimation)
+        log.debug('[SwipeBack] Starting push animation (fallback)');
+        Animated.timing(mainViewTranslateX, {
+          toValue: -SCREEN_WIDTH,
+          duration: PUSH_ANIMATION_DURATION,
+          easing: PUSH_EASING,
+          useNativeDriver: true,
+        }).start();
+      }
     } else {
       // Returning to main view: set translateX to 0 so Animated.View always uses
       // the same Animated.Value source. Without this, App.tsx had to use a
