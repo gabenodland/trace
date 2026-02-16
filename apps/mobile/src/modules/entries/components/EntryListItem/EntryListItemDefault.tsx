@@ -8,7 +8,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import type { EntryDisplayMode } from "@trace/core";
 import { Icon } from "../../../../shared/components";
-import { isCompletedStatus, getFirstLineOfText, getFormattedContent, getDisplayModeLines, formatEntryDateOnly } from "@trace/core";
+import { getFirstLineOfText, getFormattedContent, getDisplayModeLines, formatEntryDateOnly } from "@trace/core";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import { DropdownMenu, type DropdownMenuItem } from "../../../../components/layout/DropdownMenu";
@@ -26,6 +26,7 @@ interface DefaultProps extends EntryListItemCommonProps {
   onMenuPress: (e: any) => void;
   onPhotoCountChange?: (count: number) => void;
   onPhotosCollapsedChange?: (collapsed: boolean) => void;
+  onOpenPhotoViewer?: () => void;
 }
 
 export function EntryListItemDefault({
@@ -58,6 +59,7 @@ export function EntryListItemDefault({
   onMenuPress,
   onPhotoCountChange,
   onPhotosCollapsedChange,
+  onOpenPhotoViewer,
 }: DefaultProps) {
   const theme = useTheme();
 
@@ -85,7 +87,6 @@ export function EntryListItemDefault({
               ? theme.typography.fontFamily.semibold
               : (entry.title ? theme.typography.fontFamily.bold : theme.typography.fontFamily.semibold)
           },
-          isCompletedStatus(entry.status) && styles.strikethrough,
           styles.firstLineText
         ]} numberOfLines={displayMode === 'title' || !entry.title ? 1 : undefined}>
           {entry.title || getFirstLineOfText(entry.content || '')}
@@ -170,22 +171,29 @@ export function EntryListItemDefault({
                 onPhotoCountChange={onPhotoCountChange}
               />
             )}
+            {displayMode === 'short' && onPhotoCountChange && (
+              <PhotoGallery
+                entryId={entry.entry_id}
+                attachments={entry.attachments}
+                collapsible={false}
+                isCollapsed={false}
+                onPhotoCountChange={onPhotoCountChange}
+                photoSize={70}
+              />
+            )}
             {displayMode === 'flow' ? (
               <WebViewHtmlRenderer
                 html={entry.content || ''}
                 style={[
                   styles.preview,
                   { color: theme.colors.text.secondary },
-                  isCompletedStatus(entry.status) && styles.strikethrough
                 ]}
-                strikethrough={isCompletedStatus(entry.status)}
               />
             ) : (
               formattedContent && (
                 <Text style={[
                   styles.preview,
                   { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular },
-                  isCompletedStatus(entry.status) && styles.strikethrough
                 ]} numberOfLines={maxLines}>
                   {formattedContent}
                 </Text>
@@ -237,22 +245,31 @@ export function EntryListItemDefault({
                 style={[
                   styles.content,
                   { color: theme.colors.text.primary },
-                  isCompletedStatus(entry.status) && styles.strikethrough
                 ]}
-                strikethrough={isCompletedStatus(entry.status)}
               />
             </>
           ) : (
             /* Show remaining lines after first line was shown above */
-            formattedContent && formattedContent.includes('\n') && (
-              <Text style={[
-                styles.content,
-                { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular },
-                isCompletedStatus(entry.status) && styles.strikethrough
-              ]} numberOfLines={maxLines ? maxLines - 1 : undefined}>
-                {formattedContent.substring(formattedContent.indexOf('\n') + 1)}
-              </Text>
-            )
+            <>
+              {displayMode === 'short' && onPhotoCountChange && (
+                <PhotoGallery
+                  entryId={entry.entry_id}
+                  attachments={entry.attachments}
+                  collapsible={false}
+                  isCollapsed={false}
+                  onPhotoCountChange={onPhotoCountChange}
+                  photoSize={70}
+                />
+              )}
+              {formattedContent && formattedContent.includes('\n') && (
+                <Text style={[
+                  styles.content,
+                  { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular },
+                ]} numberOfLines={maxLines ? maxLines - 1 : undefined}>
+                  {formattedContent.substring(formattedContent.indexOf('\n') + 1)}
+                </Text>
+              )}
+            </>
           )
         )
       )}
@@ -273,7 +290,7 @@ export function EntryListItemDefault({
             displayMode={displayMode}
             photoCount={photoCount}
             photosCollapsed={photosCollapsed}
-            onPhotoPress={onPhotosCollapsedChange ? () => onPhotosCollapsedChange(false) : undefined}
+            onPhotoPress={onOpenPhotoViewer}
             onStreamPress={onStreamPress}
             onTagPress={onTagPress}
             onMentionPress={onMentionPress}
@@ -361,10 +378,6 @@ const styles = StyleSheet.create({
     marginTop: themeBase.spacing.sm,
     marginBottom: themeBase.spacing.md,
     flexWrap: "wrap",
-  },
-  strikethrough: {
-    textDecorationLine: "line-through",
-    opacity: 0.5,
   },
   preview: {
     fontSize: themeBase.typography.fontSize.sm,

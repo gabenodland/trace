@@ -157,17 +157,17 @@ export function EntryListItemMetadata({
       )}
 
       {/* Photo Count Badge - show for modes that don't display photos inline (short/smashed/title) */}
-      {(displayMode === 'short' || displayMode === 'smashed' || displayMode === 'title') && photoCount > 0 && (
+      {(displayMode === 'smashed' || displayMode === 'title') && photoCount > 0 && (
         <TouchableOpacity
-          style={[styles.photoBadge, { backgroundColor: theme.colors.background.tertiary }]}
+          style={[styles.photoBadge, { backgroundColor: theme.colors.background.tertiary, borderColor: theme.colors.border.medium }]}
           onPress={(e) => {
             e.stopPropagation();
             onPhotoPress?.();
           }}
-          activeOpacity={0.7}
+          activeOpacity={0.6}
         >
-          <Icon name="CustomCamera" size={10} color={theme.colors.text.secondary} />
-          <Text style={[styles.photoBadgeText, { color: theme.colors.text.tertiary }]}>
+          <Icon name="CustomCamera" size={12} color={theme.colors.text.secondary} />
+          <Text style={[styles.photoBadgeText, { color: theme.colors.text.secondary }]}>
             {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
           </Text>
         </TouchableOpacity>
@@ -248,14 +248,15 @@ const styles = StyleSheet.create({
   photoBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    paddingHorizontal: themeBase.spacing.sm,
-    paddingVertical: themeBase.spacing.xs - 2,
+    gap: 4,
+    paddingHorizontal: themeBase.spacing.md,
+    paddingVertical: themeBase.spacing.xs,
     borderRadius: themeBase.borderRadius.full,
+    borderWidth: 1,
   },
   photoBadgeText: {
     fontSize: themeBase.typography.fontSize.xs,
-    fontWeight: themeBase.typography.fontWeight.medium,
+    fontWeight: themeBase.typography.fontWeight.semibold,
   },
   tags: {
     flexDirection: "row",
