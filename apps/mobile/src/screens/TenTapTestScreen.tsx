@@ -18,7 +18,7 @@ import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { EditorWebBridge, EditorWebBridgeRef } from "../components/editor/EditorWebBridge";
 
-const SAMPLE_CONTENT_A = `<h1 class="entry-title">Entry A - Morning Notes</h1><p>This is Entry A content.</p><ul><li><p>Item A1</p></li><li><p>Item A2</p></li></ul>`;
+const SAMPLE_CONTENT_A = `<h1 class="entry-title">Entry A - Morning Notes</h1><p>This is Entry A content with a table:</p><table><tr><th>Name</th><th>Value</th><th>Notes</th></tr><tr><td>Alpha</td><td>100</td><td>First item</td></tr><tr><td>Beta</td><td>200</td><td>Second item</td></tr></table><p>Text after the table.</p><ul><li><p>Item A1</p></li><li><p>Item A2</p></li></ul>`;
 const SAMPLE_CONTENT_B = `<h1 class="entry-title">Entry B - Evening Notes</h1><p>This is Entry B content.</p><ol><li><p>Item B1</p></li><li><p>Item B2</p></li></ol>`;
 
 // For backwards compatibility
@@ -129,6 +129,36 @@ export function TenTapTestScreen() {
     addLog("clearHistory() injected - check WebView logs");
   };
 
+  // Table handlers
+  const handleInsertTable = () => {
+    editorRef.current?.insertTable(3, 3);
+    addLog("insertTable(3, 3) called");
+  };
+  const handleAddColumn = () => {
+    editorRef.current?.addColumnAfter();
+    addLog("addColumnAfter() called");
+  };
+  const handleAddRow = () => {
+    editorRef.current?.addRowAfter();
+    addLog("addRowAfter() called");
+  };
+  const handleDeleteColumn = () => {
+    editorRef.current?.deleteColumn();
+    addLog("deleteColumn() called");
+  };
+  const handleDeleteRow = () => {
+    editorRef.current?.deleteRow();
+    addLog("deleteRow() called");
+  };
+  const handleDeleteTable = () => {
+    editorRef.current?.deleteTable();
+    addLog("deleteTable() called");
+  };
+  const handleToggleHeaderRow = () => {
+    editorRef.current?.toggleHeaderRow();
+    addLog("toggleHeaderRow() called");
+  };
+
   // Simulate loading Entry A (with history clear)
   const handleLoadEntryA = () => {
     addLog("Loading Entry A with setContentAndClearHistory...");
@@ -152,7 +182,7 @@ export function TenTapTestScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
-      <SecondaryHeader title="TenTap Single Instance Test" onBack={() => navigate("settings")} />
+      <SecondaryHeader title="Table Test" onBack={() => navigate("settings")} />
 
       <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
         {/* Controls */}
@@ -242,6 +272,57 @@ export function TenTapTestScreen() {
               onPress={handleOutdent}
             >
               <Text style={styles.buttonText}>← Outdent</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Table Controls */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary, borderWidth: 2, borderColor: '#059669' }]}>
+          <Text style={[styles.cardTitle, { color: '#059669' }]}>Table Controls</Text>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#059669' }]}
+              onPress={handleInsertTable}
+            >
+              <Text style={styles.buttonText}>Insert 3x3</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#059669' }]}
+              onPress={handleAddColumn}
+            >
+              <Text style={styles.buttonText}>+ Column</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#059669' }]}
+              onPress={handleAddRow}
+            >
+              <Text style={styles.buttonText}>+ Row</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.buttonRow, { marginTop: 8 }]}>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#dc2626' }]}
+              onPress={handleDeleteColumn}
+            >
+              <Text style={styles.buttonText}>- Column</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#dc2626' }]}
+              onPress={handleDeleteRow}
+            >
+              <Text style={styles.buttonText}>- Row</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#dc2626' }]}
+              onPress={handleDeleteTable}
+            >
+              <Text style={styles.buttonText}>Delete Table</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.colors.border.dark }]}
+              onPress={handleToggleHeaderRow}
+            >
+              <Text style={styles.buttonText}>Toggle Header</Text>
             </TouchableOpacity>
           </View>
         </View>

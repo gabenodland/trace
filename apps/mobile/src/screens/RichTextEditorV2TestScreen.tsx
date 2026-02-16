@@ -29,6 +29,7 @@ export function RichTextEditorV2TestScreen() {
   const [log, setLog] = useState<string[]>([]);
   const [changeCount, setChangeCount] = useState(0);
   const [isReady, setIsReady] = useState(false);
+  const [markdownOutput, setMarkdownOutput] = useState<string>('');
   const editorRef = useRef<RichTextEditorV2Ref>(null);
 
   const addLog = (msg: string) => {
@@ -158,9 +159,36 @@ export function RichTextEditorV2TestScreen() {
     addLog("Getting HTML...");
     try {
       const html = await editorRef.current?.getHTML();
-      addLog(`Got: ${html?.substring(0, 80)}...`);
+      addLog(`HTML: ${html?.substring(0, 80)}...`);
     } catch (e: any) {
       addLog(`ERROR: ${e.message}`);
+    }
+  };
+
+  const handleGetMarkdown = async () => {
+    addLog("Getting Markdown...");
+    try {
+      const md = await editorRef.current?.getMarkdown();
+      addLog(`MD: ${md?.substring(0, 120)}`);
+      setMarkdownOutput(md || '(empty)');
+    } catch (e: any) {
+      addLog(`MD ERROR: ${e.message}`);
+      setMarkdownOutput(`ERROR: ${e.message}`);
+    }
+  };
+
+  const handleGetBoth = async () => {
+    addLog("Getting HTML + MD...");
+    try {
+      const [html, md] = await Promise.all([
+        editorRef.current?.getHTML(),
+        editorRef.current?.getMarkdown(),
+      ]);
+      addLog(`HTML (${html?.length || 0}): ${html?.substring(0, 60)}...`);
+      addLog(`MD   (${md?.length || 0}): ${md?.substring(0, 60)}...`);
+      setMarkdownOutput(md || '(empty)');
+    } catch (e: any) {
+      addLog(`BOTH ERROR: ${e.message}`);
     }
   };
 
@@ -275,6 +303,18 @@ export function RichTextEditorV2TestScreen() {
               onPress={handleGetHTML}
             >
               <Text style={styles.buttonText}>Get HTML</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#2ecc71' }]}
+              onPress={handleGetMarkdown}
+            >
+              <Text style={styles.buttonText}>Get MD</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#9b59b6' }]}
+              onPress={handleGetBoth}
+            >
+              <Text style={styles.buttonText}>HTML+MD</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.button, { backgroundColor: theme.colors.interactive.secondary }]}
@@ -419,6 +459,18 @@ export function RichTextEditorV2TestScreen() {
             />
           </View>
         </View>
+
+        {/* Markdown Output */}
+        {markdownOutput ? (
+          <View style={[styles.card, { backgroundColor: theme.colors.background.primary, borderWidth: 2, borderColor: '#2ecc71' }]}>
+            <Text style={[styles.cardTitle, { color: '#2ecc71' }]}>Markdown Output</Text>
+            <ScrollView style={styles.logContainer} nestedScrollEnabled>
+              <Text style={[styles.logLine, { color: theme.colors.text.primary, fontSize: 12 }]} selectable>
+                {markdownOutput}
+              </Text>
+            </ScrollView>
+          </View>
+        ) : null}
 
         {/* Log */}
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary }]}>

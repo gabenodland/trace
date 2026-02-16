@@ -28,6 +28,16 @@ interface DefaultProps extends EntryListItemCommonProps {
   onPhotosCollapsedChange?: (collapsed: boolean) => void;
 }
 
+/** Check if HTML content has a table near the top (within first ~500 chars of source) */
+function hasEarlyTable(html: string | null | undefined): boolean {
+  if (!html) return false;
+  const idx = html.indexOf('<table');
+  return idx !== -1 && idx < 500;
+}
+
+// Max height for short-mode table preview (header + ~2 data rows)
+const SHORT_TABLE_MAX_HEIGHT = 180;
+
 export function EntryListItemDefault({
   entry,
   streamName,
@@ -180,6 +190,18 @@ export function EntryListItemDefault({
                 ]}
                 strikethrough={isCompletedStatus(entry.status)}
               />
+            ) : displayMode === 'short' && hasEarlyTable(entry.content) ? (
+              <View style={{ maxHeight: SHORT_TABLE_MAX_HEIGHT, overflow: 'hidden' }}>
+                <WebViewHtmlRenderer
+                  html={entry.content || ''}
+                  style={[
+                    styles.preview,
+                    { color: theme.colors.text.secondary },
+                    isCompletedStatus(entry.status) && styles.strikethrough
+                  ]}
+                  strikethrough={isCompletedStatus(entry.status)}
+                />
+              </View>
             ) : (
               formattedContent && (
                 <Text style={[
@@ -242,6 +264,19 @@ export function EntryListItemDefault({
                 strikethrough={isCompletedStatus(entry.status)}
               />
             </>
+          ) : displayMode === 'short' && hasEarlyTable(entry.content) ? (
+            /* Short mode with table — render via WebView with height cap */
+            <View style={{ maxHeight: SHORT_TABLE_MAX_HEIGHT, overflow: 'hidden' }}>
+              <WebViewHtmlRenderer
+                html={entry.content || ''}
+                style={[
+                  styles.content,
+                  { color: theme.colors.text.primary },
+                  isCompletedStatus(entry.status) && styles.strikethrough
+                ]}
+                strikethrough={isCompletedStatus(entry.status)}
+              />
+            </View>
           ) : (
             /* Show remaining lines after first line was shown above */
             formattedContent && formattedContent.includes('\n') && (

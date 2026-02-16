@@ -37,31 +37,10 @@ import { useEffect, useRef, forwardRef, useImperativeHandle, useCallback, useMem
 import { View, StyleSheet, DeviceEventEmitter } from "react-native";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { createScopedLogger } from "../../shared/utils/logger";
+import { sanitizeHtmlColors } from "../../shared/utils/htmlUtils";
 import { EditorWebBridge, EditorWebBridgeRef } from "./EditorWebBridge";
 
 const log = createScopedLogger('RichTextEditorV2', '📝');
-
-// Track when setContent is called to measure WebView round-trip
-let setContentTimestamp: number | null = null;
-
-/**
- * Remove inline color styles from HTML to ensure theme colors are used
- */
-function sanitizeHtmlColors(html: string): string {
-  return html.replace(
-    /style="([^"]*)"/gi,
-    (match, styleContent) => {
-      const cleanedStyle = styleContent
-        .replace(/\bcolor\s*:\s*[^;]+;?/gi, '')
-        .replace(/background-color\s*:\s*[^;]+;?/gi, '')
-        .replace(/background\s*:\s*[^;]+;?/gi, '')
-        .trim();
-
-      if (!cleanedStyle) return '';
-      return `style="${cleanedStyle}"`;
-    }
-  );
-}
 
 export interface RichTextEditorV2Ref {
   // Formatting
@@ -77,6 +56,8 @@ export interface RichTextEditorV2Ref {
   // Content
   setContent: (html: string) => void;
   getHTML: () => Promise<string>;
+  /** Get editor content as Markdown (via tiptap-markdown) */
+  getMarkdown: () => Promise<string>;
   // Focus
   focus: () => void;
   blur: () => void;
@@ -89,6 +70,17 @@ export interface RichTextEditorV2Ref {
   setContentAndClearHistory: (html: string) => void;
   /** Reload the WebView - use when WebView becomes unresponsive */
   reloadWebView: () => void;
+  // Table commands
+  insertTable: (rows?: number, cols?: number) => void;
+  addColumnAfter: () => void;
+  addRowAfter: () => void;
+  deleteColumn: () => void;
+  deleteRow: () => void;
+  deleteTable: () => void;
+  toggleHeaderRow: () => void;
+  goToNextCell: () => void;
+  goToPreviousCell: () => void;
+  toggleHeaderColumn: () => void;
 }
 
 interface RichTextEditorV2Props {
@@ -224,18 +216,31 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     a {
       color: ${theme.colors.functional.accent} !important;
     }
+    /* Table styles - theme-aware overrides */
+    .ProseMirror table {
+      border-collapse: collapse !important;
+    }
+    .ProseMirror th,
+    .ProseMirror td {
+      border: 1px solid ${theme.colors.border.dark} !important;
+      color: ${theme.colors.text.primary} !important;
+    }
+    .ProseMirror th {
+      background: ${theme.colors.background.tertiary} !important;
+      font-weight: 600 !important;
+      white-space: nowrap !important;
+    }
+    .ProseMirror .selectedCell {
+      background: ${theme.isDark ? 'rgba(96, 165, 250, 0.2)' : '#dbeafe'} !important;
+    }
+    .ProseMirror th.selectedCell {
+      background: ${theme.isDark ? 'rgba(96, 165, 250, 0.3)' : '#bfdbfe'} !important;
+    }
   `, [theme]);
 
   // L2's onChange is just a signal - we call getHTML to get content
   const handleL2Change = useCallback(async () => {
     if (!isMounted.current || !l2Ref.current) return;
-
-    // Measure WebView round-trip if we're tracking
-    if (setContentTimestamp !== null) {
-      const elapsed = Math.round(performance.now() - setContentTimestamp);
-      log.info('⏱️ WebView onChange fired', { elapsedFromSetContent: elapsed });
-      setContentTimestamp = null; // Only measure once per setContent
-    }
 
     // Mark as ready on first onChange
     if (!isReady.current) {
@@ -275,7 +280,6 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     // Content - with sanitization
     setContent: (html: string) => {
       const sanitized = sanitizeHtmlColors(html);
-      setContentTimestamp = performance.now();
       log.info('setContent called', { length: sanitized.length });
       lastKnownContent.current = sanitized;
       l2Ref.current?.setContent(sanitized);
@@ -287,6 +291,11 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
         lastKnownContent.current = html;
       }
       return html || '';
+    },
+    getMarkdown: async () => {
+      log.debug('getMarkdown called');
+      const md = await (l2Ref.current as any)?.getMarkdown?.();
+      return md || '';
     },
 
     // Focus
@@ -304,9 +313,10 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
       l2Ref.current?.clearHistory();
     },
     setContentAndClearHistory: (html: string) => {
-      log.debug('setContentAndClearHistory called', { length: html.length });
-      lastKnownContent.current = html;
-      l2Ref.current?.setContentAndClearHistory(html);
+      const sanitized = sanitizeHtmlColors(html);
+      log.debug('setContentAndClearHistory called', { length: sanitized.length });
+      lastKnownContent.current = sanitized;
+      l2Ref.current?.setContentAndClearHistory(sanitized);
     },
     reloadWebView: () => {
       log.info('🔄 reloadWebView called - resetting isReady and reloading');
@@ -315,6 +325,17 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
       l2Ref.current?.reloadWebView();
       log.info('🔄 reloadWebView: webview.reload() called, waiting for onReady...');
     },
+    // Table commands - delegate to L2
+    insertTable: (rows?: number, cols?: number) => l2Ref.current?.insertTable(rows, cols),
+    addColumnAfter: () => l2Ref.current?.addColumnAfter(),
+    addRowAfter: () => l2Ref.current?.addRowAfter(),
+    deleteColumn: () => l2Ref.current?.deleteColumn(),
+    deleteRow: () => l2Ref.current?.deleteRow(),
+    deleteTable: () => l2Ref.current?.deleteTable(),
+    toggleHeaderRow: () => l2Ref.current?.toggleHeaderRow(),
+    goToNextCell: () => l2Ref.current?.goToNextCell(),
+    goToPreviousCell: () => l2Ref.current?.goToPreviousCell(),
+    toggleHeaderColumn: () => l2Ref.current?.toggleHeaderColumn(),
   }), []);
 
   // Handle read-only mode - blur when becoming read-only
@@ -333,7 +354,6 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     });
     return () => subscription.remove();
   }, []);
-
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>

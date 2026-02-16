@@ -41,6 +41,10 @@ import {
 } from '@10play/tentap-editor/web';
 import Text from '@tiptap/extension-text';
 import Paragraph from '@tiptap/extension-paragraph';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
 import { Extension, Editor } from '@tiptap/core';
 import { Plugin, PluginKey, EditorState } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
@@ -94,6 +98,37 @@ const BodyPlaceholder = Extension.create({
   },
 });
 
+/**
+ * TrailingParagraph - Ensures there's always a paragraph after the last table
+ *
+ * Without this, when a table is the last node in the document, users can't
+ * place their cursor below it on mobile (no physical arrow keys / gap cursor).
+ * This plugin watches every transaction and appends an empty paragraph
+ * if the document ends with a table.
+ */
+const TrailingParagraph = Extension.create({
+  name: 'trailingParagraph',
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('trailingParagraph'),
+        appendTransaction: (_transactions, _oldState, newState) => {
+          const { doc } = newState;
+          const lastChild = doc.child(doc.childCount - 1);
+
+          if (lastChild.type.name === 'table') {
+            const paragraph = newState.schema.nodes.paragraph.create();
+            return newState.tr.insert(doc.content.size, paragraph);
+          }
+
+          return null;
+        },
+      }),
+    ];
+  },
+});
+
 declare global {
   interface Window {
     initialContent: string;
@@ -115,46 +150,25 @@ window.__editorInstance = null;
  */
 window.editorCommand = (command: string, payload?: any) => {
   const editor = window.__editorInstance;
-  console.log('[WebEditor] editorCommand called:', { command, hasPayload: !!payload, hasEditor: !!editor });
-
   if (!editor) {
-    console.error('[WebEditor] editorCommand: No editor instance available');
+    console.error('[WebEditor] editorCommand: No editor instance');
     return;
   }
 
   try {
     switch (command) {
       case 'clearHistory': {
-        console.log('[WebEditor] clearHistory: Creating fresh state with current doc');
         const { state, view } = editor;
         const { doc, schema, plugins } = state;
 
-        // Log current history state before clearing
-        const canUndoBefore = editor.can().undo();
-        const canRedoBefore = editor.can().redo();
-        console.log('[WebEditor] clearHistory: Before -', { canUndo: canUndoBefore, canRedo: canRedoBefore });
-
-        // Create fresh state with same doc but no history
-        const newState = EditorState.create({
-          doc,
-          schema,
-          plugins,
-        });
-
-        // Update the view with fresh state
+        const newState = EditorState.create({ doc, schema, plugins });
         view.updateState(newState);
 
-        // Verify history was cleared
-        const canUndoAfter = editor.can().undo();
-        const canRedoAfter = editor.can().redo();
-        console.log('[WebEditor] clearHistory: After -', { canUndo: canUndoAfter, canRedo: canRedoAfter });
-
-        // Notify React Native
         if (window.ReactNativeWebView?.postMessage) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'historyCleared',
-            canUndo: canUndoAfter,
-            canRedo: canRedoAfter,
+            canUndo: editor.can().undo(),
+            canRedo: editor.can().redo(),
           }));
         }
         break;
@@ -162,11 +176,6 @@ window.editorCommand = (command: string, payload?: any) => {
 
       case 'setContentAndClearHistory': {
         const html = payload?.html || '';
-        console.log('[WebEditor] setContentAndClearHistory: Setting content with fresh history', {
-          htmlLength: html.length,
-          preview: html.substring(0, 100)
-        });
-
         const { view, schema } = editor;
 
         // Parse HTML into ProseMirror document
@@ -174,97 +183,101 @@ window.editorCommand = (command: string, payload?: any) => {
         tempDiv.innerHTML = html;
         const doc = DOMParser.fromSchema(schema).parse(tempDiv);
 
-        console.log('[WebEditor] setContentAndClearHistory: Parsed doc', {
-          nodeCount: doc.childCount,
-          firstChild: doc.firstChild?.type.name,
-        });
-
         // Create fresh state with new doc and no history
         const newState = EditorState.create({
           doc,
           schema,
           plugins: editor.state.plugins,
         });
-
-        // Update the view
         view.updateState(newState);
 
-        // Verify
-        const canUndo = editor.can().undo();
-        const canRedo = editor.can().redo();
-        console.log('[WebEditor] setContentAndClearHistory: Complete -', { canUndo, canRedo });
-
-        // Notify React Native
         if (window.ReactNativeWebView?.postMessage) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'contentSetWithClearedHistory',
-            canUndo,
-            canRedo,
+            canUndo: editor.can().undo(),
+            canRedo: editor.can().redo(),
             docLength: doc.content.size,
           }));
         }
         break;
       }
 
+      // Table commands
+      case 'insertTable': {
+        // Don't allow nested tables
+        const { $from } = editor.state.selection;
+        for (let d = $from.depth; d > 0; d--) {
+          if ($from.node(d).type.name === 'table') return;
+        }
+
+        const rows = payload?.rows || 3;
+        const cols = payload?.cols || 3;
+        // TrailingParagraph plugin handles adding paragraph after table automatically
+        editor.chain().focus()
+          .insertTable({ rows, cols, withHeaderRow: true })
+          .run();
+        break;
+      }
+      case 'addColumnAfter': {
+        editor.chain().focus().addColumnAfter().run();
+        break;
+      }
+      case 'addRowAfter': {
+        editor.chain().focus().addRowAfter().run();
+        break;
+      }
+      case 'deleteColumn': {
+        editor.chain().focus().deleteColumn().run();
+        break;
+      }
+      case 'deleteRow': {
+        editor.chain().focus().deleteRow().run();
+        break;
+      }
+      case 'deleteTable': {
+        editor.chain().focus().deleteTable().run();
+        break;
+      }
+      case 'toggleHeaderRow': {
+        editor.chain().focus().toggleHeaderRow().run();
+        break;
+      }
+      case 'goToNextCell': {
+        // If in the last cell, add a new row then move into it
+        // Must be separate commands (not chained) so state updates between them
+        const moved = editor.commands.goToNextCell();
+        if (!moved) {
+          editor.commands.addRowAfter();
+          editor.commands.goToNextCell();
+        }
+        break;
+      }
+      case 'goToPreviousCell': {
+        editor.commands.goToPreviousCell();
+        break;
+      }
+      case 'toggleHeaderColumn': {
+        editor.commands.toggleHeaderColumn();
+        break;
+      }
+
       default:
-        console.warn('[WebEditor] editorCommand: Unknown command:', command);
+        console.warn('[WebEditor] Unknown command:', command);
     }
   } catch (err: any) {
-    console.error('[WebEditor] editorCommand error:', {
-      command,
-      error: err?.message || String(err),
-      stack: err?.stack,
-    });
+    console.error('[WebEditor] editorCommand error:', command, err?.message || String(err));
   }
 };
 
-// Web-side debug logging - shows in Metro console
-console.log('[WebEditor] Bundle loaded');
-console.log('[WebEditor] DOM state:', document.readyState);
-
-// Check DOM state
-const checkDOM = () => {
-  const root = document.getElementById('root');
-  const proseMirror = document.querySelector('.ProseMirror');
-  const tiptap = document.querySelector('.tiptap');
-
-  console.log('[WebEditor] DOM check:', {
-    hasRoot: !!root,
-    rootChildren: root?.children?.length || 0,
-    hasProseMirror: !!proseMirror,
-    hasTiptap: !!tiptap,
-  });
-
-  return { root, proseMirror, tiptap };
-};
-
-// Watch for DOM changes and signal when ready
-const watchDOM = () => {
-  const observer = new MutationObserver((mutations) => {
-    const { proseMirror } = checkDOM();
-    if (proseMirror) {
-      console.log('[WebEditor] ProseMirror appeared in DOM!');
+// Watch for ProseMirror to appear in DOM, then signal bridge ready to React Native
+const watchForReady = () => {
+  const observer = new MutationObserver(() => {
+    if (document.querySelector('.ProseMirror')) {
       observer.disconnect();
-
-      // Signal to RN that the bridge is ready - delay slightly to ensure bridge is connected
+      // Delay slightly to ensure TenTap bridge is connected
       setTimeout(() => {
-        try {
-          console.log('[WebEditor] setTimeout fired, checking ReactNativeWebView...');
-          console.log('[WebEditor] window.ReactNativeWebView:', typeof window.ReactNativeWebView);
-
-          if (window.ReactNativeWebView?.postMessage) {
-            console.log('[WebEditor] postMessage exists, sending bridgeReady...');
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'bridgeReady' }));
-            console.log('[WebEditor] Sent bridgeReady signal');
-          } else {
-            console.warn('[WebEditor] ReactNativeWebView not available:', {
-              hasWindow: typeof window !== 'undefined',
-              hasRNWebView: !!window.ReactNativeWebView,
-              postMessageType: window.ReactNativeWebView ? typeof window.ReactNativeWebView.postMessage : 'N/A',
-            });
-          }
-        } catch (err: any) {
-          console.error('[WebEditor] Error in bridgeReady:', err?.message || String(err));
+        if (window.ReactNativeWebView?.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'bridgeReady' }));
         }
       }, 50);
     }
@@ -273,13 +286,10 @@ const watchDOM = () => {
   const root = document.getElementById('root');
   if (root) {
     observer.observe(root, { childList: true, subtree: true });
-    console.log('[WebEditor] Watching for ProseMirror...');
   }
 };
 
-// Initial check
-checkDOM();
-watchDOM();
+watchForReady();
 
 // Minimal bridge kit - only what toolbar actually uses
 // Reduces bundle size by removing unused: Code, Blockquote, Color, Highlight, Image, Strikethrough, Underline
@@ -298,8 +308,6 @@ const MinimalBridgeKit = [
 ];
 
 function TiptapEditor() {
-  console.log('[WebEditor] TiptapEditor rendering...');
-
   const editor = useTenTap({
     bridges: MinimalBridgeKit,
     tiptapOptions: {
@@ -313,6 +321,16 @@ function TiptapEditor() {
         // Custom placeholder handling - TipTap's Placeholder doesn't work with our custom schema
         // Title.ts handles title placeholder, BodyPlaceholder handles first paragraph
         BodyPlaceholder,
+        // Table editing - no TenTap bridge exists, so we add these directly
+        Table.configure({
+          resizable: false, // Disable column resizing on mobile for now
+          HTMLAttributes: { class: 'trace-table' },
+        }),
+        TableRow,
+        TableCell,
+        TableHeader,
+        // Ensures users can always type below a table
+        TrailingParagraph,
       ],
     },
   });
@@ -320,10 +338,8 @@ function TiptapEditor() {
   // Store editor reference globally for commands from React Native
   useEffect(() => {
     if (editor) {
-      console.log('[WebEditor] Storing editor instance globally');
       window.__editorInstance = editor;
 
-      // Notify that editor is ready for commands
       if (window.ReactNativeWebView?.postMessage) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'editorCommandsReady',
@@ -332,17 +348,11 @@ function TiptapEditor() {
     }
 
     return () => {
-      console.log('[WebEditor] Clearing global editor instance');
       window.__editorInstance = null;
     };
   }, [editor]);
 
-  if (!editor) {
-    console.log('[WebEditor] Editor not ready yet (null)');
-    return null;
-  }
-
-  console.log('[WebEditor] Editor ready, rendering EditorContent');
+  if (!editor) return null;
   return (
     <EditorContent
       editor={editor}
@@ -354,27 +364,9 @@ function TiptapEditor() {
 // Render immediately using Preact
 const container = document.getElementById('root');
 if (container) {
-  console.log('[WebEditor] Found root container, mounting...');
   try {
     render(<TiptapEditor />, container);
-    console.log('[WebEditor] Mount complete');
-
-    // Check DOM after mount
-    checkDOM();
-
-    // Check again after a moment to see if ProseMirror rendered
-    requestAnimationFrame(() => {
-      console.log('[WebEditor] After first frame:');
-      checkDOM();
-    });
   } catch (e: any) {
-    console.error('[WebEditor] Mount failed:',
-      e?.message || 'no message',
-      e?.stack || 'no stack',
-      'raw:', String(e),
-      'keys:', Object.keys(e || {}).join(',')
-    );
+    console.error('[WebEditor] Mount failed:', e?.message || String(e));
   }
-} else {
-  console.error('[WebEditor] No root container found!');
 }
