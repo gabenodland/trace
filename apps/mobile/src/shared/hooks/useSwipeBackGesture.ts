@@ -80,6 +80,14 @@ export function startPushAnimation(onComplete?: () => void) {
   }
 }
 
+// Global flag: set by WebView when user is touching a scrollable table
+let isTableTouched = false;
+
+/** Call from EditorWebBridge when touch starts/ends on a table in the WebView */
+export function setTableTouched(touched: boolean): void {
+  isTableTouched = touched;
+}
+
 interface UseSwipeBackGestureOptions {
   /** Whether swipe-back is enabled (typically false when on main view) */
   isEnabled: boolean;
@@ -173,6 +181,10 @@ export function useSwipeBackGesture({
         // Don't capture when disabled
         if (!isEnabledRef.current) {
           log.debug('[SwipeBack] onMoveShouldSet: BLOCKED (disabled)');
+          return false;
+        }
+        // Don't capture when user is scrolling a table in the editor
+        if (isTableTouched) {
           return false;
         }
         // Require clear horizontal swipe to the right

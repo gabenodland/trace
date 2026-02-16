@@ -19,15 +19,17 @@ export default defineConfig({
         find: '@10play/tentap-editor/web',
         replacement: path.resolve(__dirname, '../node_modules/@10play/tentap-editor/lib-web/index.mjs'),
       },
-      // Tiptap PM packages - use TenTap's bundled versions
-      { find: '@tiptap/pm/view', replacement: '@10play/tentap-editor/web' },
-      { find: '@tiptap/pm/state', replacement: '@10play/tentap-editor/web' },
+      // Tiptap PM packages - use TenTap's bundled versions (absolute paths for hoisted deps)
+      { find: '@tiptap/pm/view', replacement: path.resolve(__dirname, '../node_modules/@10play/tentap-editor/lib-web/index.mjs') },
+      { find: '@tiptap/pm/state', replacement: path.resolve(__dirname, '../node_modules/@10play/tentap-editor/lib-web/index.mjs') },
       // Core package for shared extensions
       {
         find: '@trace/core',
         replacement: path.resolve(__dirname, '../../../packages/core/src'),
       },
     ],
+    // Dedupe: ensure single instance of shared deps across hoisted packages
+    dedupe: ['@tiptap/core', '@tiptap/pm', 'prosemirror-model', 'prosemirror-state', 'prosemirror-view'],
   },
   esbuild: {
     jsxFactory: 'h',

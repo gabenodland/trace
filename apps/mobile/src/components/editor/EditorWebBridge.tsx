@@ -25,7 +25,7 @@
  * - Log prefix: [EditorWebBridge]
  */
 
-import { forwardRef, useImperativeHandle, useEffect, useMemo, useRef } from "react";
+import { forwardRef, useImperativeHandle, useEffect, useMemo, useRef, useCallback } from "react";
 import { View, StyleSheet } from "react-native";
 import {
   RichText,
@@ -33,6 +33,8 @@ import {
   TenTapStartKit,
   CoreBridge,
 } from "@10play/tentap-editor";
+import type { WebViewMessageEvent } from "react-native-webview";
+import { setTableTouched } from "../../shared/hooks/useSwipeBackGesture";
 
 // Our custom editor bundle with title-first schema
 // @ts-ignore - JS file
@@ -64,6 +66,17 @@ export interface EditorWebBridgeRef {
   setContentAndClearHistory: (html: string) => void;
   /** Reload the WebView - use when WebView becomes unresponsive */
   reloadWebView: () => void;
+  // Table commands
+  insertTable: (rows?: number, cols?: number) => void;
+  addColumnAfter: () => void;
+  addRowAfter: () => void;
+  deleteColumn: () => void;
+  deleteRow: () => void;
+  deleteTable: () => void;
+  toggleHeaderRow: () => void;
+  goToNextCell: () => void;
+  goToPreviousCell: () => void;
+  toggleHeaderColumn: () => void;
 }
 
 interface EditorWebBridgeProps {
@@ -192,11 +205,80 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
           console.warn('[EditorWebBridge] reloadWebView: webview ref not available');
         }
       },
+      // Table commands - injected via editorCommand since no TenTap bridge exists
+      insertTable: (rows = 3, cols = 3) => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) {
+          webview.injectJavaScript(`window.editorCommand('insertTable', { rows: ${rows}, cols: ${cols} });true;`);
+        }
+      },
+      addColumnAfter: () => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) webview.injectJavaScript(`window.editorCommand('addColumnAfter');true;`);
+      },
+      addRowAfter: () => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) webview.injectJavaScript(`window.editorCommand('addRowAfter');true;`);
+      },
+      deleteColumn: () => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) webview.injectJavaScript(`window.editorCommand('deleteColumn');true;`);
+      },
+      deleteRow: () => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) webview.injectJavaScript(`window.editorCommand('deleteRow');true;`);
+      },
+      deleteTable: () => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) webview.injectJavaScript(`window.editorCommand('deleteTable');true;`);
+      },
+      toggleHeaderRow: () => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) webview.injectJavaScript(`window.editorCommand('toggleHeaderRow');true;`);
+      },
+      goToNextCell: () => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) webview.injectJavaScript(`window.editorCommand('goToNextCell');true;`);
+      },
+      goToPreviousCell: () => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) webview.injectJavaScript(`window.editorCommand('goToPreviousCell');true;`);
+      },
+      toggleHeaderColumn: () => {
+        const webview = (editor as any).webviewRef?.current;
+        if (webview) webview.injectJavaScript(`window.editorCommand('toggleHeaderColumn');true;`);
+      },
     }), [editor]);
+
+    // Clean up table touch flag on unmount (prevents stuck swipe-back blocking)
+    useEffect(() => {
+      return () => setTableTouched(false);
+    }, []);
+
+    // Handle messages from WebView (table touch events for swipe-back blocking)
+    const handleMessage = useCallback((event: WebViewMessageEvent) => {
+      try {
+        const data = JSON.parse(event.nativeEvent.data);
+        if (data.type === 'tableTouchStart') {
+          setTableTouched(true);
+        } else if (data.type === 'tableTouchEnd') {
+          setTableTouched(false);
+        }
+      } catch {
+        // Not JSON or not our message — TenTap handles its own messages
+      }
+    }, []);
 
     return (
       <View style={[styles.container, backgroundColor && { backgroundColor }]}>
-        <RichText editor={editor} style={[styles.editor, backgroundColor && { backgroundColor }]} />
+        <RichText
+          editor={editor}
+          style={[styles.editor, backgroundColor && { backgroundColor }]}
+          overScrollMode="never"
+          nestedScrollEnabled={true}
+          onMessage={handleMessage}
+          exclusivelyUseCustomOnMessage={false}
+        />
       </View>
     );
   }

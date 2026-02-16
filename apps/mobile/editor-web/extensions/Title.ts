@@ -164,6 +164,22 @@ export const Title = Node.create<TitleOptions>({
     };
   },
 
+  // Markdown serialization for tiptap-markdown
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: any, node: any) {
+          state.write('# ');
+          state.renderInline(node);
+          state.closeBlock(node);
+        },
+        parse: {
+          // handled by markdown-it
+        },
+      },
+    };
+  },
+
   addCommands() {
     return {
       setTitle:

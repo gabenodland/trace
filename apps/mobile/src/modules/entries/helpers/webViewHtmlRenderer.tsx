@@ -10,35 +10,12 @@ import { extractAttachmentIds } from '@trace/core';
 import { getAttachmentUri } from '../../attachments/mobileAttachmentApi';
 import { PhotoViewer } from '../../photos/components/PhotoViewer';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
+import { sanitizeHtmlColors } from '../../../shared/utils/htmlUtils';
 
 interface WebViewHtmlRendererProps {
   html: string;
   style?: any;
   strikethrough?: boolean;
-}
-
-/**
- * Remove inline color styles from HTML to ensure theme colors are used
- * This handles pasted content that may have hardcoded colors like "color: rgb(0, 0, 0)"
- */
-function sanitizeHtmlColors(html: string): string {
-  return html.replace(
-    /style="([^"]*)"/gi,
-    (match, styleContent) => {
-      // Remove color and background-color properties from the style
-      const cleanedStyle = styleContent
-        .replace(/\bcolor\s*:\s*[^;]+;?/gi, '')
-        .replace(/background-color\s*:\s*[^;]+;?/gi, '')
-        .replace(/background\s*:\s*[^;]+;?/gi, '')
-        .trim();
-
-      // If style is now empty, remove the attribute entirely
-      if (!cleanedStyle) {
-        return '';
-      }
-      return `style="${cleanedStyle}"`;
-    }
-  );
 }
 
 /**
@@ -102,6 +79,8 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
   // Use theme colors and fonts for text to ensure readability on all theme backgrounds
   const textColor = theme.colors.text.primary;
   const accentColor = theme.colors.functional.accent;
+  const borderColor = theme.colors.border.dark;
+  const headerBg = theme.colors.background.tertiary;
   const webFontUrl = theme.typography.webFontUrl;
   const webFontFamily = theme.typography.webFontFamily;
   const css = `
@@ -234,6 +213,33 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
     a {
       color: ${accentColor} !important;
       text-decoration: underline;
+    }
+
+    /* Tables */
+    table {
+      border-collapse: collapse;
+      width: auto;
+      min-width: 100%;
+      margin: 8px 0;
+      display: block;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    th, td {
+      border: 1px solid ${borderColor};
+      padding: 6px 8px;
+      min-width: 50px;
+      text-align: left;
+      vertical-align: top;
+      color: ${textColor};
+    }
+    th {
+      background: ${headerBg};
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    th p, td p {
+      margin: 0 !important;
     }
   `;
 
