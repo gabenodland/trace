@@ -5,12 +5,12 @@
 
 import React from "react";
 import { TouchableOpacity, StyleSheet } from "react-native";
-import type { DropdownMenuItem } from "../../../../components/layout/DropdownMenu";
-import { formatEntryDateTime, formatRelativeTime, isTask, formatDueDate, isTaskOverdue } from "@trace/core";
+import { formatEntryDateTime, formatRelativeTime, isTask, formatDueDate, isTaskOverdue, getFirstLineOfText } from "@trace/core";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import { EntryListItemDefault } from "./EntryListItemDefault";
 import { PhotoViewer } from "../../../photos/components/PhotoViewer";
+import { ActionSheet, type ActionSheetItem } from "../../../../components/sheets/ActionSheet";
 import { getAttachmentUri } from "../../../attachments/mobileAttachmentApi";
 import type { EntryListItemProps } from "./types";
 
@@ -36,7 +36,6 @@ export function EntryListItem({
   attributeVisibility
 }: EntryListItemProps) {
   const theme = useTheme();
-  const [menuPosition, setMenuPosition] = React.useState<{ x: number; y: number } | undefined>(undefined);
   const [photoCount, setPhotoCount] = React.useState(entry.attachments?.length ?? 0);
   const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
   const [viewerVisible, setViewerVisible] = React.useState(false);
@@ -105,19 +104,18 @@ export function EntryListItem({
 
   const handleMenuPress = (e: any) => {
     e.stopPropagation();
-    // Capture the touch position
-    setMenuPosition({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
     onMenuToggle?.();
   };
 
-  const menuItems: DropdownMenuItem[] = [
-    // "Select on Map" only shown when callback provided (MapScreen)
+  const menuItems: ActionSheetItem[] = [
     ...(onSelectOnMap ? [{
       label: "Select on Map",
+      icon: "MapPin" as const,
       onPress: () => onSelectOnMap(entry.entry_id),
     }] : []),
     {
-      label: entry.is_pinned ? "Unpin" : "Pin",
+      label: entry.is_pinned ? "Unpin Entry" : "Pin Entry",
+      icon: "Pin" as const,
       onPress: () => {
         if (onPin) {
           onPin(entry.entry_id, entry.is_pinned);
@@ -125,7 +123,8 @@ export function EntryListItem({
       },
     },
     {
-      label: "Move",
+      label: entry.stream_id ? "Change Stream" : "Assign to Stream",
+      icon: "ArrowRightLeft" as const,
       onPress: () => {
         if (onMove) {
           onMove(entry.entry_id);
@@ -133,7 +132,8 @@ export function EntryListItem({
       },
     },
     {
-      label: "Copy",
+      label: "Duplicate Entry",
+      icon: "Copy" as const,
       onPress: () => {
         if (onCopy) {
           onCopy(entry.entry_id);
@@ -141,11 +141,13 @@ export function EntryListItem({
       },
     },
     ...(onArchive ? [{
-      label: entry.is_archived ? "Unarchive" : "Archive",
+      label: entry.is_archived ? "Unarchive Entry" : "Archive Entry",
+      icon: "Archive" as const,
       onPress: () => onArchive(entry.entry_id, entry.is_archived),
     }] : []),
     {
-      label: "Delete",
+      label: "Delete Entry",
+      icon: "Trash2" as const,
       onPress: () => {
         if (onDelete) {
           onDelete(entry.entry_id);
@@ -185,8 +187,6 @@ export function EntryListItem({
     dueDateStr,
     isATask,
     isOverdue,
-    menuPosition,
-    menuItems,
     onMenuPress: handleMenuPress,
     onCheckboxPress: handleCheckboxPress,
   };
@@ -214,6 +214,12 @@ export function EntryListItem({
           onOpenPhotoViewer={handleOpenPhotoViewer}
         />
       </TouchableOpacity>
+      <ActionSheet
+        visible={showMenu}
+        onClose={() => onMenuToggle?.()}
+        items={menuItems}
+        title={entry.title || getFirstLineOfText(entry.content || '')}
+      />
       {viewerVisible && (
         <PhotoViewer
           visible={viewerVisible}

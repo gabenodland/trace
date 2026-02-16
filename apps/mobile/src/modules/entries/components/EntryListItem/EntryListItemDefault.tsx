@@ -11,7 +11,6 @@ import { Icon } from "../../../../shared/components";
 import { getFirstLineOfText, getFormattedContent, getDisplayModeLines, formatEntryDateOnly } from "@trace/core";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
-import { DropdownMenu, type DropdownMenuItem } from "../../../../components/layout/DropdownMenu";
 import { WebViewHtmlRenderer } from "../../helpers/webViewHtmlRenderer";
 import { PhotoGallery } from "../../../photos/components/PhotoGallery";
 import { EntryListItemMetadata } from "./EntryListItemMetadata";
@@ -19,8 +18,6 @@ import type { EntryListItemCommonProps } from "./types";
 
 interface DefaultProps extends EntryListItemCommonProps {
   displayMode: EntryDisplayMode;
-  menuPosition?: { x: number; y: number };
-  menuItems: DropdownMenuItem[];
   photoCount?: number;
   photosCollapsed?: boolean;
   onMenuPress: (e: any) => void;
@@ -52,8 +49,6 @@ export function EntryListItemDefault({
   updatedDateStr,
   dueDateStr,
   isOverdue,
-  menuPosition,
-  menuItems,
   photoCount = 0,
   photosCollapsed = false,
   onMenuPress,
@@ -75,6 +70,12 @@ export function EntryListItemDefault({
         {entry.is_pinned && (
           <View style={styles.firstLinePinIcon}>
             <Icon name="Pin" size={displayMode === 'title' ? 12 : 14} color="#3b82f6" />
+          </View>
+        )}
+
+        {entry.is_archived && (
+          <View style={styles.firstLinePinIcon}>
+            <Icon name="Archive" size={displayMode === 'title' ? 12 : 14} color={theme.colors.text.tertiary} />
           </View>
         )}
 
@@ -117,14 +118,6 @@ export function EntryListItemDefault({
           <Icon name="MoreVertical" size={20} color={showMenu ? theme.colors.text.primary : theme.colors.text.tertiary} />
         </TouchableOpacity>
       </View>
-
-      {/* Dropdown menu modal */}
-      <DropdownMenu
-        visible={showMenu}
-        onClose={() => onMenuToggle?.()}
-        items={menuItems}
-        anchorPosition={menuPosition}
-      />
 
       {/* Rest of content - full width (hidden for title-only mode) */}
       {displayMode !== 'title' && (
