@@ -17,6 +17,7 @@
     "type-check:mobile": "cd apps/mobile && npm run type-check",
     "type-check:web": "cd apps/web && npm run type-check",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "postinstall": "npx patch-package",
     "test": "cd packages/core && npm test",
     "test:run": "cd packages/core && npm run test:run",
     "android": "expo run:android",

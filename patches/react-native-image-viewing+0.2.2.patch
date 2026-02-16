@@ -1,0 +1,41 @@
+diff --git a/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.android.js b/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.android.js
+index 5fcaa9f..ebbb689 100644
+--- a/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.android.js
++++ b/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.android.js
+@@ -58,6 +58,9 @@ const ImageItem = ({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPre
+             offsetY > SCREEN_HEIGHT / 2) {
+             onRequestClose();
+         }
++        else if (offsetY > 0 && imageContainer.current) {
++            imageContainer.current.scrollTo({ y: 0, animated: true });
++        }
+     };
+     const onScroll = ({ nativeEvent, }) => {
+         var _a, _b, _c;
+diff --git a/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.ios.js b/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.ios.js
+index 0708505..3a175a2 100644
+--- a/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.ios.js
++++ b/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.ios.js
+@@ -34,9 +34,10 @@ const ImageItem = ({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPre
+     const imagesStyles = getImageStyles(imageDimensions, translateValue, scaleValue);
+     const imageStylesWithOpacity = { ...imagesStyles, opacity: imageOpacity };
+     const onScrollEndDrag = useCallback(({ nativeEvent }) => {
+-        var _a, _b, _c, _d;
++        var _a, _b, _c, _d, _e, _f;
+         const velocityY = (_c = (_b = (_a = nativeEvent) === null || _a === void 0 ? void 0 : _a.velocity) === null || _b === void 0 ? void 0 : _b.y, (_c !== null && _c !== void 0 ? _c : 0));
+-        const scaled = ((_d = nativeEvent) === null || _d === void 0 ? void 0 : _d.zoomScale) > 1;
++        const offsetY = (_f = (_e = (_d = nativeEvent) === null || _d === void 0 ? void 0 : _d.contentOffset) === null || _e === void 0 ? void 0 : _e.y, (_f !== null && _f !== void 0 ? _f : 0));
++        const scaled = (nativeEvent === null || nativeEvent === void 0 ? void 0 : nativeEvent.zoomScale) > 1;
+         onZoom(scaled);
+         setScaled(scaled);
+         if (!scaled &&
+@@ -44,6 +45,9 @@ const ImageItem = ({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPre
+             Math.abs(velocityY) > SWIPE_CLOSE_VELOCITY) {
+             onRequestClose();
+         }
++        else if (!scaled && offsetY > 0 && scrollViewRef.current) {
++            scrollViewRef.current.scrollTo({ y: 0, animated: true });
++        }
+     }, [scaled]);
+     const onScroll = ({ nativeEvent, }) => {
+         var _a, _b, _c, _d;
