@@ -282,6 +282,9 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       ? new Date(entry.entry_date).getMilliseconds() !== 100
       : false;
 
+    // Derive location from entry fields (used by LocationPicker and AttributesPicker)
+    const entryLocation = buildLocationFromEntry(entry);
+
     // Keyboard height tracking - also detects when user taps into editor
     // Using keyboard show event instead of overlay tap because Android WebView
     // requires native touch (not programmatic focus) to show keyboard
@@ -289,7 +292,8 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     // steal focus from other screens (e.g., CreateApiKeyModal in Settings)
     const keyboardHeight = useKeyboardHeight({
       onShow: () => {
-        if (!isEditMode && isVisible) {
+        // Ignore keyboard events from picker modals (e.g. LocationPicker search field)
+        if (!isEditMode && isVisible && !activePicker) {
           log.debug('Keyboard shown, entering edit mode');
           setIsEditMode(true);
           setIsFullScreen(true);
@@ -1191,8 +1195,9 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         <LocationPicker
           visible={activePicker === 'location'}
           onClose={() => setActivePicker(null)}
-          initialLocation={buildLocationFromEntry(entry)}
+          initialLocation={entryLocation}
           onSelect={handleLocationSelect}
+          mode={entryLocation ? 'view' : 'select'}
         />
 
         {/* Type Picker */}
@@ -1219,7 +1224,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           showPriority={entry?.stream?.entry_use_priority ?? true}
           showPhotos={entry?.stream?.entry_use_photos ?? true}
           // Current values
-          locationData={buildLocationFromEntry(entry)}
+          locationData={entryLocation}
           status={(entry?.status as EntryStatus) ?? 'none'}
           type={entry?.type ?? null}
           dueDate={entry?.due_date ?? null}

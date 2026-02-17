@@ -133,7 +133,7 @@ export function useLocationPicker({
 
   // 2. UI state - View mode and input fields
   const [ui, setUI] = useState<LocationPickerUI>({
-    showingDetails: !!initialLocation,
+    showingDetails: propMode === 'view' ? false : !!initialLocation,
     searchQuery: '',
     editableNameInput: '',
     editableAddressInput: '',
@@ -330,11 +330,13 @@ export function useLocationPicker({
   // Fetch current GPS location when picker opens (using expo-location)
   useEffect(() => {
     if (visible && !initialLocation && !mapState.region) {
+      let cancelled = false;
       setIsLoadingLocation(true);
 
       const fetchCurrentLocation = async () => {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
+          if (cancelled) return;
           if (status === 'granted') {
             let location = await Location.getLastKnownPositionAsync();
             if (!location) {
@@ -342,6 +344,7 @@ export function useLocationPicker({
                 accuracy: Location.Accuracy.Low,
               });
             }
+            if (cancelled) return;
             if (location) {
               const coords = {
                 latitude: location.coords.latitude,
@@ -365,13 +368,14 @@ export function useLocationPicker({
             }
           }
         } catch (error) {
-          log.error('Error fetching location', error);
+          if (!cancelled) log.error('Error fetching location', error);
         } finally {
-          setIsLoadingLocation(false);
+          if (!cancelled) setIsLoadingLocation(false);
         }
       };
 
       fetchCurrentLocation();
+      return () => { cancelled = true; };
     }
   }, [visible, initialLocation, mapState.region]);
 
@@ -517,7 +521,7 @@ export function useLocationPicker({
         setUI(prev => ({ ...prev, isAddressEditing: false, editableAddressInput: '' }));
       }
     }
-  }, [selection.isLoadingDetails, mapboxData, mapboxLoading, selection.type, ui.editableNameInput, ui.isAddressEditing, onSelect, onClose, tappedGooglePOI, reverseGeocodeRequest]);
+  }, [selection.isLoadingDetails, mapboxData, mapboxLoading, selection.type, ui.editableNameInput, ui.isAddressEditing, tappedGooglePOI, reverseGeocodeRequest]);
 
   // Handler: Saved location selected from list - immediately adds to entry
   const handleSavedLocationSelect = useCallback((location: LocationEntity & { distance: number }) => {
