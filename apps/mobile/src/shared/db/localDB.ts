@@ -36,6 +36,16 @@ class LocalDatabase {
       // Single database stores data for ALL users, filtered by user_id
       this.db = await SQLite.openDatabaseAsync('trace.db');
 
+      // Enable WAL mode — allows concurrent reads + serialized writes instead of full lock
+      const walResult = await this.db.getFirstAsync<{ journal_mode: string }>('PRAGMA journal_mode = WAL');
+      if (walResult?.journal_mode !== 'wal') {
+        log.warn('Failed to enable WAL mode', { result: walResult });
+      }
+      // Retry writes for up to 3s instead of failing immediately on lock contention
+      await this.db.execAsync('PRAGMA busy_timeout = 3000');
+      // NORMAL sync is safe with WAL — only risks last transaction on OS crash, recoverable from server
+      await this.db.execAsync('PRAGMA synchronous = NORMAL');
+
       // Log database opened
       log.info('SQLite database opened', { dbName: 'trace.db' });
 

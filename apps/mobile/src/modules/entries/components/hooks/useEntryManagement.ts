@@ -97,7 +97,10 @@ export function useEntryManagement({
 
   // === Save State ===
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false); // Synchronous guard — React state is batched and can't prevent concurrent saves
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const entryRef = useRef(entry); // Always-current entry — avoids stale closure in timer callbacks
+  entryRef.current = entry;
 
   // === Version Tracking ===
   const knownVersionRef = useRef<number | null>(null);
@@ -140,15 +143,17 @@ export function useEntryManagement({
 
   // === Save Logic ===
   const performSave = useCallback(async (isAutosave = false): Promise<SaveResult> => {
-    if (!entry || !user?.id) {
+    const currentEntry = entryRef.current; // Read latest entry from ref, not stale closure
+    if (!currentEntry || !user?.id) {
       return { success: false, error: 'Entry or user not available' };
     }
 
-    if (isSaving) {
+    if (isSavingRef.current) {
       log.debug('Save already in progress, skipping');
       return { success: false, error: 'Save already in progress' };
     }
 
+    isSavingRef.current = true;
     setIsSaving(true);
     if (!isAutosave) {
       setIsSubmitting(true);
@@ -159,10 +164,10 @@ export function useEntryManagement({
       const editorHtml = await editorRef.current?.getHTML();
       const { title, body } = splitTitleAndBody(editorHtml || '');
       const contentToSave = body;
-      const titleToSave = title || entry.title || null;
+      const titleToSave = title || currentEntry.title || null;
 
       // Check if entry has content worth saving - silently skip empty new entries
-      const photoCount = entry.attachments?.length || 0;
+      const photoCount = currentEntry.attachments?.length || 0;
       if (isNewEntry && !hasUserContent(titleToSave || '', contentToSave, photoCount)) {
         // No dialog - just return failure, caller will handle navigation
         log.debug('Skipping save for empty new entry');
@@ -173,9 +178,9 @@ export function useEntryManagement({
       const { tags, mentions } = extractContentMetadata(contentToSave);
 
       // Build location fields
-      const locationData = buildLocationFromEntry(entry);
+      const locationData = buildLocationFromEntry(currentEntry);
       const gpsFields = buildGpsFields(locationData);
-      const geocodeStatus = entry.geocode_status ?? null;
+      const geocodeStatus = currentEntry.geocode_status ?? null;
       const locationHierarchyFields = buildLocationHierarchyFields(locationData, geocodeStatus);
 
       // Get or create location record
@@ -193,27 +198,27 @@ export function useEntryManagement({
           content: contentToSave,
           tags,
           mentions,
-          entry_date: entry.entry_date,
-          stream_id: entry.stream_id,
-          status: entry.status,
-          type: entry.type,
-          due_date: entry.due_date,
-          rating: entry.rating || 0,
-          priority: entry.priority || 0,
+          entry_date: currentEntry.entry_date,
+          stream_id: currentEntry.stream_id,
+          status: currentEntry.status,
+          type: currentEntry.type,
+          due_date: currentEntry.due_date,
+          rating: currentEntry.rating || 0,
+          priority: currentEntry.priority || 0,
           location_id,
           ...gpsFields,
           ...locationHierarchyFields,
         });
 
         // Process pending attachments - move files and create DB records
-        const pendingAttachments = entry.attachments || [];
+        const pendingAttachments = currentEntry.attachments || [];
         if (pendingAttachments.length > 0) {
           log.debug('Processing pending attachments', { count: pendingAttachments.length });
 
           const FileSystem = await import('expo-file-system/legacy');
 
           for (const attachment of pendingAttachments) {
-            const oldEntryId = entry.entry_id;
+            const oldEntryId = currentEntry.entry_id;
             const newFilePath = attachment.file_path.replace(oldEntryId, newEntry.entry_id);
             const newLocalPath = attachment.local_path?.replace(oldEntryId, newEntry.entry_id);
 
@@ -244,7 +249,7 @@ export function useEntryManagement({
 
         // Update entry state
         const updatedEntry: EntryWithRelations = {
-          ...entry,
+          ...currentEntry,
           entry_id: newEntry.entry_id,
           title: titleToSave?.trim() || null,
           content: contentToSave,
@@ -283,22 +288,22 @@ export function useEntryManagement({
 
       } else {
         // === UPDATE existing entry ===
-        log.info('Updating existing entry', { entryId: entry.entry_id });
+        log.info('Updating existing entry', { entryId: currentEntry.entry_id });
 
-        await updateEntry(entry.entry_id, {
+        await updateEntry(currentEntry.entry_id, {
           title: titleToSave?.trim() || null,
           content: contentToSave,
           tags,
           mentions,
-          stream_id: entry.stream_id,
-          entry_date: entry.entry_date,
-          status: entry.status,
-          type: entry.type,
-          due_date: entry.due_date,
-          rating: entry.rating || 0,
-          priority: entry.priority || 0,
-          is_pinned: entry.is_pinned,
-          is_archived: entry.is_archived,
+          stream_id: currentEntry.stream_id,
+          entry_date: currentEntry.entry_date,
+          status: currentEntry.status,
+          type: currentEntry.type,
+          due_date: currentEntry.due_date,
+          rating: currentEntry.rating || 0,
+          priority: currentEntry.priority || 0,
+          is_pinned: currentEntry.is_pinned,
+          is_archived: currentEntry.is_archived,
           location_id,
           ...gpsFields,
           ...locationHierarchyFields,
@@ -306,12 +311,12 @@ export function useEntryManagement({
 
         // Update local state
         const updatedEntry: EntryWithRelations = {
-          ...entry,
+          ...currentEntry,
           title: titleToSave?.trim() || null,
           content: contentToSave,
           tags,
           mentions,
-          version: (entry.version || 1) + 1,
+          version: (currentEntry.version || 1) + 1,
         };
         setEntry(updatedEntry);
         setOriginalEntry(updatedEntry);
@@ -323,13 +328,13 @@ export function useEntryManagement({
         recordSaveTime();
 
         // Patch React Query caches
-        queryClient.setQueryData(['entry', entry.entry_id], updatedEntry);
+        queryClient.setQueryData(['entry', currentEntry.entry_id], updatedEntry);
 
         queryClient.setQueriesData(
           { queryKey: ['entries'] },
           (oldData: EntryWithRelations[] | undefined) => {
             if (!oldData) return oldData;
-            const index = oldData.findIndex(e => e.entry_id === entry.entry_id);
+            const index = oldData.findIndex(e => e.entry_id === currentEntry.entry_id);
             if (index === -1) return oldData;
             const newData = [...oldData];
             // updatedEntry already has correct attachments from entry state
@@ -345,12 +350,12 @@ export function useEntryManagement({
         queryClient.invalidateQueries({ queryKey: ['streams'] });
         queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
 
-        log.info('Entry updated successfully', { entryId: entry.entry_id });
+        log.info('Entry updated successfully', { entryId: currentEntry.entry_id });
         if (!isAutosave) {
           showSnackbar('Changes saved');
         }
 
-        return { success: true, entryId: entry.entry_id };
+        return { success: true, entryId: currentEntry.entry_id };
       }
 
     } catch (error) {
@@ -364,12 +369,13 @@ export function useEntryManagement({
       return { success: false, error: message };
 
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
       if (!isAutosave) {
         setIsSubmitting(false);
       }
     }
-  }, [entry, user?.id, isNewEntry, setIsNewEntry, isSaving, editorRef, setEntry, setOriginalEntry, showSnackbar, recordSaveTime, queryClient]);
+  }, [user?.id, isNewEntry, setIsNewEntry, editorRef, setEntry, setOriginalEntry, showSnackbar, recordSaveTime, queryClient]);
 
   const handleSave = useCallback(async (): Promise<SaveResult> => {
     return performSave(false);
