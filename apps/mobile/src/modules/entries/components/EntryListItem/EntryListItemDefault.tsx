@@ -373,8 +373,8 @@ const styles = StyleSheet.create({
     lineHeight: themeBase.typography.fontSize.base * themeBase.typography.lineHeight.tight,
   },
   title: {
-    fontSize: themeBase.typography.fontSize.lg,
-    lineHeight: themeBase.typography.fontSize.lg * themeBase.typography.lineHeight.tight,
+    fontSize: 19,
+    lineHeight: 19 * themeBase.typography.lineHeight.tight,
   },
   titleOnlyText: {
     fontSize: themeBase.typography.fontSize.base,

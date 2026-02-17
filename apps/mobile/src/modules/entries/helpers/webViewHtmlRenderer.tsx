@@ -114,16 +114,28 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
       margin-bottom: 0;
     }
 
-    /* Headings */
+    /* Headings - sized below entry title (19px) so they stay subordinate */
     h1 {
-      font-size: 24px;
+      font-size: 17px;
+      font-weight: 700;
+      margin: 12px 0 4px 0;
+    }
+    h2 {
+      font-size: 16px;
       font-weight: 700;
       margin: 8px 0 4px 0;
     }
-    h2 {
-      font-size: 20px;
-      font-weight: 700;
-      margin: 6px 0 4px 0;
+    h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 4px 0 2px 0;
+      opacity: 0.85;
+    }
+    h4, h5, h6 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 4px 0 2px 0;
+      opacity: 0.85;
     }
     /* Remove top margin from first element to prevent extra space and margin collapsing */
     #content > :first-child {
