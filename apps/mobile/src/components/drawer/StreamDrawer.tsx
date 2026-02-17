@@ -25,6 +25,7 @@ import {
 import { useDrawer, type DrawerControl } from "../../shared/contexts/DrawerContext";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { StreamDrawerContent } from "./StreamDrawerContent";
+import { IOS_SPRING } from "../../shared/constants/animations";
 
 const DRAWER_WIDTH = 280;
 
@@ -55,39 +56,37 @@ export function StreamDrawer() {
     backdropOpacity.setValue((clampedPosition / DRAWER_WIDTH) * 0.5);
   }, [translateX, backdropOpacity]);
 
-  // Animate drawer to open position
-  const animateOpen = useCallback(() => {
+  // Animate drawer to open position with spring carrying gesture velocity
+  const animateOpen = useCallback((velocity?: number) => {
     setIsDragging(false);
     setIsVisible(true);
     openDrawer(); // Update state
     Animated.parallel([
-      Animated.timing(translateX, {
+      Animated.spring(translateX, {
         toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
+        velocity: velocity ?? 0,
+        ...IOS_SPRING,
       }),
-      Animated.timing(backdropOpacity, {
+      Animated.spring(backdropOpacity, {
         toValue: 0.5,
-        duration: 200,
-        useNativeDriver: true,
+        ...IOS_SPRING,
       }),
     ]).start();
   }, [translateX, backdropOpacity, openDrawer]);
 
-  // Animate drawer to closed position
-  const animateClose = useCallback(() => {
+  // Animate drawer to closed position with spring carrying gesture velocity
+  const animateClose = useCallback((velocity?: number) => {
     setIsDragging(false);
     closeDrawer(); // Update state
     Animated.parallel([
-      Animated.timing(translateX, {
+      Animated.spring(translateX, {
         toValue: -DRAWER_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
+        velocity: velocity ?? 0,
+        ...IOS_SPRING,
       }),
-      Animated.timing(backdropOpacity, {
+      Animated.spring(backdropOpacity, {
         toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
+        ...IOS_SPRING,
       }),
     ]).start(() => {
       setIsVisible(false);
@@ -130,19 +129,18 @@ export function StreamDrawer() {
       onPanResponderRelease: (_, gestureState) => {
         // Close if swiped far enough or fast enough
         if (gestureState.dx < -80 || gestureState.vx < -0.5) {
-          animateClose();
+          animateClose(gestureState.vx);
         } else {
-          // Snap back open
+          // Didn't pass close threshold — spring back open without velocity
+          // (gesture was leftward but animation goes right)
           Animated.parallel([
-            Animated.timing(translateX, {
+            Animated.spring(translateX, {
               toValue: 0,
-              duration: 150,
-              useNativeDriver: true,
+              ...IOS_SPRING,
             }),
-            Animated.timing(backdropOpacity, {
+            Animated.spring(backdropOpacity, {
               toValue: 0.5,
-              duration: 150,
-              useNativeDriver: true,
+              ...IOS_SPRING,
             }),
           ]).start();
         }
@@ -159,28 +157,24 @@ export function StreamDrawer() {
       // Only set visible if not already visible to avoid unnecessary re-renders
       setIsVisible(prev => prev === true ? prev : true);
       Animated.parallel([
-        Animated.timing(translateX, {
+        Animated.spring(translateX, {
           toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
+          ...IOS_SPRING,
         }),
-        Animated.timing(backdropOpacity, {
+        Animated.spring(backdropOpacity, {
           toValue: 0.5,
-          duration: 200,
-          useNativeDriver: true,
+          ...IOS_SPRING,
         }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(translateX, {
+        Animated.spring(translateX, {
           toValue: -DRAWER_WIDTH,
-          duration: 200,
-          useNativeDriver: true,
+          ...IOS_SPRING,
         }),
-        Animated.timing(backdropOpacity, {
+        Animated.spring(backdropOpacity, {
           toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
+          ...IOS_SPRING,
         }),
       ]).start(() => {
         // Only set invisible if not already invisible
@@ -197,7 +191,7 @@ export function StreamDrawer() {
   return (
     <View style={styles.container} pointerEvents={isActive ? "auto" : "none"}>
       {/* Backdrop */}
-      <TouchableWithoutFeedback onPress={animateClose}>
+      <TouchableWithoutFeedback onPress={() => animateClose()}>
         <Animated.View
           style={[
             styles.backdrop,

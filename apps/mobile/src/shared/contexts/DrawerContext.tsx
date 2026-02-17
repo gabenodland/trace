@@ -27,10 +27,10 @@ export type CalendarZoom = "day" | "week" | "month" | "year";
 export interface DrawerControl {
   /** Set drawer position directly (0 = closed, DRAWER_WIDTH = open) */
   setPosition: (translateX: number) => void;
-  /** Animate drawer to open position */
-  animateOpen: () => void;
-  /** Animate drawer to closed position */
-  animateClose: () => void;
+  /** Animate drawer to open position. Pass gesture velocity for spring continuity. */
+  animateOpen: (velocity?: number) => void;
+  /** Animate drawer to closed position. Pass gesture velocity for spring continuity. */
+  animateClose: (velocity?: number) => void;
   /** Get current drawer width */
   getDrawerWidth: () => number;
 }

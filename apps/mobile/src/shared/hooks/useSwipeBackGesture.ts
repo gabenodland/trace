@@ -28,14 +28,14 @@
 import { useRef } from "react";
 import { Animated, Easing, PanResponder, Dimensions, GestureResponderHandlers, Keyboard, DeviceEventEmitter } from "react-native";
 import { createScopedLogger, LogScopes } from "../utils/logger";
+import { IOS_SPRING } from "../constants/animations";
 
 const log = createScopedLogger(LogScopes.Navigation);
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const SWIPE_THRESHOLD = SCREEN_WIDTH / 3; // Same as drawer
-const VELOCITY_THRESHOLD = 0.5; // Same as drawer
+const SWIPE_THRESHOLD = SCREEN_WIDTH / 5; // ~78px — similar effective distance to old 2x multiplier with /3 threshold
+const VELOCITY_THRESHOLD = 0.5;
 const GESTURE_START_THRESHOLD = 10; // When to recognize gesture
-const SWIPE_MULTIPLIER = 2; // 2x multiplier - makes swipe feel more responsive
 const PUSH_ANIMATION_DURATION = 200; // Duration of forward push animation
 // iOS UINavigationController push curve: fast start, gentle deceleration
 const PUSH_EASING = Easing.bezier(0.25, 0.1, 0.25, 1.0);
@@ -201,9 +201,8 @@ export function useSwipeBackGesture({
         log.debug('[SwipeBack] onPanResponderGrant: gesture started');
       },
       onPanResponderMove: (_, gs) => {
-        // Match drawer pattern: Just track the finger position directly
-        // Multiplier makes it feel more responsive (less physical distance needed)
-        const newX = Math.max(-SCREEN_WIDTH, Math.min(0, -SCREEN_WIDTH + gs.dx * SWIPE_MULTIPLIER));
+        // Track finger position 1:1 — the spring on release carries velocity naturally
+        const newX = Math.max(-SCREEN_WIDTH, Math.min(0, -SCREEN_WIDTH + gs.dx));
         mainViewTranslateX.setValue(newX);
       },
       onPanResponderRelease: async (_, gs) => {
@@ -215,41 +214,41 @@ export function useSwipeBackGesture({
           log.debug('[SwipeBack] Past threshold', { canGoBack });
 
           if (canGoBack) {
-            // Complete slide-in animation then navigate
-            log.debug('[SwipeBack] Animating to 0 then navigating back');
-            Animated.timing(mainViewTranslateX, {
+            // Complete slide-in with spring carrying release velocity
+            log.debug('[SwipeBack] Springing to 0 then navigating back');
+            Animated.spring(mainViewTranslateX, {
               toValue: 0,
-              duration: 150,
-              useNativeDriver: true,
+              velocity: gs.vx,
+              ...IOS_SPRING,
             }).start(() => {
               log.debug('[SwipeBack] Animation complete, calling onBack');
               onBackRef.current();  // Use ref to get latest callback
             });
           } else {
-            // User cancelled (e.g., discard dialog) - snap back
-            log.debug('[SwipeBack] Cancelled, snapping back');
-            Animated.timing(mainViewTranslateX, {
+            // User cancelled (e.g., discard dialog) - spring back without velocity
+            // (gesture was rightward but animation goes left — don't fight the spring)
+            log.debug('[SwipeBack] Cancelled, springing back');
+            Animated.spring(mainViewTranslateX, {
               toValue: -SCREEN_WIDTH,
-              duration: 150,
-              useNativeDriver: true,
+              ...IOS_SPRING,
             }).start();
           }
         } else {
-          // Not past threshold - snap back
-          log.debug('[SwipeBack] Not past threshold, snapping back');
-          Animated.timing(mainViewTranslateX, {
+          // Not past threshold - spring back without velocity
+          // (gesture was rightward but animation goes left)
+          log.debug('[SwipeBack] Not past threshold, springing back');
+          Animated.spring(mainViewTranslateX, {
             toValue: -SCREEN_WIDTH,
-            duration: 150,
-            useNativeDriver: true,
+            ...IOS_SPRING,
           }).start();
         }
       },
-      onPanResponderTerminate: () => {
-        // Gesture interrupted - snap back to current state
-        Animated.timing(mainViewTranslateX, {
+      onPanResponderTerminate: (_, gs) => {
+        // Gesture interrupted (e.g., OS notification) - spring back carrying momentum
+        Animated.spring(mainViewTranslateX, {
           toValue: isEnabledRef.current ? -SCREEN_WIDTH : 0,
-          duration: 150,
-          useNativeDriver: true,
+          velocity: gs.vx,
+          ...IOS_SPRING,
         }).start();
       },
     })

@@ -4,17 +4,16 @@
  */
 
 import { useRef, useEffect } from 'react';
-import { PanResponder, Dimensions, Keyboard } from 'react-native';
+import { PanResponder, Keyboard } from 'react-native';
 import type { DrawerControl } from '../../shared/contexts/DrawerContext';
 
 interface UseDrawerGesturesOptions {
   drawerControl: DrawerControl | null;
 }
 
-export function useDrawerGestures({ drawerControl }: UseDrawerGesturesOptions) {
-  const screenWidth = Dimensions.get('window').width;
-  const DRAWER_SWIPE_THRESHOLD = screenWidth / 3;
+const DEFAULT_DRAWER_WIDTH = 280;
 
+export function useDrawerGestures({ drawerControl }: UseDrawerGesturesOptions) {
   // Ref to hold current drawer control - needed because PanResponder callbacks
   // capture values at creation time, so we need ref to access current value
   const drawerControlRef = useRef(drawerControl);
@@ -67,10 +66,13 @@ export function useDrawerGestures({ drawerControl }: UseDrawerGesturesOptions) {
         if (isSwipingDrawer.current) {
           const control = drawerControlRef.current;
           if (!control) return;
-          const shouldOpen = gestureState.dx > DRAWER_SWIPE_THRESHOLD || gestureState.vx > 0.5;
+          const drawerWidth = control.getDrawerWidth() ?? DEFAULT_DRAWER_WIDTH;
+          const shouldOpen = gestureState.dx > drawerWidth / 3 || gestureState.vx > 0.5;
           if (shouldOpen) {
-            control.animateOpen();
+            control.animateOpen(gestureState.vx);
           } else {
+            // Gesture was rightward but didn't pass threshold — don't carry
+            // positive velocity into a leftward close animation
             control.animateClose();
           }
         }
