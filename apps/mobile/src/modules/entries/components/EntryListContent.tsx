@@ -25,6 +25,7 @@ interface EntryListContentProps {
   onCopy?: (entryId: string) => void;
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
+  onArchive?: (entryId: string, currentArchived: boolean) => void;
 }
 
 /**
@@ -49,6 +50,7 @@ export function EntryListContent({
   onCopy,
   onDelete,
   onPin,
+  onArchive,
 }: EntryListContentProps) {
   const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
@@ -70,6 +72,7 @@ export function EntryListContent({
           onCopy={onCopy}
           onDelete={onDelete}
           onPin={onPin}
+          onArchive={onArchive}
           streamName={entry.stream_id && streamMap ? streamMap[entry.stream_id] : null}
           locationName={entry.location_id && locationMap ? locationMap[entry.location_id] : null}
           currentStreamId={currentStreamId}

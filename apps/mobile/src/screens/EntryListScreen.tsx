@@ -178,7 +178,7 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
     handlePinEntry,
     handleArchiveEntry,
     handleCopyEntry,
-  } = useEntryActions({ entryMutations, navigate, entries });
+  } = useEntryActions({ entryMutations, navigate, entries, showSnackbar });
 
   // Get current stream for filter context
   const currentStream = useMemo(() => {

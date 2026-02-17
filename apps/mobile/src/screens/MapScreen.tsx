@@ -23,9 +23,11 @@ import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { Icon } from "../shared/components/Icon";
+import { Snackbar, useSnackbar } from "../shared/components";
 import type { EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
 import type { EntryWithRelations } from "../modules/entries/EntryWithRelationsTypes";
 import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, sortEntries } from "@trace/core";
+import { useEntryActions } from "./hooks/useEntryActions";
 
 // Cluster entries that are close together
 interface EntryCluster {
@@ -102,16 +104,10 @@ interface MapScreenProps {
   isVisible?: boolean;
 }
 
-// Render counter and previous state for tracking re-renders (module-level for sync comparison)
-let mapScreenRenderCount = 0;
-let prevMapState: any = {};
-
 export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreenProps) {
-  mapScreenRenderCount++;
-  const renderNum = mapScreenRenderCount;
-  console.log(`[MapScreen] 🔄 RENDER #${renderNum}`, { isVisible, timestamp: Date.now() });
 
   // Minimal hooks that must always run (React rules)
+  const { message: snackbarMessage, opacity: snackbarOpacity, showSnackbar } = useSnackbar();
   const theme = useTheme();
   const navigate = useNavigate();
   const drawerState = useDrawer();
@@ -218,30 +214,10 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   const title = selectedStreamName;
   const { data: locationsData } = useLocations();
 
-  // NOW do sync change detection - AFTER all hooks
-  const changes: string[] = [];
-  if (prevMapState.isVisible !== isVisible) changes.push('isVisible');
-  if (prevMapState.theme !== theme) changes.push('theme');
-  if (prevMapState.drawerState !== drawerState) changes.push('drawerState');
-  if (prevMapState.viewMode !== viewMode) changes.push('viewMode');
-  if (prevMapState.selectedStreamId !== selectedStreamId) changes.push('selectedStreamId');
-  if (prevMapState.user !== user) changes.push('user');
-  if (prevMapState.profile !== profile) changes.push('profile');
-  if (prevMapState.streams !== streams) changes.push('streams');
-  if (prevMapState.allEntriesFromHook !== allEntriesFromHook) changes.push('entries');
-  if (prevMapState.locationsData !== locationsData) changes.push('locationsData');
-  if (prevMapState.isFetching !== isFetching) changes.push('isFetching');
-  if (prevMapState.isLoading !== isLoading) changes.push('isLoading');
-  console.log(`[MapScreen] #${renderNum} SYNC changes: ${changes.length > 0 ? changes.join(', ') : 'NONE DETECTED'}`);
-  prevMapState = {
-    isVisible, theme, drawerState, viewMode, selectedStreamId,
-    user, profile, streams, allEntriesFromHook, locationsData, isFetching, isLoading
-  };
-
-  // Filter entries to only those with GPS coordinates
-  const allEntries = useMemo(() => {
+  // Filter entries to only those with GPS coordinates, exclude archived
+  const entries = useMemo(() => {
     return allEntriesFromHook.filter(
-      (entry) => entry.entry_latitude && entry.entry_longitude
+      (entry) => entry.entry_latitude && entry.entry_longitude && !entry.is_archived
     );
   }, [allEntriesFromHook]);
 
@@ -262,10 +238,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   };
 
   const [region, setRegion] = useState<Region>(persistedRegion || defaultRegion);
-  const [visibleEntries, setVisibleEntries] = useState<EntryWithRelations[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<EntryWithRelations | null>(null);
-  const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
-  const [entryToMove, setEntryToMove] = useState<string | null>(null);
   const [isMapExpanded, setIsMapExpanded] = useState(true); // true = full height (300), false = half height (150)
   const mapRef = useRef<MapView>(null);
   const regionRef = useRef<Region>(persistedRegion || defaultRegion); // Track region without causing re-renders
@@ -276,8 +249,19 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   const lastEntriesKeyRef = useRef<string>(""); // Track entries by stable key to avoid unnecessary refits
   const entriesRef = useRef<EntryWithRelations[]>([]); // Ref to access current entries without dependency
 
-  // entries is now the same as allEntries (filtering already done by hook)
-  const entries = allEntries;
+  // Entry action handlers (shared with EntryListScreen and CalendarScreen)
+  const {
+    showMoveStreamPicker,
+    entryToMoveStreamId,
+    handleEntryPress,
+    handleMoveEntry,
+    handleMoveStreamSelect,
+    handleCloseMoveStreamPicker,
+    handleDeleteEntry,
+    handlePinEntry,
+    handleArchiveEntry,
+    handleCopyEntry,
+  } = useEntryActions({ entryMutations, navigate, entries, showSnackbar });
 
   // Create stream lookup map for sorting
   const streamMap = useMemo(() => {
@@ -286,6 +270,22 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
       return map;
     }, {} as Record<string, string>) || {};
   }, [streams]);
+
+  // Derive visible entries from entries + region (reactive to cache updates)
+  const visibleEntries = useMemo(() => {
+    return entries.filter(entry => {
+      const lat = entry.entry_latitude!;
+      const lng = entry.entry_longitude!;
+      const latDelta = region.latitudeDelta / 2;
+      const lngDelta = region.longitudeDelta / 2;
+      return (
+        lat >= region.latitude - latDelta &&
+        lat <= region.latitude + latDelta &&
+        lng >= region.longitude - lngDelta &&
+        lng <= region.longitude + lngDelta
+      );
+    });
+  }, [entries, region]);
 
   // Sort visible entries based on user preference
   const sortedVisibleEntries = useMemo(() => {
@@ -438,17 +438,14 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
     return clustered;
   }, [entries, region.latitudeDelta]);
 
-  // Update visible entries when region changes
+  // Update region state when map pans/zooms (visibleEntries derived via useMemo)
   const handleRegionChange = useCallback((newRegion: Region) => {
-    console.log(`[MapScreen] handleRegionChange called`, { isVisible });
     // Skip expensive work when not visible
     if (!isVisible) return;
 
-    // Use ref for comparison to avoid callback recreation
     const prevRegion = regionRef.current;
 
     // Only update region state if it changed significantly (avoid micro-updates)
-    // Use larger threshold to reduce flickering
     const latChanged = Math.abs(newRegion.latitude - prevRegion.latitude) > 0.001;
     const lngChanged = Math.abs(newRegion.longitude - prevRegion.longitude) > 0.001;
     const deltaChanged = Math.abs(newRegion.latitudeDelta - prevRegion.latitudeDelta) > 0.001;
@@ -456,34 +453,9 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
     if (latChanged || lngChanged || deltaChanged) {
       regionRef.current = newRegion;
       setRegion(newRegion);
-      // Persist to context so it survives navigation to sub-screens
       persistRegion(newRegion);
     }
-
-    // Filter entries within the visible region
-    const visible = entries.filter(entry => {
-      const lat = entry.entry_latitude!;
-      const lng = entry.entry_longitude!;
-      const latDelta = newRegion.latitudeDelta / 2;
-      const lngDelta = newRegion.longitudeDelta / 2;
-
-      return (
-        lat >= newRegion.latitude - latDelta &&
-        lat <= newRegion.latitude + latDelta &&
-        lng >= newRegion.longitude - lngDelta &&
-        lng <= newRegion.longitude + lngDelta
-      );
-    });
-
-    // Sort by date (newest first)
-    visible.sort((a, b) => {
-      const dateA = new Date(a.entry_date || a.created_at).getTime();
-      const dateB = new Date(b.entry_date || b.created_at).getTime();
-      return dateB - dateA;
-    });
-
-    setVisibleEntries(visible);
-  }, [entries, isVisible]); // Skip when not visible
+  }, [isVisible, persistRegion]);
 
   // Go to user's current location
   const goToCurrentLocation = async () => {
@@ -553,11 +525,6 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
     }
   };
 
-  // Handle entry press - navigate to edit screen (consistent with inbox/calendar)
-  const handleEntryPress = (entryId: string) => {
-    navigate("capture", { entryId });
-  };
-
   // Handle "Select on Map" - highlight entry on map and zoom (via context menu)
   const handleSelectOnMap = (entryId: string) => {
     const entry = visibleEntries.find(e => e.entry_id === entryId);
@@ -573,74 +540,6 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     }, 500);
-  };
-
-  // Handle move entry
-  const handleMoveEntry = (entryId: string) => {
-    setEntryToMove(entryId);
-    setShowMoveStreamPicker(true);
-  };
-
-  const handleMoveStreamSelect = async (streamId: string | null, streamName: string | null) => {
-    if (!entryToMove) return;
-
-    try {
-      await entryMutations.updateEntry(entryToMove, {
-        stream_id: streamId,
-      });
-
-      setShowMoveStreamPicker(false);
-      setEntryToMove(null);
-    } catch (error) {
-      log.error("Failed to move entry", error);
-      Alert.alert("Error", "Failed to move entry");
-    }
-  };
-
-  // Handle copy entry
-  const handleCopyEntry = async (entryId: string) => {
-    try {
-      const newEntryId = await entryMutations.copyEntry(entryId);
-      navigate("capture", { entryId: newEntryId });
-    } catch (error) {
-      log.error("Failed to copy entry", error);
-      Alert.alert("Error", "Failed to copy entry");
-    }
-  };
-
-  // Handle delete entry
-  const handleDeleteEntry = (entryId: string) => {
-    Alert.alert(
-      "Delete Entry",
-      "Are you sure you want to delete this entry?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await entryMutations.deleteEntry(entryId);
-            } catch (error) {
-              log.error("Failed to delete entry", error);
-              Alert.alert("Error", "Failed to delete entry");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // Handle pin entry
-  const handlePinEntry = async (entryId: string, currentPinned: boolean) => {
-    try {
-      await entryMutations.updateEntry(entryId, {
-        is_pinned: !currentPinned,
-      });
-    } catch (error) {
-      log.error("Failed to pin/unpin entry", error);
-      Alert.alert("Error", "Failed to pin/unpin entry");
-    }
   };
 
   // Handle tag press - filter by tag
@@ -671,10 +570,6 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
     }
     // "map" mode - already here, no navigation needed
   }, [setViewMode, navigate]);
-
-  // Get current stream of entry being moved
-  const entryToMoveData = entryToMove ? visibleEntries.find(e => e.entry_id === entryToMove) : null;
-  const entryToMoveStreamId = entryToMoveData?.stream_id || null;
 
   if (isLoading) {
     return (
@@ -813,6 +708,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
               onCopy={handleCopyEntry}
               onDelete={handleDeleteEntry}
               onPin={handlePinEntry}
+              onArchive={handleArchiveEntry}
               onTagPress={handleTagPress}
               onMentionPress={handleMentionPress}
               onStreamPress={handleStreamPress}
@@ -828,10 +724,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
       {/* Move Stream Picker */}
       <StreamPicker
         visible={showMoveStreamPicker}
-        onClose={() => {
-          setShowMoveStreamPicker(false);
-          setEntryToMove(null);
-        }}
+        onClose={handleCloseMoveStreamPicker}
         onSelect={handleMoveStreamSelect}
         selectedStreamId={entryToMoveStreamId}
       />
@@ -864,6 +757,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
         avatarUrl={avatarUrl}
         displayName={displayName}
       />
+      <Snackbar message={snackbarMessage} opacity={snackbarOpacity} />
     </View>
   );
 });

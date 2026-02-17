@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, memo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder, Dimensions } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, PanResponder, Dimensions, Switch } from "react-native";
 import { Icon } from "../shared/components/Icon";
 import type { EntryDisplayMode, EntrySortMode, EntrySortOrder, EntrySection } from "@trace/core";
 import {
@@ -31,6 +31,9 @@ import { EntryListHeader, StickyEntryListHeader } from "../modules/entries/compo
 import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSelector";
 import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
+import { StreamPicker } from "../modules/streams/components/StreamPicker";
+import { useEntryActions } from "./hooks/useEntryActions";
+import { Snackbar, useSnackbar } from "../shared/components";
 import { useTheme } from "../shared/contexts/ThemeContext";
 
 // Calendar date field type - which date to use for calendar display
@@ -72,7 +75,7 @@ function formatDateKey(date: Date): string {
 type ZoomLevel = "day" | "month" | "year";
 
 export const CalendarScreen = memo(function CalendarScreen() {
-  console.log('[CalendarScreen] 🔄 RENDER');
+  const { message: snackbarMessage, opacity: snackbarOpacity, showSnackbar } = useSnackbar();
   const theme = useTheme();
   const navigate = useNavigate();
   const {
@@ -229,8 +232,31 @@ export const CalendarScreen = memo(function CalendarScreen() {
   const title = selectedStreamName;
 
   // Data hooks
-  const { entries } = useEntries(entryFilter);
+  const { entries: allEntries, entryMutations } = useEntries(entryFilter);
   const { streams } = useStreams();
+
+  // Show archived toggle
+  const [showArchived, setShowArchived] = usePersistedState<boolean>('calendar-show-archived', false);
+
+  // Filter archived entries unless toggle is on
+  const entries = useMemo(() => {
+    if (showArchived) return allEntries;
+    return allEntries.filter(e => !e.is_archived);
+  }, [allEntries, showArchived]);
+
+  // Entry action handlers (shared with EntryListScreen and MapScreen)
+  const {
+    showMoveStreamPicker,
+    entryToMoveStreamId,
+    handleEntryPress,
+    handleMoveEntry,
+    handleMoveStreamSelect,
+    handleCloseMoveStreamPicker,
+    handleDeleteEntry,
+    handlePinEntry,
+    handleArchiveEntry,
+    handleCopyEntry,
+  } = useEntryActions({ entryMutations, navigate, entries, showSnackbar });
 
   // Entry counts - based on selected date field
   const entryCounts = useMemo(() => {
@@ -396,12 +422,6 @@ export const CalendarScreen = memo(function CalendarScreen() {
     }
     return undefined;
   }, [filteredEntriesForYear, sortMode, streamMap, streamById, orderMode, showPinnedFirst]);
-
-  // Navigation handlers
-  const handleEntryPress = (entryId: string) => {
-    // EntryScreen fetches entry data itself (usually from React Query cache)
-    navigate("capture", { entryId });
-  };
 
   const handleTagPress = (tag: string) => {
     // Update stream selection in DrawerContext and switch to list view
@@ -610,6 +630,11 @@ export const CalendarScreen = memo(function CalendarScreen() {
             onEntryPress={handleEntryPress}
             onTagPress={handleTagPress}
             onMentionPress={handleMentionPress}
+            onMove={handleMoveEntry}
+            onCopy={handleCopyEntry}
+            onDelete={handleDeleteEntry}
+            onPin={handlePinEntry}
+            onArchive={handleArchiveEntry}
           />
         </ScrollView>
 
@@ -719,6 +744,11 @@ export const CalendarScreen = memo(function CalendarScreen() {
                 onEntryPress={handleEntryPress}
                 onTagPress={handleTagPress}
                 onMentionPress={handleMentionPress}
+                onMove={handleMoveEntry}
+                onCopy={handleCopyEntry}
+                onDelete={handleDeleteEntry}
+                onPin={handlePinEntry}
+                onArchive={handleArchiveEntry}
               />
             </>
           )}
@@ -829,6 +859,11 @@ export const CalendarScreen = memo(function CalendarScreen() {
                 onEntryPress={handleEntryPress}
                 onTagPress={handleTagPress}
                 onMentionPress={handleMentionPress}
+                onMove={handleMoveEntry}
+                onCopy={handleCopyEntry}
+                onDelete={handleDeleteEntry}
+                onPin={handlePinEntry}
+                onArchive={handleArchiveEntry}
               />
             </>
           )}
@@ -859,7 +894,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
         showDropdownArrow
       />
 
-      {/* SubBar with date field selector */}
+      {/* SubBar with date field selector and archived toggle */}
       <View style={[styles.subBar, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
         <TouchableOpacity
           style={styles.dateFieldSelector}
@@ -870,6 +905,16 @@ export const CalendarScreen = memo(function CalendarScreen() {
           <Text style={[styles.dateFieldText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>{dateFieldLabel}</Text>
           <Icon name="ChevronDown" size={16} color={theme.colors.text.tertiary} />
         </TouchableOpacity>
+        <View style={styles.archivedToggle}>
+          <Text style={[styles.archivedToggleLabel, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>Archived</Text>
+          <Switch
+            value={showArchived}
+            onValueChange={setShowArchived}
+            trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+            thumbColor="#fff"
+            style={styles.archivedSwitch}
+          />
+        </View>
       </View>
 
       {/* Date Field Selector Modal */}
@@ -950,6 +995,14 @@ export const CalendarScreen = memo(function CalendarScreen() {
         onClose={() => setShowSortModeSelector(false)}
       />
 
+      {/* Move Stream Picker */}
+      <StreamPicker
+        visible={showMoveStreamPicker}
+        onClose={handleCloseMoveStreamPicker}
+        onSelect={handleMoveStreamSelect}
+        selectedStreamId={entryToMoveStreamId}
+      />
+
       {/* Zoom Level Tabs */}
       <View style={[styles.tabContainer, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
         <TouchableOpacity
@@ -990,6 +1043,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
         avatarUrl={avatarUrl}
         displayName={displayName}
       />
+      <Snackbar message={snackbarMessage} opacity={snackbarOpacity} />
     </View>
   );
 });
@@ -1180,6 +1234,9 @@ const styles = StyleSheet.create({
   },
   // SubBar styles
   subBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: 1,
@@ -1191,11 +1248,20 @@ const styles = StyleSheet.create({
   },
   dateFieldLabel: {
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   dateFieldText: {
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
+  },
+  archivedToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  archivedToggleLabel: {
+    fontSize: 13,
+  },
+  archivedSwitch: {
+    transform: [{ scale: 0.8 }],
   },
   // Modal styles
   modalOverlay: {

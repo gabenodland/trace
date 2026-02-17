@@ -125,32 +125,38 @@ function useUpdateEntryMutation() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Entry> }) =>
       updateEntry(id, data),
-    onSuccess: (updatedEntry) => {
+    onSuccess: (updatedEntry, { data: mutationData }) => {
       // Patch the single entry cache directly
       queryClient.setQueryData(['entry', updatedEntry.entry_id], updatedEntry);
 
-      // Patch the entry in all entries list caches (smooth update, no flash)
-      // Note: Cache now contains EntryWithRelations[], preserve attachments
-      queryClient.setQueriesData(
-        { queryKey: ['entries'] },
-        (oldData: EntryWithRelations[] | undefined) => {
-          if (!oldData) return oldData;
+      // If stream_id or is_archived changed, the entry may no longer belong in
+      // some filtered query caches. Invalidate all entries queries to refetch.
+      if ('stream_id' in mutationData || 'is_archived' in mutationData) {
+        queryClient.invalidateQueries({ queryKey: ['entries'] });
+        queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
+        queryClient.invalidateQueries({ queryKey: ['streams'] });
+      } else {
+        // For other field changes (pin, title, etc.), patch in place for smooth UI
+        queryClient.setQueriesData(
+          { queryKey: ['entries'] },
+          (oldData: EntryWithRelations[] | undefined) => {
+            if (!oldData) return oldData;
 
-          const index = oldData.findIndex(e => e.entry_id === updatedEntry.entry_id);
-          if (index === -1) return oldData;
+            const index = oldData.findIndex(e => e.entry_id === updatedEntry.entry_id);
+            if (index === -1) return oldData;
 
-          const newData = [...oldData];
-          // Preserve attachments from cached entry
-          newData[index] = {
-            ...updatedEntry,
-            attachments: oldData[index].attachments,
-          };
-          return newData;
-        }
-      );
+            const newData = [...oldData];
+            // Preserve attachments from cached entry
+            newData[index] = {
+              ...updatedEntry,
+              attachments: oldData[index].attachments,
+            };
+            return newData;
+          }
+        );
+      }
 
       // These are less critical - can still invalidate for background refresh
-      // Tags/mentions only change if content changed, streams only if stream_id changed
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
@@ -207,26 +213,11 @@ function useArchiveEntryMutation() {
       // Patch the single entry cache directly
       queryClient.setQueryData(['entry', updatedEntry.entry_id], updatedEntry);
 
-      // Patch the entry in all entries list caches (smooth update, no flash)
-      // Note: Cache now contains EntryWithRelations[], preserve attachments
-      queryClient.setQueriesData(
-        { queryKey: ['entries'] },
-        (oldData: EntryWithRelations[] | undefined) => {
-          if (!oldData) return oldData;
-
-          const index = oldData.findIndex(e => e.entry_id === updatedEntry.entry_id);
-          if (index === -1) return oldData;
-
-          const newData = [...oldData];
-          // Preserve attachments from cached entry
-          newData[index] = {
-            ...updatedEntry,
-            attachments: oldData[index].attachments,
-          };
-          return newData;
-        }
-      );
-
+      // is_archived changed — entry may no longer belong in filtered query caches.
+      // Invalidate all entries queries to refetch (matches useUpdateEntryMutation strategy).
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
+      queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
     },
   });

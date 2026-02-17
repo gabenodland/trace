@@ -1,6 +1,6 @@
 /**
  * useEntryActions - Entry action handlers (delete, pin, archive, copy, move)
- * Extracts action handlers from EntryListScreen
+ * Shared across EntryListScreen, MapScreen, and CalendarScreen
  */
 
 import { useState } from 'react';
@@ -23,9 +23,10 @@ interface UseEntryActionsOptions {
   entryMutations: EntryMutations;
   navigate: (screen: string, params?: Record<string, unknown>) => void;
   entries: EntryWithRelations[];
+  showSnackbar?: (message: string) => void;
 }
 
-export function useEntryActions({ entryMutations, navigate, entries }: UseEntryActionsOptions) {
+export function useEntryActions({ entryMutations, navigate, entries, showSnackbar }: UseEntryActionsOptions) {
   const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
 
@@ -49,7 +50,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
     setShowMoveStreamPicker(true);
   };
 
-  const handleMoveStreamSelect = async (streamId: string | null) => {
+  const handleMoveStreamSelect = async (streamId: string | null, _streamName: string | null) => {
     if (!entryToMove) return;
 
     try {
@@ -59,6 +60,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
 
       setShowMoveStreamPicker(false);
       setEntryToMove(null);
+      showSnackbar?.("Entry moved");
     } catch (error) {
       log.error("Failed to move entry", error);
       Alert.alert("Error", "Failed to move entry");
@@ -97,6 +99,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
       await entryMutations.updateEntry(entryId, {
         is_pinned: !currentPinned,
       });
+      showSnackbar?.(currentPinned ? "Entry unpinned" : "Entry pinned");
     } catch (error) {
       log.error("Failed to pin/unpin entry", error);
       Alert.alert("Error", "Failed to pin/unpin entry");
@@ -106,6 +109,7 @@ export function useEntryActions({ entryMutations, navigate, entries }: UseEntryA
   const handleArchiveEntry = async (entryId: string, currentArchived: boolean) => {
     try {
       await entryMutations.archiveEntry(entryId, !currentArchived);
+      showSnackbar?.(currentArchived ? "Entry unarchived" : "Entry archived");
     } catch (error) {
       log.error("Failed to archive/unarchive entry", error);
       Alert.alert("Error", "Failed to archive/unarchive entry");
