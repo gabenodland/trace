@@ -1,2 +1,2 @@
-export { EntryListItem } from "./EntryListItem";
+export { EntryListItem, SELECTED_COLOR } from "./EntryListItem";
 export type { EntryListItemProps } from "./types";

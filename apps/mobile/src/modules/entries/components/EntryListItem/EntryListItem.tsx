@@ -14,6 +14,8 @@ import { ActionSheet, type ActionSheetItem } from "../../../../components/sheets
 import { getAttachmentUri } from "../../../attachments/mobileAttachmentApi";
 import type { EntryListItemProps } from "./types";
 
+export const SELECTED_COLOR = '#ef4444';
+
 export function EntryListItem({
   entry,
   onPress,
@@ -27,6 +29,7 @@ export function EntryListItem({
   onPin,
   onArchive,
   onSelectOnMap,
+  selectedEntryId,
   streamName,
   locationName,
   currentStreamId,
@@ -166,6 +169,7 @@ export function EntryListItem({
     showMenu,
     onMenuToggle,
     onSelectOnMap,
+    selectedEntryId,
     onStreamPress,
     onTagPress,
     onMentionPress,
@@ -199,7 +203,8 @@ export function EntryListItem({
           { backgroundColor: theme.colors.background.primary },
           theme.shadows.xs,
           displayMode === 'title' && styles.containerTitleOnly,
-          isOverdue && { backgroundColor: theme.colors.background.secondary }
+          isOverdue && { backgroundColor: theme.colors.background.secondary },
+          selectedEntryId === entry.entry_id && styles.containerSelectedOnMap,
         ]}
         onPress={onPress}
         activeOpacity={0.7}
@@ -238,11 +243,21 @@ export function EntryListItem({
 const styles = StyleSheet.create({
   container: {
     borderRadius: themeBase.borderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
     padding: themeBase.spacing.xl,
     marginBottom: themeBase.spacing.lg,
   },
   containerTitleOnly: {
     padding: themeBase.spacing.md,
     marginBottom: themeBase.spacing.sm,
+  },
+  containerSelectedOnMap: {
+    borderColor: SELECTED_COLOR,
+    shadowColor: SELECTED_COLOR,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

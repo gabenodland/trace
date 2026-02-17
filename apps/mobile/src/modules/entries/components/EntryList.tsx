@@ -34,6 +34,7 @@ interface EntryListProps {
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
   onSelectOnMap?: (entryId: string) => void; // Select entry on map (MapScreen only)
+  selectedEntryId?: string | null; // Currently selected entry on map (for highlight)
   onArchive?: (entryId: string, currentArchived: boolean) => void; // Archive/unarchive entry
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
   streams?: Stream[]; // Optional streams for displaying stream names
@@ -47,6 +48,8 @@ interface EntryListProps {
   entryCount?: number;
   /** Total count for header display (unfiltered count) */
   totalCount?: number;
+  /** Whether a map selection is active (shows "X selected" label) */
+  selectionActive?: boolean;
 }
 
 /** Methods exposed via ref */
@@ -55,7 +58,7 @@ export interface EntryListRef {
   restoreScrollPosition: () => void;
 }
 
-export const EntryList = forwardRef<EntryListRef, EntryListProps>(function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, onArchive, ListHeaderComponent, streams, locations, currentStreamId, displayMode, fullStreams, entryCount, totalCount }, ref) {
+export const EntryList = forwardRef<EntryListRef, EntryListProps>(function EntryList({ entries, sections, isLoading, onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, selectedEntryId, onArchive, ListHeaderComponent, streams, locations, currentStreamId, displayMode, fullStreams, entryCount, totalCount, selectionActive }, ref) {
   const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList<EntryWithRelations>>(null);
@@ -98,17 +101,19 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
 
   // Build count header that scrolls with list
   const isFiltering = totalCount !== undefined && entryCount !== undefined && entryCount !== totalCount;
-  const countLabel = isFiltering
-    ? `${entryCount} of ${totalCount} entries`
-    : entryCount !== undefined
-      ? `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'}`
-      : undefined;
+  const countLabel = selectionActive && entryCount !== undefined
+    ? `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'} selected`
+    : isFiltering
+      ? `${entryCount} of ${totalCount} entries`
+      : entryCount !== undefined
+        ? `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'}`
+        : undefined;
 
   const CountHeader = countLabel ? (
     <View style={styles.countHeader}>
       <Text style={[
         styles.countHeaderText,
-        { color: isFiltering ? theme.colors.interactive.primary : theme.colors.text.secondary },
+        { color: selectionActive ? theme.colors.interactive.primary : isFiltering ? theme.colors.interactive.primary : theme.colors.text.secondary },
         { fontFamily: theme.typography.fontFamily.medium }
       ]}>
         {countLabel}
@@ -188,6 +193,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         onDelete={onDelete}
         onPin={onPin}
         onSelectOnMap={onSelectOnMap}
+        selectedEntryId={selectedEntryId}
         onArchive={onArchive}
         streamName={item.stream_id && streamMap ? streamMap[item.stream_id] : null}
         locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}

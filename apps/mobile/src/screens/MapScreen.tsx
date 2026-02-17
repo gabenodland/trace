@@ -23,6 +23,7 @@ import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { Icon } from "../shared/components/Icon";
+import { SELECTED_COLOR } from "../modules/entries/components/EntryListItem";
 import { Snackbar, useSnackbar } from "../shared/components";
 import type { EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
 import type { EntryWithRelations } from "../modules/entries/EntryWithRelationsTypes";
@@ -66,7 +67,7 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
   }, [cluster.count, isSelected]);
 
   // Color based on selection state
-  const markerColor = isSelected ? "#ef4444" : "#3b82f6";
+  const markerColor = isSelected ? SELECTED_COLOR : "#3b82f6";
 
   // Calculate marker size based on digit count to prevent clipping
   // Android clips to square bounding box, so width and height must match
@@ -81,7 +82,7 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
       }}
       onPress={onPress}
       tracksViewChanges={shouldTrack}
-      anchor={{ x: 0.5, y: 0.5 }}
+      anchor={cluster.count > 1 ? { x: 0.5, y: 0.5 } : { x: 0.5, y: 1.0 }}
     >
       {cluster.count > 1 ? (
         <View style={[
@@ -93,7 +94,7 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
         </View>
       ) : (
         <View style={styles.singleMarker}>
-          <Icon name="MapPin" size={32} color={markerColor} />
+          <Icon name="MapPinSolid" size={32} color={markerColor} />
         </View>
       )}
     </Marker>
@@ -238,7 +239,8 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   };
 
   const [region, setRegion] = useState<Region>(persistedRegion || defaultRegion);
-  const [selectedEntry, setSelectedEntry] = useState<EntryWithRelations | null>(null);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [selectedClusterEntryIds, setSelectedClusterEntryIds] = useState<string[] | null>(null);
   const [isMapExpanded, setIsMapExpanded] = useState(true); // true = full height (300), false = half height (150)
   const mapRef = useRef<MapView>(null);
   const regionRef = useRef<Region>(persistedRegion || defaultRegion); // Track region without causing re-renders
@@ -248,6 +250,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   const fitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Debounce fit operations
   const lastEntriesKeyRef = useRef<string>(""); // Track entries by stable key to avoid unnecessary refits
   const entriesRef = useRef<EntryWithRelations[]>([]); // Ref to access current entries without dependency
+  const markerPressRef = useRef(false); // Prevent MapView.onPress from clearing selection on marker tap
 
   // Entry action handlers (shared with EntryListScreen and CalendarScreen)
   const {
@@ -292,6 +295,34 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
     return sortEntries(visibleEntries, sortMode, streamMap, orderMode, showPinnedFirst);
   }, [visibleEntries, sortMode, streamMap, orderMode, showPinnedFirst]);
 
+  // Displayed entries: filter to selection if active, otherwise show all visible
+  // Derives from live `entries` array so data stays fresh after refetches
+  const selectedClusterIdSet = useMemo(
+    () => selectedClusterEntryIds ? new Set(selectedClusterEntryIds) : null,
+    [selectedClusterEntryIds]
+  );
+  const displayedEntries = useMemo(() => {
+    if (selectedClusterIdSet) {
+      const filtered = entries.filter(e => selectedClusterIdSet.has(e.entry_id));
+      return sortEntries(filtered, sortMode, streamMap, orderMode, showPinnedFirst);
+    }
+    if (selectedEntryId) {
+      const entry = entries.find(e => e.entry_id === selectedEntryId);
+      return entry ? [entry] : [];
+    }
+    return sortedVisibleEntries;
+  }, [selectedClusterIdSet, selectedEntryId, entries, sortedVisibleEntries, sortMode, streamMap, orderMode, showPinnedFirst]);
+
+  // Auto-clear selection if selected entry disappears (deleted/archived)
+  useEffect(() => {
+    if (selectedEntryId && !entries.some(e => e.entry_id === selectedEntryId)) {
+      setSelectedEntryId(null);
+    }
+    if (selectedClusterEntryIds && !selectedClusterEntryIds.some(id => entries.some(e => e.entry_id === id))) {
+      setSelectedClusterEntryIds(null);
+    }
+  }, [entries, selectedEntryId, selectedClusterEntryIds]);
+
   // Display mode and sort mode labels for SubBar
   const displayModeLabel = ENTRY_DISPLAY_MODES.find(m => m.value === displayMode)?.label || 'Smashed';
   const baseSortLabel = ENTRY_SORT_MODES.find(m => m.value === sortMode)?.label || 'Entry Date';
@@ -306,6 +337,12 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
     // Cleanup on unmount
     return () => registerStreamHandler(null);
   }, [registerStreamHandler, setSelectedStreamId, setSelectedStreamName]);
+
+  // Clear map selection when stream filter changes
+  useEffect(() => {
+    setSelectedEntryId(null);
+    setSelectedClusterEntryIds(null);
+  }, [selectedStreamId]);
 
   // Create a stable key for entries to avoid unnecessary effect re-runs
   // Only changes when the actual entry IDs change, not on every array reference change
@@ -364,14 +401,14 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   }, [selectedStreamId, entriesKey, isFetching, isMapReady, isVisible]);
 
   // Calculate map bounds to fit all entries
-  const calculateBounds = (entries: EntryWithRelations[]): Region => {
-    if (entries.length === 0) {
-      return region;
+  const calculateBounds = useCallback((boundsEntries: EntryWithRelations[]): Region => {
+    if (boundsEntries.length === 0) {
+      return regionRef.current;
     }
 
     let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
 
-    entries.forEach(entry => {
+    boundsEntries.forEach(entry => {
       const lat = entry.entry_latitude!;
       const lng = entry.entry_longitude!;
       minLat = Math.min(minLat, lat);
@@ -391,7 +428,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
       latitudeDelta: latDelta,
       longitudeDelta: lngDelta,
     };
-  };
+  }, []);
 
   // Cluster entries based on zoom level
   const clusters = useMemo(() => {
@@ -499,39 +536,39 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
 
   // Handle cluster/marker press
   const handleClusterPress = (cluster: EntryCluster) => {
+    // react-native-maps Android bug: Marker.onPress and MapView.onPress both fire
+    // for the same tap. We set a flag here that handleMapPress checks to avoid
+    // immediately clearing the selection we just set. On Android, handleMapPress
+    // runs synchronously after this and consumes the flag. On iOS, MapView.onPress
+    // doesn't fire for marker taps, so we clear the stale flag on the next frame
+    // via requestAnimationFrame (the lightest possible cleanup — not a delay hack).
+    markerPressRef.current = true;
+    requestAnimationFrame(() => { markerPressRef.current = false; });
+
     if (cluster.count === 1) {
-      // Single entry - select it to highlight marker
-      const entry = cluster.entries[0];
-      setSelectedEntry(entry);
+      // Single entry - show only this entry in the list
+      setSelectedEntryId(cluster.entries[0].entry_id);
+      setSelectedClusterEntryIds(null);
     } else {
-      // Multiple entries - zoom to fit all entries in the cluster
-      const bounds = calculateBounds(cluster.entries);
-
-      // Add padding so entries aren't at the edge
-      // Use larger deltas to ensure all entries stay visible and don't re-cluster immediately
-      const paddingFactor = 1.5;
-
-      // Ensure minimum delta so we don't zoom too far
-      const minDelta = 0.01;
-      const newLatDelta = Math.max(minDelta, bounds.latitudeDelta * paddingFactor);
-      const newLngDelta = Math.max(minDelta, bounds.longitudeDelta * paddingFactor);
-
-      mapRef.current?.animateToRegion({
-        latitude: bounds.latitude,
-        longitude: bounds.longitude,
-        latitudeDelta: newLatDelta,
-        longitudeDelta: newLngDelta,
-      }, 500);
+      // Multiple entries - show cluster entries in the list
+      setSelectedEntryId(null);
+      setSelectedClusterEntryIds(cluster.entries.map(e => e.entry_id));
     }
   };
 
   // Handle "Select on Map" - highlight entry on map and zoom (via context menu)
   const handleSelectOnMap = (entryId: string) => {
-    const entry = visibleEntries.find(e => e.entry_id === entryId);
-    if (!entry?.entry_latitude || !entry?.entry_longitude) return;
+    const entry = entries.find(e => e.entry_id === entryId);
+    if (!entry?.entry_latitude || !entry?.entry_longitude) {
+      // Entry not found or lost its location — clear any stale selection
+      setSelectedEntryId(null);
+      setSelectedClusterEntryIds(null);
+      return;
+    }
 
-    // Set as selected entry to show red marker
-    setSelectedEntry(entry);
+    // Show only this entry in the list and highlight its pin
+    setSelectedEntryId(entryId);
+    setSelectedClusterEntryIds(null);
 
     // Zoom to the entry location
     mapRef.current?.animateToRegion({
@@ -541,6 +578,20 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
       longitudeDelta: 0.01,
     }, 500);
   };
+
+  // Handle map background press - deselect all
+  // react-native-maps platform differences:
+  //   iOS: nativeEvent.action === 'marker-press' when a marker is tapped
+  //   Android: no marker-press action, both Marker.onPress and MapView.onPress fire
+  const handleMapPress = useCallback((e: any) => {
+    if (e.nativeEvent.action === 'marker-press') return;
+    if (markerPressRef.current) {
+      markerPressRef.current = false;
+      return;
+    }
+    setSelectedEntryId(null);
+    setSelectedClusterEntryIds(null);
+  }, []);
 
   // Handle tag press - filter by tag
   const handleTagPress = (tag: string) => {
@@ -623,16 +674,19 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
           showsBuildings={false}
           showsIndoors={false}
           toolbarEnabled={false}
+          onPress={handleMapPress}
         >
           {clusters.map(cluster => {
-            // Check if selected entry is in this cluster
-            const isClusterSelected = selectedEntry
-              ? cluster.entries.some(e => e.entry_id === selectedEntry.entry_id)
-              : false;
+            // Check if this cluster is selected (single entry or whole cluster)
+            const isClusterSelected = selectedEntryId
+              ? cluster.entries.some(e => e.entry_id === selectedEntryId)
+              : selectedClusterIdSet
+                ? cluster.entries.some(e => selectedClusterIdSet.has(e.entry_id))
+                : false;
 
             return (
               <ClusterMarker
-                key={cluster.id}
+                key={`${cluster.id}${isClusterSelected ? '-s' : ''}`}
                 cluster={cluster}
                 onPress={() => handleClusterPress(cluster)}
                 isSelected={isClusterSelected}
@@ -700,10 +754,11 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
         ) : (
           <View style={[styles.entryList, { backgroundColor: theme.colors.background.primary }]}>
             <EntryList
-              entries={sortedVisibleEntries}
+              entries={displayedEntries}
               isLoading={false}
               onEntryPress={handleEntryPress}
               onSelectOnMap={handleSelectOnMap}
+              selectedEntryId={selectedEntryId}
               onMove={handleMoveEntry}
               onCopy={handleCopyEntry}
               onDelete={handleDeleteEntry}
@@ -716,6 +771,9 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
               locations={locations}
               displayMode={displayMode}
               fullStreams={streams}
+              entryCount={displayedEntries.length}
+              totalCount={(selectedEntryId || selectedClusterEntryIds) ? undefined : sortedVisibleEntries.length}
+              selectionActive={!!(selectedEntryId || selectedClusterEntryIds)}
             />
           </View>
         )}
@@ -831,7 +889,7 @@ const styles = StyleSheet.create({
     // Width is set dynamically based on digit count to prevent clipping
   },
   clusterMarkerSelected: {
-    backgroundColor: "#ef4444",
+    backgroundColor: SELECTED_COLOR,
   },
   clusterText: {
     color: "#fff",

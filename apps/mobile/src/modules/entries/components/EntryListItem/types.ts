@@ -14,6 +14,7 @@ export interface EntryListItemProps {
   onPin?: (entryId: string, currentPinned: boolean) => void;
   onArchive?: (entryId: string, currentArchived: boolean) => void; // Archive/unarchive entry
   onSelectOnMap?: (entryId: string) => void; // Select entry on map (MapScreen only)
+  selectedEntryId?: string | null; // Currently selected entry on map (for highlight)
   streamName?: string | null; // Stream name to display
   locationName?: string | null; // Location name to display
   currentStreamId?: string | null; // ID of the stream being viewed (to hide redundant stream badge)
@@ -32,6 +33,7 @@ export interface EntryListItemCommonProps {
   showMenu: boolean;
   onMenuToggle?: () => void;
   onSelectOnMap?: (entryId: string) => void;
+  selectedEntryId?: string | null;
   onStreamPress?: (streamId: string | null, streamName: string) => void;
   onTagPress?: (tag: string) => void;
   onMentionPress?: (mention: string) => void;

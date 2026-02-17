@@ -12,6 +12,9 @@
 import React, { createElement } from 'react';
 import * as LucideIcons from 'lucide-react-native';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
+import { createScopedLogger } from '../utils/logger';
+
+const log = createScopedLogger('Icon', '🎨');
 
 // Custom SVG icons that we prefer over Lucide versions
 const CustomIcons = {
@@ -70,6 +73,18 @@ const CustomIcons = {
     </Svg>
   ),
 
+  // Solid filled map pin with white circle cutout (original pre-Lucide marker icon)
+  MapPinSolid: (props: any) => (
+    <Svg viewBox="0 0 24 24" {...props}>
+      <Path
+        d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+        fill={props.fill || props.color}
+        stroke="none"
+      />
+      <Circle cx="12" cy="10" r="3" fill="#ffffff" />
+    </Svg>
+  ),
+
   // Add more custom icons here as needed
 };
 
@@ -113,6 +128,6 @@ export function Icon({ name, size = 24, color, style }: IconProps) {
   }
 
   // Icon not found
-  console.warn(`Icon "${name}" not found in custom or Lucide icons`);
+  log.warn(`Icon "${name}" not found in custom or Lucide icons`);
   return null;
 }

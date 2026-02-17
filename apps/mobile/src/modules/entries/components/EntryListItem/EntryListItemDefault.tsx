@@ -15,6 +15,7 @@ import { WebViewHtmlRenderer } from "../../helpers/webViewHtmlRenderer";
 import { PhotoGallery } from "../../../photos/components/PhotoGallery";
 import { EntryListItemMetadata } from "./EntryListItemMetadata";
 import type { EntryListItemCommonProps } from "./types";
+import { SELECTED_COLOR } from "./EntryListItem";
 
 interface DefaultProps extends EntryListItemCommonProps {
   displayMode: EntryDisplayMode;
@@ -45,6 +46,7 @@ export function EntryListItemDefault({
   showMenu,
   onMenuToggle,
   onSelectOnMap,
+  selectedEntryId,
   onStreamPress,
   onTagPress,
   onMentionPress,
@@ -67,6 +69,7 @@ export function EntryListItemDefault({
   onOpenPhotoViewer,
 }: DefaultProps) {
   const theme = useTheme();
+  const isSelectedOnMap = selectedEntryId === entry.entry_id;
 
   // Format content based on display mode (title mode doesn't need content formatting)
   const formattedContent = displayMode !== 'title' ? getFormattedContent(entry.content || '', displayMode) : null;
@@ -114,7 +117,7 @@ export function EntryListItemDefault({
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Icon name="MapPin" size={18} color={theme.colors.text.tertiary} />
+            <Icon name="MapPin" size={18} color={isSelectedOnMap ? SELECTED_COLOR : theme.colors.text.tertiary} />
           </TouchableOpacity>
         )}
 
