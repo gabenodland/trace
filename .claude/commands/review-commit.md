@@ -24,8 +24,20 @@ Review all uncommitted changes, fix issues, and commit after user approval.
 |---|----------|---------|--------|
 
 For each finding, set Action to one of:
-- **Fix** — You will fix this (critical, high, and clear medium issues)
-- **Skip** — Not worth fixing (nits, intentional design, debatable)
+- **Fix** — You will fix this
+- **Skip** — Genuinely not worth fixing
+
+**Default to Fix.** The bar for Skip is HIGH. Only skip if fixing would:
+- Require a large refactor unrelated to the current change
+- Risk regressions in untouched code paths
+- Be purely cosmetic with zero quality/correctness impact
+
+In particular, ALWAYS fix (never skip):
+- Hacks, timers, delays, or workarounds — even pre-existing ones in touched files
+- Hardcoded values that should be dynamic
+- Duplicated code/config that should be shared
+- Inconsistencies in the pattern being implemented
+- Anything that could cause bugs on different devices/screen sizes
 
 Explain your reasoning for each Skip.
 
@@ -51,7 +63,14 @@ Do NOT proceed until the user confirms.
 
 ### Phase 5: Smoketest + Commit
 
-Tell the user: "Ready for your smoketest. Let me know when you're good to commit."
+Present a manual test checklist based on the changes. For each changed behavior, list a concrete action the user should perform on device, e.g.:
+
+> **Manual tests:**
+> - [ ] Swipe right on entry list → drawer should open smoothly
+> - [ ] Flick quickly vs drag slowly → both should feel natural
+> - [ ] Open drawer via hamburger button → same spring animation
+
+Then tell the user: "Ready for your smoketest. Let me know when you're good to commit."
 
 STOP and wait for the user to confirm.
 
