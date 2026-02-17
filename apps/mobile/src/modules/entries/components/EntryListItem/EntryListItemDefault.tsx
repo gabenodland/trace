@@ -199,9 +199,7 @@ export function EntryListItemDefault({
                   style={[
                     styles.preview,
                     { color: theme.colors.text.secondary },
-                    isCompletedStatus(entry.status) && styles.strikethrough
                   ]}
-                  strikethrough={isCompletedStatus(entry.status)}
                 />
               </View>
             ) : (
@@ -271,9 +269,7 @@ export function EntryListItemDefault({
                 style={[
                   styles.content,
                   { color: theme.colors.text.primary },
-                  isCompletedStatus(entry.status) && styles.strikethrough
                 ]}
-                strikethrough={isCompletedStatus(entry.status)}
               />
             </View>
           ) : (
