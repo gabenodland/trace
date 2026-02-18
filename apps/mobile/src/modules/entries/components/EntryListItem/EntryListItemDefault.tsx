@@ -102,7 +102,7 @@ export function EntryListItemDefault({
               : (entry.title ? theme.typography.fontFamily.bold : theme.typography.fontFamily.semibold)
           },
           styles.firstLineText
-        ]} numberOfLines={displayMode === 'title' || !entry.title ? 1 : undefined}>
+        ]} numberOfLines={!entry.title ? 1 : undefined}>
           {entry.title || getFirstLineOfText(entry.content || '')}
         </Text>
 
@@ -341,7 +341,7 @@ export function EntryListItemDefault({
 const styles = StyleSheet.create({
   firstLineRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: themeBase.spacing.sm,
   },
   firstLinePinIcon: {
