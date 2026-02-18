@@ -7,6 +7,7 @@ import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useNavigate } from "../shared/navigation";
 import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
+import { useMapState } from "../shared/contexts/MapStateContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
@@ -111,7 +112,6 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   const { message: snackbarMessage, opacity: snackbarOpacity, showSnackbar } = useSnackbar();
   const theme = useTheme();
   const navigate = useNavigate();
-  const drawerState = useDrawer();
   const {
     registerStreamHandler,
     selectedStreamId,
@@ -119,12 +119,14 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
     setSelectedStreamId,
     setSelectedStreamName,
     openDrawer,
-    mapRegion: persistedRegion,
-    setMapRegion: persistRegion,
     drawerControl,
     viewMode,
     setViewMode,
-  } = drawerState;
+  } = useDrawer();
+  const {
+    mapRegion: persistedRegion,
+    setMapRegion: persistRegion,
+  } = useMapState();
   const authState = useAuth();
   const { user } = authState;
   const { profile } = useMobileProfile(user?.id);

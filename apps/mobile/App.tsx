@@ -32,6 +32,8 @@ import { useNavigationState, getNavigationVersion } from "./src/shared/navigatio
 import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
 import { ThemeProvider, useTheme } from "./src/shared/contexts/ThemeContext";
 import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/DrawerContext";
+import { CalendarStateProvider } from "./src/shared/contexts/CalendarStateContext";
+import { MapStateProvider } from "./src/shared/contexts/MapStateContext";
 import { StreamDrawer } from "./src/components/drawer";
 import { useSwipeBackGesture } from "./src/shared/hooks/useSwipeBackGesture";
 import { ErrorBoundary } from "./src/shared/components/ErrorBoundary";
@@ -171,9 +173,13 @@ function AuthGate() {
   // Navigation state is managed by NavigationService singleton
   return (
     <>
-      <DrawerProvider>
-        <AppContent />
-      </DrawerProvider>
+      <CalendarStateProvider>
+        <MapStateProvider>
+          <DrawerProvider>
+            <AppContent />
+          </DrawerProvider>
+        </MapStateProvider>
+      </CalendarStateProvider>
 
       {/* Update Modal */}
       <Modal

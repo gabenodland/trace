@@ -1,9 +1,8 @@
 import { View, Text, StyleSheet } from "react-native";
 import { useState } from "react";
 import type { Stream, EntrySection, EntryDisplayMode } from "@trace/core";
-import { getStreamAttributeVisibility } from "@trace/core";
 import type { EntryWithRelations } from "../EntryWithRelationsTypes";
-import { EntryListItem } from "./EntryListItem";
+import { EntryListItemRow } from "./EntryListItemRow";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 
 interface EntryListContentProps {
@@ -26,6 +25,8 @@ interface EntryListContentProps {
   onDelete?: (entryId: string) => void;
   onPin?: (entryId: string, currentPinned: boolean) => void;
   onArchive?: (entryId: string, currentArchived: boolean) => void;
+  onSelectOnMap?: (entryId: string) => void;
+  selectedEntryId?: string | null;
 }
 
 /**
@@ -51,39 +52,37 @@ export function EntryListContent({
   onDelete,
   onPin,
   onArchive,
+  onSelectOnMap,
+  selectedEntryId,
 }: EntryListContentProps) {
   const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
-  const renderEntry = (entry: EntryWithRelations) => {
-    // Get attribute visibility for this entry's stream
-    const stream = entry.stream_id && streamById ? streamById[entry.stream_id] : null;
-    const attributeVisibility = getStreamAttributeVisibility(stream);
-
-    return (
-      <View key={entry.entry_id} style={styles.entryItemWrapper}>
-        <EntryListItem
-          entry={entry}
-          onPress={() => onEntryPress(entry.entry_id)}
-          onTagPress={onTagPress}
-          onMentionPress={onMentionPress}
-          onStreamPress={onStreamPress}
-          onMove={onMove}
-          onCopy={onCopy}
-          onDelete={onDelete}
-          onPin={onPin}
-          onArchive={onArchive}
-          streamName={entry.stream_id && streamMap ? streamMap[entry.stream_id] : null}
-          locationName={entry.location_id && locationMap ? locationMap[entry.location_id] : null}
-          currentStreamId={currentStreamId}
-          displayMode={displayMode}
-          showMenu={openMenuEntryId === entry.entry_id}
-          onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
-          attributeVisibility={attributeVisibility}
-        />
-      </View>
-    );
-  };
+  const renderEntry = (entry: EntryWithRelations) => (
+    <View key={entry.entry_id} style={styles.entryItemWrapper}>
+      <EntryListItemRow
+        entry={entry}
+        onEntryPress={onEntryPress}
+        onTagPress={onTagPress}
+        onMentionPress={onMentionPress}
+        onStreamPress={onStreamPress}
+        onMove={onMove}
+        onCopy={onCopy}
+        onDelete={onDelete}
+        onPin={onPin}
+        onArchive={onArchive}
+        onSelectOnMap={onSelectOnMap}
+        selectedEntryId={selectedEntryId}
+        streamMap={streamMap}
+        locationMap={locationMap}
+        streamById={streamById}
+        currentStreamId={currentStreamId}
+        displayMode={displayMode}
+        showMenu={openMenuEntryId === entry.entry_id}
+        onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
+      />
+    </View>
+  );
 
   // Empty state
   if (entries.length === 0) {

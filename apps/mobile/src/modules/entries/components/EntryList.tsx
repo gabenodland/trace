@@ -1,15 +1,11 @@
 import { View, Text, FlatList, SectionList, StyleSheet, ActivityIndicator } from "react-native";
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from "react";
 import type { Stream as FullStream, EntrySection, EntryDisplayMode } from "@trace/core";
-import { getStreamAttributeVisibility } from "@trace/core";
 import type { EntryWithRelations } from "../EntryWithRelationsTypes";
-import { EntryListItem } from "./EntryListItem";
+import { EntryListItemRow } from "./EntryListItemRow";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../shared/theme/themeBase";
 import { FAB_CLEARANCE } from "../../../components/layout/BottomNavBar";
-import { createScopedLogger, LogScopes } from "../../../shared/utils/logger";
-
-const log = createScopedLogger(LogScopes.EntryNav);
 
 interface Stream {
   stream_id: string;
@@ -154,57 +150,46 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
     };
   };
 
-  // Create a lookup map for streams
-  const streamMap = streams?.reduce((map, s) => {
+  // Memoize lookup maps to preserve referential identity across renders
+  const streamMap = useMemo(() => streams?.reduce((map, s) => {
     map[s.stream_id] = s.name;
     return map;
-  }, {} as Record<string, string>);
+  }, {} as Record<string, string>), [streams]);
 
-  // Create a lookup map for locations
-  const locationMap = locations?.reduce((map, loc) => {
+  const locationMap = useMemo(() => locations?.reduce((map, loc) => {
     map[loc.location_id] = loc.name;
     return map;
-  }, {} as Record<string, string>);
+  }, {} as Record<string, string>), [locations]);
 
-  // Create a lookup map for full streams (for attribute visibility)
-  const fullStreamMap = fullStreams?.reduce((map, s) => {
+  const fullStreamMap = useMemo(() => fullStreams?.reduce((map, s) => {
     map[s.stream_id] = s;
     return map;
-  }, {} as Record<string, FullStream>);
+  }, {} as Record<string, FullStream>), [fullStreams]);
 
   // Render a single entry item
-  const renderEntryItem = (item: EntryWithRelations) => {
-    // Get attribute visibility for this entry's stream
-    const stream = item.stream_id && fullStreamMap ? fullStreamMap[item.stream_id] : null;
-    const attributeVisibility = getStreamAttributeVisibility(stream);
-
-    return (
-      <EntryListItem
-        entry={item}
-        onPress={() => {
-          log.info('------- ENTRY CLICKED -------', { entryId: item.entry_id });
-          onEntryPress(item.entry_id);
-        }}
-        onTagPress={onTagPress}
-        onMentionPress={onMentionPress}
-        onStreamPress={onStreamPress}
-        onMove={onMove}
-        onCopy={onCopy}
-        onDelete={onDelete}
-        onPin={onPin}
-        onSelectOnMap={onSelectOnMap}
-        selectedEntryId={selectedEntryId}
-        onArchive={onArchive}
-        streamName={item.stream_id && streamMap ? streamMap[item.stream_id] : null}
-        locationName={item.location_id && locationMap ? locationMap[item.location_id] : null}
-        currentStreamId={currentStreamId}
-        displayMode={displayMode}
-        showMenu={openMenuEntryId === item.entry_id}
-        onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}
-        attributeVisibility={attributeVisibility}
-      />
-    );
-  };
+  const renderEntryItem = (item: EntryWithRelations) => (
+    <EntryListItemRow
+      entry={item}
+      onEntryPress={onEntryPress}
+      onTagPress={onTagPress}
+      onMentionPress={onMentionPress}
+      onStreamPress={onStreamPress}
+      onMove={onMove}
+      onCopy={onCopy}
+      onDelete={onDelete}
+      onPin={onPin}
+      onSelectOnMap={onSelectOnMap}
+      selectedEntryId={selectedEntryId}
+      onArchive={onArchive}
+      streamMap={streamMap}
+      locationMap={locationMap}
+      streamById={fullStreamMap}
+      currentStreamId={currentStreamId}
+      displayMode={displayMode}
+      showMenu={openMenuEntryId === item.entry_id}
+      onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}
+    />
+  );
 
   // Render section header (only if title is not empty)
   const renderSectionHeader = ({ section }: { section: EntrySection<EntryWithRelations> }) => {

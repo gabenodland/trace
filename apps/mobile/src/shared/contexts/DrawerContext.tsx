@@ -1,17 +1,16 @@
 /**
  * DrawerContext
  *
- * Manages drawer state, stream selection, view mode, and main view state.
+ * Manages drawer state, stream selection, view mode, and gesture control.
  * Provides unified navigation for the left drawer.
  *
- * Main view state (map region, calendar date) is preserved here so
- * navigating to sub-screens (entry, settings) and back preserves position.
+ * Map and calendar state are in their own contexts (MapStateContext,
+ * CalendarStateContext) to avoid cross-screen re-renders.
  *
  * Supports gesture-driven drawer control via DrawerControl interface.
  */
 
 import { createContext, useContext, useState, useCallback, useRef, useMemo, type ReactNode } from "react";
-import type { Region } from "react-native-maps";
 
 /** View modes for the primary screen */
 export type ViewMode = "list" | "map" | "calendar";
@@ -19,9 +18,6 @@ export type ViewMode = "list" | "map" | "calendar";
 type StreamSelectHandler = ((streamId: string | null, streamName: string) => void) | null;
 type StreamLongPressHandler = ((streamId: string) => void) | null;
 type ViewModeChangeHandler = ((mode: ViewMode) => void) | null;
-
-/** Calendar zoom levels */
-export type CalendarZoom = "day" | "week" | "month" | "year";
 
 /** Interface for gesture-driven drawer control */
 export interface DrawerControl {
@@ -73,20 +69,6 @@ interface DrawerContextValue {
   /** Register a view mode change handler */
   registerViewModeHandler: (handler: ViewModeChangeHandler) => void;
 
-  /** Persisted map region (survives navigation to sub-screens) */
-  mapRegion: Region | null;
-  /** Update map region */
-  setMapRegion: (region: Region) => void;
-
-  /** Persisted calendar date (survives navigation to sub-screens) */
-  calendarDate: string;
-  /** Update calendar date */
-  setCalendarDate: (date: string) => void;
-  /** Persisted calendar zoom level */
-  calendarZoom: CalendarZoom;
-  /** Update calendar zoom */
-  setCalendarZoom: (zoom: CalendarZoom) => void;
-
   /** Gesture-driven drawer control (registered by StreamDrawer) */
   drawerControl: DrawerControl | null;
   /** Register drawer control methods */
@@ -99,14 +81,7 @@ interface DrawerProviderProps {
   children: ReactNode;
 }
 
-// Render tracking for DrawerProvider
-let drawerProviderRenderCount = 0;
-let prevDrawerState: any = {};
-
 export function DrawerProvider({ children }: DrawerProviderProps) {
-  drawerProviderRenderCount++;
-  const renderNum = drawerProviderRenderCount;
-
   const [isOpen, setIsOpen] = useState(false);
   const [onStreamSelect, setOnStreamSelect] = useState<StreamSelectHandler>(null);
   const [onStreamLongPress, setOnStreamLongPress] = useState<StreamLongPressHandler>(null);
@@ -114,11 +89,6 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
   const [selectedStreamName, setSelectedStreamName] = useState<string>("All Entries");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [onViewModeChange, setOnViewModeChange] = useState<ViewModeChangeHandler>(null);
-
-  // Persisted main view state
-  const [mapRegion, setMapRegion] = useState<Region | null>(null);
-  const [calendarDate, setCalendarDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [calendarZoom, setCalendarZoom] = useState<CalendarZoom>("month");
 
   // Gesture-driven drawer control
   const [drawerControl, setDrawerControl] = useState<DrawerControl | null>(null);
@@ -173,26 +143,6 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
     }
   }, []);
 
-  // Track what's changing to debug re-renders
-  const changes: string[] = [];
-  if (prevDrawerState.isOpen !== isOpen) changes.push('isOpen');
-  if (prevDrawerState.onStreamSelect !== onStreamSelect) changes.push('onStreamSelect');
-  if (prevDrawerState.onStreamLongPress !== onStreamLongPress) changes.push('onStreamLongPress');
-  if (prevDrawerState.selectedStreamId !== selectedStreamId) changes.push('selectedStreamId');
-  if (prevDrawerState.selectedStreamName !== selectedStreamName) changes.push('selectedStreamName');
-  if (prevDrawerState.viewMode !== viewMode) changes.push('viewMode');
-  if (prevDrawerState.onViewModeChange !== onViewModeChange) changes.push('onViewModeChange');
-  if (prevDrawerState.mapRegion !== mapRegion) changes.push('mapRegion');
-  if (prevDrawerState.calendarDate !== calendarDate) changes.push('calendarDate');
-  if (prevDrawerState.calendarZoom !== calendarZoom) changes.push('calendarZoom');
-  if (prevDrawerState.drawerControl !== drawerControl) changes.push('drawerControl');
-  console.log(`[DrawerProvider] 🔄 RENDER #${renderNum} changes: ${changes.length > 0 ? changes.join(', ') : 'NONE'}`);
-  prevDrawerState = {
-    isOpen, onStreamSelect, onStreamLongPress, selectedStreamId, selectedStreamName,
-    viewMode, onViewModeChange, mapRegion, calendarDate, calendarZoom, drawerControl
-  };
-
-  // Memoize context value to prevent unnecessary re-renders of consumers
   const contextValue = useMemo(() => ({
     isOpen,
     openDrawer,
@@ -210,12 +160,6 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
     setViewMode,
     onViewModeChange,
     registerViewModeHandler,
-    mapRegion,
-    setMapRegion,
-    calendarDate,
-    setCalendarDate,
-    calendarZoom,
-    setCalendarZoom,
     drawerControl,
     registerDrawerControl,
   }), [
@@ -235,12 +179,6 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
     setViewMode,
     onViewModeChange,
     registerViewModeHandler,
-    mapRegion,
-    setMapRegion,
-    calendarDate,
-    setCalendarDate,
-    calendarZoom,
-    setCalendarZoom,
     drawerControl,
     registerDrawerControl,
   ]);
