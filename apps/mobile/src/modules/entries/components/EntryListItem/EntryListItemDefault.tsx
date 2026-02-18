@@ -27,15 +27,21 @@ interface DefaultProps extends EntryListItemCommonProps {
   onOpenPhotoViewer?: () => void;
 }
 
-/** Check if HTML content has a table near the top (within first ~500 chars of source) */
-function hasEarlyTable(html: string | null | undefined): boolean {
-  if (!html) return false;
-  const idx = html.indexOf('<table');
-  return idx !== -1 && idx < 500;
-}
+// How far into HTML source to look for rich block elements
+const EARLY_CONTENT_THRESHOLD = 500;
 
-// Max height for short-mode table preview (header + ~2 data rows)
-const SHORT_TABLE_MAX_HEIGHT = 180;
+// Max height for short-mode rich content preview (tables, lists)
+const SHORT_RICH_MAX_HEIGHT = 180;
+
+/** Check if HTML has a rich block element near the top that needs WebView rendering */
+function hasEarlyRichContent(html: string | null | undefined): boolean {
+  if (!html) return false;
+  const prefix = html.substring(0, EARLY_CONTENT_THRESHOLD);
+  if (prefix.includes('<table')) return true;
+  if (prefix.includes('<ul')) return true;
+  if (prefix.includes('<ol')) return true;
+  return false;
+}
 
 export function EntryListItemDefault({
   entry,
@@ -195,8 +201,8 @@ export function EntryListItemDefault({
                   { color: theme.colors.text.secondary },
                 ]}
               />
-            ) : displayMode === 'short' && hasEarlyTable(entry.content) ? (
-              <View style={{ maxHeight: SHORT_TABLE_MAX_HEIGHT, overflow: 'hidden' }}>
+            ) : displayMode === 'short' && (hasEarlyRichContent(entry.content)) ? (
+              <View style={{ maxHeight: SHORT_RICH_MAX_HEIGHT, overflow: 'hidden' }}>
                 <WebViewHtmlRenderer
                   html={entry.content || ''}
                   style={[
@@ -264,9 +270,9 @@ export function EntryListItemDefault({
                 ]}
               />
             </>
-          ) : displayMode === 'short' && hasEarlyTable(entry.content) ? (
-            /* Short mode with table — render via WebView with height cap */
-            <View style={{ maxHeight: SHORT_TABLE_MAX_HEIGHT, overflow: 'hidden' }}>
+          ) : displayMode === 'short' && (hasEarlyRichContent(entry.content)) ? (
+            /* Short mode with rich content — render via WebView with height cap */
+            <View style={{ maxHeight: SHORT_RICH_MAX_HEIGHT, overflow: 'hidden' }}>
               <WebViewHtmlRenderer
                 html={entry.content || ''}
                 style={[
