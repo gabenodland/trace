@@ -46,10 +46,7 @@ import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { AccountScreen } from "./src/screens/AccountScreen";
 import { DatabaseInfoScreen } from "./src/screens/DatabaseInfoScreen";
-import { EditorTestScreen } from "./src/screens/EditorTestScreen";
-import { TenTapTestScreen } from "./src/screens/TenTapTestScreen";
 import { RichTextEditorV2TestScreen } from "./src/screens/RichTextEditorV2TestScreen";
-import { DataFetchTestScreen } from "./src/screens/DataFetchTestScreen";
 import { LocationsScreen } from "./src/screens/LocationsScreen";
 import { MapScreen } from "./src/screens/MapScreen";
 import { StreamsScreen } from "./src/screens/StreamsScreen";
@@ -458,21 +455,9 @@ function AppContent() {
         boundaryName = "DatabaseInfoScreen";
         content = <DatabaseInfoScreen />;
         break;
-      case "editorTest":
-        boundaryName = "EditorTestScreen";
-        content = <EditorTestScreen />;
-        break;
-      case "tenTapTest":
-        boundaryName = "TenTapTestScreen";
-        content = <TenTapTestScreen />;
-        break;
       case "editorV2Test":
         boundaryName = "RichTextEditorV2TestScreen";
         content = <RichTextEditorV2TestScreen />;
-        break;
-      case "dataFetchTest":
-        boundaryName = "DataFetchTestScreen";
-        content = <DataFetchTestScreen />;
         break;
       case "locations":
         boundaryName = "LocationsScreen";

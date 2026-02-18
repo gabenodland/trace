@@ -12,8 +12,8 @@ import { createScopedLogger } from '../utils/logger';
 const log = createScopedLogger('Navigation', '🧭');
 
 export type MainScreen = 'inbox' | 'map' | 'calendar' | 'entryManagement';
-export type SettingsScreen = 'account' | 'profile' | 'settings' | 'debug' | 'editorTest' |
-  'tenTapTest' | 'editorV2Test' | 'dataFetchTest' | 'locations' | 'streams' |
+export type SettingsScreen = 'account' | 'profile' | 'settings' | 'debug' |
+  'editorV2Test' | 'locations' | 'streams' |
   'stream-properties' | 'subscription' | 'capture';  // capture = legacy entry screen
 
 // Use string for backward compatibility - screens use various string names

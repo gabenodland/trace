@@ -3,7 +3,7 @@
  */
 
 // Components
-export { ApiKeysSection } from './components/ApiKeysSection';
+export { IntegrationsSection } from './components/IntegrationsSection';
 export { ApiKeyItem } from './components/ApiKeyItem';
 export { CreateApiKeyModal } from './components/CreateApiKeyModal';
 

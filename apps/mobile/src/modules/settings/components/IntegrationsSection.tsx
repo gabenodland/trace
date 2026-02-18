@@ -1,36 +1,43 @@
 /**
- * ApiKeysSection - Settings section for managing API keys
+ * IntegrationsSection - Settings section for managing API keys and integrations
  *
- * Shows:
- * - Header with "API Keys" title and "Create" button
- * - List of active API keys (ApiKeyItem components)
- * - List of revoked keys (collapsed by default)
- * - Empty state if no keys
- * - Loading state
+ * Pro feature: Create/revoke keys gated behind apiAccess feature.
+ * Free users can see existing keys (read-only) but cannot create or revoke.
  */
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
+import { useSubscription } from '../../../shared/hooks/useSubscription';
+import { useNavigate } from '../../../shared/navigation';
 import { Icon } from '../../../shared/components';
 import { useApiKeys } from '../hooks/useApiKeys';
 import { ApiKeyItem } from './ApiKeyItem';
 import { CreateApiKeyModal } from './CreateApiKeyModal';
 
-export function ApiKeysSection() {
+const INTEGRATION_DOCS_URL = 'https://www.mindjig.com/trace/integrations';
+
+export function IntegrationsSection() {
   const theme = useTheme();
+  const { hasFeature } = useSubscription();
+  const navigate = useNavigate();
   const { activeKeys, revokedKeys, isLoading, error, refetch } = useApiKeys();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRevokedKeys, setShowRevokedKeys] = useState(false);
+
+  const canManageKeys = hasFeature('apiAccess');
 
   // Loading state
   if (isLoading) {
     return (
       <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
         <View style={styles.headerRow}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
-            API Keys
-          </Text>
+          <View style={styles.headerLeft}>
+            <Icon name="Plug" size={20} color={theme.colors.text.secondary} style={styles.headerIcon} />
+            <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
+              Integrations
+            </Text>
+          </View>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={theme.colors.text.secondary} />
@@ -47,9 +54,12 @@ export function ApiKeysSection() {
     return (
       <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
         <View style={styles.headerRow}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
-            API Keys
-          </Text>
+          <View style={styles.headerLeft}>
+            <Icon name="Plug" size={20} color={theme.colors.text.secondary} style={styles.headerIcon} />
+            <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
+              Integrations
+            </Text>
+          </View>
         </View>
         <View style={styles.errorContainer}>
           <Icon name="AlertCircle" size={24} color={theme.colors.functional.overdue} />
@@ -77,30 +87,74 @@ export function ApiKeysSection() {
       {/* Header */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Icon name="Key" size={20} color={theme.colors.text.secondary} style={styles.headerIcon} />
+          <Icon name="Plug" size={20} color={theme.colors.text.secondary} style={styles.headerIcon} />
           <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
-            API Keys
+            Integrations
           </Text>
+          {!canManageKeys && (
+            <View style={[styles.proBadge, { backgroundColor: theme.colors.functional.accent + '20' }]}>
+              <Icon name="Lock" size={12} color={theme.colors.functional.accent} />
+              <Text style={[styles.proBadgeText, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>
+                PRO
+              </Text>
+            </View>
+          )}
         </View>
         <TouchableOpacity
-          style={[styles.createButton, { backgroundColor: theme.colors.functional.accent }]}
-          onPress={() => setShowCreateModal(true)}
+          style={[
+            styles.createButton,
+            { backgroundColor: canManageKeys ? theme.colors.functional.accent : theme.colors.border.dark },
+          ]}
+          onPress={() => {
+            if (canManageKeys) {
+              setShowCreateModal(true);
+            } else {
+              navigate('subscription');
+            }
+          }}
           activeOpacity={0.8}
         >
-          <Icon name="Plus" size={16} color="#ffffff" />
+          {canManageKeys && <Icon name="Plus" size={16} color="#ffffff" />}
           <Text style={[styles.createButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>
-            Create
+            {canManageKeys ? 'Create' : 'Upgrade'}
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* Description */}
       <Text style={[styles.description, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-        API keys allow external applications to access your data programmatically.
+        Connect external apps to your Trace data via API keys. Works with MCP-compatible AI assistants and custom integrations.
       </Text>
 
-      {/* Empty state */}
-      {!hasKeys && (
+      {/* Setup Instructions link */}
+      <TouchableOpacity
+        style={[styles.docsLink, { borderColor: theme.colors.border.light }]}
+        onPress={() => Linking.openURL(INTEGRATION_DOCS_URL)}
+        activeOpacity={0.7}
+      >
+        <Icon name="ExternalLink" size={14} color={theme.colors.functional.accent} />
+        <Text style={[styles.docsLinkText, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.medium }]}>
+          Setup Instructions
+        </Text>
+      </TouchableOpacity>
+
+      {/* Pro upgrade prompt for free users */}
+      {!canManageKeys && !hasKeys && (
+        <View style={[styles.upgradePrompt, { backgroundColor: theme.colors.functional.accent + '08', borderColor: theme.colors.functional.accent + '20' }]}>
+          <Icon name="Sparkles" size={18} color={theme.colors.functional.accent} />
+          <View style={styles.upgradeContent}>
+            <Text style={[styles.upgradeTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
+              Unlock Integrations
+            </Text>
+            <Text style={[styles.upgradeDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+              Upgrade to Pro to create API keys and connect external apps.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Empty state (only for Pro users with no keys) */}
+      {canManageKeys && !hasKeys && (
         <View style={[styles.emptyState, { borderColor: theme.colors.border.light }]}>
           <Icon name="KeyRound" size={32} color={theme.colors.text.tertiary} />
           <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>
@@ -120,6 +174,7 @@ export function ApiKeysSection() {
               key={apiKey.api_key_id}
               apiKey={apiKey}
               isLast={index === activeKeys.length - 1 && revokedKeys.length === 0}
+              readOnly={!canManageKeys}
             />
           ))}
         </View>
@@ -150,6 +205,7 @@ export function ApiKeysSection() {
                   key={apiKey.api_key_id}
                   apiKey={apiKey}
                   isLast={index === revokedKeys.length - 1}
+                  readOnly={!canManageKeys}
                 />
               ))}
             </View>
@@ -188,6 +244,19 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
   },
+  proBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    gap: 4,
+  },
+  proBadgeText: {
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -203,7 +272,35 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     lineHeight: 20,
+    marginBottom: 12,
+  },
+  docsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: 16,
+  },
+  docsLinkText: {
+    fontSize: 14,
+  },
+  upgradePrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 12,
+  },
+  upgradeContent: {
+    flex: 1,
+  },
+  upgradeTitle: {
+    fontSize: 15,
+    marginBottom: 2,
+  },
+  upgradeDescription: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   loadingContainer: {
     flexDirection: 'row',

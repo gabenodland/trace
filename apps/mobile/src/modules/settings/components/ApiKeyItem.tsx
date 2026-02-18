@@ -20,9 +20,10 @@ import { formatDistanceToNow } from 'date-fns';
 interface ApiKeyItemProps {
   apiKey: ApiKey;
   isLast?: boolean;
+  readOnly?: boolean;
 }
 
-export function ApiKeyItem({ apiKey, isLast = false }: ApiKeyItemProps) {
+export function ApiKeyItem({ apiKey, isLast = false, readOnly = false }: ApiKeyItemProps) {
   const theme = useTheme();
   const { apiKeyMutations } = useApiKeys();
   const [isActionPending, setIsActionPending] = useState(false);
@@ -170,28 +171,30 @@ export function ApiKeyItem({ apiKey, isLast = false }: ApiKeyItemProps) {
         </View>
       </View>
 
-      {/* Actions */}
-      <View style={styles.actions}>
-        {isActionPending ? (
-          <ActivityIndicator size="small" color={theme.colors.text.secondary} />
-        ) : isRevoked ? (
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: theme.colors.background.tertiary }]}
-            onPress={handleDelete}
-            activeOpacity={0.7}
-          >
-            <Icon name="Trash2" size={16} color={theme.colors.functional.overdue} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: theme.colors.functional.overdue + '15' }]}
-            onPress={handleRevoke}
-            activeOpacity={0.7}
-          >
-            <Icon name="Ban" size={16} color={theme.colors.functional.overdue} />
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Actions — hidden in read-only mode (free users who downgraded) */}
+      {!readOnly && (
+        <View style={styles.actions}>
+          {isActionPending ? (
+            <ActivityIndicator size="small" color={theme.colors.text.secondary} />
+          ) : isRevoked ? (
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: theme.colors.background.tertiary }]}
+              onPress={handleDelete}
+              activeOpacity={0.7}
+            >
+              <Icon name="Trash2" size={16} color={theme.colors.functional.overdue} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: theme.colors.functional.overdue + '15' }]}
+              onPress={handleRevoke}
+              activeOpacity={0.7}
+            >
+              <Icon name="Ban" size={16} color={theme.colors.functional.overdue} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </View>
   );
 }

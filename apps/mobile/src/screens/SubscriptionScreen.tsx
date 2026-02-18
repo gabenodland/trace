@@ -39,6 +39,11 @@ const PRO_FEATURES = [
     title: "Unlimited Entries",
     description: "No limits on entries, streams, or tags",
   },
+  {
+    icon: "integrations",
+    title: "AI Integrations",
+    description: "Connect Claude, ChatGPT, or Gemini via MCP",
+  },
 ];
 
 function FeatureIcon({ icon, color }: { icon: string; color: string }) {
@@ -54,6 +59,7 @@ function FeatureIcon({ icon, color }: { icon: string; color: string }) {
     widget: "Grid",
     image: "Image",
     unlimited: "Infinity",
+    integrations: "Plug",
   };
 
   const iconName = iconMap[icon] || "Star";
@@ -63,9 +69,9 @@ function FeatureIcon({ icon, color }: { icon: string; color: string }) {
 export function SubscriptionScreen() {
   const theme = useTheme();
   const navigate = useNavigate();
-  const { isPro, isDevMode, expiresAt, tier } = useSubscription();
+  const { isPro, isDevMode, expiresAt } = useSubscription();
 
-  const isSubscribed = isPro || isDevMode;
+  const isSubscribed = isPro;
 
   const handleUpgrade = () => {
     // TODO: Implement react-native-iap for iOS/Android

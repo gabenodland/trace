@@ -1,10 +1,11 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking, Alert } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Icon } from "../shared/components";
 import { getAppVersion, getBuildNumber } from "../config/appVersionService";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useNavigate } from "../shared/navigation";
+import { useSubscription } from "../shared/hooks/useSubscription";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { UnitSystemSelector } from "../components/settings/UnitSystemSelector";
 import { ImageQualitySelector } from "../components/settings/ImageQualitySelector";
@@ -14,17 +15,46 @@ import { UNIT_OPTIONS, IMAGE_QUALITY_OPTIONS } from "@trace/core";
 import { getThemeOptions } from "../shared/theme/themes";
 import { getFontOptions } from "../shared/theme/fonts";
 import { logger } from "../shared/utils/logger";
-import { ApiKeysSection } from "../modules/settings/components/ApiKeysSection";
+import { IntegrationsSection } from "../modules/settings";
+
+const VERSION_TAP_THRESHOLD = 7;
+const VERSION_TAP_TIMEOUT_MS = 2000;
 
 export function SettingsScreen() {
   const { settings, updateSettings } = useSettings();
   const theme = useTheme();
   const navigate = useNavigate();
+  const { isDevMode } = useSubscription();
 
   const [showUnitSelector, setShowUnitSelector] = useState(false);
   const [showImageQualitySelector, setShowImageQualitySelector] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [showFontSelector, setShowFontSelector] = useState(false);
+
+  // Developer section visibility (session-only via easter egg, or persistent via dev mode)
+  const [showDeveloper, setShowDeveloper] = useState(false);
+  const tapCountRef = useRef(0);
+  const lastTapRef = useRef(0);
+
+  const developerVisible = isDevMode || showDeveloper;
+
+  // 7-tap version easter egg handler
+  const handleVersionTap = () => {
+    const now = Date.now();
+    if (now - lastTapRef.current > VERSION_TAP_TIMEOUT_MS) {
+      tapCountRef.current = 0;
+    }
+    lastTapRef.current = now;
+    tapCountRef.current += 1;
+
+    if (tapCountRef.current >= VERSION_TAP_THRESHOLD) {
+      tapCountRef.current = 0;
+      if (!showDeveloper) {
+        setShowDeveloper(true);
+        Alert.alert('Developer Options', 'Developer options are now visible.');
+      }
+    }
+  };
 
   // Debug mode state
   const [debugModeEnabled, setDebugModeEnabled] = useState(logger.isDebugModeEnabled());
@@ -185,7 +215,7 @@ export function SettingsScreen() {
         </View>
 
         {/* Integrations Section - API Keys for MCP */}
-        <ApiKeysSection />
+        <IntegrationsSection />
 
         {/* Legal Section */}
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
@@ -224,25 +254,12 @@ export function SettingsScreen() {
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
           <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>About</Text>
 
-          {/* Database Info */}
+          {/* Version Info — 7-tap to reveal Developer section */}
           <TouchableOpacity
-            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
-            onPress={() => navigate("debug")}
-            activeOpacity={0.7}
+            style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
+            onPress={handleVersionTap}
+            activeOpacity={1}
           >
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Database Info</Text>
-              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                View sync status and database statistics
-              </Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
-            </View>
-          </TouchableOpacity>
-
-          {/* Version Info */}
-          <View style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}>
             <View style={styles.settingContent}>
               <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Version</Text>
             </View>
@@ -251,138 +268,108 @@ export function SettingsScreen() {
                 {getAppVersion()} ({getBuildNumber() || '1'}){__DEV__ ? ' dev' : ''}
               </Text>
             </View>
-          </View>
-        </View>
-
-        {/* Developer Section */}
-        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Developer</Text>
-
-          {/* Debug Mode Toggle */}
-          <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Debug Mode</Text>
-              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                {__DEV__
-                  ? 'Always enabled in development builds.'
-                  : 'Enable verbose logging for troubleshooting. Logs can be exported for bug reports.'}
-              </Text>
-            </View>
-            <Switch
-              value={__DEV__ ? true : debugModeEnabled}
-              onValueChange={handleDebugModeToggle}
-              disabled={__DEV__}
-              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
-              thumbColor="#ffffff"
-            />
-          </View>
-
-          {/* Export Logs Button */}
-          <TouchableOpacity
-            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
-            onPress={handleExportLogs}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Export Debug Logs</Text>
-              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                Share logs via email or other apps for support
-              </Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Text style={[styles.settingValueText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                {logBufferSize} entries
-              </Text>
-              <Icon name="ExternalLink" size={16} color={theme.colors.text.tertiary} />
-            </View>
-          </TouchableOpacity>
-
-          {/* Clear Logs Button */}
-          <TouchableOpacity
-            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
-            onPress={handleClearLogs}
-            activeOpacity={0.7}
-            disabled={logBufferSize === 0}
-          >
-            <View style={styles.settingContent}>
-              <Text style={[
-                styles.settingLabel,
-                { color: logBufferSize > 0 ? theme.colors.functional.overdue : theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.medium }
-              ]}>Clear Debug Logs</Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Icon name="Trash2" size={16} color={logBufferSize > 0 ? theme.colors.functional.overdue : theme.colors.text.disabled} />
-            </View>
-          </TouchableOpacity>
-
-          {/* Editor Test (Layer 1 - Plain WebView) */}
-          <TouchableOpacity
-            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
-            onPress={() => navigate("editorTest")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Editor Test (L1)</Text>
-              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                Plain WebView - no TenTap
-              </Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
-            </View>
-          </TouchableOpacity>
-
-          {/* TenTap Test (Layer 2 - TenTap Bridge) */}
-          <TouchableOpacity
-            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
-            onPress={() => navigate("tenTapTest")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>TenTap Test (L2)</Text>
-              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                EditorWebBridge - single instance
-              </Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
-            </View>
-          </TouchableOpacity>
-
-          {/* RichTextEditorV2 Test (Layer 3) */}
-          <TouchableOpacity
-            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
-            onPress={() => navigate("editorV2Test")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>RichTextEditor V2 (L3)</Text>
-              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                Full editor with onChange
-              </Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
-            </View>
-          </TouchableOpacity>
-
-          {/* Data Fetch Test */}
-          <TouchableOpacity
-            style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
-            onPress={() => navigate("dataFetchTest")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Data Fetch Test</Text>
-              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                Test SQLite query timing
-              </Text>
-            </View>
-            <View style={styles.settingValue}>
-              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
-            </View>
           </TouchableOpacity>
         </View>
+
+        {/* Developer Section — visible via dev mode or 7-tap easter egg */}
+        {developerVisible && (
+          <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Developer</Text>
+
+            {/* Debug Mode Toggle */}
+            <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Debug Mode</Text>
+                <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                  {__DEV__
+                    ? 'Always enabled in development builds.'
+                    : 'Enable verbose logging for troubleshooting. Logs can be exported for bug reports.'}
+                </Text>
+              </View>
+              <Switch
+                value={__DEV__ ? true : debugModeEnabled}
+                onValueChange={handleDebugModeToggle}
+                disabled={__DEV__}
+                trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+                thumbColor="#ffffff"
+              />
+            </View>
+
+            {/* Export Logs Button */}
+            <TouchableOpacity
+              style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+              onPress={handleExportLogs}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Export Debug Logs</Text>
+                <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                  Share logs via email or other apps for support
+                </Text>
+              </View>
+              <View style={styles.settingValue}>
+                <Text style={[styles.settingValueText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                  {logBufferSize} entries
+                </Text>
+                <Icon name="ExternalLink" size={16} color={theme.colors.text.tertiary} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Clear Logs Button */}
+            <TouchableOpacity
+              style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+              onPress={handleClearLogs}
+              activeOpacity={0.7}
+              disabled={logBufferSize === 0}
+            >
+              <View style={styles.settingContent}>
+                <Text style={[
+                  styles.settingLabel,
+                  { color: logBufferSize > 0 ? theme.colors.functional.overdue : theme.colors.text.disabled, fontFamily: theme.typography.fontFamily.medium }
+                ]}>Clear Debug Logs</Text>
+              </View>
+              <View style={styles.settingValue}>
+                <Icon name="Trash2" size={16} color={logBufferSize > 0 ? theme.colors.functional.overdue : theme.colors.text.disabled} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Database Info */}
+            <TouchableOpacity
+              style={[styles.settingRow, { borderBottomWidth: isDevMode ? 1 : 0, borderBottomColor: theme.colors.border.light }]}
+              onPress={() => navigate("debug")}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Data Management</Text>
+                <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                  View sync status and database statistics
+                </Text>
+              </View>
+              <View style={styles.settingValue}>
+                <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
+              </View>
+            </TouchableOpacity>
+
+            {/* RichTextEditorV2 Test (Layer 3) — dev mode only */}
+            {isDevMode && (
+              <TouchableOpacity
+                style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
+                onPress={() => navigate("editorV2Test")}
+                activeOpacity={0.7}
+              >
+                <View style={styles.settingContent}>
+                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Editor Test (L3)</Text>
+                  <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                    Full RichTextEditorV2 with onChange
+                  </Text>
+                </View>
+                <View style={styles.settingValue}>
+                  <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* Bottom padding */}
         <View style={{ height: 20 }} />
@@ -466,13 +453,5 @@ const styles = StyleSheet.create({
   },
   settingValueText: {
     fontSize: 14,
-  },
-  aboutSection: {
-    alignItems: 'center',
-    paddingVertical: 24,
-    paddingBottom: 40,
-  },
-  aboutText: {
-    fontSize: 13,
   },
 });
