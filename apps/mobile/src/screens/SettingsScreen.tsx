@@ -438,7 +438,6 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 18,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 16,
   },
   settingRow: {
@@ -454,7 +453,6 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 4,
   },
   settingDescription: {

@@ -894,7 +894,6 @@ const styles = StyleSheet.create({
   clusterText: {
     color: "#fff",
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   singleMarker: {
     // Container for single marker pin
@@ -909,7 +908,6 @@ const styles = StyleSheet.create({
   },
   countBarText: {
     fontSize: 13,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   mapToggleButton: {
     padding: 4,
@@ -925,7 +923,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginTop: 16,
     marginBottom: 8,
   },

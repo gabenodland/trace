@@ -119,7 +119,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   closeButton: {
     padding: 4,
@@ -132,7 +131,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 8,
   },
   input: {
@@ -157,7 +155,6 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   submitButton: {
     flex: 1,
@@ -170,7 +167,6 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     color: "#ffffff",
   },
 });

@@ -497,7 +497,6 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 18,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 8,
   },
   errorDetail: {
@@ -543,7 +542,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 4,
   },
   textInput: {
@@ -577,7 +575,6 @@ const styles = StyleSheet.create({
   },
   settingsLinkText: {
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   signOutButton: {
     flexDirection: "row",
@@ -598,7 +595,6 @@ const styles = StyleSheet.create({
   signOutText: {
     color: "#ffffff",
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   snackbar: {
     position: "absolute",
@@ -614,7 +610,6 @@ const styles = StyleSheet.create({
   snackbarText: {
     color: "#fff",
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     textAlign: "center",
   },
 });

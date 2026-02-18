@@ -1073,7 +1073,6 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     fontSize: 20,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     flex: 1,
     textAlign: "center",
   },
@@ -1086,7 +1085,6 @@ const styles = StyleSheet.create({
   },
   navButtonText: {
     fontSize: 28,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   todayButton: {
     alignSelf: "center",
@@ -1097,7 +1095,6 @@ const styles = StyleSheet.create({
   },
   todayButtonText: {
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     color: "#ffffff",
   },
   weekRow: {
@@ -1111,7 +1108,6 @@ const styles = StyleSheet.create({
   },
   dayHeaderText: {
     fontSize: 12,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   calendarGrid: {
     marginTop: 8,
@@ -1128,7 +1124,6 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   countBadge: {
     position: "absolute",
@@ -1142,7 +1137,6 @@ const styles = StyleSheet.create({
   },
   countText: {
     fontSize: 10,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     color: "#ffffff",
   },
   // Tab styles
@@ -1160,7 +1154,6 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   // Month view styles
   monthViewHeader: {
@@ -1171,7 +1164,6 @@ const styles = StyleSheet.create({
   },
   yearTitle: {
     fontSize: 24,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     flex: 1,
     textAlign: "center",
   },
@@ -1195,7 +1187,6 @@ const styles = StyleSheet.create({
   },
   monthCellText: {
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   // Year view styles
   yearViewHeader: {
@@ -1206,7 +1197,6 @@ const styles = StyleSheet.create({
   },
   decadeTitle: {
     fontSize: 24,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     flex: 1,
     textAlign: "center",
   },
@@ -1230,7 +1220,6 @@ const styles = StyleSheet.create({
   },
   yearCellText: {
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   // SubBar styles
   subBar: {
@@ -1289,7 +1278,6 @@ const styles = StyleSheet.create({
   },
   dateFieldModalTitle: {
     fontSize: 18,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   dateFieldOption: {
     flexDirection: "row",
@@ -1300,7 +1288,5 @@ const styles = StyleSheet.create({
   },
   dateFieldOptionText: {
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
-  // Note: dateFieldOptionTextSelected removed - font weight now applied via inline fontFamily
 });

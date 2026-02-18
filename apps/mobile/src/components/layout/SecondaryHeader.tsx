@@ -89,7 +89,6 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   rightSection: {
     flexDirection: "row",

@@ -161,7 +161,6 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   closeButton: {
     padding: 4,
@@ -214,7 +213,6 @@ const styles = StyleSheet.create({
   },
   optionLabel: {
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   proBadge: {
     paddingHorizontal: 6,

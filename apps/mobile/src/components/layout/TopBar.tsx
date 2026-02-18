@@ -1,9 +1,8 @@
-import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar, Image } from "react-native";
-import { useEffect, useState, ReactNode } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from "react-native";
+import { ReactNode } from "react";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { Icon } from "../../shared/components";
 import { themeBase } from "../../shared/theme/themeBase";
-import { getDefaultAvatarUrl } from "@trace/core";
 
 interface TopBarProps {
   // Title mode (for list screens)
@@ -16,22 +15,9 @@ interface TopBarProps {
   // Custom content mode (for editing screens)
   children?: React.ReactNode;
 
-  // Back button
-  showBackButton?: boolean;
-  onBackPress?: () => void;
-
-  // Settings button (gear icon) - for stream management
-  onSettingsPress?: () => void;
-
   // Search button
   onSearchPress?: () => void;
   isSearchActive?: boolean;
-
-  // Avatar/Account button - navigates to account screen
-  showAvatar?: boolean;
-  avatarUrl?: string | null;
-  displayName?: string | null;
-  onAvatarPress?: () => void;
 }
 
 export function TopBar({
@@ -41,41 +27,13 @@ export function TopBar({
   onTitlePress,
   showDropdownArrow = false,
   children,
-  showBackButton = false,
-  onBackPress,
-  onSettingsPress,
   onSearchPress,
   isSearchActive = false,
-  showAvatar = false,
-  avatarUrl,
-  displayName,
-  onAvatarPress,
 }: TopBarProps) {
   const theme = useTheme();
-  const [avatarError, setAvatarError] = useState(false);
-
-  // Reset avatar error when avatarUrl changes
-  useEffect(() => {
-    setAvatarError(false);
-  }, [avatarUrl]);
-
-  // Determine effective avatar URL - use default if remote fails to load
-  const defaultAvatar = getDefaultAvatarUrl(displayName || "User");
-  const effectiveAvatarUrl = avatarError || !avatarUrl ? defaultAvatar : avatarUrl;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
-      {/* Back Button - Hidden for minimalist design */}
-      {false && showBackButton && onBackPress && (
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={onBackPress}
-          activeOpacity={0.7}
-        >
-          <Icon name="ChevronLeft" size={24} color={theme.colors.text.primary} />
-        </TouchableOpacity>
-      )}
-
       {/* Title Mode - Clickable stream/filter selector */}
       {title && (
         <TouchableOpacity
@@ -106,17 +64,6 @@ export function TopBar({
 
       {/* Right side buttons */}
       <View style={styles.rightButtons}>
-        {/* Settings Button (gear icon) - for stream management */}
-        {onSettingsPress && (
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={onSettingsPress}
-            activeOpacity={0.7}
-          >
-            <Icon name="Settings" size={22} color={theme.colors.text.primary} />
-          </TouchableOpacity>
-        )}
-
         {/* Search Button */}
         {onSearchPress && (
           <TouchableOpacity
@@ -125,21 +72,6 @@ export function TopBar({
             activeOpacity={0.7}
           >
             <Icon name="Search" size={22} color={isSearchActive ? theme.colors.functional.accent : theme.colors.text.primary} />
-          </TouchableOpacity>
-        )}
-
-        {/* Profile Avatar - navigates to Account screen */}
-        {showAvatar && onAvatarPress && (
-          <TouchableOpacity
-            style={styles.avatarButton}
-            onPress={onAvatarPress}
-            activeOpacity={0.7}
-          >
-            <Image
-              source={{ uri: effectiveAvatarUrl }}
-              style={[styles.avatarImage, { backgroundColor: theme.colors.background.tertiary }]}
-              onError={() => setAvatarError(true)}
-            />
           </TouchableOpacity>
         )}
       </View>
@@ -157,10 +89,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  backButton: {
-    padding: themeBase.spacing.sm,
-    marginRight: themeBase.spacing.sm,
-  },
   titleContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -172,7 +100,6 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   badge: {
     borderRadius: themeBase.borderRadius.full,
@@ -184,10 +111,6 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: themeBase.typography.fontSize.sm,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
-  },
-  dropdownArrow: {
-    marginLeft: 4,
   },
   customContent: {
     flex: 1,
@@ -202,13 +125,5 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: themeBase.spacing.sm,
-  },
-  avatarButton: {
-    padding: 2,
-  },
-  avatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
   },
 });

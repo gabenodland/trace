@@ -8,8 +8,8 @@
  * - {date} - Locale-aware full date (e.g., "January 6, 2026" or "6 January 2026")
  * - {date_short} - Locale-aware short date (e.g., "1/6/26" or "6/1/26")
  * - {weekday} - Day of week name (e.g., "Monday")
- * - {day} - Day of month number (e.g., "6")
- * - {month} - Month number (e.g., "1")
+ * - {day} - Day of month zero-padded (e.g., "06")
+ * - {month} - Month number zero-padded (e.g., "01")
  * - {month_name} - Month name (e.g., "January")
  * - {year} - Full year (e.g., "2026")
  * - {year_short} - 2-digit year (e.g., "26")
@@ -76,8 +76,8 @@ export function getTemplateVariables(
     date: dateFull,
     date_short: dateShort,
     weekday: weekdays[dayOfWeek],
-    day: dayOfMonth.toString(),
-    month: (monthNum + 1).toString(),
+    day: dayOfMonth.toString().padStart(2, "0"),
+    month: (monthNum + 1).toString().padStart(2, "0"),
     month_name: months[monthNum],
     year: year.toString(),
     year_short: year.toString().slice(-2),
@@ -281,8 +281,8 @@ export const TEMPLATE_HELP = {
     { syntax: "{date}", description: "Full date (locale-aware)" },
     { syntax: "{date_short}", description: "Short date (locale-aware)" },
     { syntax: "{weekday}", description: "Day of week (Monday)" },
-    { syntax: "{day}", description: "Day of month (6)" },
-    { syntax: "{month}", description: "Month number (1)" },
+    { syntax: "{day}", description: "Day of month zero-padded (06)" },
+    { syntax: "{month}", description: "Month number zero-padded (01)" },
     { syntax: "{month_name}", description: "Month name (January)" },
     { syntax: "{year}", description: "Full year (2026)" },
     { syntax: "{year_short}", description: "2-digit year (26)" },

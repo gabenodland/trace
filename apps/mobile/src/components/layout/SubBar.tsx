@@ -151,11 +151,9 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: themeBase.typography.fontSize.sm,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   value: {
     fontSize: themeBase.typography.fontSize.sm,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   icon: {
     marginLeft: 2,

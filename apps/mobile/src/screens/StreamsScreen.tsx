@@ -253,7 +253,6 @@ const styles = StyleSheet.create({
   },
   streamName: {
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   actionButton: {
     width: 36,
@@ -281,6 +280,5 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: "#ffffff",
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
 });

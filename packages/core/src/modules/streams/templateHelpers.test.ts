@@ -33,7 +33,7 @@ describe("getTemplateVariables", () => {
     const vars = getTemplateVariables(date, "Test Stream");
 
     expect(vars.day).toBe("15");
-    expect(vars.month).toBe("1");
+    expect(vars.month).toBe("01");
     expect(vars.month_name).toBe("January");
     expect(vars.year).toBe("2026");
     expect(vars.year_short).toBe("26");
@@ -45,6 +45,13 @@ describe("getTemplateVariables", () => {
     const vars = getTemplateVariables(date);
     // Time format depends on locale, so just check it's not empty
     expect(vars.time.length).toBeGreaterThan(0);
+  });
+
+  it("zero-pads single-digit day and month", () => {
+    const date = new Date(2026, 2, 3, 12, 0, 0); // March 3
+    const vars = getTemplateVariables(date);
+    expect(vars.day).toBe("03");
+    expect(vars.month).toBe("03");
   });
 
   it("handles missing streamName", () => {
@@ -116,6 +123,18 @@ describe("applyTitleTemplate", () => {
 
   it("handles undefined template", () => {
     expect(applyTitleTemplate(undefined)).toBe("");
+  });
+
+  it("zero-pads single-digit day in title template", () => {
+    const date = new Date(2026, 0, 3, 12, 0, 0); // Jan 3
+    const result = applyTitleTemplate("{year}-{month}-{day}", { date });
+    expect(result).toBe("2026-01-03");
+  });
+
+  it("does not double-pad double-digit day and month", () => {
+    const date = new Date(2026, 11, 25, 12, 0, 0); // Dec 25
+    const result = applyTitleTemplate("{year}-{month}-{day}", { date });
+    expect(result).toBe("2026-12-25");
   });
 
   it("includes stream name", () => {

@@ -773,7 +773,6 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   tabTextActive: {
     // Styles set inline with theme
@@ -792,7 +791,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 12,
   },
   sectionDescription: {
@@ -804,7 +802,6 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 8,
   },
   textInput: {
@@ -892,7 +889,6 @@ const styles = StyleSheet.create({
   },
   toggleLabel: {
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
     marginBottom: 2,
   },
   toggleDescription: {
@@ -924,7 +920,6 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: "#ffffff",
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   saveButtonContainer: {
     position: "absolute",
@@ -942,7 +937,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "#ffffff",
     fontSize: 16,
-    // Note: fontWeight removed - use fontFamily with weight variant instead
   },
   snackbar: {
     position: "absolute",

@@ -52,7 +52,7 @@ export function BottomNavBar({
     <View style={styles.wrapper}>
       {/* Floating Add Button - positioned above bar on right */}
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: theme.colors.functional.accent }]}
+        style={[styles.fab, { backgroundColor: theme.colors.functional.accent + "D9" }]}
         onPress={onAddPress}
         activeOpacity={0.8}
       >
@@ -125,8 +125,8 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: "absolute",
-    right: 20,
-    top: -70,
+    right: 50,
+    top: -80,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -140,8 +140,8 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
   },
 });
