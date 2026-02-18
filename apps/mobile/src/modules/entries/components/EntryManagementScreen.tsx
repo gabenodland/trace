@@ -38,7 +38,7 @@ import { createScopedLogger } from '../../../shared/utils/logger';
 import { navigate } from '../../../shared/navigation';
 import type { EntryWithRelations } from '../EntryWithRelationsTypes';
 import { splitTitleAndBody, combineTitleAndBody } from '@trace/core';
-import type { EntryStatus, Location, LocationEntity } from '@trace/core';
+import type { EntryStatus, Location, LocationEntity, RatingType } from '@trace/core';
 import { useSettings } from '../../../shared/contexts/SettingsContext';
 import { useStreams } from '../../streams/mobileStreamHooks';
 import { useLocations } from '../../locations/mobileLocationHooks';
@@ -496,8 +496,8 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
      * - If entry is new (temp ID): restore from current React state
      * - If no entry loaded: just reload WebView (ready for next use)
      */
-    const handleEditorReload = useCallback(async (source: 'manual' | 'recovery') => {
-      log.info(`🔄 handleEditorReload (${source})`, {
+    const handleEditorReload = useCallback(async () => {
+      log.info('🔄 handleEditorReload (recovery)', {
         hasEntry: !!entry,
         isNew: isNewEntry,
         entryId: entryId?.substring(0, 8),
@@ -507,9 +507,6 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       if (!entry || !entryId) {
         log.info('🔄 No entry loaded, just reloading WebView');
         editorRef.current?.reloadWebView();
-        if (source === 'manual') {
-          showSnackbar('Editor reloaded');
-        }
         return;
       }
 
@@ -518,15 +515,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       log.info('🔄 Setting pendingResumeRestore before reload', { length: html.length });
       pendingResumeRestore.current = html;
       editorRef.current?.reloadWebView();
-      if (source === 'manual') {
-        showSnackbar('Editor reloading...');
-      }
-    }, [entry, entryId, isNewEntry, showSnackbar]);
-
-    // Manual reload handler (for debug menu)
-    const handleReloadEditor = useCallback(() => {
-      handleEditorReload('manual');
-    }, [handleEditorReload]);
+    }, [entry, entryId, isNewEntry]);
 
     /**
      * Check if WebView is responsive by calling getHTML with timeout.
@@ -575,7 +564,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           if (!isHealthy) {
             log.warn('🔄 WebView DEAD after resume, triggering recovery', { entryId: entryId?.substring(0, 8) });
             emitToast('Editor recovering...');
-            handleEditorReload('recovery');
+            handleEditorReload();
           } else {
             log.info('🔄 WebView healthy after resume, no action needed');
           }
@@ -1215,6 +1204,8 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           visible={activePicker === 'entryOptions'}
           onClose={() => setActivePicker(null)}
           isEditing={!isNewEntry && !!entryId}
+          streamName={entry?.stream?.name ?? null}
+          onShowStreamPicker={() => setActivePicker('stream')}
           // Visibility flags - default to true when no stream (except type which needs defined types)
           showLocation={entry?.stream?.entry_use_location ?? true}
           showStatus={entry?.stream?.entry_use_status ?? true}
@@ -1230,7 +1221,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           dueDate={entry?.due_date ?? null}
           rating={entry?.rating ?? 0}
           priority={entry?.priority ?? 0}
-          ratingType={(entry?.stream?.entry_rating_type as any) ?? 'stars'}
+          ratingType={(entry?.stream?.entry_rating_type as RatingType) ?? 'stars'}
           isPinned={entry?.is_pinned ?? false}
           isArchived={entry?.is_archived ?? false}
           // Picker callbacks - directly switch to the target picker
@@ -1248,8 +1239,6 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           onArchiveToggle={handleArchiveToggle}
           onDuplicate={handleDuplicate}
           onDelete={handleDelete}
-          // Developer callbacks
-          onReloadEditor={handleReloadEditor}
         />
 
         {/* Snackbar for notifications */}

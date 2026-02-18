@@ -9,6 +9,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import type { Stream } from "@trace/core";
 import { useTheme } from "../../shared/contexts/ThemeContext";
+import { Icon, type IconName } from "../../shared/components";
 
 interface StreamDrawerItemProps {
   stream: Stream;
@@ -63,13 +64,14 @@ export const StreamDrawerItem = React.memo(function StreamDrawerItem({
 });
 
 /**
- * Special item for "All Entries" and "Unassigned" filters
+ * Special item for "All Entries" and "Inbox" filters
  */
 interface QuickFilterItemProps {
   label: string;
   count: number;
   isSelected: boolean;
   onPress: () => void;
+  icon?: IconName;
   // Optional drawer-specific colors (falls back to theme defaults)
   textColor?: string;
   textColorSecondary?: string;
@@ -81,6 +83,7 @@ export const QuickFilterItem = React.memo(function QuickFilterItem({
   count,
   isSelected,
   onPress,
+  icon,
   textColor,
   textColorSecondary,
   textColorTertiary,
@@ -97,6 +100,14 @@ export const QuickFilterItem = React.memo(function QuickFilterItem({
       activeOpacity={0.6}
       delayPressIn={0}
     >
+      {icon && (
+        <Icon
+          name={icon}
+          size={16}
+          color={isSelected ? primaryColor : secondaryColor}
+          style={styles.icon}
+        />
+      )}
       <Text
         style={[
           styles.name,
@@ -130,6 +141,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     letterSpacing: -0.2,
+  },
+  icon: {
+    marginRight: 10,
   },
   count: {
     fontSize: 14,

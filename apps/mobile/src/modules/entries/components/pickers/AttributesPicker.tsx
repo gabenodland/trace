@@ -26,6 +26,9 @@ interface AttributesPickerProps {
   visible: boolean;
   onClose: () => void;
   isEditing: boolean;
+  // Stream
+  streamName: string | null;
+  onShowStreamPicker: () => void;
   // Visibility flags
   showLocation: boolean;
   showStatus: boolean;
@@ -57,14 +60,14 @@ interface AttributesPickerProps {
   onArchiveToggle?: () => void;
   onDuplicate?: () => void;
   onDelete: () => void;
-  // Developer callbacks (shown only in __DEV__ mode)
-  onReloadEditor?: () => void;
 }
 
 export function AttributesPicker({
   visible,
   onClose,
   isEditing,
+  streamName,
+  onShowStreamPicker,
   showLocation,
   showStatus,
   showType,
@@ -93,7 +96,6 @@ export function AttributesPicker({
   onArchiveToggle,
   onDuplicate,
   onDelete,
-  onReloadEditor,
 }: AttributesPickerProps) {
   const dynamicTheme = useTheme();
 
@@ -118,12 +120,35 @@ export function AttributesPicker({
       onClose={onClose}
       title="Entry Options"
     >
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false}>
         {/* ATTRIBUTES Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionHeader, { color: dynamicTheme.colors.text.tertiary, fontFamily: dynamicTheme.typography.fontFamily.semibold }]}>
             ATTRIBUTES
           </Text>
+
+          {/* Stream - always shown first */}
+          <TouchableOpacity
+            style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
+            onPress={onShowStreamPicker}
+          >
+            <View style={styles.optionIcon}>
+              <Icon name="Layers" size={16} color={streamName ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
+            </View>
+            <Text
+              style={[
+                styles.optionText,
+                {
+                  fontFamily: streamName ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
+                  color: dynamicTheme.colors.text.primary,
+                }
+              ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {streamName ? `Stream: ${streamName}` : "Set Stream"}
+            </Text>
+          </TouchableOpacity>
 
           {/* Location */}
           {showLocation && (
@@ -134,13 +159,17 @@ export function AttributesPicker({
               <View style={styles.optionIcon}>
                 <Icon name="MapPin" size={16} color={hasLocationData ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
-              <Text style={[
-                styles.optionText,
-                {
-                  fontFamily: hasLocationData ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                  color: hasLocationData ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary
-                }
-              ]}>
+              <Text
+                style={[
+                  styles.optionText,
+                  {
+                    fontFamily: hasLocationData ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
+                    color: dynamicTheme.colors.text.primary,
+                  }
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {hasLocationData ? `Location: ${getLocationLabel(locationData)}` : "Set Location"}
               </Text>
             </TouchableOpacity>
@@ -155,13 +184,17 @@ export function AttributesPicker({
               <View style={styles.optionIcon}>
                 <Icon name="Circle" size={16} color={status !== "none" ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
-              <Text style={[
-                styles.optionText,
-                {
-                  fontFamily: status !== "none" ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                  color: status !== "none" ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary
-                }
-              ]}>
+              <Text
+                style={[
+                  styles.optionText,
+                  {
+                    fontFamily: status !== "none" ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
+                    color: dynamicTheme.colors.text.primary,
+                  }
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {status !== "none" ? `Status: ${getStatusLabel(status)}` : "Set Status"}
               </Text>
             </TouchableOpacity>
@@ -176,13 +209,17 @@ export function AttributesPicker({
               <View style={styles.optionIcon}>
                 <Icon name="Folder" size={16} color={type ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
-              <Text style={[
-                styles.optionText,
-                {
-                  fontFamily: type ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                  color: type ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary
-                }
-              ]}>
+              <Text
+                style={[
+                  styles.optionText,
+                  {
+                    fontFamily: type ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
+                    color: dynamicTheme.colors.text.primary,
+                  }
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {type ? `Type: ${type}` : "Set Type"}
               </Text>
             </TouchableOpacity>
@@ -197,13 +234,17 @@ export function AttributesPicker({
               <View style={styles.optionIcon}>
                 <Icon name="CalendarClock" size={16} color={dueDate ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
-              <Text style={[
-                styles.optionText,
-                {
-                  fontFamily: dueDate ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                  color: dueDate ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary
-                }
-              ]}>
+              <Text
+                style={[
+                  styles.optionText,
+                  {
+                    fontFamily: dueDate ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
+                    color: dynamicTheme.colors.text.primary,
+                  }
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {dueDate ? `Due Date: ${formatDate(dueDate)}` : "Set Due Date"}
               </Text>
             </TouchableOpacity>
@@ -218,13 +259,17 @@ export function AttributesPicker({
               <View style={styles.optionIcon}>
                 <Icon name="Star" size={16} color={rating > 0 ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
-              <Text style={[
-                styles.optionText,
-                {
-                  fontFamily: rating > 0 ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                  color: rating > 0 ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary
-                }
-              ]}>
+              <Text
+                style={[
+                  styles.optionText,
+                  {
+                    fontFamily: rating > 0 ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
+                    color: dynamicTheme.colors.text.primary,
+                  }
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {rating > 0 ? `Rating: ${formatRatingDisplay(rating, ratingType)}` : "Set Rating"}
               </Text>
             </TouchableOpacity>
@@ -239,13 +284,17 @@ export function AttributesPicker({
               <View style={styles.optionIcon}>
                 <Icon name="Flag" size={16} color={priority > 0 ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
-              <Text style={[
-                styles.optionText,
-                {
-                  fontFamily: priority > 0 ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                  color: priority > 0 ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary
-                }
-              ]}>
+              <Text
+                style={[
+                  styles.optionText,
+                  {
+                    fontFamily: priority > 0 ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
+                    color: dynamicTheme.colors.text.primary,
+                  }
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {priority > 0 ? `Priority: ${getPriorityInfo(priority)?.label || `P${priority}`}` : "Set Priority"}
               </Text>
             </TouchableOpacity>
@@ -371,40 +420,12 @@ export function AttributesPicker({
             </TouchableOpacity>
           )}
         </View>
-
-        {/* DEVELOPER Section - only in dev builds */}
-        {__DEV__ && onReloadEditor && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionHeader, { color: dynamicTheme.colors.text.tertiary, fontFamily: dynamicTheme.typography.fontFamily.semibold }]}>
-              DEVELOPER
-            </Text>
-
-            {/* Reload Editor */}
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={() => {
-                onReloadEditor();
-                onClose();
-              }}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="RefreshCw" size={16} color={dynamicTheme.colors.text.secondary} />
-              </View>
-              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.secondary }]}>
-                Reload Editor (Debug)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </ScrollView>
     </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    maxHeight: 500,
-  },
   section: {
     marginBottom: themeBase.spacing.md,
   },
@@ -429,5 +450,6 @@ const styles = StyleSheet.create({
   },
   optionText: {
     fontSize: 16,
+    flex: 1,
   },
 });

@@ -58,12 +58,12 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
   // Scroll to selected item when picker becomes visible
   useEffect(() => {
     if (visible && selectedStreamId && streams.length > 0 && scrollViewRef.current) {
-      // Find the index of the selected stream (+1 for the "Unassigned" option at the top)
+      // Find the index of the selected stream (+1 for the "Inbox" option at the top)
       const selectedIndex = streams.findIndex(s => s.stream_id === selectedStreamId);
       if (selectedIndex >= 0) {
         // Wait a bit for the ScrollView to be fully rendered
         setTimeout(() => {
-          const scrollOffset = (selectedIndex + 1) * ITEM_HEIGHT; // +1 for Unassigned
+          const scrollOffset = (selectedIndex + 1) * ITEM_HEIGHT; // +1 for Inbox
           scrollViewRef.current?.scrollTo({ y: scrollOffset, animated: true });
         }, 100);
       }
@@ -124,7 +124,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Unassigned Option - First item */}
+        {/* Inbox Option - First item */}
         <TouchableOpacity
           style={[
             styles.streamItem,
@@ -134,13 +134,13 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
           onPress={() => handleSelect(null)}
         >
           <View style={styles.streamContent}>
-            <Icon name="Layers" size={20} color={selectedStreamId === null ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} />
+            <Icon name="Inbox" size={20} color={selectedStreamId === null ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} />
             <Text style={[
               styles.streamName,
               { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },
               selectedStreamId === null && { color: dynamicTheme.colors.functional.accent, fontFamily: dynamicTheme.typography.fontFamily.semibold }
             ]}>
-              Unassigned
+              Inbox
             </Text>
             {selectedStreamId === null && (
               <Icon name="Check" size={18} color={dynamicTheme.colors.functional.accent} style={styles.checkIcon} />

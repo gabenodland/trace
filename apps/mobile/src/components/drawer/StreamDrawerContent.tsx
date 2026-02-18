@@ -346,10 +346,11 @@ export function StreamDrawerContent() {
                 textColorTertiary={drawerTextTertiary}
               />
               <QuickFilterItem
-                label="Unassigned"
+                label="Inbox"
+                icon="Inbox"
                 count={noStreamCount}
                 isSelected={selectedStreamId === null}
-                onPress={() => handleStreamSelect(null, "Unassigned")}
+                onPress={() => handleStreamSelect(null, "Inbox")}
                 textColor={drawerTextPrimary}
                 textColorSecondary={drawerTextSecondary}
                 textColorTertiary={drawerTextTertiary}

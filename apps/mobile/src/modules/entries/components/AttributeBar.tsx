@@ -121,7 +121,7 @@ export function AttributeBar({
   const computedTypeColor = (() => {
     if (unsupported.unsupportedType) return UNSUPPORTED_COLOR;
     if (entry.type && isLegacyType(entry.type, availableTypes)) return LEGACY_TYPE_COLOR;
-    return entry.type ? theme.colors.text.primary : theme.colors.text.disabled;
+    return entry.type ? theme.colors.text.primary : theme.colors.text.secondary;
   })();
 
   // Photo count with safe default
@@ -133,17 +133,17 @@ export function AttributeBar({
         {/* Stream - always shown */}
         <TouchableOpacity style={styles.attribute} onPress={onStreamPress}>
           <View style={styles.attributeContent}>
-            <Icon name="Layers" size={12} color={stream ? theme.colors.text.primary : theme.colors.text.disabled} />
+            <Icon name="Layers" size={12} color={stream ? theme.colors.text.primary : theme.colors.text.secondary} />
             <Text
               style={[
                 styles.attributeText,
                 { fontFamily: theme.typography.fontFamily.medium },
-                stream ? { color: theme.colors.text.primary } : { color: theme.colors.text.disabled },
+                stream ? { color: theme.colors.text.primary } : { color: theme.colors.text.secondary },
               ]}
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {stream?.name || 'No Stream'}
+              {stream?.name || 'Set Stream'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -160,7 +160,7 @@ export function AttributeBar({
                     styles.attributeText,
                     entry.type
                       ? { fontFamily: theme.typography.fontFamily.medium, color: computedTypeColor }
-                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.secondary },
                     unsupported.unsupportedType && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
@@ -192,7 +192,7 @@ export function AttributeBar({
                           fontFamily: theme.typography.fontFamily.medium,
                           color: unsupported.unsupportedStatus ? UNSUPPORTED_COLOR : theme.colors.text.primary,
                         }
-                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.secondary },
                     unsupported.unsupportedStatus && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
@@ -217,7 +217,7 @@ export function AttributeBar({
                   color={
                     entry.rating > 0
                       ? unsupported.unsupportedRating ? UNSUPPORTED_COLOR : theme.colors.text.primary
-                      : theme.colors.text.disabled
+                      : theme.colors.text.secondary
                   }
                 />
                 <Text
@@ -228,7 +228,7 @@ export function AttributeBar({
                           fontFamily: theme.typography.fontFamily.medium,
                           color: unsupported.unsupportedRating ? UNSUPPORTED_COLOR : theme.colors.text.primary,
                         }
-                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.secondary },
                     unsupported.unsupportedRating && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
@@ -257,7 +257,7 @@ export function AttributeBar({
                       ? unsupported.unsupportedPriority
                         ? UNSUPPORTED_COLOR
                         : theme.colors.priority[priorityInfo.category as PriorityCategory]
-                      : theme.colors.text.disabled
+                      : theme.colors.text.secondary
                   }
                 />
                 <Text
@@ -270,7 +270,7 @@ export function AttributeBar({
                             ? UNSUPPORTED_COLOR
                             : theme.colors.priority[priorityInfo.category as PriorityCategory],
                         }
-                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.secondary },
                     unsupported.unsupportedPriority && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
@@ -295,7 +295,7 @@ export function AttributeBar({
                   color={
                     hasLocation
                       ? unsupported.unsupportedLocation ? UNSUPPORTED_COLOR : theme.colors.text.primary
-                      : theme.colors.text.disabled
+                      : theme.colors.text.secondary
                   }
                 />
                 <Text
@@ -306,7 +306,7 @@ export function AttributeBar({
                           fontFamily: theme.typography.fontFamily.medium,
                           color: unsupported.unsupportedLocation ? UNSUPPORTED_COLOR : theme.colors.text.primary,
                         }
-                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.secondary },
                     unsupported.unsupportedLocation && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
@@ -331,7 +331,7 @@ export function AttributeBar({
                   color={
                     entry.due_date
                       ? unsupported.unsupportedDueDate ? UNSUPPORTED_COLOR : theme.colors.text.primary
-                      : theme.colors.text.disabled
+                      : theme.colors.text.secondary
                   }
                 />
                 <Text
@@ -342,7 +342,7 @@ export function AttributeBar({
                           fontFamily: theme.typography.fontFamily.medium,
                           color: unsupported.unsupportedDueDate ? UNSUPPORTED_COLOR : theme.colors.text.primary,
                         }
-                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.disabled },
+                      : { fontFamily: theme.typography.fontFamily.regular, color: theme.colors.text.secondary },
                     unsupported.unsupportedDueDate && styles.unsupportedText,
                   ]}
                   numberOfLines={1}
