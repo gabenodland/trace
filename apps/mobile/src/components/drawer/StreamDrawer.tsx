@@ -6,7 +6,7 @@
  *
  * Features:
  * - Animated slide-in from left
- * - Backdrop with fade
+ * - Backdrop with fade (derived from translateX via interpolation)
  * - Swipe-to-close gesture (on drawer itself)
  * - Swipe-to-open gesture (from EntryListScreen via drawerControl)
  * - Tap backdrop to close
@@ -33,15 +33,21 @@ export function StreamDrawer() {
   const theme = useTheme();
   const { isOpen, openDrawer, closeDrawer, registerDrawerControl } = useDrawer();
 
-  // Animation values
+  // Single animation value — backdrop opacity is derived via interpolation
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const backdropOpacity = translateX.interpolate({
+    inputRange: [-DRAWER_WIDTH, 0],
+    outputRange: [0, 0.5],
+  });
 
   // Track if drawer is currently visible (for pointer events)
   // Using state instead of ref so changes trigger re-render and update pointerEvents
   const [isVisible, setIsVisible] = useState(false);
   // Track if being dragged externally (swipe-to-open from list)
   const [isDragging, setIsDragging] = useState(false);
+  // Counter to prevent useEffect from double-firing animations when animateClose/animateOpen already started them.
+  // Using a counter instead of a boolean so interrupted animation callbacks can detect they're stale.
+  const animationIdRef = useRef(0);
 
   // Set drawer position directly (for external gesture control)
   // Position is in terms of how far drawer has moved: 0 = fully closed, DRAWER_WIDTH = fully open
@@ -52,46 +58,40 @@ export function StreamDrawer() {
     // position goes from 0 (closed) to DRAWER_WIDTH (open)
     const clampedPosition = Math.max(0, Math.min(position, DRAWER_WIDTH));
     translateX.setValue(-DRAWER_WIDTH + clampedPosition);
-    // Backdrop opacity: 0 when closed, 0.5 when open
-    backdropOpacity.setValue((clampedPosition / DRAWER_WIDTH) * 0.5);
-  }, [translateX, backdropOpacity]);
+    // Backdrop opacity follows automatically via interpolation
+  }, [translateX]);
 
   // Animate drawer to open position with spring carrying gesture velocity
   const animateOpen = useCallback((velocity?: number) => {
+    const myId = ++animationIdRef.current;
     setIsDragging(false);
     setIsVisible(true);
     openDrawer(); // Update state
-    Animated.parallel([
-      Animated.spring(translateX, {
-        toValue: 0,
-        velocity: velocity ?? 0,
-        ...IOS_SPRING,
-      }),
-      Animated.spring(backdropOpacity, {
-        toValue: 0.5,
-        ...IOS_SPRING,
-      }),
-    ]).start();
-  }, [translateX, backdropOpacity, openDrawer]);
+    Animated.spring(translateX, {
+      toValue: 0,
+      velocity: velocity ?? 0,
+      ...IOS_SPRING,
+    }).start(() => {
+      if (animationIdRef.current !== myId) return;
+      animationIdRef.current = 0;
+    });
+  }, [translateX, openDrawer]);
 
   // Animate drawer to closed position with spring carrying gesture velocity
   const animateClose = useCallback((velocity?: number) => {
+    const myId = ++animationIdRef.current;
     setIsDragging(false);
     closeDrawer(); // Update state
-    Animated.parallel([
-      Animated.spring(translateX, {
-        toValue: -DRAWER_WIDTH,
-        velocity: velocity ?? 0,
-        ...IOS_SPRING,
-      }),
-      Animated.spring(backdropOpacity, {
-        toValue: 0,
-        ...IOS_SPRING,
-      }),
-    ]).start(() => {
-      setIsVisible(false);
+    Animated.spring(translateX, {
+      toValue: -DRAWER_WIDTH,
+      velocity: velocity ?? 0,
+      ...IOS_SPRING,
+    }).start(({ finished }) => {
+      if (animationIdRef.current !== myId) return;
+      animationIdRef.current = 0;
+      if (finished) setIsVisible(false);
     });
-  }, [translateX, backdropOpacity, closeDrawer]);
+  }, [translateX, closeDrawer]);
 
   // Get drawer width
   const getDrawerWidth = useCallback(() => DRAWER_WIDTH, []);
@@ -121,9 +121,7 @@ export function StreamDrawer() {
         // Only allow swiping left (closing)
         if (gestureState.dx < 0) {
           translateX.setValue(gestureState.dx);
-          // Also update backdrop
-          const progress = Math.max(0, 1 + gestureState.dx / DRAWER_WIDTH);
-          backdropOpacity.setValue(progress * 0.5);
+          // Backdrop opacity follows automatically via interpolation
         }
       },
       onPanResponderRelease: (_, gestureState) => {
@@ -132,56 +130,39 @@ export function StreamDrawer() {
           animateClose(gestureState.vx);
         } else {
           // Didn't pass close threshold — spring back open without velocity
-          // (gesture was leftward but animation goes right)
-          Animated.parallel([
-            Animated.spring(translateX, {
-              toValue: 0,
-              ...IOS_SPRING,
-            }),
-            Animated.spring(backdropOpacity, {
-              toValue: 0.5,
-              ...IOS_SPRING,
-            }),
-          ]).start();
+          Animated.spring(translateX, {
+            toValue: 0,
+            ...IOS_SPRING,
+          }).start();
         }
       },
     })
   ).current;
 
-  // Animate open/close based on state (for non-gesture triggers like button press)
+  // Animate open/close based on state (for non-gesture triggers like button press, stream selection)
+  // Gesture-driven animations are handled by animateClose/animateOpen directly.
   useEffect(() => {
-    // Skip if we're being dragged - let the gesture control position
+    // Skip if we're being dragged or if animateClose/animateOpen is already handling it
     if (isDragging) return;
+    if (animationIdRef.current !== 0) return;
 
     if (isOpen) {
-      // Only set visible if not already visible to avoid unnecessary re-renders
-      setIsVisible(prev => prev === true ? prev : true);
-      Animated.parallel([
-        Animated.spring(translateX, {
-          toValue: 0,
-          ...IOS_SPRING,
-        }),
-        Animated.spring(backdropOpacity, {
-          toValue: 0.5,
-          ...IOS_SPRING,
-        }),
-      ]).start();
+      setIsVisible(true);
+      Animated.timing(translateX, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
     } else {
-      Animated.parallel([
-        Animated.spring(translateX, {
-          toValue: -DRAWER_WIDTH,
-          ...IOS_SPRING,
-        }),
-        Animated.spring(backdropOpacity, {
-          toValue: 0,
-          ...IOS_SPRING,
-        }),
-      ]).start(() => {
-        // Only set invisible if not already invisible
-        setIsVisible(prev => prev === false ? prev : false);
+      Animated.timing(translateX, {
+        toValue: -DRAWER_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setIsVisible(false);
       });
     }
-  }, [isOpen, isDragging]); // Remove translateX, backdropOpacity - they're stable refs
+  }, [isOpen, isDragging]); // translateX is a stable ref
 
   // Always render the drawer - it starts off-screen (translateX = -DRAWER_WIDTH)
   // and backdrop is invisible (opacity = 0). Using pointerEvents to control interaction.
