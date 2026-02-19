@@ -13,6 +13,7 @@
 import * as Crypto from 'expo-crypto';
 import { localDB } from '../../shared/db/localDB';
 import type { Stream, UpdateStreamInput } from '@trace/core';
+import { supabase } from '@trace/core';
 // Import directly from syncApi to avoid circular dependency through sync/index.ts
 import { triggerPushSync } from '../../shared/sync/syncApi';
 import { createScopedLogger } from '../../shared/utils/logger';
@@ -71,11 +72,11 @@ export async function createStream(data: {
     icon: data.icon || null,
     created_at: now,
     updated_at: now,
-    // Default feature toggles
-    entry_use_rating: false,
-    entry_use_priority: false,
-    entry_use_status: false,
-    entry_use_duedates: false,
+    // Default feature toggles (must match StreamPropertiesScreen defaults)
+    entry_use_rating: true,
+    entry_use_priority: true,
+    entry_use_status: true,
+    entry_use_duedates: true,
     entry_use_location: true,
     entry_use_photos: true,
     entry_content_type: 'text',
@@ -133,4 +134,35 @@ export async function deleteStream(streamId: string): Promise<void> {
 
   // Trigger sync in background (non-blocking)
   triggerPushSync();
+}
+
+/**
+ * Make a stream local-only by deleting its data from the server.
+ * Local SQLite data is preserved. This is a server-side destructive operation
+ * that cannot be undone — entries and photos are soft-deleted on the server.
+ */
+export async function makeStreamLocalOnly(streamId: string): Promise<void> {
+  log.info('Making stream local-only', { streamId });
+
+  // Soft-delete entries from server (cascade handles photos)
+  const { error: entriesError } = await supabase
+    .from("entries")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("stream_id", streamId);
+
+  if (entriesError) {
+    log.error("Failed to delete server entries", entriesError);
+    throw new Error(`Failed to delete server entries: ${entriesError.message}`);
+  }
+
+  // Delete stream from server
+  const { error: streamError } = await supabase
+    .from("streams")
+    .delete()
+    .eq("stream_id", streamId);
+
+  if (streamError) {
+    log.error("Failed to delete server stream", streamError);
+    throw new Error(`Failed to delete server stream: ${streamError.message}`);
+  }
 }

@@ -10,9 +10,9 @@ import {
   createStream,
   updateStream,
   deleteStream,
+  makeStreamLocalOnly,
 } from './mobileStreamApi';
 import type { UpdateStreamInput } from '@trace/core';
-import * as streamHelpers from '@trace/core/src/modules/streams/streamHelpers';
 
 /**
  * Internal: Query hook for fetching streams from local SQLite
@@ -67,6 +67,7 @@ function useUpdateStreamMutation() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['stream', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
     },
   });
@@ -89,6 +90,22 @@ function useDeleteStreamMutation() {
 }
 
 /**
+ * Internal: Mutation hook for making a stream local-only
+ * Deletes server data while preserving local SQLite data.
+ */
+function useMakeStreamLocalOnlyMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: makeStreamLocalOnly,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['streams'] });
+      queryClient.invalidateQueries({ queryKey: ['unsyncedCount'] });
+    },
+  });
+}
+
+/**
  * SINGLE SOURCE OF TRUTH: Main hook for stream operations (mobile version)
  * Uses local SQLite database for offline-first functionality
  */
@@ -97,6 +114,7 @@ export function useStreams() {
   const createMutation = useCreateStreamMutation();
   const updateMutation = useUpdateStreamMutation();
   const deleteMutation = useDeleteStreamMutation();
+  const makeLocalOnlyMutation = useMakeStreamLocalOnlyMutation();
 
   return {
     // Data
@@ -121,10 +139,11 @@ export function useStreams() {
       deleteStream: async (id: string) => {
         return deleteMutation.mutateAsync(id);
       },
-    },
 
-    // Helpers (pure functions)
-    streamHelpers,
+      makeStreamLocalOnly: async (id: string) => {
+        return makeLocalOnlyMutation.mutateAsync(id);
+      },
+    },
   };
 }
 
@@ -135,6 +154,7 @@ export function useStream(streamId: string | null) {
   const streamQuery = useStreamQuery(streamId);
   const updateMutation = useUpdateStreamMutation();
   const deleteMutation = useDeleteStreamMutation();
+  const makeLocalOnlyMutation = useMakeStreamLocalOnlyMutation();
 
   return {
     // Data
@@ -153,9 +173,11 @@ export function useStream(streamId: string | null) {
         if (!streamId) throw new Error('No stream ID provided');
         return deleteMutation.mutateAsync(streamId);
       },
-    },
 
-    // Helpers (pure functions)
-    streamHelpers,
+      makeStreamLocalOnly: async () => {
+        if (!streamId) throw new Error('No stream ID provided');
+        return makeLocalOnlyMutation.mutateAsync(streamId);
+      },
+    },
   };
 }

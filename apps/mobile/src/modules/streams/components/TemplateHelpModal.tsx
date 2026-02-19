@@ -4,9 +4,10 @@
  * Shows supported markdown syntax and variables for stream templates.
  */
 
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Pressable, Platform } from "react-native";
 import { TEMPLATE_HELP } from "@trace/core";
 import { Icon } from "../../../shared/components";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 
 interface TemplateHelpModalProps {
   visible: boolean;
@@ -16,6 +17,7 @@ interface TemplateHelpModalProps {
 }
 
 export function TemplateHelpModal({ visible, onClose, mode = 'content' }: TemplateHelpModalProps) {
+  const theme = useTheme();
   const isTitle = mode === 'title';
 
   return (
@@ -25,27 +27,32 @@ export function TemplateHelpModal({ visible, onClose, mode = 'content' }: Templa
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable
+          style={[styles.modal, { backgroundColor: theme.colors.background.primary }]}
+          onPress={e => e.stopPropagation()}
+        >
           {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>{isTitle ? 'Title Variables' : 'Template Syntax'}</Text>
+          <View style={[styles.header, { borderBottomColor: theme.colors.border.light }]}>
+            <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
+              {isTitle ? 'Title Variables' : 'Template Syntax'}
+            </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Icon name="X" size={24} color="#6b7280" />
+              <Icon name="X" size={20} color={theme.colors.text.tertiary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
             {/* Variables Section */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Variables</Text>
-              <Text style={styles.sectionDescription}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Variables</Text>
+              <Text style={[styles.sectionDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
                 These get replaced when a new entry is created:
               </Text>
               {TEMPLATE_HELP.variables.map((item) => (
-                <View key={item.syntax} style={styles.row}>
-                  <Text style={styles.syntax}>{item.syntax}</Text>
-                  <Text style={styles.description}>{item.description}</Text>
+                <View key={item.syntax} style={[styles.row, { borderBottomColor: theme.colors.border.light }]}>
+                  <Text style={[styles.syntax, { color: theme.colors.functional.accent }]}>{item.syntax}</Text>
+                  <Text style={[styles.description, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{item.description}</Text>
                 </View>
               ))}
             </View>
@@ -53,14 +60,14 @@ export function TemplateHelpModal({ visible, onClose, mode = 'content' }: Templa
             {/* Markdown Section - only for content mode */}
             {!isTitle && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Formatting</Text>
-                <Text style={styles.sectionDescription}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Formatting</Text>
+                <Text style={[styles.sectionDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
                   Basic markdown supported in content:
                 </Text>
                 {TEMPLATE_HELP.markdown.map((item) => (
-                  <View key={item.syntax} style={styles.row}>
-                    <Text style={styles.syntax}>{item.syntax}</Text>
-                    <Text style={styles.description}>{item.description}</Text>
+                  <View key={item.syntax} style={[styles.row, { borderBottomColor: theme.colors.border.light }]}>
+                    <Text style={[styles.syntax, { color: theme.colors.functional.accent }]}>{item.syntax}</Text>
+                    <Text style={[styles.description, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{item.description}</Text>
                   </View>
                 ))}
               </View>
@@ -69,28 +76,28 @@ export function TemplateHelpModal({ visible, onClose, mode = 'content' }: Templa
             {/* Example Section - only for content mode */}
             {!isTitle && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Example Template</Text>
-                <View style={styles.exampleBox}>
-                  <Text style={styles.exampleText}>## {"{weekday}"} Tasks{"\n"}</Text>
-                  <Text style={styles.exampleText}>[ ] Meditate{"\n"}</Text>
-                  <Text style={styles.exampleText}>[ ] Walk 10K{"\n"}</Text>
-                  <Text style={styles.exampleText}>{"\n"}</Text>
-                  <Text style={styles.exampleText}>## {"{month_name}"} {"{day}"}, {"{year}"}{"\n"}</Text>
-                  <Text style={styles.exampleText}>[ ]</Text>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Example Template</Text>
+                <View style={[styles.exampleBox, { backgroundColor: theme.colors.background.tertiary, borderColor: theme.colors.border.light }]}>
+                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>## {"{weekday}"} Tasks{"\n"}</Text>
+                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>[ ] Meditate{"\n"}</Text>
+                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>[ ] Walk 10K{"\n"}</Text>
+                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>{"\n"}</Text>
+                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>## {"{month_name}"} {"{day}"}, {"{year}"}{"\n"}</Text>
+                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>[ ]</Text>
                 </View>
               </View>
             )}
 
             {/* Note */}
-            <View style={styles.note}>
-              <Icon name="Info" size={16} color="#6b7280" />
-              <Text style={styles.noteText}>
+            <View style={[styles.note, { backgroundColor: theme.colors.background.tertiary }]}>
+              <Icon name="Info" size={16} color={theme.colors.text.tertiary} />
+              <Text style={[styles.noteText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
                 Templates apply when creating a new empty entry in this stream.
               </Text>
             </View>
           </ScrollView>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -104,29 +111,20 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modal: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
+    borderRadius: 14,
     width: "100%",
     maxWidth: 400,
     maxHeight: "80%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   title: {
     fontSize: 18,
-    fontWeight: "600",
-    color: "#1f2937",
   },
   closeButton: {
     padding: 4,
@@ -139,50 +137,39 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: "600",
-    color: "#374151",
     marginBottom: 4,
   },
   sectionDescription: {
     fontSize: 13,
-    color: "#6b7280",
     marginBottom: 12,
   },
   row: {
     flexDirection: "row",
     paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   syntax: {
     width: 140,
-    fontFamily: "monospace",
     fontSize: 13,
-    color: "#3b82f6",
-    fontWeight: "500",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
   description: {
     flex: 1,
     fontSize: 13,
-    color: "#4b5563",
   },
   exampleBox: {
-    backgroundColor: "#f9fafb",
     borderRadius: 8,
     padding: 12,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderWidth: StyleSheet.hairlineWidth,
   },
   exampleText: {
-    fontFamily: "monospace",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     fontSize: 12,
-    color: "#374151",
     lineHeight: 18,
   },
   note: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#f0f9ff",
     borderRadius: 8,
     padding: 12,
     gap: 8,
@@ -191,7 +178,6 @@ const styles = StyleSheet.create({
   noteText: {
     flex: 1,
     fontSize: 13,
-    color: "#0369a1",
     lineHeight: 18,
   },
 });

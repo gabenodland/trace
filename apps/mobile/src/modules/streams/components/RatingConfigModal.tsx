@@ -12,9 +12,9 @@ import {
   Modal,
   Pressable,
 } from "react-native";
-import { theme } from "../../../shared/theme/theme";
-import { type RatingType, getRatingTypeLabel } from "@trace/core";
+import { type RatingType } from "@trace/core";
 import { Icon } from "../../../shared/components";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 
 interface RatingConfigModalProps {
   visible: boolean;
@@ -50,6 +50,7 @@ export function RatingConfigModal({
   ratingType,
   onSave,
 }: RatingConfigModalProps) {
+  const theme = useTheme();
   const [selectedType, setSelectedType] = useState<RatingType>(ratingType);
 
   // Reset when modal opens
@@ -65,7 +66,7 @@ export function RatingConfigModal({
   };
 
   const renderIcon = (iconType: string, isSelected: boolean) => {
-    const color = isSelected ? "#3b82f6" : theme.colors.text.tertiary;
+    const color = isSelected ? theme.colors.functional.accent : theme.colors.text.tertiary;
 
     switch (iconType) {
       case 'star':
@@ -75,13 +76,13 @@ export function RatingConfigModal({
       case 'number':
         return (
           <View style={styles.numberIcon}>
-            <Text style={[styles.numberIconText, { color }]}>10</Text>
+            <Text style={[styles.numberIconText, { color, fontFamily: theme.typography.fontFamily.bold }]}>10</Text>
           </View>
         );
       case 'decimal':
         return (
           <View style={styles.numberIcon}>
-            <Text style={[styles.numberIconText, { color }]}>8.5</Text>
+            <Text style={[styles.numberIconText, { color, fontFamily: theme.typography.fontFamily.bold }]}>8.5</Text>
           </View>
         );
       default:
@@ -97,16 +98,19 @@ export function RatingConfigModal({
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.modal} onPress={e => e.stopPropagation()}>
+        <Pressable
+          style={[styles.modal, { backgroundColor: theme.colors.background.primary }]}
+          onPress={e => e.stopPropagation()}
+        >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Rating Type</Text>
+            <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Rating Type</Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Icon name="X" size={20} color="#6b7280" />
+              <Icon name="X" size={20} color={theme.colors.text.tertiary} />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.subtitle}>
+          <Text style={[styles.subtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
             Choose how ratings are displayed and entered for entries in this stream.
           </Text>
 
@@ -120,7 +124,8 @@ export function RatingConfigModal({
                   key={option.value}
                   style={[
                     styles.optionRow,
-                    isSelected && styles.optionRowSelected,
+                    { backgroundColor: theme.colors.background.tertiary, borderColor: "transparent" },
+                    isSelected && { borderColor: theme.colors.functional.accent },
                   ]}
                   onPress={() => setSelectedType(option.value)}
                   activeOpacity={0.7}
@@ -129,10 +134,11 @@ export function RatingConfigModal({
                   <View
                     style={[
                       styles.radio,
-                      isSelected && styles.radioSelected,
+                      { borderColor: theme.colors.border.dark },
+                      isSelected && { borderColor: theme.colors.functional.accent },
                     ]}
                   >
-                    {isSelected && <View style={styles.radioInner} />}
+                    {isSelected && <View style={[styles.radioInner, { backgroundColor: theme.colors.functional.accent }]} />}
                   </View>
 
                   {/* Icon */}
@@ -144,11 +150,12 @@ export function RatingConfigModal({
                   <View style={styles.optionInfo}>
                     <Text style={[
                       styles.optionLabel,
-                      isSelected && styles.optionLabelSelected,
+                      { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
+                      isSelected && { color: theme.colors.functional.accent },
                     ]}>
                       {option.label}
                     </Text>
-                    <Text style={styles.optionDescription}>
+                    <Text style={[styles.optionDescription, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
                       {option.description}
                     </Text>
                   </View>
@@ -159,11 +166,19 @@ export function RatingConfigModal({
 
           {/* Actions */}
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+            <TouchableOpacity
+              style={[styles.cancelButton, { backgroundColor: theme.colors.background.tertiary }]}
+              onPress={onClose}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.cancelButtonText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Save</Text>
+            <TouchableOpacity
+              style={[styles.saveButton, { backgroundColor: theme.colors.functional.accent }]}
+              onPress={handleSave}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.saveButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>Save</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -181,9 +196,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modal: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
+    borderRadius: 14,
+    padding: 20,
     width: "100%",
     maxWidth: 400,
   },
@@ -191,57 +205,43 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: theme.spacing.sm,
+    marginBottom: 8,
   },
   title: {
     fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
   },
   closeButton: {
     padding: 4,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.colors.text.secondary,
-    marginBottom: theme.spacing.lg,
+    marginBottom: 20,
     lineHeight: 18,
   },
   optionsList: {
-    gap: theme.spacing.sm,
+    gap: 8,
   },
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    backgroundColor: theme.colors.background.secondary,
-    borderRadius: theme.borderRadius.md,
-    gap: theme.spacing.md,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 12,
     borderWidth: 2,
-    borderColor: "transparent",
-  },
-  optionRowSelected: {
-    borderColor: "#3b82f6",
-    backgroundColor: "#eff6ff",
   },
   radio: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: "#d1d5db",
     alignItems: "center",
     justifyContent: "center",
-  },
-  radioSelected: {
-    borderColor: "#3b82f6",
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#3b82f6",
   },
   optionIcon: {
     width: 32,
@@ -255,52 +255,40 @@ const styles = StyleSheet.create({
   },
   numberIconText: {
     fontSize: 14,
-    fontWeight: theme.typography.fontWeight.bold,
   },
   optionInfo: {
     flex: 1,
   },
   optionLabel: {
     fontSize: 15,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
     marginBottom: 2,
-  },
-  optionLabelSelected: {
-    color: "#3b82f6",
   },
   optionDescription: {
     fontSize: 12,
-    color: theme.colors.text.tertiary,
     lineHeight: 16,
   },
   actions: {
     flexDirection: "row",
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.lg,
+    gap: 8,
+    marginTop: 20,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.background.secondary,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: "center",
   },
   cancelButtonText: {
     fontSize: 15,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.secondary,
   },
   saveButton: {
     flex: 1,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: "#3b82f6",
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: "center",
   },
   saveButtonText: {
     fontSize: 15,
-    fontWeight: theme.typography.fontWeight.semibold,
     color: "#ffffff",
   },
 });

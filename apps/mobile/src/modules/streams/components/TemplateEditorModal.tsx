@@ -2,6 +2,7 @@
  * Template Editor Modal
  *
  * Full-screen modal for editing content templates with proper keyboard handling.
+ * Uses pageSheet presentation with theme-aware styling.
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -15,9 +16,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  StatusBar,
 } from "react-native";
 import { TemplateHelpModal } from "./TemplateHelpModal";
 import { Icon } from "../../../shared/components";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 
 interface TemplateEditorModalProps {
   visible: boolean;
@@ -36,6 +39,7 @@ export function TemplateEditorModal({
   title = "Content Template",
   placeholder = "## {weekday} Tasks\n[ ] Task 1\n[ ] Task 2\n\n## {month_name} {day}, {year}",
 }: TemplateEditorModalProps) {
+  const theme = useTheme();
   const [localValue, setLocalValue] = useState(value);
   const [showHelp, setShowHelp] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -44,10 +48,6 @@ export function TemplateEditorModal({
   useEffect(() => {
     if (visible) {
       setLocalValue(value);
-      // Focus the input after a short delay to ensure modal is fully visible
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
     }
   }, [visible, value]);
 
@@ -57,7 +57,7 @@ export function TemplateEditorModal({
   };
 
   const handleCancel = () => {
-    setLocalValue(value); // Reset to original
+    setLocalValue(value);
     onClose();
   };
 
@@ -70,20 +70,20 @@ export function TemplateEditorModal({
       presentationStyle="pageSheet"
       onRequestClose={handleCancel}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <KeyboardAvoidingView
           style={styles.keyboardView}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
             <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={[styles.cancelText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Cancel</Text>
             </TouchableOpacity>
 
             <View style={styles.headerCenter}>
-              <Text style={styles.headerTitle}>{title}</Text>
+              <Text style={[styles.headerTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>{title}</Text>
             </View>
 
             <View style={styles.headerRight}>
@@ -92,7 +92,7 @@ export function TemplateEditorModal({
                 style={styles.helpButton}
                 activeOpacity={0.7}
               >
-                <Icon name="HelpCircle" size={22} color="#6b7280" />
+                <Icon name="HelpCircle" size={22} color={theme.colors.text.tertiary} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -100,7 +100,7 @@ export function TemplateEditorModal({
                 style={[styles.headerButton, !hasChanges && styles.headerButtonDisabled]}
                 disabled={!hasChanges}
               >
-                <Text style={[styles.saveText, !hasChanges && styles.saveTextDisabled]}>
+                <Text style={[styles.saveText, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }, !hasChanges && { color: theme.colors.text.disabled }]}>
                   Done
                 </Text>
               </TouchableOpacity>
@@ -111,15 +111,16 @@ export function TemplateEditorModal({
           <View style={styles.editorContainer}>
             <TextInput
               ref={inputRef}
-              style={styles.editor}
+              style={[styles.editor, { color: theme.colors.text.primary }]}
               value={localValue}
               onChangeText={setLocalValue}
               placeholder={placeholder}
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={theme.colors.text.tertiary}
               multiline
               textAlignVertical="top"
               autoCapitalize="sentences"
               autoCorrect={false}
+              autoFocus
               scrollEnabled
             />
           </View>
@@ -130,6 +131,7 @@ export function TemplateEditorModal({
       <TemplateHelpModal
         visible={showHelp}
         onClose={() => setShowHelp(false)}
+        mode="content"
       />
     </Modal>
   );
@@ -138,7 +140,6 @@ export function TemplateEditorModal({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
   },
   keyboardView: {
     flex: 1,
@@ -148,10 +149,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    backgroundColor: "#f9fafb",
+    paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 0) + 16 : 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerButton: {
     paddingVertical: 4,
@@ -174,20 +174,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: "600",
-    color: "#1f2937",
   },
   cancelText: {
     fontSize: 16,
-    color: "#6b7280",
   },
   saveText: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#3b82f6",
-  },
-  saveTextDisabled: {
-    color: "#9ca3af",
   },
   helpButton: {
     padding: 4,
@@ -201,7 +193,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     lineHeight: 22,
-    color: "#1f2937",
     textAlignVertical: "top",
   },
 });

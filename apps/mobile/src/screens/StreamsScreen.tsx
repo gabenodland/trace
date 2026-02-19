@@ -3,20 +3,21 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   TextInput,
   Alert,
 } from "react-native";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
-
-const log = createScopedLogger(LogScopes.Streams);
 import { Icon } from "../shared/components";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import type { Stream } from "@trace/core";
 import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { useTheme } from "../shared/contexts/ThemeContext";
+import { ActionSheet, type ActionSheetItem } from "../components/sheets";
+
+const log = createScopedLogger(LogScopes.Streams);
 
 export function StreamsScreen() {
   const navigate = useNavigate();
@@ -24,33 +25,23 @@ export function StreamsScreen() {
   const { streams, isLoading, streamMutations } = useStreams();
 
   const [searchText, setSearchText] = useState("");
+  const [actionSheetStream, setActionSheetStream] = useState<Stream | null>(null);
 
-  // Filter streams by search text
-  const filteredStreams = useMemo(() => {
-    if (!searchText.trim()) return streams;
-    const searchLower = searchText.toLowerCase();
-    return streams.filter((stream) =>
-      stream.name.toLowerCase().includes(searchLower)
-    );
+  const sortedStreams = useMemo(() => {
+    const filtered = searchText.trim()
+      ? streams.filter((s) => s.name.toLowerCase().includes(searchText.toLowerCase()))
+      : streams;
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [streams, searchText]);
 
-  // Sort streams alphabetically
-  const sortedStreams = useMemo(() => {
-    return [...filteredStreams].sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
-  }, [filteredStreams]);
-
-  // Navigate to create new stream screen
   const handleCreateStream = () => {
     navigate("stream-properties", { streamId: null });
   };
 
-  // Delete stream with confirmation
   const handleDeleteStream = (stream: Stream) => {
     Alert.alert(
       "Delete Stream",
-      `Are you sure you want to delete "${stream.name}"? Entries will be moved to no stream.`,
+      `Are you sure you want to delete "${stream.name}"? Entries will be moved to Inbox.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -69,57 +60,34 @@ export function StreamsScreen() {
     );
   };
 
-  // Open stream settings screen
   const handleOpenSettings = (stream: Stream) => {
     navigate("stream-properties", { streamId: stream.stream_id });
   };
 
-  // Open entry list filtered by stream
   const handleOpenEntries = (stream: Stream) => {
     navigate("inbox", { returnStreamId: stream.stream_id, returnStreamName: stream.name });
   };
 
-  // Render a single stream item
-  const renderStreamItem = ({ item: stream }: { item: Stream }) => {
-    return (
-      <View style={[styles.streamItem, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-        <TouchableOpacity
-          style={styles.streamMain}
-          onPress={() => handleOpenSettings(stream)}
-          onLongPress={() => handleOpenEntries(stream)}
-          activeOpacity={0.7}
-        >
-          {/* Stream icon */}
-          <View
-            style={[
-              styles.streamIcon,
-              { backgroundColor: stream.color || theme.colors.text.secondary },
-            ]}
-          >
-            {stream.icon ? (
-              <Text style={styles.streamIconText}>{stream.icon}</Text>
-            ) : (
-              <Icon name="Layers" size={16} color="#ffffff" />
-            )}
-          </View>
-
-          {/* Stream name */}
-          <View style={styles.streamInfo}>
-            <Text style={[styles.streamName, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>{stream.name}</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Delete action */}
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleDeleteStream(stream)}
-          activeOpacity={0.7}
-        >
-          <Icon name="Trash2" size={18} color={theme.colors.functional.overdue} />
-        </TouchableOpacity>
-      </View>
-    );
-  };
+  const actionSheetItems: ActionSheetItem[] = actionSheetStream
+    ? [
+        {
+          label: "Edit Stream",
+          icon: "Settings",
+          onPress: () => handleOpenSettings(actionSheetStream),
+        },
+        {
+          label: "View Entries",
+          icon: "List",
+          onPress: () => handleOpenEntries(actionSheetStream),
+        },
+        {
+          label: "Delete Stream",
+          icon: "Trash2",
+          onPress: () => handleDeleteStream(actionSheetStream),
+          isDanger: true,
+        },
+      ]
+    : [];
 
   const addButton = (
     <TouchableOpacity
@@ -133,56 +101,122 @@ export function StreamsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
-      <SecondaryHeader title="Streams" rightAction={addButton} />
+      <SecondaryHeader title="Manage Streams" rightAction={addButton} />
 
-      {/* Search bar */}
-      <View style={[styles.searchContainer, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
-        <View style={[styles.searchInputWrapper, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Icon name="Search" size={18} color={theme.colors.text.tertiary} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
-            placeholder="Search streams..."
-            placeholderTextColor={theme.colors.text.tertiary}
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-          {searchText.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchText("")}>
-              <Icon name="X" size={18} color={theme.colors.text.tertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Stream list */}
       {isLoading ? (
         <View style={styles.emptyContainer}>
           <Text style={[styles.emptyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading streams...</Text>
         </View>
-      ) : sortedStreams.length === 0 ? (
+      ) : streams.length === 0 && !searchText ? (
         <View style={styles.emptyContainer}>
+          <Icon name="Layers" size={48} color={theme.colors.text.disabled} />
+          <Text style={[styles.emptyTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>No Streams Yet</Text>
           <Text style={[styles.emptyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-            {searchText ? "No streams match your search" : "No streams yet"}
+            Streams help you organize entries into categories
           </Text>
-          {!searchText && (
-            <TouchableOpacity
-              style={[styles.emptyButton, { backgroundColor: theme.colors.functional.accent }]}
-              onPress={handleCreateStream}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.emptyButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Create your first stream</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.emptyButton, { backgroundColor: theme.colors.functional.accent }]}
+            onPress={handleCreateStream}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.emptyButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Create Your First Stream</Text>
+          </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={sortedStreams}
-          keyExtractor={(item) => item.stream_id}
-          renderItem={renderStreamItem}
-          contentContainerStyle={styles.listContent}
-        />
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+          {/* Search bar */}
+          <View style={[styles.searchWrapper, { backgroundColor: theme.colors.background.tertiary }]}>
+            <Icon name="Search" size={16} color={theme.colors.text.tertiary} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
+              placeholder="Search streams..."
+              placeholderTextColor={theme.colors.text.tertiary}
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+            {searchText.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchText("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Icon name="X" size={16} color={theme.colors.text.tertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {sortedStreams.length === 0 ? (
+            <View style={styles.noResultsContainer}>
+              <Text style={[styles.noResultsText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                No streams match "{searchText}"
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+              {sortedStreams.map((stream, index) => (
+                <View
+                  key={stream.stream_id}
+                  style={[
+                    styles.streamRow,
+                    index < sortedStreams.length - 1 && [styles.streamRowSeparator, { borderBottomColor: theme.colors.border.light }],
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={styles.streamRowContent}
+                    onPress={() => handleOpenSettings(stream)}
+                    activeOpacity={0.7}
+                  >
+                    {/* Color dot or emoji */}
+                    {stream.icon ? (
+                      <Text style={styles.streamEmoji}>{stream.icon}</Text>
+                    ) : stream.color ? (
+                      <View style={[styles.colorDot, { backgroundColor: stream.color }]} />
+                    ) : null}
+
+                    {/* Stream name */}
+                    <Text
+                      style={[styles.streamName, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}
+                      numberOfLines={1}
+                    >
+                      {stream.name}
+                    </Text>
+
+                    {/* Status badges */}
+                    {stream.is_localonly && (
+                      <Icon name="Smartphone" size={14} color={theme.colors.text.tertiary} />
+                    )}
+                    {stream.is_private && (
+                      <Icon name="Lock" size={14} color={theme.colors.text.tertiary} />
+                    )}
+
+                    {/* Entry count */}
+                    {(stream.entry_count ?? 0) > 0 && (
+                      <Text style={[styles.entryCount, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+                        {stream.entry_count}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* More menu */}
+                  <TouchableOpacity
+                    style={styles.moreButton}
+                    onPress={() => setActionSheetStream(stream)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Icon name="MoreVertical" size={18} color={theme.colors.text.tertiary} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
       )}
 
+      {/* Action sheet */}
+      <ActionSheet
+        visible={!!actionSheetStream}
+        onClose={() => setActionSheetStream(null)}
+        items={actionSheetItems}
+        title={actionSheetStream?.name}
+      />
     </View>
   );
 }
@@ -191,94 +225,101 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-    borderBottomWidth: 1,
-  },
-  searchInputWrapper: {
+  content: {
     flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+  },
+  searchWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
     gap: 8,
+    marginBottom: 16,
   },
   searchInput: {
     flex: 1,
-    height: 40,
+    height: 36,
+    fontSize: 15,
+  },
+  card: {
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  streamRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  streamRowSeparator: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  colorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  streamEmoji: {
     fontSize: 16,
   },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+  streamRowContent: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 8,
+  },
+  streamName: {
+    flex: 1,
+    fontSize: 16,
+  },
+  entryCount: {
+    fontSize: 15,
+  },
+  moreButton: {
+    padding: 4,
+    marginLeft: 4,
   },
   headerAddButton: {
     padding: 4,
-  },
-  listContent: {
-    padding: 16,
-  },
-  streamItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-  },
-  streamMain: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  streamIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  streamIconText: {
-    fontSize: 16,
-  },
-  streamInfo: {
-    flex: 1,
-  },
-  streamName: {
-    fontSize: 16,
-  },
-  actionButton: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
   },
   emptyContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 32,
+    gap: 12,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    marginTop: 4,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 15,
     textAlign: "center",
-    marginBottom: 16,
   },
   emptyButton: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 10,
+    marginTop: 8,
   },
   emptyButtonText: {
     color: "#ffffff",
     fontSize: 16,
+  },
+  noResultsContainer: {
+    padding: 32,
+    alignItems: "center",
+  },
+  noResultsText: {
+    fontSize: 15,
+    textAlign: "center",
+  },
+  bottomSpacer: {
+    height: 20,
   },
 });

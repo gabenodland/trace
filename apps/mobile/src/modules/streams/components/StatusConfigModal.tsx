@@ -3,7 +3,7 @@
  * Allows selecting which statuses to enable and which is the default
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,6 @@ import {
   ScrollView,
   Pressable,
 } from "react-native";
-import { theme } from "../../../shared/theme/theme";
 import { StatusIcon } from "../../../shared/components/StatusIcon";
 import {
   type EntryStatus,
@@ -22,6 +21,7 @@ import {
   DEFAULT_INITIAL_STATUS,
 } from "@trace/core";
 import { Icon } from "../../../shared/components";
+import { useTheme } from "../../../shared/contexts/ThemeContext";
 
 interface StatusConfigModalProps {
   visible: boolean;
@@ -38,9 +38,13 @@ export function StatusConfigModal({
   defaultStatus,
   onSave,
 }: StatusConfigModalProps) {
+  const theme = useTheme();
+
   // Local state for editing
   const [localStatuses, setLocalStatuses] = useState<EntryStatus[]>(selectedStatuses);
   const [localDefault, setLocalDefault] = useState<EntryStatus>(defaultStatus);
+  const localDefaultRef = useRef(localDefault);
+  localDefaultRef.current = localDefault;
 
   // Reset local state when modal opens
   useEffect(() => {
@@ -57,7 +61,7 @@ export function StatusConfigModal({
         if (prev.length <= 1) return prev;
         // If removing the default status, switch default to first remaining
         const newStatuses = prev.filter(s => s !== status);
-        if (localDefault === status) {
+        if (localDefaultRef.current === status) {
           setLocalDefault(newStatuses[0]);
         }
         return newStatuses;
@@ -98,18 +102,21 @@ export function StatusConfigModal({
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.modal} onPress={e => e.stopPropagation()}>
+        <Pressable
+          style={[styles.modal, { backgroundColor: theme.colors.background.primary }]}
+          onPress={e => e.stopPropagation()}
+        >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Configure Statuses</Text>
+            <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Configure Statuses</Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Icon name="X" size={20} color="#6b7280" />
+              <Icon name="X" size={20} color={theme.colors.text.tertiary} />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.subtitle}>
+          <Text style={[styles.subtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
             Select which statuses are available for entries in this stream. Tap the star to set the default status for new entries.{"\n\n"}
-            <Text style={styles.subtitleHighlight}>Tip:</Text> Enable "None" to allow removing status from entries. Set it as default to make status optional.
+            <Text style={{ color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }}>Tip:</Text> Enable "None" to allow removing status from entries. Set it as default to make status optional.
           </Text>
 
           {/* Status List */}
@@ -122,14 +129,15 @@ export function StatusConfigModal({
                 return (
                   <Pressable
                     key={statusInfo.value}
-                    style={styles.statusRow}
+                    style={[styles.statusRow, { backgroundColor: theme.colors.background.tertiary }]}
                     onPress={() => toggleStatus(statusInfo.value)}
                   >
                     {/* Checkbox */}
                     <View
                       style={[
                         styles.checkbox,
-                        isSelected && styles.checkboxSelected,
+                        { borderColor: theme.colors.border.dark },
+                        isSelected && { backgroundColor: theme.colors.functional.accent, borderColor: theme.colors.functional.accent },
                       ]}
                     >
                       {isSelected && (
@@ -140,11 +148,12 @@ export function StatusConfigModal({
                     {/* Status icon and label */}
                     <View style={styles.statusInfo}>
                       <View style={styles.statusIcon}>
-                        <StatusIcon status={statusInfo.value} size={18} color={isSelected ? statusInfo.color : "#9ca3af"} />
+                        <StatusIcon status={statusInfo.value} size={18} color={isSelected ? statusInfo.color : theme.colors.text.disabled} />
                       </View>
                       <Text style={[
                         styles.statusLabel,
-                        !isSelected && styles.statusLabelDisabled,
+                        { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
+                        !isSelected && { color: theme.colors.text.tertiary },
                       ]}>
                         {statusInfo.label}
                       </Text>
@@ -161,9 +170,9 @@ export function StatusConfigModal({
                       hitSlop={8}
                     >
                       <Icon
-                        name={isDefault ? "Star" : "Star"}
+                        name="Star"
                         size={20}
-                        color={isSelected ? (isDefault ? "#f59e0b" : "#d1d5db") : "#e5e7eb"}
+                        color={isSelected ? (isDefault ? "#f59e0b" : theme.colors.border.dark) : theme.colors.border.light}
                       />
                     </Pressable>
                   </Pressable>
@@ -173,9 +182,9 @@ export function StatusConfigModal({
           </ScrollView>
 
           {/* Selected summary */}
-          <View style={styles.summary}>
-            <Text style={styles.summaryLabel}>Selected:</Text>
-            <Text style={styles.summaryText} numberOfLines={2}>
+          <View style={[styles.summary, { backgroundColor: theme.colors.background.tertiary }]}>
+            <Text style={[styles.summaryLabel, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.semibold }]}>Selected:</Text>
+            <Text style={[styles.summaryText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={2}>
               {localStatuses
                 .map(s => ALL_STATUSES.find(info => info.value === s)?.label || s)
                 .join(", ")}
@@ -184,11 +193,19 @@ export function StatusConfigModal({
 
           {/* Actions */}
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
-              <Text style={styles.resetButtonText}>Reset to Default</Text>
+            <TouchableOpacity
+              style={[styles.resetButton, { backgroundColor: theme.colors.background.tertiary }]}
+              onPress={handleReset}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.resetButtonText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>Reset to Default</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Save</Text>
+            <TouchableOpacity
+              style={[styles.saveButton, { backgroundColor: theme.colors.functional.accent }]}
+              onPress={handleSave}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.saveButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>Save</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -206,9 +223,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modal: {
-    backgroundColor: theme.colors.background.primary,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
+    borderRadius: 14,
+    padding: 20,
     width: "100%",
     maxWidth: 400,
     maxHeight: "80%",
@@ -217,59 +233,46 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: theme.spacing.sm,
+    marginBottom: 8,
   },
   title: {
     fontSize: 18,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
   },
   closeButton: {
     padding: 4,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.colors.text.secondary,
-    marginBottom: theme.spacing.md,
+    marginBottom: 16,
     lineHeight: 18,
-  },
-  subtitleHighlight: {
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.primary,
   },
   scrollView: {
     maxHeight: 320,
   },
   statusList: {
-    gap: theme.spacing.xs,
+    gap: 6,
   },
   statusRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.sm,
-    backgroundColor: theme.colors.background.secondary,
-    borderRadius: theme.borderRadius.md,
-    gap: theme.spacing.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    gap: 10,
   },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: "#d1d5db",
     alignItems: "center",
     justifyContent: "center",
-  },
-  checkboxSelected: {
-    backgroundColor: "#3b82f6",
-    borderColor: "#3b82f6",
   },
   statusInfo: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.sm,
+    gap: 10,
   },
   statusIcon: {
     width: 24,
@@ -277,11 +280,6 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     fontSize: 15,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.primary,
-  },
-  statusLabelDisabled: {
-    color: theme.colors.text.tertiary,
   },
   defaultButton: {
     padding: 4,
@@ -289,49 +287,40 @@ const styles = StyleSheet.create({
   summary: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: theme.colors.background.secondary,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    marginTop: theme.spacing.md,
-    gap: theme.spacing.sm,
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+    gap: 8,
   },
   summaryLabel: {
     fontSize: 13,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text.secondary,
   },
   summaryText: {
     flex: 1,
     fontSize: 13,
-    color: theme.colors.text.primary,
   },
   actions: {
     flexDirection: "row",
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.md,
+    gap: 8,
+    marginTop: 12,
   },
   resetButton: {
     flex: 1,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.background.secondary,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: "center",
   },
   resetButtonText: {
     fontSize: 15,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.secondary,
   },
   saveButton: {
     flex: 1,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: "#3b82f6",
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: "center",
   },
   saveButtonText: {
     fontSize: 15,
-    fontWeight: theme.typography.fontWeight.semibold,
     color: "#ffffff",
   },
 });
