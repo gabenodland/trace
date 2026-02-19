@@ -207,7 +207,7 @@ export function AttributesPicker({
               onPress={onShowTypePicker}
             >
               <View style={styles.optionIcon}>
-                <Icon name="Folder" size={16} color={type ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
+                <Icon name="Bookmark" size={16} color={type ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
               </View>
               <Text
                 style={[

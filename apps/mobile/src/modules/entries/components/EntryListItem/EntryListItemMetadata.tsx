@@ -101,7 +101,7 @@ export function EntryListItemMetadata({
       {/* Type Badge - only show if stream supports type */}
       {showType && entry.type && (
         <View style={[styles.typeBadge, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Icon name="Folder" size={10} color={theme.colors.text.secondary} />
+          <Icon name="Bookmark" size={10} color={theme.colors.text.secondary} />
           <Text style={[styles.typeText, { color: theme.colors.text.tertiary }]}>{entry.type}</Text>
         </View>
       )}

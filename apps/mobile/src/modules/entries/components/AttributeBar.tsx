@@ -154,7 +154,7 @@ export function AttributeBar({
             <Text style={[styles.divider, { color: theme.colors.text.tertiary }]}>·</Text>
             <TouchableOpacity style={styles.attribute} onPress={onTypePress}>
               <View style={styles.attributeContent}>
-                <Icon name="Folder" size={12} color={computedTypeColor} />
+                <Icon name="Bookmark" size={12} color={computedTypeColor} />
                 <Text
                   style={[
                     styles.attributeText,
