@@ -1,16 +1,18 @@
 /**
- * Font Selector - Modal for choosing app font
+ * Font Selector - Bottom sheet for choosing app font
  *
  * Shows available fonts with sample text preview.
  * Pro fonts are gated - free users see them but can't select.
  */
 
-import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, ScrollView, Alert, Platform, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import { getFontOptions } from '../../shared/theme/fonts';
 import { useTheme } from '../../shared/contexts/ThemeContext';
 import { useNavigate } from '../../shared/navigation';
 import { useSubscription } from '../../shared/hooks/useSubscription';
 import { Icon } from '../../shared/components';
+import { PickerBottomSheet } from '../sheets/PickerBottomSheet';
+import { themeBase } from '../../shared/theme/themeBase';
 
 interface FontSelectorProps {
   visible: boolean;
@@ -31,7 +33,6 @@ export function FontSelector({
   const fontOptions = getFontOptions();
 
   const handleSelect = (fontId: string, isProFont: boolean) => {
-    // If it's a Pro font and user doesn't have Pro, show upgrade prompt
     if (isProFont && !isPro) {
       Alert.alert(
         'Pro Font',
@@ -52,27 +53,15 @@ export function FontSelector({
   };
 
   return (
-    <Modal
+    <PickerBottomSheet
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onClose={onClose}
+      title="Font"
+      height="large"
+      swipeArea="grabber"
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
-          <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Font</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Icon name="X" size={24} color={theme.colors.text.secondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Options */}
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.optionsList}
-          showsVerticalScrollIndicator={true}
-        >
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+        <View style={styles.optionsList}>
           {fontOptions.map((option) => {
             const isLocked = option.isPro && !isPro;
             const isSelected = selectedFont === option.id;
@@ -83,7 +72,7 @@ export function FontSelector({
                 style={[
                   styles.optionItem,
                   { backgroundColor: theme.colors.background.primary },
-                  isSelected && [styles.optionItemSelected, { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight }],
+                  isSelected && { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight },
                   isLocked && styles.optionItemLocked,
                 ]}
                 onPress={() => handleSelect(option.id, !!option.isPro)}
@@ -140,49 +129,27 @@ export function FontSelector({
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+        </View>
+      </ScrollView>
+    </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: 18,
-  },
-  closeButton: {
-    padding: 4,
-  },
   scrollView: {
     flex: 1,
   },
   optionsList: {
-    padding: 20,
-    paddingBottom: 40,
+    gap: themeBase.spacing.md,
+    paddingBottom: themeBase.spacing.lg,
   },
   optionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    padding: themeBase.spacing.lg,
+    borderRadius: themeBase.borderRadius.md,
     borderWidth: 2,
     borderColor: 'transparent',
-  },
-  optionItemSelected: {
-    // borderColor and backgroundColor set inline with theme
   },
   optionItemLocked: {
     opacity: 0.8,
@@ -191,7 +158,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 8,
-    marginRight: 16,
+    marginRight: themeBase.spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -203,7 +170,7 @@ const styles = StyleSheet.create({
   },
   optionContent: {
     flex: 1,
-    marginRight: 12,
+    marginRight: themeBase.spacing.md,
   },
   labelRow: {
     flexDirection: 'row',
@@ -212,7 +179,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   optionLabel: {
-    fontSize: 16,
+    fontSize: themeBase.typography.fontSize.base,
   },
   proBadge: {
     paddingHorizontal: 6,
@@ -225,6 +192,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   optionDescription: {
-    fontSize: 14,
+    fontSize: themeBase.typography.fontSize.sm,
   },
 });

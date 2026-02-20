@@ -223,7 +223,8 @@ export function EntryListItem({
         visible={showMenu}
         onClose={() => onMenuToggle?.()}
         items={menuItems}
-        title={entry.title || getFirstLineOfText(entry.content || '')}
+        title="Actions"
+        subtitle={entry.title || getFirstLineOfText(entry.content || '')}
       />
       {viewerVisible && (
         <PhotoViewer

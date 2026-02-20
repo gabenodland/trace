@@ -4,6 +4,7 @@ import type { EntryDisplayMode, EntrySortMode, EntrySortOrder, Stream } from "@t
 import type { EntryWithRelations } from "../../modules/entries/EntryWithRelationsTypes";
 import { EntryListItemRow } from "../../modules/entries/components/EntryListItemRow";
 import { EntryListHeader, StickyEntryListHeader } from "../../modules/entries/components/EntryListHeader";
+import { EmptyState } from "../../shared/components";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { useCalendarEntries } from "./useCalendarEntries";
 import { formatDateKey, getEntryDate, type CalendarDateField } from "./calendarHelpers";
@@ -289,9 +290,7 @@ export const DayView = memo(function DayView({
           </>
         }
         ListEmptyComponent={entriesReady ? (
-          <View style={[sharedStyles.emptyContainer, { backgroundColor: theme.colors.background.secondary }]}>
-            <Text style={[sharedStyles.emptyText, { color: theme.colors.text.secondary }]}>No entries for this date</Text>
-          </View>
+          <EmptyState title="No entries for this date" />
         ) : null}
         contentContainerStyle={sharedStyles.scrollContent}
         onScroll={handleScroll}

@@ -10,7 +10,7 @@ import { StreamList } from "./StreamList";
 import { PickerBottomSheet } from "../../../components/sheets";
 import { themeBase } from "../../../shared/theme/themeBase";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
-import { Icon } from "../../../shared/components";
+import { Icon, EmptyState } from "../../../shared/components";
 
 const ITEM_HEIGHT = 45; // Approximate height of each stream item (used for scroll positioning)
 
@@ -167,20 +167,14 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
             )}
 
             {!isLoading && streams.length === 0 && (
-              <View style={styles.emptyContainer}>
-                <Text style={[styles.emptyText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.tertiary }]}>No streams yet</Text>
-                <Text style={[styles.emptySubtext, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]}>Create a stream first</Text>
-              </View>
+              <EmptyState title="No streams yet" subtitle="Create a stream first" />
             )}
           </>
         ) : (
           <>
             {/* Filtered Streams when searching */}
             {filteredStreams.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={[styles.emptyText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.tertiary }]}>No streams found</Text>
-                <Text style={[styles.emptySubtext, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]}>Try a different search</Text>
-              </View>
+              <EmptyState title="No streams found" subtitle="Try a different search" />
             ) : (
               <StreamList
                 streams={filteredStreams}
@@ -254,17 +248,6 @@ const styles = StyleSheet.create({
     gap: themeBase.spacing.md,
   },
   loadingText: {
-    fontSize: 14,
-  },
-  emptyContainer: {
-    padding: themeBase.spacing.xl,
-    alignItems: "center",
-  },
-  emptyText: {
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  emptySubtext: {
     fontSize: 14,
   },
 });

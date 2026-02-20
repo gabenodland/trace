@@ -1,33 +1,30 @@
 /**
  * Profile Screen
  *
- * Full-featured profile editing with:
- * - Avatar upload/change
- * - Name editing
- * - Username editing with availability check
+ * Focused profile editor with explicit Save:
+ * - Avatar upload/change (saves immediately — binary upload)
+ * - Name and username editing with explicit Save button
+ * - "Unsaved changes" prompt on back navigation
  * - Profile completion tracking
- * - Sign out functionality
+ *
+ * Settings and Sign Out live on AccountScreen — not here.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Animated,
-  StatusBar,
 } from "react-native";
-import { Icon } from "../shared/components";
+import { Icon, Button } from "../shared/components";
 import { useAuth } from "../shared/contexts/AuthContext";
-import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
-import { useSync } from "../shared/sync";
+import { BottomBar } from "../components/layout/BottomBar";
 import { createScopedLogger } from "../shared/utils/logger";
 import {
   validateName,
@@ -38,27 +35,24 @@ import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { AvatarPicker, UsernameInput } from "../modules/profile/components";
 import type { AvatarImageData } from "../modules/profile/components/AvatarPicker";
 import { useTheme } from "../shared/contexts/ThemeContext";
+import { useNavigate, useBeforeBack } from "../shared/navigation";
+import { useKeyboardHeight } from "../modules/entries/components/hooks/useKeyboardHeight";
+import { themeBase } from "../shared/theme/themeBase";
 
 const log = createScopedLogger("ProfileScreen");
 
 export function ProfileScreen() {
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
-  const { sync } = useSync();
+  const { user } = useAuth();
   const theme = useTheme();
+  const navigate = useNavigate();
+  const keyboardHeight = useKeyboardHeight();
 
-  // Profile data with offline support - pass user.id to ensure mutations work even before profile loads
+  // Profile data with offline support
   const { profile, isLoading, error, profileMutations, isOffline } = useMobileProfile(user?.id);
 
   // Local form state
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
-  const [isSigningOut, setIsSigningOut] = useState(false);
-
-  // Snackbar state for auto-save feedback
-  const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
-  const snackbarOpacity = useRef(new Animated.Value(0)).current;
-  const snackbarTranslateY = useRef(new Animated.Value(-20)).current;
 
   // Initialize form with profile data
   useEffect(() => {
@@ -68,45 +62,51 @@ export function ProfileScreen() {
     }
   }, [profile]);
 
-  // Show snackbar with pop-down animation
-  const showSnackbar = useCallback((message: string) => {
-    setSnackbarMessage(message);
-    // Reset position
-    snackbarTranslateY.setValue(-20);
-    snackbarOpacity.setValue(0);
+  // Track unsaved changes
+  const hasChanges = profile
+    ? name.trim() !== profile.name || username.trim() !== profile.username
+    : false;
 
-    Animated.sequence([
-      // Pop down
-      Animated.parallel([
-        Animated.timing(snackbarOpacity, {
-          toValue: 1,
-          duration: 150,
-          useNativeDriver: true,
-        }),
-        Animated.spring(snackbarTranslateY, {
-          toValue: 0,
-          tension: 100,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Hold
-      Animated.delay(1500),
-      // Pop away
-      Animated.parallel([
-        Animated.timing(snackbarOpacity, {
-          toValue: 0,
-          duration: 150,
-          useNativeDriver: true,
-        }),
-        Animated.timing(snackbarTranslateY, {
-          toValue: -20,
-          duration: 150,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start(() => setSnackbarMessage(null));
-  }, [snackbarOpacity, snackbarTranslateY]);
+  // Block hardware/swipe back when unsaved changes exist
+  useBeforeBack(
+    hasChanges
+      ? async () => {
+          Alert.alert(
+            "Unsaved Changes",
+            "You have unsaved changes. Discard them?",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Discard",
+                style: "destructive",
+                onPress: () => navigate("back"),
+              },
+            ]
+          );
+          return true; // Block default navigation
+        }
+      : null
+  );
+
+  // Handle back with unsaved changes prompt
+  const handleBack = useCallback(() => {
+    if (hasChanges) {
+      Alert.alert(
+        "Unsaved Changes",
+        "You have unsaved changes. Discard them?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => navigate("back"),
+          },
+        ]
+      );
+    } else {
+      navigate("back");
+    }
+  }, [hasChanges, navigate]);
 
   // Handle name change
   const handleNameChange = useCallback((text: string) => {
@@ -118,89 +118,77 @@ export function ProfileScreen() {
     setUsername(text);
   }, []);
 
-  // Auto-save name on blur
-  const handleNameBlur = useCallback(async () => {
+  // Explicit save — validates and saves name + username
+  const handleSave = useCallback(async () => {
     const trimmedName = name.trim();
-
-    // Skip if empty or unchanged
-    if (!trimmedName) return;
-    if (profile && trimmedName === profile.name) return;
-
-    // Validate
-    const validation = validateName(trimmedName);
-    if (!validation.isValid) {
-      Alert.alert("Invalid Name", validation.error);
-      return;
-    }
-
-    try {
-      log.info("Auto-saving name", { name: trimmedName });
-      await profileMutations.updateProfile({
-        name: trimmedName,
-        profile_complete: true,
-      });
-      showSnackbar("Name saved");
-    } catch (error: any) {
-      log.error("Name save failed", error);
-      Alert.alert("Save Failed", error.message || "Failed to save name");
-    }
-  }, [name, profile, profileMutations, showSnackbar]);
-
-  // Auto-save username on blur
-  const handleUsernameBlur = useCallback(async () => {
     const trimmedUsername = username.trim();
 
-    // Skip if empty or unchanged
-    if (!trimmedUsername) return;
-    if (profile && trimmedUsername === profile.username) return;
-
-    // Validate format
-    const validation = validateUsername(trimmedUsername);
-    if (!validation.isValid) {
-      Alert.alert("Invalid Username", validation.error);
+    // Validate name — required
+    if (!trimmedName) {
+      Alert.alert("Name Required", "Please enter a display name.");
+      return;
+    }
+    const nameValidation = validateName(trimmedName);
+    if (!nameValidation.isValid) {
+      Alert.alert("Invalid Name", nameValidation.error);
       return;
     }
 
-    // Check availability
-    try {
-      const isAvailable = await profileMutations.checkUsername(trimmedUsername);
-      if (!isAvailable) {
-        Alert.alert("Username Taken", "This username is already in use");
+    // Validate username format
+    if (trimmedUsername && trimmedUsername !== profile?.username) {
+      const usernameValidation = validateUsername(trimmedUsername);
+      if (!usernameValidation.isValid) {
+        Alert.alert("Invalid Username", usernameValidation.error);
         return;
       }
-    } catch (error) {
-      log.error("Username check failed", error);
-      Alert.alert("Error", "Could not verify username availability");
-      return;
+
+      // Check availability
+      try {
+        const isAvailable = await profileMutations.checkUsername(trimmedUsername);
+        if (!isAvailable) {
+          Alert.alert("Username Taken", "This username is already in use.");
+          return;
+        }
+      } catch (err) {
+        log.error("Username check failed", err);
+        Alert.alert("Error", "Could not verify username availability.");
+        return;
+      }
     }
 
+    // Save
     try {
-      log.info("Auto-saving username", { username: trimmedUsername });
-      await profileMutations.updateProfile({
-        username: trimmedUsername,
-        profile_complete: true,
-      });
-      showSnackbar("Username saved");
-    } catch (error: any) {
-      log.error("Username save failed", error);
-      Alert.alert("Save Failed", error.message || "Failed to save username");
-    }
-  }, [username, profile, profileMutations, showSnackbar]);
+      const updates: Record<string, any> = { profile_complete: true };
+      if (trimmedName && trimmedName !== profile?.name) {
+        updates.name = trimmedName;
+      }
+      if (trimmedUsername && trimmedUsername !== profile?.username) {
+        updates.username = trimmedUsername;
+      }
 
-  // Check username availability
+      log.info("Saving profile", updates);
+      await profileMutations.updateProfile(updates);
+      log.success("Profile saved");
+    } catch (err: any) {
+      log.error("Profile save failed", err);
+      Alert.alert("Save Failed", err.message || "Failed to save profile.");
+    }
+  }, [name, username, profile, profileMutations]);
+
+  // Check username availability (for UsernameInput indicator)
   const handleCheckUsername = useCallback(
     async (usernameToCheck: string): Promise<boolean> => {
       try {
         return await profileMutations.checkUsername(usernameToCheck);
-      } catch (error) {
-        log.error("Username check failed", error);
+      } catch (err) {
+        log.error("Username check failed", err);
         return false;
       }
     },
     [profileMutations]
   );
 
-  // Handle avatar selection
+  // Handle avatar selection (saves immediately — binary upload, not form data)
   const handleAvatarSelected = useCallback(
     async (imageData: AvatarImageData) => {
       try {
@@ -215,13 +203,12 @@ export function ProfileScreen() {
 
         await profileMutations.uploadAvatar(avatarInput);
         log.success("Avatar uploaded");
-        showSnackbar("Photo saved");
-      } catch (error: any) {
-        log.error("Avatar upload failed", error);
-        Alert.alert("Upload Failed", error.message || "Failed to upload avatar");
+      } catch (err: any) {
+        log.error("Avatar upload failed", err);
+        Alert.alert("Upload Failed", err.message || "Failed to upload avatar.");
       }
     },
-    [profileMutations, showSnackbar]
+    [profileMutations]
   );
 
   // Handle avatar removal
@@ -230,81 +217,19 @@ export function ProfileScreen() {
       log.info("Removing avatar");
       await profileMutations.deleteAvatar();
       log.success("Avatar removed");
-      showSnackbar("Photo removed");
-    } catch (error: any) {
-      log.error("Avatar removal failed", error);
-      Alert.alert("Remove Failed", error.message || "Failed to remove avatar");
+    } catch (err: any) {
+      log.error("Avatar removal failed", err);
+      Alert.alert("Remove Failed", err.message || "Failed to remove avatar.");
     }
-  }, [profileMutations, showSnackbar]);
-
-  // Handle sign out
-  const handleSignOut = async () => {
-    // Warn when offline
-    if (isOffline) {
-      Alert.alert(
-        "You're Offline",
-        "Your changes won't be synced until you're online. Sign out anyway?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Sign Out",
-            style: "destructive",
-            onPress: async () => {
-              setIsSigningOut(true);
-              try {
-                await signOut();
-              } finally {
-                setIsSigningOut(false);
-              }
-            },
-          },
-        ]
-      );
-      return;
-    }
-
-    try {
-      setIsSigningOut(true);
-      log.info("Syncing before sign out");
-
-      await sync();
-
-      log.success("Sync complete, signing out");
-      await signOut();
-    } catch (error) {
-      log.error("Error during sign out", error);
-
-      Alert.alert(
-        "Sync Failed",
-        "Could not sync your changes. Sign out anyway? Unsaved changes may be lost.",
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-            onPress: () => setIsSigningOut(false),
-          },
-          {
-            text: "Sign Out Anyway",
-            style: "destructive",
-            onPress: async () => {
-              await signOut();
-              setIsSigningOut(false);
-            },
-          },
-        ]
-      );
-    } finally {
-      setIsSigningOut(false);
-    }
-  };
+  }, [profileMutations]);
 
   // Loading state
   if (isLoading && !profile) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Profile" />
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading profile...</Text>
+        <View style={styles.centerContainer}>
+          <Text style={[styles.centerText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading profile...</Text>
         </View>
       </View>
     );
@@ -315,10 +240,10 @@ export function ProfileScreen() {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Profile" />
-        <View style={styles.errorContainer}>
+        <View style={styles.centerContainer}>
           <Icon name="WifiOff" size={48} color={theme.colors.text.tertiary} />
-          <Text style={[styles.errorText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold, marginTop: 16 }]}>You're Offline</Text>
-          <Text style={[styles.errorDetail, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+          <Text style={[styles.centerTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>You're Offline</Text>
+          <Text style={[styles.centerSubtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
             Connect to the internet to view your profile
           </Text>
         </View>
@@ -331,9 +256,9 @@ export function ProfileScreen() {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Profile" />
-        <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.semibold }]}>Failed to load profile</Text>
-          <Text style={[styles.errorDetail, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{error.message}</Text>
+        <View style={styles.centerContainer}>
+          <Text style={[styles.centerTitle, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.semibold }]}>Failed to load profile</Text>
+          <Text style={[styles.centerSubtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{error.message}</Text>
         </View>
       </View>
     );
@@ -341,7 +266,7 @@ export function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
-      <SecondaryHeader title="Profile" />
+      <SecondaryHeader title="Profile" onBack={handleBack} />
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
@@ -398,7 +323,6 @@ export function ProfileScreen() {
                 ]}
                 value={name}
                 onChangeText={handleNameChange}
-                onBlur={handleNameBlur}
                 placeholder="Your name"
                 placeholderTextColor={theme.colors.text.tertiary}
                 autoComplete="name"
@@ -412,7 +336,6 @@ export function ProfileScreen() {
               value={username}
               onChangeText={handleUsernameChange}
               onCheckAvailability={handleCheckUsername}
-              onBlur={handleUsernameBlur}
               currentUsername={profile?.username}
               disabled={isOffline}
             />
@@ -426,45 +349,22 @@ export function ProfileScreen() {
             </View>
           </View>
 
-          {/* Settings Link */}
-          <TouchableOpacity
-            style={[styles.settingsLink, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}
-            onPress={() => navigate("settings")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingsLinkContent}>
-              <Icon name="Settings" size={20} color={theme.colors.text.primary} />
-              <Text style={[styles.settingsLinkText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>App Settings</Text>
-            </View>
-            <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
-          </TouchableOpacity>
-
-          {/* Sign Out Button */}
-          <TouchableOpacity
-            style={[styles.signOutButton, isSigningOut && styles.signOutButtonDisabled]}
-            onPress={handleSignOut}
-            activeOpacity={0.7}
-            disabled={isSigningOut}
-          >
-            <Icon name="LogOut" size={20} color="#ffffff" />
-            <Text style={[styles.signOutText, { fontFamily: theme.typography.fontFamily.semibold }]}>
-              {isSigningOut ? "Syncing & Signing Out..." : "Sign Out"}
-            </Text>
-          </TouchableOpacity>
+          {/* Bottom spacer — room for BottomBar save button when visible */}
+          <View style={{ height: hasChanges ? 120 : themeBase.spacing.xl }} />
         </ScrollView>
 
       </KeyboardAvoidingView>
 
-      {/* Auto-save Snackbar - positioned over TopBar */}
-      {snackbarMessage && (
-        <Animated.View
-          style={[
-            styles.snackbar,
-            { opacity: snackbarOpacity, transform: [{ translateY: snackbarTranslateY }] },
-          ]}
-        >
-          <Text style={styles.snackbarText}>{snackbarMessage}</Text>
-        </Animated.View>
+      {/* Save Button */}
+      {hasChanges && (
+        <BottomBar keyboardOffset={keyboardHeight}>
+          <Button
+            label="Save Changes"
+            onPress={handleSave}
+            size="lg"
+            fullWidth
+          />
+        </BottomBar>
       )}
     </View>
   );
@@ -481,25 +381,21 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    fontSize: 16,
-  },
-  errorContainer: {
+  centerContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
   },
-  errorText: {
-    fontSize: 18,
-    marginBottom: 8,
+  centerText: {
+    fontSize: 16,
   },
-  errorDetail: {
+  centerTitle: {
+    fontSize: 18,
+    marginTop: themeBase.spacing.lg,
+    marginBottom: themeBase.spacing.sm,
+  },
+  centerSubtitle: {
     fontSize: 14,
     textAlign: "center",
   },
@@ -508,9 +404,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#f59e0b",
     padding: 10,
-    borderRadius: 8,
-    marginBottom: 12,
-    gap: 8,
+    borderRadius: themeBase.borderRadius.sm,
+    marginBottom: themeBase.spacing.md,
+    gap: themeBase.spacing.sm,
   },
   offlineBannerText: {
     color: "#ffffff",
@@ -519,10 +415,10 @@ const styles = StyleSheet.create({
   completionBanner: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
-    borderRadius: 8,
+    padding: themeBase.spacing.md,
+    borderRadius: themeBase.borderRadius.sm,
     marginBottom: 20,
-    gap: 10,
+    gap: themeBase.spacing.md,
   },
   completionText: {
     flex: 1,
@@ -533,83 +429,31 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   formSection: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: themeBase.borderRadius.md,
+    padding: themeBase.spacing.lg,
+    marginBottom: themeBase.spacing.lg,
   },
   inputGroup: {
-    marginBottom: 12,
+    marginBottom: themeBase.spacing.md,
   },
   label: {
     fontSize: 14,
     marginBottom: 4,
   },
   textInput: {
-    borderRadius: 8,
+    borderRadius: themeBase.borderRadius.sm,
     borderWidth: 1,
     paddingVertical: 12,
     paddingHorizontal: 12,
     fontSize: 16,
   },
   readOnlyInput: {
-    borderRadius: 8,
+    borderRadius: themeBase.borderRadius.sm,
     borderWidth: 1,
     paddingVertical: 12,
     paddingHorizontal: 12,
   },
   readOnlyText: {
     fontSize: 16,
-  },
-  settingsLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  settingsLinkContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  settingsLinkText: {
-    fontSize: 16,
-  },
-  signOutButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    backgroundColor: "#ef4444",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    marginTop: 8,
-    marginBottom: 40,
-  },
-  signOutButtonDisabled: {
-    backgroundColor: "#9ca3af",
-    opacity: 0.7,
-  },
-  signOutText: {
-    color: "#ffffff",
-    fontSize: 16,
-  },
-  snackbar: {
-    position: "absolute",
-    top: Platform.OS === "ios" ? 62 : (StatusBar.currentHeight || 24) + 18,
-    alignSelf: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    maxWidth: "70%",
-    zIndex: 1000,
-  },
-  snackbarText: {
-    color: "#fff",
-    fontSize: 14,
-    textAlign: "center",
   },
 });

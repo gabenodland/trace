@@ -1,18 +1,16 @@
 /**
  * SecondaryHeader - Header for secondary screens
  *
- * Pattern: [<-] Title [Action?]
- * - Back button on left
- * - Title on left (after back button)
- * - Optional action button on right
- *
- * Uses the same container styling as TopBar for consistency.
+ * Pattern:
+ *   [<-]  Title                [Action?]
  */
 
-import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "../../shared/components/Icon";
 import { useNavigate } from "../../shared/navigation";
 import { useTheme } from "../../shared/contexts/ThemeContext";
+import { themeBase } from "../../shared/theme/themeBase";
 import type { ReactNode } from "react";
 
 interface SecondaryHeaderProps {
@@ -29,6 +27,7 @@ interface SecondaryHeaderProps {
 export function SecondaryHeader({ title, rightAction, onBack, children }: SecondaryHeaderProps) {
   const navigate = useNavigate();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   const handleBack = () => {
     if (onBack) {
@@ -39,7 +38,7 @@ export function SecondaryHeader({ title, rightAction, onBack, children }: Second
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.primary, paddingTop: insets.top + 12 }]}>
       {/* Left: Back button */}
       <TouchableOpacity
         style={styles.backButton}
@@ -49,10 +48,19 @@ export function SecondaryHeader({ title, rightAction, onBack, children }: Second
         <Icon name="ArrowLeft" size={24} color={theme.colors.text.primary} />
       </TouchableOpacity>
 
-      {/* Center: Title or children */}
+      {/* Center: Title (or children) */}
       <View style={styles.titleContainer}>
         {children || (
-          <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.title,
+              {
+                color: theme.colors.text.primary,
+                fontFamily: theme.typography.fontFamily.bold,
+              },
+            ]}
+            numberOfLines={1}
+          >
             {title}
           </Text>
         )}
@@ -68,27 +76,24 @@ export function SecondaryHeader({ title, rightAction, onBack, children }: Second
 
 const styles = StyleSheet.create({
   container: {
-    height: 116,
-    paddingTop: Platform.OS === "ios" ? 60 : (StatusBar.currentHeight || 0) + 16,
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingHorizontal: themeBase.spacing.xl,
+    paddingBottom: themeBase.spacing.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   backButton: {
-    padding: 8,
-    marginLeft: -8,
-    marginRight: 8,
+    padding: 12,
+    marginLeft: -12,
+    marginRight: 4,
   },
   titleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    flexDirection: "column",
+    justifyContent: "center",
     flex: 1,
   },
   title: {
-    fontSize: 28,
+    fontSize: themeBase.typography.fontSize.xl,
   },
   rightSection: {
     flexDirection: "row",

@@ -4,10 +4,11 @@
  * Shows supported markdown syntax and variables for stream templates.
  */
 
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Pressable, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform } from "react-native";
 import { TEMPLATE_HELP } from "@trace/core";
 import { Icon } from "../../../shared/components";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
+import { PickerBottomSheet } from "../../../components/sheets/PickerBottomSheet";
 
 interface TemplateHelpModalProps {
   visible: boolean;
@@ -21,117 +22,72 @@ export function TemplateHelpModal({ visible, onClose, mode = 'content' }: Templa
   const isTitle = mode === 'title';
 
   return (
-    <Modal
+    <PickerBottomSheet
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
+      onClose={onClose}
+      title={isTitle ? 'Title Variables' : 'Template Syntax'}
+      height="large"
+      swipeArea="grabber"
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
-          style={[styles.modal, { backgroundColor: theme.colors.background.primary }]}
-          onPress={e => e.stopPropagation()}
-        >
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: theme.colors.border.light }]}>
-            <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
-              {isTitle ? 'Title Variables' : 'Template Syntax'}
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Variables Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Variables</Text>
+          <Text style={[styles.sectionDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+            These get replaced when a new entry is created:
+          </Text>
+          {TEMPLATE_HELP.variables.map((item) => (
+            <View key={item.syntax} style={[styles.row, { borderBottomColor: theme.colors.border.light }]}>
+              <Text style={[styles.syntax, { color: theme.colors.functional.accent }]}>{item.syntax}</Text>
+              <Text style={[styles.description, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{item.description}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Markdown Section - only for content mode */}
+        {!isTitle && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Formatting</Text>
+            <Text style={[styles.sectionDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+              Basic markdown supported in content:
             </Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Icon name="X" size={20} color={theme.colors.text.tertiary} />
-            </TouchableOpacity>
+            {TEMPLATE_HELP.markdown.map((item) => (
+              <View key={item.syntax} style={[styles.row, { borderBottomColor: theme.colors.border.light }]}>
+                <Text style={[styles.syntax, { color: theme.colors.functional.accent }]}>{item.syntax}</Text>
+                <Text style={[styles.description, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{item.description}</Text>
+              </View>
+            ))}
           </View>
+        )}
 
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            {/* Variables Section */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Variables</Text>
-              <Text style={[styles.sectionDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                These get replaced when a new entry is created:
-              </Text>
-              {TEMPLATE_HELP.variables.map((item) => (
-                <View key={item.syntax} style={[styles.row, { borderBottomColor: theme.colors.border.light }]}>
-                  <Text style={[styles.syntax, { color: theme.colors.functional.accent }]}>{item.syntax}</Text>
-                  <Text style={[styles.description, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{item.description}</Text>
-                </View>
-              ))}
+        {/* Example Section - only for content mode */}
+        {!isTitle && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Example Template</Text>
+            <View style={[styles.exampleBox, { backgroundColor: theme.colors.background.tertiary, borderColor: theme.colors.border.light }]}>
+              <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>## {"{weekday}"} Tasks{"\n"}</Text>
+              <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>[ ] Meditate{"\n"}</Text>
+              <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>[ ] Walk 10K{"\n"}</Text>
+              <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>{"\n"}</Text>
+              <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>## {"{month_name}"} {"{day}"}, {"{year}"}{"\n"}</Text>
+              <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>[ ]</Text>
             </View>
+          </View>
+        )}
 
-            {/* Markdown Section - only for content mode */}
-            {!isTitle && (
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Formatting</Text>
-                <Text style={[styles.sectionDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                  Basic markdown supported in content:
-                </Text>
-                {TEMPLATE_HELP.markdown.map((item) => (
-                  <View key={item.syntax} style={[styles.row, { borderBottomColor: theme.colors.border.light }]}>
-                    <Text style={[styles.syntax, { color: theme.colors.functional.accent }]}>{item.syntax}</Text>
-                    <Text style={[styles.description, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{item.description}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Example Section - only for content mode */}
-            {!isTitle && (
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Example Template</Text>
-                <View style={[styles.exampleBox, { backgroundColor: theme.colors.background.tertiary, borderColor: theme.colors.border.light }]}>
-                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>## {"{weekday}"} Tasks{"\n"}</Text>
-                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>[ ] Meditate{"\n"}</Text>
-                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>[ ] Walk 10K{"\n"}</Text>
-                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>{"\n"}</Text>
-                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>## {"{month_name}"} {"{day}"}, {"{year}"}{"\n"}</Text>
-                  <Text style={[styles.exampleText, { color: theme.colors.text.primary }]}>[ ]</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Note */}
-            <View style={[styles.note, { backgroundColor: theme.colors.background.tertiary }]}>
-              <Icon name="Info" size={16} color={theme.colors.text.tertiary} />
-              <Text style={[styles.noteText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                Templates apply when creating a new empty entry in this stream.
-              </Text>
-            </View>
-          </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        {/* Note */}
+        <View style={[styles.note, { backgroundColor: theme.colors.background.tertiary }]}>
+          <Icon name="Info" size={16} color={theme.colors.text.tertiary} />
+          <Text style={[styles.noteText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+            Templates apply when creating a new empty entry in this stream.
+          </Text>
+        </View>
+      </ScrollView>
+    </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modal: {
-    borderRadius: 14,
-    width: "100%",
-    maxWidth: 400,
-    maxHeight: "80%",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  title: {
-    fontSize: 18,
-  },
-  closeButton: {
-    padding: 4,
-  },
-  content: {
-    padding: 16,
-  },
   section: {
     marginBottom: 20,
   },

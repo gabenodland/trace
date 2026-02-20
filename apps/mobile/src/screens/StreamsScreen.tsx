@@ -9,7 +9,7 @@ import {
   Alert,
 } from "react-native";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
-import { Icon } from "../shared/components";
+import { Icon, EmptyState, LoadingState } from "../shared/components";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import type { Stream } from "@trace/core";
 import { useNavigate } from "../shared/navigation";
@@ -91,11 +91,12 @@ export function StreamsScreen() {
 
   const addButton = (
     <TouchableOpacity
-      style={styles.headerAddButton}
+      style={[styles.createButton, { backgroundColor: theme.colors.functional.accent }]}
       onPress={handleCreateStream}
-      activeOpacity={0.7}
+      activeOpacity={0.8}
     >
-      <Icon name="Plus" size={22} color={theme.colors.functional.accent} />
+      <Icon name="Plus" size={16} color="#ffffff" />
+      <Text style={[styles.createButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Create</Text>
     </TouchableOpacity>
   );
 
@@ -104,24 +105,14 @@ export function StreamsScreen() {
       <SecondaryHeader title="Manage Streams" rightAction={addButton} />
 
       {isLoading ? (
-        <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading streams...</Text>
-        </View>
+        <LoadingState message="Loading streams..." />
       ) : streams.length === 0 && !searchText ? (
-        <View style={styles.emptyContainer}>
-          <Icon name="Layers" size={48} color={theme.colors.text.disabled} />
-          <Text style={[styles.emptyTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>No Streams Yet</Text>
-          <Text style={[styles.emptyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-            Streams help you organize entries into categories
-          </Text>
-          <TouchableOpacity
-            style={[styles.emptyButton, { backgroundColor: theme.colors.functional.accent }]}
-            onPress={handleCreateStream}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.emptyButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Create Your First Stream</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          icon="Layers"
+          title="No Streams Yet"
+          subtitle="Streams help you organize entries into categories"
+          action={{ label: "Create Your First Stream", onPress: handleCreateStream }}
+        />
       ) : (
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
           {/* Search bar */}
@@ -215,7 +206,8 @@ export function StreamsScreen() {
         visible={!!actionSheetStream}
         onClose={() => setActionSheetStream(null)}
         items={actionSheetItems}
-        title={actionSheetStream?.name}
+        title="Actions"
+        subtitle={actionSheetStream?.name}
       />
     </View>
   );
@@ -283,33 +275,17 @@ const styles = StyleSheet.create({
     padding: 4,
     marginLeft: 4,
   },
-  headerAddButton: {
-    padding: 4,
-  },
-  emptyContainer: {
-    flex: 1,
+  createButton: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderRadius: 8,
+    gap: 4,
   },
-  emptyTitle: {
-    fontSize: 18,
-    marginTop: 4,
-  },
-  emptyText: {
-    fontSize: 15,
-    textAlign: "center",
-  },
-  emptyButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 8,
-  },
-  emptyButtonText: {
+  createButtonText: {
+    fontSize: 14,
     color: "#ffffff",
-    fontSize: 16,
   },
   noResultsContainer: {
     padding: 32,

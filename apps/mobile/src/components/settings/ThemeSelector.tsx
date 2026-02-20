@@ -1,16 +1,18 @@
 /**
- * Theme Selector - Modal for choosing app theme
+ * Theme Selector - Bottom sheet for choosing app theme
  *
  * Shows available themes with color preview swatches.
  * Pro themes are gated - free users see them but can't select.
  */
 
-import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, ScrollView, Alert, Platform, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import { getThemeOptions } from '../../shared/theme/themes';
 import { useTheme } from '../../shared/contexts/ThemeContext';
 import { useNavigate } from '../../shared/navigation';
 import { useSubscription } from '../../shared/hooks/useSubscription';
 import { Icon } from '../../shared/components';
+import { PickerBottomSheet } from '../sheets/PickerBottomSheet';
+import { themeBase } from '../../shared/theme/themeBase';
 
 interface ThemeSelectorProps {
   visible: boolean;
@@ -31,7 +33,6 @@ export function ThemeSelector({
   const themeOptions = getThemeOptions();
 
   const handleSelect = (themeId: string, isProTheme: boolean) => {
-    // If it's a Pro theme and user doesn't have Pro, show upgrade prompt
     if (isProTheme && !isPro) {
       Alert.alert(
         'Pro Theme',
@@ -52,23 +53,15 @@ export function ThemeSelector({
   };
 
   return (
-    <Modal
+    <PickerBottomSheet
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onClose={onClose}
+      title="Theme"
+      height="large"
+      swipeArea="grabber"
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
-          <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Theme</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Icon name="X" size={24} color={theme.colors.text.secondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Options */}
-        <ScrollView style={styles.optionsList} showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+        <View style={styles.optionsList}>
           {themeOptions.map((option) => {
             const isLocked = option.isPro && !isPro;
             const isSelected = selectedTheme === option.id;
@@ -79,7 +72,7 @@ export function ThemeSelector({
                 style={[
                   styles.optionItem,
                   { backgroundColor: theme.colors.background.primary },
-                  isSelected && [styles.optionItemSelected, { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight }],
+                  isSelected && { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight },
                   isLocked && styles.optionItemLocked,
                 ]}
                 onPress={() => handleSelect(option.id, !!option.isPro)}
@@ -94,18 +87,8 @@ export function ThemeSelector({
                       isLocked && styles.previewSwatchLocked,
                     ]}
                   >
-                    <View
-                      style={[
-                        styles.previewText,
-                        { backgroundColor: option.preview.text },
-                      ]}
-                    />
-                    <View
-                      style={[
-                        styles.previewAccent,
-                        { backgroundColor: option.preview.accent },
-                      ]}
-                    />
+                    <View style={[styles.previewText, { backgroundColor: option.preview.text }]} />
+                    <View style={[styles.previewAccent, { backgroundColor: option.preview.accent }]} />
                   </View>
                 </View>
 
@@ -149,53 +132,33 @@ export function ThemeSelector({
               </TouchableOpacity>
             );
           })}
-          <View style={{ height: 20 }} />
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+        </View>
+      </ScrollView>
+    </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollView: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: 18,
-  },
-  closeButton: {
-    padding: 4,
   },
   optionsList: {
-    flex: 1,
-    padding: 20,
+    gap: themeBase.spacing.md,
+    paddingBottom: themeBase.spacing.lg,
   },
   optionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    padding: themeBase.spacing.lg,
+    borderRadius: themeBase.borderRadius.md,
     borderWidth: 2,
     borderColor: 'transparent',
-  },
-  optionItemSelected: {
-    borderWidth: 2,
   },
   optionItemLocked: {
     opacity: 0.8,
   },
   previewContainer: {
-    marginRight: 16,
+    marginRight: themeBase.spacing.lg,
   },
   previewSwatch: {
     width: 48,
@@ -220,7 +183,7 @@ const styles = StyleSheet.create({
   },
   optionContent: {
     flex: 1,
-    marginRight: 12,
+    marginRight: themeBase.spacing.md,
   },
   labelRow: {
     flexDirection: 'row',
@@ -229,7 +192,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   optionLabel: {
-    fontSize: 16,
+    fontSize: themeBase.typography.fontSize.base,
   },
   proBadge: {
     paddingHorizontal: 6,
@@ -242,6 +205,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   optionDescription: {
-    fontSize: 14,
+    fontSize: themeBase.typography.fontSize.sm,
   },
 });

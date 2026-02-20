@@ -180,8 +180,7 @@ export function DecimalRatingPicker({
       onClose={onClose}
       title="Set Rating"
       primaryAction={{
-        label: "Set Rating",
-        variant: "primary",
+        label: "Save",
         onPress: handleSave,
       }}
       secondaryAction={

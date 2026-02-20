@@ -4,17 +4,11 @@
  */
 
 import { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Modal,
-  Pressable,
-} from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { type RatingType } from "@trace/core";
 import { Icon } from "../../../shared/components";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
+import { PickerBottomSheet } from "../../../components/sheets/PickerBottomSheet";
 
 interface RatingConfigModalProps {
   visible: boolean;
@@ -70,9 +64,7 @@ export function RatingConfigModal({
 
     switch (iconType) {
       case 'star':
-        return (
-          <Icon name="Star" size={24} color={color} />
-        );
+        return <Icon name="Star" size={24} color={color} />;
       case 'number':
         return (
           <View style={styles.numberIcon}>
@@ -91,128 +83,67 @@ export function RatingConfigModal({
   };
 
   return (
-    <Modal
+    <PickerBottomSheet
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
+      onClose={onClose}
+      title="Rating Type"
+      height="auto"
+      primaryAction={{ label: "Save", onPress: handleSave }}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
-          style={[styles.modal, { backgroundColor: theme.colors.background.primary }]}
-          onPress={e => e.stopPropagation()}
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Rating Type</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Icon name="X" size={20} color={theme.colors.text.tertiary} />
-            </TouchableOpacity>
-          </View>
+      <Text style={[styles.subtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+        Choose how ratings are displayed and entered for entries in this stream.
+      </Text>
 
-          <Text style={[styles.subtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-            Choose how ratings are displayed and entered for entries in this stream.
-          </Text>
+      <View style={styles.optionsList}>
+        {RATING_OPTIONS.map((option) => {
+          const isSelected = selectedType === option.value;
 
-          {/* Options */}
-          <View style={styles.optionsList}>
-            {RATING_OPTIONS.map((option) => {
-              const isSelected = selectedType === option.value;
-
-              return (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.optionRow,
-                    { backgroundColor: theme.colors.background.tertiary, borderColor: "transparent" },
-                    isSelected && { borderColor: theme.colors.functional.accent },
-                  ]}
-                  onPress={() => setSelectedType(option.value)}
-                  activeOpacity={0.7}
-                >
-                  {/* Radio button */}
-                  <View
-                    style={[
-                      styles.radio,
-                      { borderColor: theme.colors.border.dark },
-                      isSelected && { borderColor: theme.colors.functional.accent },
-                    ]}
-                  >
-                    {isSelected && <View style={[styles.radioInner, { backgroundColor: theme.colors.functional.accent }]} />}
-                  </View>
-
-                  {/* Icon */}
-                  <View style={styles.optionIcon}>
-                    {renderIcon(option.icon, isSelected)}
-                  </View>
-
-                  {/* Label and description */}
-                  <View style={styles.optionInfo}>
-                    <Text style={[
-                      styles.optionLabel,
-                      { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
-                      isSelected && { color: theme.colors.functional.accent },
-                    ]}>
-                      {option.label}
-                    </Text>
-                    <Text style={[styles.optionDescription, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
-                      {option.description}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Actions */}
-          <View style={styles.actions}>
+          return (
             <TouchableOpacity
-              style={[styles.cancelButton, { backgroundColor: theme.colors.background.tertiary }]}
-              onPress={onClose}
+              key={option.value}
+              style={[
+                styles.optionRow,
+                { backgroundColor: theme.colors.background.tertiary, borderColor: "transparent" },
+                isSelected && { borderColor: theme.colors.functional.accent },
+              ]}
+              onPress={() => setSelectedType(option.value)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.cancelButtonText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>Cancel</Text>
+              <View
+                style={[
+                  styles.radio,
+                  { borderColor: theme.colors.border.dark },
+                  isSelected && { borderColor: theme.colors.functional.accent },
+                ]}
+              >
+                {isSelected && <View style={[styles.radioInner, { backgroundColor: theme.colors.functional.accent }]} />}
+              </View>
+
+              <View style={styles.optionIcon}>
+                {renderIcon(option.icon, isSelected)}
+              </View>
+
+              <View style={styles.optionInfo}>
+                <Text style={[
+                  styles.optionLabel,
+                  { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
+                  isSelected && { color: theme.colors.functional.accent },
+                ]}>
+                  {option.label}
+                </Text>
+                <Text style={[styles.optionDescription, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+                  {option.description}
+                </Text>
+              </View>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.saveButton, { backgroundColor: theme.colors.functional.accent }]}
-              onPress={handleSave}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.saveButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>Save</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+          );
+        })}
+      </View>
+    </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modal: {
-    borderRadius: 14,
-    padding: 20,
-    width: "100%",
-    maxWidth: 400,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 18,
-  },
-  closeButton: {
-    padding: 4,
-  },
   subtitle: {
     fontSize: 13,
     marginBottom: 20,
@@ -266,29 +197,5 @@ const styles = StyleSheet.create({
   optionDescription: {
     fontSize: 12,
     lineHeight: 16,
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 20,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    fontSize: 15,
-  },
-  saveButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  saveButtonText: {
-    fontSize: 15,
-    color: "#ffffff",
   },
 });

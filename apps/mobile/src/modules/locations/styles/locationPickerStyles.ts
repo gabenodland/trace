@@ -7,62 +7,16 @@ import { StyleSheet } from 'react-native';
 import { themeBase } from '../../../shared/theme/themeBase';
 
 export const locationPickerStyles = StyleSheet.create({
-  // Modal container (wraps backdrop + sheet)
-  modalContainer: {
-    flex: 1,
-  },
-  // Semi-transparent backdrop
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  // Sheet container with rounded top corners (matches BottomSheet)
-  sheetContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '95%',
-    borderTopLeftRadius: themeBase.borderRadius.xl,
-    borderTopRightRadius: themeBase.borderRadius.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 20,
-    overflow: 'hidden',
-  },
-  // Container styles
-  container: {
-    flex: 1,
-  },
-  // Grabber bar for swipe-to-close gesture
-  grabberContainer: {
-    alignItems: 'center',
-    paddingVertical: themeBase.spacing.sm,
-  },
-  grabber: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-  },
-  // Header matching PickerBottomSheet style (left-aligned title, X on right)
-  pickerHeader: {
+  // Show Map bar - appears when keyboard collapses the map
+  showMapBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: themeBase.spacing.lg,
-    paddingBottom: themeBase.spacing.md,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 6,
   },
-  pickerHeaderTitle: {
-    fontSize: 18,
-  },
-  pickerCloseButton: {
-    padding: 4,
+  showMapText: {
+    fontSize: 14,
   },
   // Legacy header (keep for compatibility with sub-components)
   header: {

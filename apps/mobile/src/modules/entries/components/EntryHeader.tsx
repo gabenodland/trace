@@ -21,6 +21,8 @@ interface EntryHeaderProps {
   // Form data
   entryDate: string;
   includeTime: boolean;
+  // Layout
+  topInset?: number;
   // Callbacks
   onBack: () => void;
   onDatePress: () => void;
@@ -42,6 +44,7 @@ export function EntryHeader({
   isArchived = false,
   entryDate,
   includeTime,
+  topInset = 0,
   onBack,
   onDatePress,
   onTimePress,
@@ -69,7 +72,7 @@ export function EntryHeader({
   }, [isSaving]);
 
   return (
-    <View style={[styles.titleBar, { backgroundColor: theme.colors.background.secondary }, isFullScreen && styles.titleBarFullScreen]}>
+    <View style={[styles.titleBar, { backgroundColor: theme.colors.background.secondary, paddingTop: topInset + 10 }, isFullScreen && styles.titleBarFullScreen]}>
       {/* Left side: Back button (always shown, auto-saves if dirty) */}
       <View style={styles.headerLeftContainer}>
         <TouchableOpacity
@@ -177,12 +180,12 @@ export function EntryHeader({
           )}
         </View>
 
-        {/* Fullscreen toggle button - chevron down (V) when normal, chevron up (^) when fullscreen */}
+        {/* Fullscreen toggle button */}
         <TouchableOpacity
           style={styles.menuButton}
           onPress={onToggleFullScreen}
         >
-          <Icon name={isFullScreen ? "ChevronUp" : "ChevronDown"} size={20} color={theme.colors.text.secondary} />
+          <Icon name={isFullScreen ? "Minimize2" : "Maximize2"} size={20} color={theme.colors.text.secondary} />
         </TouchableOpacity>
       </View>
     </View>

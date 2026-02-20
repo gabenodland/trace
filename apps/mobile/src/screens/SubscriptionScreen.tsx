@@ -5,12 +5,13 @@
  * Displays current tier with option to upgrade for free users.
  */
 
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, StatusBar, Linking, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useNavigate } from "../shared/navigation";
 import { useSubscription } from "../shared/hooks/useSubscription";
 import { themeBase } from "../shared/theme/themeBase";
 import { Icon } from "../shared/components";
+import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 
 // Feature list for Pro subscription - only features that actually exist
 const PRO_FEATURES = [
@@ -94,19 +95,7 @@ export function SubscriptionScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.background.primary }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigate("back")}
-          activeOpacity={0.7}
-        >
-          <Icon name="ChevronLeft" size={24} color={theme.colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
-          Trace Pro
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <SecondaryHeader title="Trace Pro" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Hero Section */}
@@ -297,23 +286,6 @@ export function SubscriptionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: Platform.OS === "ios" ? 60 : (StatusBar.currentHeight || 0) + 16,
-    paddingBottom: themeBase.spacing.md,
-    paddingHorizontal: themeBase.spacing.md,
-  },
-  backButton: {
-    padding: themeBase.spacing.sm,
-  },
-  headerTitle: {
-    fontSize: 17,
-  },
-  headerSpacer: {
-    width: 40,
   },
   content: {
     flex: 1,

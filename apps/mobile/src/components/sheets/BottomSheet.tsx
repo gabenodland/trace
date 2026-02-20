@@ -14,7 +14,6 @@ import {
   Dimensions,
   PanResponder,
   Keyboard,
-  Platform,
   Modal,
 } from "react-native";
 import { useTheme } from "../../shared/contexts/ThemeContext";

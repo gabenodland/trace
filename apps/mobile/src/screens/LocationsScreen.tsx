@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from "react-native";
 import { useNavigate } from "../shared/navigation";
 import { useLocationsWithCounts } from "../modules/locations/mobileLocationHooks";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { SubBar } from "../components/layout/SubBar";
-import { Icon } from "../shared/components";
+import { Icon, EmptyState, LoadingState } from "../shared/components";
 import { useTheme, type ThemeContextValue } from "../shared/contexts/ThemeContext";
 import type { LocationEntity } from "@trace/core";
 
@@ -136,10 +136,7 @@ export function LocationsScreen() {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Locations" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.text.tertiary} />
-          <Text style={[styles.loadingText, { color: theme.colors.text.tertiary }]}>Loading locations...</Text>
-        </View>
+        <LoadingState message="Loading locations..." />
       </View>
     );
   }
@@ -171,11 +168,11 @@ export function LocationsScreen() {
 
       <ScrollView style={[styles.content, { backgroundColor: theme.colors.background.primary }]}>
         {filteredTree.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Icon name="MapPin" size={64} color={theme.colors.text.disabled} />
-            <Text style={[styles.emptyText, { color: theme.colors.text.tertiary }]}>No locations yet</Text>
-            <Text style={[styles.emptySubtext, { color: theme.colors.text.tertiary }]}>Add locations to your entries to see them here</Text>
-          </View>
+          <EmptyState
+            icon="MapPin"
+            title="No locations yet"
+            subtitle="Add locations to your entries to see them here"
+          />
         ) : (
           <View style={styles.locationList}>
             {filteredTree.map((node) => (
@@ -353,15 +350,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-  },
   searchContainer: {
     flex: 1,
     flexDirection: "row",
@@ -384,24 +372,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 40,
-    marginTop: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 24,
   },
   locationList: {
     paddingVertical: 8,

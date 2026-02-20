@@ -22,7 +22,7 @@ export const sepiaTheme: Theme = {
     text: {
       primary: '#3D3229',      // Dark brown
       secondary: '#5C5046',    // Medium brown
-      tertiary: '#8B7D6B',     // Light brown
+      tertiary: '#6B5D4B',     // Medium brown (6.0:1 on cream — WCAG AA)
       disabled: '#B8A99A',     // Muted tan
     },
 

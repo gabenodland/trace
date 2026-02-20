@@ -12,6 +12,7 @@ import { Icon } from "../../shared/components/Icon";
 import { BottomSheet, SheetHeight } from "./BottomSheet";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
+import { useKeyboardHeight } from "../../modules/entries/components/hooks/useKeyboardHeight";
 
 export interface PickerAction {
   label: string;
@@ -38,6 +39,8 @@ interface PickerBottomSheetProps {
   dismissKeyboard?: boolean;
   /** Where swipe gesture is active: "grabber" or "full" sheet. Use "grabber" when content has scrollable areas. Default: "full" */
   swipeArea?: "grabber" | "full";
+  /** Remove padding from content area for edge-to-edge layouts (maps, etc). Header/actions keep their own padding. Default: false */
+  noPadding?: boolean;
 }
 
 export function PickerBottomSheet({
@@ -51,8 +54,10 @@ export function PickerBottomSheet({
   secondaryAction,
   dismissKeyboard = false,
   swipeArea = "full",
+  noPadding = false,
 }: PickerBottomSheetProps) {
   const dynamicTheme = useTheme();
+  const keyboardHeight = useKeyboardHeight();
 
   const hasActions = primaryAction || secondaryAction;
 
@@ -67,9 +72,9 @@ export function PickerBottomSheet({
       dismissKeyboard={dismissKeyboard}
       useModal={true}
     >
-      <View style={styles.container}>
+      <View style={[styles.container, noPadding && styles.containerNoPadding]}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, noPadding && styles.headerPadded]}>
           <View style={styles.titleContainer}>
             <Text
               style={[
@@ -91,6 +96,7 @@ export function PickerBottomSheet({
                     color: dynamicTheme.colors.interactive.primary,
                   },
                 ]}
+                numberOfLines={1}
               >
                 {subtitle}
               </Text>
@@ -99,9 +105,8 @@ export function PickerBottomSheet({
           <TouchableOpacity
             style={styles.closeButton}
             onPress={onClose}
-            hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
           >
-            <Icon name="X" size={22} color={dynamicTheme.colors.text.secondary} />
+            <Icon name="X" size={20} color={dynamicTheme.colors.text.tertiary} />
           </TouchableOpacity>
         </View>
 
@@ -112,7 +117,7 @@ export function PickerBottomSheet({
 
         {/* Action Buttons */}
         {hasActions && (
-          <View style={styles.actions}>
+          <View style={[styles.actions, noPadding && styles.actionsPadded]}>
             {secondaryAction && (
               <TouchableOpacity
                 style={[
@@ -170,6 +175,12 @@ export function PickerBottomSheet({
             )}
           </View>
         )}
+
+        {/* Keyboard spacer — only for sheets that keep the keyboard open (dismissKeyboard=false).
+            Pushes content above keyboard so actions stay visible. */}
+        {!dismissKeyboard && keyboardHeight > 0 && (
+          <View style={{ height: keyboardHeight }} />
+        )}
       </View>
     </BottomSheet>
   );
@@ -188,13 +199,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: themeBase.spacing.lg,
     paddingBottom: themeBase.spacing.xl,
   },
+  containerNoPadding: {
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingBottom: themeBase.spacing.md,
   },
+  headerPadded: {
+    paddingHorizontal: themeBase.spacing.lg,
+  },
   titleContainer: {
+    flex: 1,
     flexDirection: "column",
   },
   title: {
@@ -205,7 +224,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   closeButton: {
-    padding: 4,
+    padding: 14,
+    marginRight: -14,
+    marginTop: -14,
   },
   content: {
     flex: 1,
@@ -215,6 +236,9 @@ const styles = StyleSheet.create({
     gap: themeBase.spacing.sm,
     marginTop: themeBase.spacing.lg,
     paddingTop: themeBase.spacing.md,
+  },
+  actionsPadded: {
+    paddingHorizontal: themeBase.spacing.lg,
   },
   actionButton: {
     flex: 1,

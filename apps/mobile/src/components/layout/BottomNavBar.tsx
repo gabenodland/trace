@@ -6,13 +6,14 @@
  */
 
 import { View, TouchableOpacity, StyleSheet, Platform, Image } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { Icon } from "../../shared/components";
 import { getDefaultAvatarUrl } from "@trace/core";
 import { useState, useEffect } from "react";
 import type { ViewMode } from "../../shared/contexts/DrawerContext";
 
-/** Height of the bottom nav bar (excluding safe area) */
+/** Approximate height of the bottom nav bar (used for scroll padding calculations) */
 export const BOTTOM_NAV_HEIGHT = Platform.OS === "ios" ? 84 : 64;
 /** Extra padding needed for content to clear the FAB */
 export const FAB_CLEARANCE = 80;
@@ -35,6 +36,7 @@ export function BottomNavBar({
   displayName,
 }: BottomNavBarProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [avatarError, setAvatarError] = useState(false);
 
   // Reset avatar error when avatarUrl changes
@@ -60,7 +62,7 @@ export function BottomNavBar({
       </TouchableOpacity>
 
       {/* Navigation Bar */}
-      <View style={[styles.container, { backgroundColor: theme.colors.background.primary, borderTopColor: theme.colors.border.light }]}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background.primary, borderTopColor: theme.colors.border.light, paddingBottom: insets.bottom }]}>
         {/* List View */}
         <TouchableOpacity
           style={styles.tabButton}
@@ -114,7 +116,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-around",
     height: BOTTOM_NAV_HEIGHT,
-    paddingBottom: Platform.OS === "ios" ? 20 : 0,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   tabButton: {

@@ -1,5 +1,6 @@
-import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { ReactNode } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { Icon } from "../../shared/components";
 import { themeBase } from "../../shared/theme/themeBase";
@@ -31,9 +32,10 @@ export function TopBar({
   isSearchActive = false,
 }: TopBarProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.primary, paddingTop: insets.top + 6 }]}>
       {/* Title Mode - Clickable stream/filter selector */}
       {title && (
         <TouchableOpacity
@@ -70,6 +72,7 @@ export function TopBar({
             style={styles.iconButton}
             onPress={onSearchPress}
             activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
             <Icon name="Search" size={22} color={isSearchActive ? theme.colors.functional.accent : theme.colors.text.primary} />
           </TouchableOpacity>
@@ -81,12 +84,10 @@ export function TopBar({
 
 const styles = StyleSheet.create({
   container: {
-    height: 110,
-    paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
     paddingHorizontal: themeBase.spacing.lg,
-    paddingBottom: themeBase.spacing.md,
+    paddingBottom: themeBase.spacing.xs,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
   },
   titleContainer: {
@@ -99,7 +100,7 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   title: {
-    fontSize: 28,
+    fontSize: themeBase.typography.fontSize.xl,
   },
   badge: {
     borderRadius: themeBase.borderRadius.full,
@@ -124,6 +125,7 @@ const styles = StyleSheet.create({
     gap: themeBase.spacing.xs,
   },
   iconButton: {
-    padding: themeBase.spacing.sm,
+    padding: themeBase.spacing.xs,
+    paddingHorizontal: themeBase.spacing.sm,
   },
 });

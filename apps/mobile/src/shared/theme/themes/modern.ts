@@ -24,7 +24,7 @@ export const modernTheme: Theme = {
     text: {
       primary: '#0F172A',      // Slate-900 (deep blue-black)
       secondary: '#475569',    // Slate-600
-      tertiary: '#94A3B8',     // Slate-400
+      tertiary: '#64748B',     // Slate-500 (4.5:1 on cool white — WCAG AA)
       disabled: '#CBD5E1',     // Slate-300
     },
 

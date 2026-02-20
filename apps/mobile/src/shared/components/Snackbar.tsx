@@ -10,7 +10,8 @@
  */
 
 import { useRef, useCallback, useState } from 'react';
-import { Animated, Text, StyleSheet, Platform, StatusBar } from 'react-native';
+import { Animated, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface SnackbarProps {
@@ -25,11 +26,12 @@ interface SnackbarProps {
  */
 export function Snackbar({ message, opacity }: SnackbarProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   if (!message) return null;
 
   return (
-    <Animated.View style={[styles.snackbar, { opacity }]}>
+    <Animated.View style={[styles.snackbar, { opacity, top: insets.top + 5 }]}>
       <Text style={[styles.snackbarText, { fontFamily: theme.typography.fontFamily.medium }]}>
         {message}
       </Text>
@@ -75,7 +77,6 @@ export function useSnackbar() {
 const styles = StyleSheet.create({
   snackbar: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 24) + 5,
     alignSelf: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     paddingVertical: 10,

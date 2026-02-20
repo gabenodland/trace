@@ -15,6 +15,7 @@
 import { useRef, useImperativeHandle, forwardRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { View, Text, StyleSheet, Keyboard, Alert, AppState, AppStateStatus } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EntryHeader } from './EntryHeader';
 import { AttributeBar } from './AttributeBar';
 import { EditorToolbar } from './EditorToolbar';
@@ -174,6 +175,7 @@ function buildNewEntry(options?: NewEntryOptions, userId?: string): EntryWithRel
 export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryManagementScreenProps>(
   ({ isVisible = true }, ref) => {
     const theme = useTheme();
+    const insets = useSafeAreaInsets();
     const queryClient = useQueryClient();
     const { settings } = useSettings();
     const { streams } = useStreams();
@@ -1047,6 +1049,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           isArchived={entry?.is_archived}
           entryDate={entry?.entry_date || new Date().toISOString()}
           includeTime={includeTime}
+          topInset={insets.top}
           onBack={handleBack}
           onDatePress={handleDatePress}
           onTimePress={handleTimePress}

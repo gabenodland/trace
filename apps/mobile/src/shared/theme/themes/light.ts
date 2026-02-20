@@ -23,7 +23,7 @@ export const lightTheme: Theme = {
     text: {
       primary: '#111827',      // Almost black
       secondary: '#4B5563',    // Medium-dark gray
-      tertiary: '#9CA3AF',     // Medium gray
+      tertiary: '#6B7280',     // Medium gray (4.8:1 on white — WCAG AA)
       disabled: '#D1D5DB',     // Light gray
     },
 

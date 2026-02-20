@@ -9,12 +9,8 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Modal,
-  Pressable,
   TextInput,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import {
   sortTypes,
@@ -23,6 +19,7 @@ import {
 } from "@trace/core";
 import { Icon } from "../../../shared/components";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
+import { PickerBottomSheet } from "../../../components/sheets/PickerBottomSheet";
 
 interface TypeConfigModalProps {
   visible: boolean;
@@ -75,150 +72,87 @@ export function TypeConfigModal({
     onClose();
   };
 
+  const handleClearAll = () => {
+    Alert.alert(
+      "Clear All Types",
+      "Remove all types?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Clear All", style: "destructive", onPress: () => setLocalTypes([]) },
+      ]
+    );
+  };
+
   return (
-    <Modal
+    <PickerBottomSheet
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
+      onClose={onClose}
+      title="Entry Types"
+      height="auto"
+      dismissKeyboard={false}
+      primaryAction={{ label: "Save", onPress: handleSave }}
+      secondaryAction={localTypes.length > 0 ? { label: "Clear All", onPress: handleClearAll, variant: "danger" } : undefined}
     >
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoid}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <Pressable style={styles.overlay} onPress={onClose}>
-          <Pressable
-            style={[styles.modal, { backgroundColor: theme.colors.background.primary }]}
-            onPress={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <View style={styles.header}>
-              <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Entry Types</Text>
-              <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                <Icon name="X" size={20} color={theme.colors.text.tertiary} />
-              </TouchableOpacity>
-            </View>
+      <Text style={[styles.subtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+        Add types to categorize entries in this stream.
+      </Text>
 
-            <Text style={[styles.subtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-              Add types to categorize entries in this stream.
-            </Text>
+      {/* Add type input */}
+      <View style={[styles.addRow, { backgroundColor: theme.colors.background.tertiary }]}>
+        <TextInput
+          style={[styles.input, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
+          placeholder="Add a type..."
+          placeholderTextColor={theme.colors.text.tertiary}
+          value={newTypeName}
+          onChangeText={setNewTypeName}
+          maxLength={MAX_TYPE_NAME_LENGTH}
+          autoCapitalize="words"
+          returnKeyType="done"
+          onSubmitEditing={handleAddType}
+        />
+        <TouchableOpacity
+          style={[styles.addButton, { backgroundColor: newTypeName.trim() ? theme.colors.functional.accent : theme.colors.border.dark }]}
+          onPress={handleAddType}
+          disabled={!newTypeName.trim()}
+          activeOpacity={0.7}
+        >
+          <Icon name="Plus" size={18} color="#ffffff" />
+        </TouchableOpacity>
+      </View>
 
-            {/* Add type input */}
-            <View style={[styles.addRow, { backgroundColor: theme.colors.background.tertiary }]}>
-              <TextInput
-                style={[styles.input, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
-                placeholder="Add a type..."
-                placeholderTextColor={theme.colors.text.tertiary}
-                value={newTypeName}
-                onChangeText={setNewTypeName}
-                maxLength={MAX_TYPE_NAME_LENGTH}
-                autoCapitalize="words"
-                returnKeyType="done"
-                onSubmitEditing={handleAddType}
-              />
-              <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: newTypeName.trim() ? theme.colors.functional.accent : theme.colors.border.dark }]}
-                onPress={handleAddType}
-                disabled={!newTypeName.trim()}
-                activeOpacity={0.7}
+      {/* Chips container */}
+      <View style={styles.chipsContainer}>
+        {localTypes.length === 0 ? (
+          <Text style={[styles.emptyText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+            No types yet — add one above
+          </Text>
+        ) : (
+          <View style={styles.chipsWrap}>
+            {localTypes.map((type, index) => (
+              <View
+                key={`${type}-${index}`}
+                style={[styles.chip, { backgroundColor: theme.colors.background.tertiary }]}
               >
-                <Icon name="Plus" size={18} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Chips container */}
-            <View style={styles.chipsContainer}>
-              {localTypes.length === 0 ? (
-                <Text style={[styles.emptyText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
-                  No types yet — add one above
+                <Text style={[styles.chipText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
+                  {type}
                 </Text>
-              ) : (
-                <View style={styles.chipsWrap}>
-                  {localTypes.map((type, index) => (
-                    <View
-                      key={`${type}-${index}`}
-                      style={[styles.chip, { backgroundColor: theme.colors.background.tertiary }]}
-                    >
-                      <Text style={[styles.chipText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
-                        {type}
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.chipRemove}
-                        onPress={() => handleRemoveType(index)}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                      >
-                        <Icon name="X" size={14} color={theme.colors.text.tertiary} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Actions */}
-            <View style={styles.actions}>
-              {localTypes.length > 0 && (
                 <TouchableOpacity
-                  style={[styles.clearButton, { backgroundColor: theme.colors.background.tertiary }]}
-                  onPress={() => {
-                    Alert.alert(
-                      "Clear All Types",
-                      "Remove all types?",
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Clear All", style: "destructive", onPress: () => setLocalTypes([]) },
-                      ]
-                    );
-                  }}
-                  activeOpacity={0.7}
+                  style={styles.chipRemove}
+                  onPress={() => handleRemoveType(index)}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
-                  <Text style={[styles.clearButtonText, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.medium }]}>Clear All</Text>
+                  <Icon name="X" size={14} color={theme.colors.text.tertiary} />
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.saveButton, { backgroundColor: theme.colors.functional.accent }]}
-                onPress={handleSave}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.saveButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
-    </Modal>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  keyboardAvoid: {
-    flex: 1,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modal: {
-    borderRadius: 14,
-    padding: 20,
-    width: "100%",
-    maxWidth: 400,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 18,
-  },
-  closeButton: {
-    padding: 4,
-  },
   subtitle: {
     fontSize: 13,
     lineHeight: 18,
@@ -246,7 +180,6 @@ const styles = StyleSheet.create({
   },
   chipsContainer: {
     minHeight: 60,
-    marginBottom: 16,
   },
   chipsWrap: {
     flexDirection: "row",
@@ -272,28 +205,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     paddingVertical: 16,
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  clearButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  clearButtonText: {
-    fontSize: 15,
-  },
-  saveButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  saveButtonText: {
-    fontSize: 15,
-    color: "#ffffff",
   },
 });

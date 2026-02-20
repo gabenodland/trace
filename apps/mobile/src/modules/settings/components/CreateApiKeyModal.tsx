@@ -15,18 +15,14 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Modal,
-  SafeAreaView,
-  KeyboardAvoidingView,
   ScrollView,
-  Platform,
   Alert,
   ActivityIndicator,
-  StatusBar,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { Icon } from '../../../shared/components';
+import { PickerBottomSheet } from '../../../components/sheets/PickerBottomSheet';
 import { useApiKeys, ApiKeyScope } from '../hooks/useApiKeys';
 
 interface CreateApiKeyModalProps {
@@ -137,229 +133,193 @@ export function CreateApiKeyModal({ visible, onClose }: CreateApiKeyModalProps) 
   const isFormValid = name.trim().length > 0;
 
   return (
-    <Modal
+    <PickerBottomSheet
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={handleClose}
+      onClose={handleClose}
+      title={step === 'form' ? 'Create API Key' : 'API Key Created'}
+      height="full"
+      swipeArea="grabber"
+      dismissKeyboard={false}
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
-        >
-          {/* Header */}
-          <View style={[styles.header, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
-            <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
-              {step === 'form' ? 'Create API Key' : 'API Key Created'}
-            </Text>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Icon name="X" size={24} color={theme.colors.text.secondary} />
-            </TouchableOpacity>
-          </View>
-
-          {step === 'form' ? (
-            /* Form Step */
-            <ScrollView
-              style={styles.content}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Name input */}
-              <View style={styles.field}>
-                <Text style={[styles.label, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
-                  Name
-                </Text>
-                <Text style={[styles.hint, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
-                  A descriptive name to identify this key
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.colors.background.primary,
-                      color: theme.colors.text.primary,
-                      borderColor: theme.colors.border.light,
-                      fontFamily: theme.typography.fontFamily.regular,
-                    },
-                  ]}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="e.g., Claude Desktop, Mobile App"
-                  placeholderTextColor={theme.colors.text.tertiary}
-                  maxLength={100}
-                  returnKeyType="done"
-                />
-              </View>
-
-              {/* Scope selection */}
-              <View style={styles.field}>
-                <Text style={[styles.label, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
-                  Permissions
-                </Text>
-                <Text style={[styles.hint, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
-                  Choose the level of access for this key
-                </Text>
-                <View style={styles.scopeOptions}>
-                  {scopeOptions.map((option) => {
-                    const isSelected = scope === option.value;
-                    return (
-                      <TouchableOpacity
-                        key={option.value}
-                        style={[
-                          styles.scopeOption,
-                          { backgroundColor: theme.colors.background.primary, borderColor: theme.colors.border.light },
-                          isSelected && { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight },
-                        ]}
-                        onPress={() => setScope(option.value)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[
-                          styles.scopeIconContainer,
-                          { backgroundColor: isSelected ? theme.colors.functional.accent + '20' : theme.colors.background.tertiary },
-                        ]}>
-                          <Icon
-                            name={option.icon as any}
-                            size={20}
-                            color={isSelected ? theme.colors.functional.accent : theme.colors.text.secondary}
-                          />
-                        </View>
-                        <View style={styles.scopeContent}>
-                          <Text style={[
-                            styles.scopeLabel,
-                            { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
-                            isSelected && { color: theme.colors.functional.accent },
-                          ]}>
-                            {option.label}
-                          </Text>
-                          <Text style={[styles.scopeDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                            {option.description}
-                          </Text>
-                        </View>
-                        {isSelected && (
-                          <Icon name="Check" size={20} color={theme.colors.functional.accent} />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Create button */}
-              <TouchableOpacity
-                style={[
-                  styles.createButton,
-                  { backgroundColor: theme.colors.functional.accent },
-                  !isFormValid && { opacity: 0.5 },
-                ]}
-                onPress={handleCreate}
-                disabled={!isFormValid || isCreating}
-                activeOpacity={0.8}
-              >
-                {isCreating ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <>
-                    <Icon name="Plus" size={20} color="#ffffff" />
-                    <Text style={[styles.createButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>
-                      Create API Key
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          ) : (
-            /* Success Step */
-            <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-              {/* Success icon */}
-              <View style={[styles.successIcon, { backgroundColor: theme.colors.functional.complete + '20' }]}>
-                <Icon name="CheckCircle" size={48} color={theme.colors.functional.complete} />
-              </View>
-
-              <Text style={[styles.successTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
-                API Key Created Successfully
+      {step === 'form' ? (
+          /* Form Step */
+          <ScrollView
+            style={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Name input */}
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
+                Name
               </Text>
-
-              {/* Warning banner */}
-              <View style={[styles.warningBanner, { backgroundColor: theme.colors.functional.overdue + '15' }]}>
-                <Icon name="AlertTriangle" size={20} color={theme.colors.functional.overdue} />
-                <Text style={[styles.warningText, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.medium }]}>
-                  Copy this key now! It will not be shown again.
-                </Text>
-              </View>
-
-              {/* Key display */}
-              <View style={styles.keyContainer}>
-                <Text style={[styles.keyLabel, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>
-                  Your API Key
-                </Text>
-                <View style={[styles.keyBox, { backgroundColor: theme.colors.background.primary, borderColor: theme.colors.border.light }]}>
-                  <Text
-                    style={[styles.keyText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
-                    selectable
-                  >
-                    {createdKey}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Copy button */}
-              <TouchableOpacity
+              <Text style={[styles.hint, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+                A descriptive name to identify this key
+              </Text>
+              <TextInput
                 style={[
-                  styles.copyButton,
-                  { backgroundColor: hasCopied ? theme.colors.functional.complete : theme.colors.functional.accent },
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.background.primary,
+                    color: theme.colors.text.primary,
+                    borderColor: theme.colors.border.light,
+                    fontFamily: theme.typography.fontFamily.regular,
+                  },
                 ]}
-                onPress={handleCopy}
-                activeOpacity={0.8}
-              >
-                <Icon name={hasCopied ? 'Check' : 'Copy'} size={20} color="#ffffff" />
-                <Text style={[styles.copyButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>
-                  {hasCopied ? 'Copied to Clipboard' : 'Copy to Clipboard'}
-                </Text>
-              </TouchableOpacity>
+                value={name}
+                onChangeText={setName}
+                placeholder="e.g., Claude Desktop, Mobile App"
+                placeholderTextColor={theme.colors.text.tertiary}
+                maxLength={100}
+                returnKeyType="done"
+              />
+            </View>
 
-              {/* Done button */}
-              <TouchableOpacity
-                style={[styles.doneButton, { borderColor: theme.colors.border.dark }]}
-                onPress={handleClose}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.doneButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
-                  Done
+            {/* Scope selection */}
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
+                Permissions
+              </Text>
+              <Text style={[styles.hint, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+                Choose the level of access for this key
+              </Text>
+              <View style={styles.scopeOptions}>
+                {scopeOptions.map((option) => {
+                  const isSelected = scope === option.value;
+                  return (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.scopeOption,
+                        { backgroundColor: theme.colors.background.primary, borderColor: theme.colors.border.light },
+                        isSelected && { borderColor: theme.colors.functional.accent, backgroundColor: theme.colors.functional.accentLight },
+                      ]}
+                      onPress={() => setScope(option.value)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[
+                        styles.scopeIconContainer,
+                        { backgroundColor: isSelected ? theme.colors.functional.accent + '20' : theme.colors.background.tertiary },
+                      ]}>
+                        <Icon
+                          name={option.icon as any}
+                          size={20}
+                          color={isSelected ? theme.colors.functional.accent : theme.colors.text.secondary}
+                        />
+                      </View>
+                      <View style={styles.scopeContent}>
+                        <Text style={[
+                          styles.scopeLabel,
+                          { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium },
+                          isSelected && { color: theme.colors.functional.accent },
+                        ]}>
+                          {option.label}
+                        </Text>
+                        <Text style={[styles.scopeDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                          {option.description}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Icon name="Check" size={20} color={theme.colors.functional.accent} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Create button */}
+            <TouchableOpacity
+              style={[
+                styles.createButton,
+                { backgroundColor: theme.colors.functional.accent },
+                !isFormValid && { opacity: 0.5 },
+              ]}
+              onPress={handleCreate}
+              disabled={!isFormValid || isCreating}
+              activeOpacity={0.8}
+            >
+              {isCreating ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <>
+                  <Icon name="Plus" size={20} color="#ffffff" />
+                  <Text style={[styles.createButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>
+                    Create API Key
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        ) : (
+          /* Success Step */
+          <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+            {/* Success icon */}
+            <View style={[styles.successIcon, { backgroundColor: theme.colors.functional.complete + '20' }]}>
+              <Icon name="CheckCircle" size={48} color={theme.colors.functional.complete} />
+            </View>
+
+            <Text style={[styles.successTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
+              API Key Created Successfully
+            </Text>
+
+            {/* Warning banner */}
+            <View style={[styles.warningBanner, { backgroundColor: theme.colors.functional.overdue + '15' }]}>
+              <Icon name="AlertTriangle" size={20} color={theme.colors.functional.overdue} />
+              <Text style={[styles.warningText, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.medium }]}>
+                Copy this key now! It will not be shown again.
+              </Text>
+            </View>
+
+            {/* Key display */}
+            <View style={styles.keyContainer}>
+              <Text style={[styles.keyLabel, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.medium }]}>
+                Your API Key
+              </Text>
+              <View style={[styles.keyBox, { backgroundColor: theme.colors.background.primary, borderColor: theme.colors.border.light }]}>
+                <Text
+                  style={[styles.keyText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
+                  selectable
+                >
+                  {createdKey}
                 </Text>
-              </TouchableOpacity>
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          )}
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </Modal>
+              </View>
+            </View>
+
+            {/* Copy button */}
+            <TouchableOpacity
+              style={[
+                styles.copyButton,
+                { backgroundColor: hasCopied ? theme.colors.functional.complete : theme.colors.functional.accent },
+              ]}
+              onPress={handleCopy}
+              activeOpacity={0.8}
+            >
+              <Icon name={hasCopied ? 'Check' : 'Copy'} size={20} color="#ffffff" />
+              <Text style={[styles.copyButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>
+                {hasCopied ? 'Copied to Clipboard' : 'Copy to Clipboard'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Done button */}
+            <TouchableOpacity
+              style={[styles.doneButton, { borderColor: theme.colors.border.dark }]}
+              onPress={handleClose}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.doneButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
+                Done
+              </Text>
+            </TouchableOpacity>
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        )}
+    </PickerBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: 18,
-  },
-  closeButton: {
-    padding: 4,
-  },
   content: {
     flex: 1,
     padding: 20,

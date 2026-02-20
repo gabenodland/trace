@@ -1,4 +1,4 @@
-import { StyleSheet, Platform, StatusBar } from "react-native";
+import { StyleSheet } from "react-native";
 import { themeBase } from "../../../shared/theme/themeBase";
 
 export const styles = StyleSheet.create({
@@ -26,8 +26,6 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
   },
   titleBar: {
-    height: 90,
-    paddingTop: Platform.OS === "ios" ? 45 : (StatusBar.currentHeight || 0) + 10,
     paddingHorizontal: themeBase.spacing.sm,
     paddingBottom: 4,
     flexDirection: "row",
@@ -69,9 +67,7 @@ export const styles = StyleSheet.create({
     position: "relative",
   },
   headerCancelButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    minHeight: 32,
+    padding: 14,
     justifyContent: "center",
   },
   headerCancelText: {
@@ -386,7 +382,7 @@ export const styles = StyleSheet.create({
   },
   snackbar: {
     position: "absolute",
-    top: Platform.OS === "ios" ? 50 : (StatusBar.currentHeight || 24) + 5,
+    top: 5,
     alignSelf: "center",
     backgroundColor: "rgba(0, 0, 0, 0.8)",
     paddingVertical: 10,

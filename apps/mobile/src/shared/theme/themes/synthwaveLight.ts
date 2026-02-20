@@ -25,7 +25,7 @@ export const synthwaveLightTheme: Theme = {
     text: {
       primary: '#4A1942',      // Deep plum
       secondary: '#7B4B6E',    // Muted magenta
-      tertiary: '#A67999',     // Dusty rose
+      tertiary: '#8B5F7A',     // Deeper dusty rose (4.9:1 on blush — WCAG AA)
       disabled: '#D4B5C7',     // Faded lavender
     },
 

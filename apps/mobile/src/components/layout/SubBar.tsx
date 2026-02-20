@@ -129,15 +129,16 @@ export function SubBarFilters({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: themeBase.spacing.lg,
-    paddingVertical: themeBase.spacing.md,
+    paddingTop: themeBase.spacing.xs,
+    paddingBottom: themeBase.spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: themeBase.spacing.lg,
   },
   filtersWrapper: {
     paddingHorizontal: themeBase.spacing.lg,
-    paddingTop: themeBase.spacing.md,
-    paddingBottom: themeBase.spacing.sm,
+    paddingTop: themeBase.spacing.xs,
+    paddingBottom: themeBase.spacing.xs,
   },
   filtersRow: {
     flexDirection: 'row',
@@ -148,6 +149,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: themeBase.spacing.xs,
+    minHeight: 48,
   },
   label: {
     fontSize: themeBase.typography.fontSize.sm,
@@ -174,9 +176,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   filterButton: {
-    padding: themeBase.spacing.xs,
-    paddingRight: themeBase.spacing.sm,
-    marginRight: themeBase.spacing.xs,
+    padding: 14,
     borderRadius: themeBase.borderRadius.sm,
     position: 'relative',
   },

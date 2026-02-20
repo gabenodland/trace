@@ -3,6 +3,7 @@ import { useState, useMemo, useRef, useEffect, forwardRef, useImperativeHandle, 
 import type { Stream as FullStream, EntrySection, EntryDisplayMode } from "@trace/core";
 import type { EntryWithRelations } from "../EntryWithRelationsTypes";
 import { EntryListItemRow } from "./EntryListItemRow";
+import { EmptyState } from "../../../shared/components";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../shared/theme/themeBase";
 import { FAB_CLEARANCE } from "../../../components/layout/BottomNavBar";
@@ -228,14 +229,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>{emptyMessage.title}</Text>
-            {emptyMessage.subtitle && (
-              <Text style={[styles.emptySubtitle, { color: theme.colors.text.tertiary }]}>
-                {emptyMessage.subtitle}
-              </Text>
-            )}
-          </View>
+          <EmptyState title={emptyMessage.title} subtitle={emptyMessage.subtitle} />
         }
         stickySectionHeadersEnabled={false}
         removeClippedSubviews={false}
@@ -258,14 +252,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>{emptyMessage.title}</Text>
-            {emptyMessage.subtitle && (
-              <Text style={[styles.emptySubtitle, { color: theme.colors.text.tertiary }]}>
-                {emptyMessage.subtitle}
-              </Text>
-            )}
-          </View>
+          <EmptyState title={emptyMessage.title} subtitle={emptyMessage.subtitle} />
         }
         removeClippedSubviews={false}
         onScroll={handleScroll}
@@ -279,12 +266,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
     const emptyMessage = getEmptyMessage();
     return (
       <View style={styles.centerContainer}>
-        <Text style={[styles.emptyTitle, { color: theme.colors.text.secondary }]}>{emptyMessage.title}</Text>
-        {emptyMessage.subtitle && (
-          <Text style={[styles.emptySubtitle, { color: theme.colors.text.tertiary }]}>
-            {emptyMessage.subtitle}
-          </Text>
-        )}
+        <EmptyState title={emptyMessage.title} subtitle={emptyMessage.subtitle} />
       </View>
     );
   }
@@ -311,19 +293,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
-  },
-  emptyContainer: {
-    alignItems: "center",
-    padding: 24,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "500",
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: "center",
   },
   listContent: {
     paddingTop: 16,

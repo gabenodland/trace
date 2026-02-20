@@ -27,6 +27,7 @@ import { Raleway_400Regular, Raleway_500Medium, Raleway_600SemiBold, Raleway_700
 import { Exo2_400Regular, Exo2_500Medium, Exo2_600SemiBold, Exo2_700Bold } from "@expo-google-fonts/exo-2";
 import * as Linking from "expo-linking";
 import { setSession } from "@trace/core";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
 import { useNavigationState, getNavigationVersion } from "./src/shared/navigation";
 import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
@@ -750,15 +751,17 @@ export default function App() {
 
   console.log('[App] Fonts loaded, rendering providers...');
   return (
-    <QueryClientProvider client={queryClient}>
-      <SettingsProvider>
-        <ThemeProvider>
-          <AuthProvider>
-            <AuthGate />
-          </AuthProvider>
-        </ThemeProvider>
-      </SettingsProvider>
-    </QueryClientProvider>
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <SettingsProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <AuthGate />
+            </AuthProvider>
+          </ThemeProvider>
+        </SettingsProvider>
+      </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }
 

@@ -13,7 +13,7 @@ import {
   StatusBar,
 } from "react-native";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
-import { Icon } from "../shared/components";
+import { Icon, LoadingState, EmptyState, Button } from "../shared/components";
 import { useStreams, useStream } from "../modules/streams/mobileStreamHooks";
 import {
   type UpdateStreamInput,
@@ -303,9 +303,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Stream" onBack={() => navigate(backDestination)} />
-        <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Loading...</Text>
-        </View>
+        <LoadingState message="Loading..." />
       </View>
     );
   }
@@ -315,16 +313,10 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <SecondaryHeader title="Not Found" onBack={() => navigate(backDestination)} />
-        <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Stream not found</Text>
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: theme.colors.functional.accent }]}
-            onPress={() => navigate(backDestination)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.primaryButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Back to Streams</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          title="Stream not found"
+          action={{ label: "Back to Streams", onPress: () => navigate(backDestination) }}
+        />
       </View>
     );
   }
@@ -662,13 +654,12 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
       {/* Save/Create Button */}
       {(isCreateMode || hasChanges) && (
         <BottomBar keyboardOffset={keyboardHeight}>
-          <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: theme.colors.functional.accent }]}
+          <Button
+            label={isCreateMode ? "Create" : "Save Changes"}
             onPress={handleSave}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.saveButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>{isCreateMode ? "Create" : "Save Changes"}</Text>
-          </TouchableOpacity>
+            size="lg"
+            fullWidth
+          />
         </BottomBar>
       )}
 
@@ -829,25 +820,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     padding: 4,
   },
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-  },
-  emptyText: {
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  primaryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  primaryButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-  },
   deleteButton: {
     alignItems: "center",
     paddingVertical: 14,
@@ -855,16 +827,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   deleteButtonText: {
-    fontSize: 16,
-  },
-  saveButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  saveButtonText: {
-    color: "#ffffff",
     fontSize: 16,
   },
   snackbar: {

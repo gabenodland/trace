@@ -11,7 +11,7 @@
  * - Sign Out
  */
 
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Platform, StatusBar } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { useState, useEffect } from "react";
 import { Icon } from "../shared/components";
 import { getDefaultAvatarUrl } from "@trace/core";
@@ -21,6 +21,7 @@ import { useTheme } from "../shared/contexts/ThemeContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSubscription } from "../shared/hooks/useSubscription";
 import { themeBase } from "../shared/theme/themeBase";
+import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 
 interface AccountRowProps {
   icon: React.ReactNode;
@@ -94,19 +95,7 @@ export function AccountScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.background.primary }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigate("back")}
-          activeOpacity={0.7}
-        >
-          <Icon name="ChevronLeft" size={24} color={theme.colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
-          Account
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <SecondaryHeader title="Account" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Section */}
@@ -231,23 +220,6 @@ export function AccountScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: Platform.OS === "ios" ? 60 : (StatusBar.currentHeight || 0) + 16,
-    paddingBottom: themeBase.spacing.md,
-    paddingHorizontal: themeBase.spacing.md,
-  },
-  backButton: {
-    padding: themeBase.spacing.sm,
-  },
-  headerTitle: {
-    fontSize: 17,
-  },
-  headerSpacer: {
-    width: 40,
   },
   content: {
     flex: 1,
