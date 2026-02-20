@@ -154,6 +154,15 @@ export const CalendarScreen = memo(function CalendarScreen() {
     });
   }, [registerStreamHandler, setSelectedStreamId, setSelectedStreamName]);
 
+  // Title icon for TopBar
+  const titleIcon = useMemo(() => {
+    if (typeof selectedStreamId === 'string' &&
+        (selectedStreamId.startsWith("location:") || selectedStreamId.startsWith("geo:"))) {
+      return <Icon name="MapPin" size={20} color={theme.colors.text.primary} />;
+    }
+    return null;
+  }, [selectedStreamId, theme.colors.text.primary]);
+
   // Parse selection into filter
   const entryFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
 
@@ -317,9 +326,10 @@ export const CalendarScreen = memo(function CalendarScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...drawerPanResponder.panHandlers}>
       <TopBar
         title={selectedStreamName}
+        titleIcon={titleIcon}
         badge={entries.length}
+        onMenuPress={openDrawer}
         onTitlePress={openDrawer}
-        showDropdownArrow
       />
 
       {/* SubBar with date field selector and archived toggle */}

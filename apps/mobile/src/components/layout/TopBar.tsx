@@ -11,7 +11,7 @@ interface TopBarProps {
   titleIcon?: ReactNode;  // Optional icon before title (stream icon, location pin, etc.)
   badge?: number;
   onTitlePress?: () => void;
-  showDropdownArrow?: boolean;
+  onMenuPress?: () => void;  // Hamburger menu button
 
   // Custom content mode (for editing screens)
   children?: React.ReactNode;
@@ -26,7 +26,7 @@ export function TopBar({
   titleIcon,
   badge,
   onTitlePress,
-  showDropdownArrow = false,
+  onMenuPress,
   children,
   onSearchPress,
   isSearchActive = false,
@@ -35,7 +35,18 @@ export function TopBar({
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background.primary, paddingTop: insets.top + 6 }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.primary, paddingTop: insets.top + 16 }]}>
+      {/* Hamburger menu button */}
+      {onMenuPress && (
+        <TouchableOpacity
+          style={styles.menuButton}
+          onPress={onMenuPress}
+          activeOpacity={0.7}
+        >
+          <Icon name="Menu" size={22} color={theme.colors.text.primary} />
+        </TouchableOpacity>
+      )}
+
       {/* Title Mode - Clickable stream/filter selector */}
       {title && (
         <TouchableOpacity
@@ -45,14 +56,16 @@ export function TopBar({
           activeOpacity={onTitlePress ? 0.7 : 1}
         >
           {titleIcon && <View style={styles.titleIcon}>{titleIcon}</View>}
-          <Text style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{title}</Text>
+          <Text
+            style={[styles.title, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
           {badge !== undefined && (
             <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
               <Text style={[styles.badgeText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.semibold }]}>{badge}</Text>
             </View>
-          )}
-          {showDropdownArrow && (
-            <Icon name="ChevronDown" size={20} color={theme.colors.text.secondary} />
           )}
         </TouchableOpacity>
       )}
@@ -87,8 +100,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: themeBase.spacing.lg,
     paddingBottom: themeBase.spacing.xs,
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
+  },
+  menuButton: {
+    padding: themeBase.spacing.sm,
+    marginLeft: -themeBase.spacing.sm,
+    marginRight: themeBase.spacing.xs,
   },
   titleContainer: {
     flexDirection: "row",
@@ -101,6 +119,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: themeBase.typography.fontSize.xl,
+    flexShrink: 1,
   },
   badge: {
     borderRadius: themeBase.borderRadius.full,

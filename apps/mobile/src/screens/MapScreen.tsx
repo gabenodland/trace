@@ -213,8 +213,15 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
 
   const { entries: allEntriesFromHook, isLoading, isFetching, entryMutations } = useEntries(entryFilter);
 
-  // Title for TopBar
+  // Title and icon for TopBar
   const title = selectedStreamName;
+  const titleIcon = useMemo(() => {
+    if (typeof selectedStreamId === 'string' &&
+        (selectedStreamId.startsWith("location:") || selectedStreamId.startsWith("geo:"))) {
+      return <Icon name="MapPin" size={20} color={theme.colors.text.primary} />;
+    }
+    return null;
+  }, [selectedStreamId, theme.colors.text.primary]);
   const { data: locationsData } = useLocations();
 
   // Filter entries to only those with GPS coordinates, exclude archived
@@ -629,9 +636,10 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
       <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
         <TopBar
           title={title}
+          titleIcon={titleIcon}
           badge={0}
+          onMenuPress={openDrawer}
           onTitlePress={openDrawer}
-          showDropdownArrow
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.text.tertiary} />
@@ -653,9 +661,10 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       <TopBar
         title={title}
+        titleIcon={titleIcon}
         badge={entries.length}
+        onMenuPress={openDrawer}
         onTitlePress={openDrawer}
-        showDropdownArrow
       />
 
       {/* Map */}

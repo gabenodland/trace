@@ -300,8 +300,8 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
       <TopBar
         title={title}
         titleIcon={titleIcon}
+        onMenuPress={openDrawer}
         onTitlePress={openDrawer}
-        showDropdownArrow
         onSearchPress={() => setIsSearchOpen(!isSearchOpen)}
         isSearchActive={isSearchOpen}
       />
