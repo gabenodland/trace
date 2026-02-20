@@ -533,7 +533,7 @@ export function StreamDrawerContent() {
                             { color: isActive ? "#FFFFFF" : drawerTextSecondary },
                           ]}
                         >
-                          {opt.label}
+                          {opt.label}{isActive ? (streamSortAsc ? " ↓" : " ↑") : ""}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -618,7 +618,7 @@ export function StreamDrawerContent() {
                             { color: isActive ? "#FFFFFF" : drawerTextSecondary },
                           ]}
                         >
-                          {opt.label}
+                          {opt.label}{isActive ? (locationSortAsc ? " ↓" : " ↑") : ""}
                         </Text>
                       </TouchableOpacity>
                     );
