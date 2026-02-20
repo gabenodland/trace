@@ -213,6 +213,7 @@ export function StreamDrawerContent() {
   const [containerWidth, setContainerWidth] = useState(0);
   const containerWidthRef = useRef(0);
   const translateX = useRef(new Animated.Value(0)).current;
+  const lastTranslateXRef = useRef(0);
   const streamScrollRef = useRef<ScrollView>(null);
   const locationScrollRef = useRef<ScrollView>(null);
 
@@ -414,7 +415,9 @@ export function StreamDrawerContent() {
     containerWidthRef.current = w;
     setContainerWidth(w);
     // Snap to current tab position without animation
-    translateX.setValue(-activeTabIndexRef.current * w);
+    const val = -activeTabIndexRef.current * w;
+    translateX.setValue(val);
+    lastTranslateXRef.current = val;
   }, [translateX]);
 
   const animateToTab = useCallback((index: number) => {
@@ -465,7 +468,9 @@ export function StreamDrawerContent() {
         const base = -activeTabIndexRef.current * containerWidthRef.current;
         const proposed = base + gs.dx * 1.5;
         const minX = -(TABS.length - 1) * containerWidthRef.current;
-        translateX.setValue(Math.max(minX, Math.min(0, proposed)));
+        const clamped = Math.max(minX, Math.min(0, proposed));
+        lastTranslateXRef.current = clamped;
+        translateX.setValue(clamped);
       },
       onPanResponderRelease: (_, gs) => {
         const width = containerWidthRef.current;
@@ -480,6 +485,19 @@ export function StreamDrawerContent() {
         setActiveTab(TABS[targetIdx].key);
         Animated.spring(translateX, {
           toValue: -targetIdx * containerWidthRef.current,
+          ...IOS_SPRING,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        // ScrollView native gesture stole the touch — snap to nearest tab
+        const width = containerWidthRef.current;
+        if (width <= 0) return;
+        let targetIdx = Math.round(-lastTranslateXRef.current / width);
+        targetIdx = Math.max(0, Math.min(TABS.length - 1, targetIdx));
+        activeTabIndexRef.current = targetIdx;
+        setActiveTab(TABS[targetIdx].key);
+        Animated.spring(translateX, {
+          toValue: -targetIdx * width,
           ...IOS_SPRING,
         }).start();
       },
