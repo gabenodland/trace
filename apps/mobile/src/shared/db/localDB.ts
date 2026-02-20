@@ -1856,7 +1856,8 @@ class LocalDatabase {
     let query = `
       SELECT
         s.*,
-        COALESCE(COUNT(e.entry_id), 0) as entry_count
+        COALESCE(COUNT(e.entry_id), 0) as entry_count,
+        MAX(e.updated_at) as last_entry_updated_at
       FROM streams s
       LEFT JOIN entries e ON s.stream_id = e.stream_id
         AND (e.deleted_at IS NULL OR e.deleted_at = '')

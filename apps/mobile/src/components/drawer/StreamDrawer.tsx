@@ -7,9 +7,9 @@
  * Features:
  * - Animated slide-in from left
  * - Backdrop with fade (derived from translateX via interpolation)
- * - Swipe-to-close gesture (on drawer itself)
  * - Swipe-to-open gesture (from EntryListScreen via drawerControl)
  * - Tap backdrop to close
+ * - Tab swiping handled by StreamDrawerContent's own PanResponder
  */
 
 import { useRef, useEffect, useCallback, useState } from "react";
@@ -17,8 +17,8 @@ import {
   View,
   StyleSheet,
   Animated,
-  TouchableWithoutFeedback,
   PanResponder,
+  TouchableWithoutFeedback,
   Platform,
   StatusBar,
 } from "react-native";
@@ -27,7 +27,7 @@ import { useTheme } from "../../shared/contexts/ThemeContext";
 import { StreamDrawerContent } from "./StreamDrawerContent";
 import { IOS_SPRING } from "../../shared/constants/animations";
 
-const DRAWER_WIDTH = 280;
+const DRAWER_WIDTH = 300;
 
 export function StreamDrawer() {
   const theme = useTheme();
@@ -96,6 +96,30 @@ export function StreamDrawer() {
   // Get drawer width
   const getDrawerWidth = useCallback(() => DRAWER_WIDTH, []);
 
+  // Swipe-to-close on the drawer panel (left swipe)
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        gs.dx < -10 && Math.abs(gs.dx) > Math.abs(gs.dy),
+      onPanResponderMove: (_, gs) => {
+        if (gs.dx < 0) {
+          translateX.setValue(gs.dx);
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx < -80 || gs.vx < -0.5) {
+          animateClose(gs.vx);
+        } else {
+          Animated.spring(translateX, {
+            toValue: 0,
+            ...IOS_SPRING,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
   // Register control methods on mount
   useEffect(() => {
     const control: DrawerControl = {
@@ -107,37 +131,6 @@ export function StreamDrawer() {
     registerDrawerControl(control);
     return () => registerDrawerControl(null);
   }, [setPosition, animateOpen, animateClose, getDrawerWidth, registerDrawerControl]);
-
-  // Swipe-to-close gesture on drawer itself - only captures swipe movements, not taps
-  const panResponder = useRef(
-    PanResponder.create({
-      // Don't capture initial touch - let children handle taps
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only capture horizontal swipes to the left
-        return gestureState.dx < -10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
-      },
-      onPanResponderMove: (_, gestureState) => {
-        // Only allow swiping left (closing)
-        if (gestureState.dx < 0) {
-          translateX.setValue(gestureState.dx);
-          // Backdrop opacity follows automatically via interpolation
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        // Close if swiped far enough or fast enough
-        if (gestureState.dx < -80 || gestureState.vx < -0.5) {
-          animateClose(gestureState.vx);
-        } else {
-          // Didn't pass close threshold — spring back open without velocity
-          Animated.spring(translateX, {
-            toValue: 0,
-            ...IOS_SPRING,
-          }).start();
-        }
-      },
-    })
-  ).current;
 
   // Animate open/close based on state (for non-gesture triggers like button press, stream selection)
   // Gesture-driven animations are handled by animateClose/animateOpen directly.
@@ -154,13 +147,8 @@ export function StreamDrawer() {
         useNativeDriver: true,
       }).start();
     } else {
-      Animated.timing(translateX, {
-        toValue: -DRAWER_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) setIsVisible(false);
-      });
+      translateX.setValue(-DRAWER_WIDTH);
+      setIsVisible(false);
     }
   }, [isOpen, isDragging]); // translateX is a stable ref
 
@@ -183,11 +171,11 @@ export function StreamDrawer() {
 
       {/* Drawer panel */}
       <Animated.View
+        {...panResponder.panHandlers}
         style={[
           styles.drawer,
           { transform: [{ translateX }], backgroundColor: theme.colors.surface.overlay },
         ]}
-        {...panResponder.panHandlers}
       >
         <StreamDrawerContent />
       </Animated.View>

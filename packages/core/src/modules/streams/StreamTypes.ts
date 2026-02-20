@@ -37,6 +37,9 @@ export interface Stream {
   // Privacy and sync controls
   is_private?: boolean;
   is_localonly?: boolean;
+
+  // Computed aggregates (from queries, not stored in DB)
+  last_entry_updated_at?: string | null;
 }
 
 export interface CreateStreamInput {
