@@ -396,8 +396,8 @@ export function LocationPicker({
                 style={[styles.mapLocationButton, { backgroundColor: dynamicTheme.colors.background.primary }]}
                 onPress={picker.handleCenterOnMyLocation}
               >
-                {picker.effectiveMode === 'view' ? (
-                  /* Navigation arrow icon - shows "you relative to pin" in view mode */
+                {picker.effectiveMode === 'view' || picker.effectiveMode === 'manage' ? (
+                  /* Navigation arrow icon - shows "you relative to pin" in view/manage mode */
                   <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.primary} strokeWidth={2}>
                     <Path d="M3 11l19-9-9 19-2-8-8-2z" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>

@@ -226,10 +226,14 @@ export async function checkBeforeBack(): Promise<boolean> {
 }
 
 /**
- * Set modal open state (disables swipe-back gesture)
+ * Set modal open state (disables swipe-back and drawer gestures).
+ * Uses a counter internally so nested sheets work correctly.
  */
+let modalOpenCount = 0;
 export function setIsModalOpen(open: boolean): void {
-  state.isModalOpen = open;
+  modalOpenCount += open ? 1 : -1;
+  if (modalOpenCount < 0) modalOpenCount = 0; // Safety
+  state.isModalOpen = modalOpenCount > 0;
 }
 
 /**

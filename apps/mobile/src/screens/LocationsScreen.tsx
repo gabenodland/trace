@@ -71,18 +71,17 @@ function getEntryPlaceCityLine(place: EntryDerivedPlace): string {
   return [place.city, place.country].filter(Boolean).join(", ");
 }
 
+function isDisplayableIssue(issue: LocationIssue): boolean {
+  return issue.type !== 'merge_candidate' && issue.type !== 'needs_geocoding' && issue.type !== 'missing_data';
+}
+
 function getIssueNotices(issues: LocationIssue[]): string[] {
   return issues
-    .filter(issue => issue.type !== 'merge_candidate') // merge handled on manage screen only
+    .filter(isDisplayableIssue)
     .map(issue => {
       switch (issue.type) {
         case 'snap_candidate':
           return `May be the same as "${issue.targetLocationName}" in My Places`;
-        case 'missing_data':
-          return `Missing location details (${issue.message.replace('Missing ', '')})`;
-        case 'needs_geocoding':
-          return issue.message.replace('needs geocoding', 'missing address information')
-            .replace('need geocoding', 'missing address information');
         default:
           return issue.message;
       }
@@ -287,7 +286,7 @@ export function LocationsScreen() {
     if (!managePlaceId) return [];
     const place = entryDerivedPlaces.find(p => p.location_id === managePlaceId);
     if (!place) return [];
-    return issueMap.get(getPlaceIssueKey(place)) || [];
+    return (issueMap.get(getPlaceIssueKey(place)) || []).filter(isDisplayableIssue);
   }, [managePlaceId, entryDerivedPlaces, issueMap]);
 
   const handleManageDelete = useCallback(() => {
@@ -636,7 +635,7 @@ export function LocationsScreen() {
                   place={place}
                   isLast={index === filteredEntryPlaces.length - 1}
                   theme={theme}
-                  issueCount={issueMap.get(getPlaceIssueKey(place))?.length || 0}
+                  issueCount={issueMap.get(getPlaceIssueKey(place))?.filter(isDisplayableIssue).length || 0}
                   onMenuPress={() => setEntryPlaceSheet(place)}
                   onPress={() => {
                     if (place.is_favorite && place.location_id) {

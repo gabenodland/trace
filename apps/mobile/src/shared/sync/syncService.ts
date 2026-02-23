@@ -17,7 +17,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { getDeviceName } from '../utils/deviceUtils';
 import { createScopedLogger } from '../utils/logger';
 
-// Lazy import to break circular dependency
+// Lazy imports to break circular dependencies
 // mobileAttachmentApi imports syncApi, which imports this file
 let _downloadAttachmentsInBackground: ((limit?: number) => Promise<void>) | null = null;
 async function downloadAttachmentsInBackground(limit: number = 10): Promise<void> {
@@ -26,6 +26,18 @@ async function downloadAttachmentsInBackground(limit: number = 10): Promise<void
     _downloadAttachmentsInBackground = module.downloadAttachmentsInBackground;
   }
   return _downloadAttachmentsInBackground(limit);
+}
+
+// Lazy import for location enrichment (geocode entries + fill location hierarchy)
+let _geocodeEntries: (() => Promise<{ geocoded: number; noData: number; errors: number }>) | null = null;
+let _enrichLocationHierarchy: (() => Promise<{ processed: number; errors: number }>) | null = null;
+async function loadEnrichmentFunctions() {
+  if (!_geocodeEntries || !_enrichLocationHierarchy) {
+    const module = await import('../../modules/locations/mobileLocationApi');
+    _geocodeEntries = module.geocodeEntries;
+    _enrichLocationHierarchy = module.enrichLocationHierarchy;
+  }
+  return { geocodeEntries: _geocodeEntries!, enrichLocationHierarchy: _enrichLocationHierarchy! };
 }
 import {
   SyncResult,
@@ -76,6 +88,9 @@ class SyncService {
   private appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
   private lastForegroundSyncTime: number = 0;
   private readonly MIN_FOREGROUND_SYNC_INTERVAL_MS = 30000;
+
+  // Post-sync enrichment state
+  private isEnriching = false;
 
   // ==========================================================================
   // INITIALIZATION
@@ -350,6 +365,9 @@ class SyncService {
 
       // Background attachment download
       this.startBackgroundAttachmentDownload();
+
+      // Background enrichment — geocode entries + fill location hierarchy
+      this.startBackgroundEnrichment();
 
       result.success = true;
       result.duration = Date.now() - startTime;
@@ -970,6 +988,34 @@ class SyncService {
         log.warn('Background attachment download error', { error });
       });
     }, 1000);
+  }
+
+  /**
+   * Run geocoding for entries and hierarchy enrichment for saved locations.
+   * Fire-and-forget after sync — fills in missing address/city/region data.
+   * Items with no geocode data (e.g. middle of ocean) get marked 'no_data' and won't retry.
+   */
+  private startBackgroundEnrichment(): void {
+    if (this.isEnriching) return;
+    this.isEnriching = true;
+
+    loadEnrichmentFunctions()
+      .then(async ({ geocodeEntries, enrichLocationHierarchy }) => {
+        const entryResult = await geocodeEntries();
+        const locationResult = await enrichLocationHierarchy();
+
+        const total = entryResult.geocoded + locationResult.processed;
+        if (total > 0) {
+          log.info(`Enrichment: ${entryResult.geocoded} entries geocoded, ${locationResult.processed} locations enriched`);
+          this.invalidateQueryCache();
+        }
+      })
+      .catch((error: unknown) => {
+        log.warn('Background enrichment error', { error });
+      })
+      .finally(() => {
+        this.isEnriching = false;
+      });
   }
 
   private async logSyncResult(trigger: SyncTrigger, result: SyncResult): Promise<void> {

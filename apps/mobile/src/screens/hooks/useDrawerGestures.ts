@@ -6,6 +6,7 @@
 import { useRef, useEffect } from 'react';
 import { PanResponder, Keyboard } from 'react-native';
 import type { DrawerControl } from '../../shared/contexts/DrawerContext';
+import { getIsModalOpen } from '../../shared/navigation';
 
 interface UseDrawerGesturesOptions {
   drawerControl: DrawerControl | null;
@@ -33,6 +34,8 @@ export function useDrawerGestures({ drawerControl }: UseDrawerGesturesOptions) {
       // IMPORTANT: Avoid Android's edge gesture zones (~60px from each edge)
       // to prevent accidental back navigation when swiping for drawers
       onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
+        // Don't capture when a sheet/modal is open
+        if (getIsModalOpen()) return false;
         // Strict 2:1 ratio + 35px threshold to avoid hijacking vertical scrolls in FlatList
         const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2;
         const isSwipingRight = gestureState.dx > 35;

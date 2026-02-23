@@ -744,6 +744,28 @@ class LocalDatabase {
     } catch (error) {
       log.error('Migration error (locations merge_ignore_ids)', error);
     }
+
+    // Migration: Add geocode_status column to locations table
+    try {
+      const geocodeStatusCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('locations') WHERE name = 'geocode_status'`
+      );
+
+      if (!geocodeStatusCheck) {
+        log.info('Running migration: Adding geocode_status to locations table');
+        await this.db.execAsync(`
+          ALTER TABLE locations ADD COLUMN geocode_status TEXT;
+        `);
+        // Mark locations that already have hierarchy data as enriched
+        await this.db.execAsync(`
+          UPDATE locations SET geocode_status = 'success'
+          WHERE geocode_status IS NULL AND country IS NOT NULL;
+        `);
+        log.info('Migration complete: geocode_status added to locations');
+      }
+    } catch (error) {
+      log.error('Migration error (locations geocode_status)', error);
+    }
   }
 
   private async createTables(): Promise<void> {
@@ -768,6 +790,7 @@ class LocalDatabase {
         country TEXT,
         location_radius REAL,         -- User-selected radius in meters for location generalization
         merge_ignore_ids TEXT,        -- JSON array of location_ids to suppress merge suggestions
+        geocode_status TEXT,          -- Reverse geocode status: null, 'success', 'no_data', 'error'
         mapbox_place_id TEXT,
         foursquare_fsq_id TEXT,
         created_at INTEGER NOT NULL,

@@ -29,6 +29,7 @@ import { useRef } from "react";
 import { Animated, Easing, PanResponder, Dimensions, GestureResponderHandlers, Keyboard, DeviceEventEmitter } from "react-native";
 import { createScopedLogger, LogScopes } from "../utils/logger";
 import { IOS_SPRING } from "../constants/animations";
+import { getIsModalOpen } from "../navigation";
 
 const log = createScopedLogger(LogScopes.Navigation);
 
@@ -181,6 +182,10 @@ export function useSwipeBackGesture({
         // Don't capture when disabled
         if (!isEnabledRef.current) {
           log.debug('[SwipeBack] onMoveShouldSet: BLOCKED (disabled)');
+          return false;
+        }
+        // Don't capture when a sheet/modal is open (e.g., map panning in LocationPicker)
+        if (getIsModalOpen()) {
           return false;
         }
         // Don't capture when user is scrolling a table in the editor

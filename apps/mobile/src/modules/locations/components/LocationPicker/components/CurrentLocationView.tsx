@@ -348,62 +348,64 @@ export function CurrentLocationView({
               theme.shadows.sm,
             ]}
           >
-            {/* Top-right pill: Edit (view mode only) or Zoom indicator */}
-            {!isEditing && canEdit && (
-              <TouchableOpacity
-                style={{
-                  position: 'absolute',
-                  top: 10,
-                  right: 10,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                  backgroundColor: theme.colors.background.secondary,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 12,
-                  zIndex: 1,
-                }}
-                onPress={onStartEditing}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Icon name="Edit" size={14} color={theme.colors.functional.accent} />
-                <Text style={{
-                  fontSize: 12,
-                  fontFamily: theme.typography.fontFamily.medium,
-                  color: theme.colors.functional.accent,
-                }}>
-                  Edit
-                </Text>
-              </TouchableOpacity>
-            )}
-            {!isEditing && !canEdit && (
-              <TouchableOpacity
-                style={{
-                  position: 'absolute',
-                  top: 10,
-                  right: 10,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 2,
-                  backgroundColor: theme.colors.background.secondary,
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 12,
-                  zIndex: 1,
-                }}
-                onPress={handleLocationCardPress}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Icon name="Search" size={14} color={theme.colors.text.tertiary} />
-                <Text style={{
-                  fontSize: 12,
-                  fontFamily: theme.typography.fontFamily.medium,
-                  color: theme.colors.text.tertiary,
-                }}>
-                  ±
-                </Text>
-              </TouchableOpacity>
+            {/* Top-right pills: zoom toggle + edit (view mode only) */}
+            {!isEditing && (
+              <View style={{
+                position: 'absolute',
+                top: 10,
+                right: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                zIndex: 1,
+              }}>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 2,
+                    backgroundColor: theme.colors.background.secondary,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                  }}
+                  onPress={handleLocationCardPress}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Icon name="Search" size={14} color={theme.colors.text.tertiary} />
+                  <Text style={{
+                    fontSize: 12,
+                    fontFamily: theme.typography.fontFamily.medium,
+                    color: theme.colors.text.tertiary,
+                  }}>
+                    ±
+                  </Text>
+                </TouchableOpacity>
+                {canEdit && (
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      backgroundColor: theme.colors.background.secondary,
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 12,
+                    }}
+                    onPress={onStartEditing}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Icon name="Edit" size={14} color={theme.colors.functional.accent} />
+                    <Text style={{
+                      fontSize: 12,
+                      fontFamily: theme.typography.fontFamily.medium,
+                      color: theme.colors.functional.accent,
+                    }}>
+                      Edit
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
 
             {isEditing ? (

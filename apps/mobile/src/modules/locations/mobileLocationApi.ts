@@ -468,7 +468,7 @@ export async function updateEntryPlaceData(
  * Link entries matching a place group to a location_id.
  * Matches on place_name + address (using COALESCE for nulls).
  */
-async function linkMatchingEntries(
+export async function linkMatchingEntries(
   locationId: string,
   place: { place_name: string | null; address: string | null; city: string | null; region: string | null; country: string | null }
 ): Promise<number> {
@@ -503,7 +503,7 @@ async function linkMatchingEntries(
     await localDB.execSQL('COMMIT');
 
     if (count > 0) triggerPushSync();
-    log.info('Linked entries to promoted location', { locationId, entriesLinked: count });
+    log.info('Linked entries to saved location', { locationId, entriesLinked: count });
     return count;
   } catch (error) {
     await localDB.execSQL('ROLLBACK');
@@ -790,8 +790,7 @@ export async function enrichLocationHierarchy(
     SELECT location_id, name, latitude, longitude
     FROM locations
     WHERE deleted_at IS NULL
-      AND (neighborhood IS NULL OR postal_code IS NULL OR city IS NULL
-           OR subdivision IS NULL OR region IS NULL OR country IS NULL)
+      AND geocode_status IS NULL
   `);
 
   if (locationsToEnrich.length === 0) {
@@ -809,6 +808,10 @@ export async function enrichLocationHierarchy(
       const response = await reverseGeocode({ latitude: loc.latitude, longitude: loc.longitude });
       const hierarchy = parseMapboxHierarchy(response);
 
+      // Determine status: 'success' if Mapbox returned any data, 'no_data' otherwise (e.g., ocean)
+      const hasData = !!(hierarchy.country || hierarchy.region || hierarchy.place);
+      const geocodeStatus = hasData ? 'success' : 'no_data';
+
       await localDB.runCustomQuery(
         `UPDATE locations SET
           neighborhood = COALESCE(neighborhood, ?),
@@ -817,6 +820,7 @@ export async function enrichLocationHierarchy(
           subdivision = COALESCE(subdivision, ?),
           region = COALESCE(region, ?),
           country = COALESCE(country, ?),
+          geocode_status = ?,
           synced = 0,
           sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END,
           updated_at = ?
@@ -828,6 +832,7 @@ export async function enrichLocationHierarchy(
           hierarchy.district || null,
           hierarchy.region || null,
           hierarchy.country || null,
+          geocodeStatus,
           new Date().toISOString(),
           loc.location_id,
         ]
@@ -840,6 +845,11 @@ export async function enrichLocationHierarchy(
       }
     } catch (err) {
       log.error('Failed to enrich location', err, { locationName: loc.name });
+      // Mark as error so we don't retry every sync — manual retry from LocationsScreen
+      await localDB.runCustomQuery(
+        `UPDATE locations SET geocode_status = 'error' WHERE location_id = ?`,
+        [loc.location_id]
+      );
       errorCount++;
     }
   }
@@ -860,6 +870,9 @@ export async function enrichSingleLocation(locationId: string): Promise<boolean>
     const response = await reverseGeocode({ latitude: loc.latitude, longitude: loc.longitude });
     const hierarchy = parseMapboxHierarchy(response);
 
+    const hasData = !!(hierarchy.country || hierarchy.region || hierarchy.place);
+    const geocodeStatus = hasData ? 'success' : 'no_data';
+
     await localDB.runCustomQuery(
       `UPDATE locations SET
         neighborhood = COALESCE(neighborhood, ?),
@@ -868,6 +881,7 @@ export async function enrichSingleLocation(locationId: string): Promise<boolean>
         subdivision = COALESCE(subdivision, ?),
         region = COALESCE(region, ?),
         country = COALESCE(country, ?),
+        geocode_status = ?,
         synced = 0,
         sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END,
         updated_at = ?
@@ -879,6 +893,7 @@ export async function enrichSingleLocation(locationId: string): Promise<boolean>
         hierarchy.district || null,
         hierarchy.region || null,
         hierarchy.country || null,
+        geocodeStatus,
         new Date().toISOString(),
         locationId,
       ]
@@ -887,6 +902,10 @@ export async function enrichSingleLocation(locationId: string): Promise<boolean>
     return true;
   } catch (err) {
     log.error('Failed to enrich single location', err, { locationId });
+    await localDB.runCustomQuery(
+      `UPDATE locations SET geocode_status = 'error' WHERE location_id = ?`,
+      [locationId]
+    );
     return false;
   }
 }

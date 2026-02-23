@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
+import { setIsModalOpen } from "../../shared/navigation";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const ANIMATION_DURATION = 250;
@@ -147,6 +148,14 @@ export function BottomSheet({
       openSheet();
     }
   }, [visible, openSheet]);
+
+  // Block swipe-back and drawer gestures while sheet is visible
+  useEffect(() => {
+    if (visible) {
+      setIsModalOpen(true);
+      return () => setIsModalOpen(false);
+    }
+  }, [visible]);
 
   if (!visible) return null;
 

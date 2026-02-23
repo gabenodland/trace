@@ -87,6 +87,10 @@ export function StreamDrawer() {
       toValue: -DRAWER_WIDTH,
       velocity: velocity ?? 0,
       ...IOS_SPRING,
+      // Tighter thresholds than default IOS_SPRING (10px) — the drawer's final
+      // position is on-screen, so stopping 10px short leaves a visible gap
+      restDisplacementThreshold: 0.1,
+      restSpeedThreshold: 0.1,
     }).start(({ finished }) => {
       if (animationIdRef.current !== myId) return;
       animationIdRef.current = 0;
@@ -150,6 +154,8 @@ export function StreamDrawer() {
       Animated.spring(translateX, {
         toValue: -DRAWER_WIDTH,
         ...IOS_SPRING,
+        restDisplacementThreshold: 0.1,
+        restSpeedThreshold: 0.1,
       }).start(({ finished }) => {
         if (finished) setIsVisible(false);
       });

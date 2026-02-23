@@ -32,7 +32,7 @@ import {
 } from '@trace/core';
 import { useAuth } from '../../../../../shared/contexts/AuthContext';
 import { useLocationsWithCounts, useUpdateLocationDetails, useDeleteLocation } from '../../../mobileLocationHooks';
-import { createLocation } from '../../../mobileLocationApi';
+import { createLocation, linkMatchingEntries } from '../../../mobileLocationApi';
 import { createScopedLogger, LogScopes } from '../../../../../shared/utils/logger';
 
 const log = createScopedLogger(LogScopes.LocationPicker);
@@ -795,6 +795,14 @@ export function useLocationPicker({
           const locationInput = locationToCreateInput(finalLocation);
           const savedLocation = await createLocation(locationInput);
           finalLocation.location_id = savedLocation.location_id;
+          // Link all entries at this place to the new saved location
+          await linkMatchingEntries(savedLocation.location_id, {
+            place_name: finalLocation.name ?? null,
+            address: finalLocation.address ?? null,
+            city: finalLocation.city ?? null,
+            region: finalLocation.region ?? null,
+            country: finalLocation.country ?? null,
+          });
         } catch (error) {
           log.error('Failed to save location', error);
           // Still proceed with the location even if save fails
@@ -811,9 +819,9 @@ export function useLocationPicker({
   // - Create mode (showingDetails in select): Recenter on selected point
   // - Select mode: Get GPS and move marker there
   const handleCenterOnMyLocation = useCallback(async () => {
-    // In VIEW mode, always get GPS and fit both marker and user location
+    // In VIEW/MANAGE mode, always get GPS and fit both marker and user location
     // This shows the user where they are relative to the pin
-    if (effectiveMode === 'view' && mapState.markerPosition && mapRef.current) {
+    if ((effectiveMode === 'view' || effectiveMode === 'manage') && mapState.markerPosition && mapRef.current) {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
@@ -1108,6 +1116,20 @@ export function useLocationPicker({
         const locationInput = locationToCreateInput(selection.location);
         const savedLocation = await createLocation(locationInput);
 
+        // Link all entries at this place to the new saved location
+        let linked = 0;
+        try {
+          linked = await linkMatchingEntries(savedLocation.location_id, {
+            place_name: selection.location.name ?? null,
+            address: selection.location.address ?? null,
+            city: selection.location.city ?? null,
+            region: selection.location.region ?? null,
+            country: selection.location.country ?? null,
+          });
+        } catch (linkError) {
+          log.error('Failed to link matching entries', linkError);
+        }
+
         const linkedLocation: LocationType = {
           ...selection.location,
           location_id: savedLocation.location_id,
@@ -1117,7 +1139,7 @@ export function useLocationPicker({
           ...prev,
           location: linkedLocation,
           locationId: savedLocation.location_id,
-          entryCount: 1,
+          entryCount: linked || 1,
         }));
 
         onSelect(linkedLocation);
