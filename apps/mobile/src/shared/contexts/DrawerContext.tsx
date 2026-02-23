@@ -32,8 +32,6 @@ export interface DrawerControl {
 }
 
 interface DrawerContextValue {
-  /** Whether the drawer is currently open */
-  isOpen: boolean;
   /** Open the drawer */
   openDrawer: () => void;
   /** Close the drawer */
@@ -76,6 +74,9 @@ interface DrawerContextValue {
 }
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
+
+/** Separate context for isOpen — only drawer UI and back-button handlers need reactive updates */
+const DrawerOpenContext = createContext<boolean | null>(null);
 
 interface DrawerProviderProps {
   children: ReactNode;
@@ -144,7 +145,6 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
   }, []);
 
   const contextValue = useMemo(() => ({
-    isOpen,
     openDrawer,
     closeDrawer,
     toggleDrawer,
@@ -163,7 +163,6 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
     drawerControl,
     registerDrawerControl,
   }), [
-    isOpen,
     openDrawer,
     closeDrawer,
     toggleDrawer,
@@ -185,7 +184,9 @@ export function DrawerProvider({ children }: DrawerProviderProps) {
 
   return (
     <DrawerContext.Provider value={contextValue}>
-      {children}
+      <DrawerOpenContext.Provider value={isOpen}>
+        {children}
+      </DrawerOpenContext.Provider>
     </DrawerContext.Provider>
   );
 }
@@ -196,4 +197,14 @@ export function useDrawer(): DrawerContextValue {
     throw new Error("useDrawer must be used within a DrawerProvider");
   }
   return context;
+}
+
+/** Read drawer open/close state without subscribing to the full DrawerContext.
+ *  Only components that need reactive isOpen updates should use this. */
+export function useDrawerOpen(): boolean {
+  const isOpen = useContext(DrawerOpenContext);
+  if (isOpen === null) {
+    throw new Error("useDrawerOpen must be used within a DrawerProvider");
+  }
+  return isOpen;
 }

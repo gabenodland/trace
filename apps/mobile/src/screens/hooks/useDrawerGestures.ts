@@ -33,8 +33,9 @@ export function useDrawerGestures({ drawerControl }: UseDrawerGesturesOptions) {
       // IMPORTANT: Avoid Android's edge gesture zones (~60px from each edge)
       // to prevent accidental back navigation when swiping for drawers
       onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
-        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
-        const isSwipingRight = gestureState.dx > 20;
+        // Strict 2:1 ratio + 35px threshold to avoid hijacking vertical scrolls in FlatList
+        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2;
+        const isSwipingRight = gestureState.dx > 35;
 
         // Android back gesture zone is ~20-40dp from edge, use 60px to be safe
         const EDGE_ZONE = 60;

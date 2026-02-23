@@ -22,7 +22,7 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
-import { useDrawer, type DrawerControl } from "../../shared/contexts/DrawerContext";
+import { useDrawer, useDrawerOpen, type DrawerControl } from "../../shared/contexts/DrawerContext";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { StreamDrawerContent } from "./StreamDrawerContent";
 import { IOS_SPRING } from "../../shared/constants/animations";
@@ -31,7 +31,8 @@ const DRAWER_WIDTH = 300;
 
 export function StreamDrawer() {
   const theme = useTheme();
-  const { isOpen, openDrawer, closeDrawer, registerDrawerControl } = useDrawer();
+  const { openDrawer, closeDrawer, registerDrawerControl } = useDrawer();
+  const isOpen = useDrawerOpen();
 
   // Single animation value — backdrop opacity is derived via interpolation
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
@@ -141,23 +142,28 @@ export function StreamDrawer() {
 
     if (isOpen) {
       setIsVisible(true);
-      Animated.timing(translateX, {
+      Animated.spring(translateX, {
         toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
+        ...IOS_SPRING,
       }).start();
     } else {
-      translateX.setValue(-DRAWER_WIDTH);
-      setIsVisible(false);
+      Animated.spring(translateX, {
+        toValue: -DRAWER_WIDTH,
+        ...IOS_SPRING,
+      }).start(({ finished }) => {
+        if (finished) setIsVisible(false);
+      });
     }
   }, [isOpen, isDragging]); // translateX is a stable ref
 
   // Always render the drawer - it starts off-screen (translateX = -DRAWER_WIDTH)
   // and backdrop is invisible (opacity = 0). Using pointerEvents to control interaction.
-  // Only interactive when fully open — during swipe-to-open gesture, the overlay must stay
-  // non-interactive so it doesn't steal touch events from the screen's PanResponder.
+  // Interactive when open or visible (drag released, close animating) so the backdrop
+  // blocks touches to entries underneath and tapping it dismisses the drawer.
+  // Not using isDragging here — during active drag the EntryListScreen PanResponder
+  // owns the gesture and we must not intercept its move events.
   return (
-    <View style={styles.container} pointerEvents={isOpen ? "auto" : "none"}>
+    <View style={styles.container} pointerEvents={isOpen || isVisible ? "auto" : "none"}>
       {/* Backdrop */}
       <TouchableWithoutFeedback onPress={() => animateClose()}>
         <Animated.View

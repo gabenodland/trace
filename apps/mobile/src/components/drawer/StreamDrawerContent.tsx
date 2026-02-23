@@ -319,6 +319,7 @@ const DrawerLocationRow = memo(function DrawerLocationRow({
     <TouchableOpacity
       style={[
         styles.filterItem,
+        styles.locationItem,
         isGrouped && styles.groupedItem,
         isSelected && { backgroundColor: theme.colors.background.tertiary },
       ]}
@@ -330,6 +331,7 @@ const DrawerLocationRow = memo(function DrawerLocationRow({
         name={isFavorite ? "MapPinFavoriteLine" : (item.kind === "place" && item.place.place_name) ? "MapPin" : "MapPinEmpty"}
         size={12}
         color={isFavorite ? theme.colors.functional.accent : drawerTextTertiary}
+        style={styles.locationIcon}
       />
       <View style={styles.locationItemText}>
         <Text
@@ -369,7 +371,7 @@ const DrawerLocationRow = memo(function DrawerLocationRow({
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
-export function StreamDrawerContent() {
+export const StreamDrawerContent = memo(function StreamDrawerContent() {
   const theme = useTheme();
 
   const drawerTextPrimary = theme.colors.surface.drawerText || theme.colors.text.primary;
@@ -1064,7 +1066,7 @@ export function StreamDrawerContent() {
       </View>
     </View>
   );
-}
+});
 
 // ─── Styles ─────────────────────────────────────────────────────────────────────
 
@@ -1136,7 +1138,14 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginLeft: 12,
   },
-  // Location list items
+  // Location list items — override shared filterItem's center alignment
+  locationItem: {
+    alignItems: "flex-start",
+  },
+  locationIcon: {
+    marginTop: 4,
+    marginRight: 6,
+  },
   sectionHeader: {
     paddingHorizontal: 20,
     paddingTop: 16,

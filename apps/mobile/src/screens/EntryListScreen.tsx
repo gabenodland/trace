@@ -8,7 +8,7 @@ import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigate } from "../shared/navigation";
-import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
+import { useDrawer, useDrawerOpen, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
@@ -48,11 +48,15 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
     setSelectedStreamName,
     openDrawer,
     closeDrawer,
-    isOpen: isDrawerOpen,
     drawerControl,
     viewMode,
     setViewMode,
   } = useDrawer();
+
+  // Track drawer open state via ref so BackHandler doesn't cause visual re-renders
+  const isDrawerOpen = useDrawerOpen();
+  const isDrawerOpenRef = useRef(isDrawerOpen);
+  isDrawerOpenRef.current = isDrawerOpen;
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -129,17 +133,17 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
   }, [registerStreamLongPressHandler, handleStreamLongPress]);
 
   // Handle Android back button - close drawer if open, otherwise let app exit normally
+  // Uses ref to avoid re-subscribing (and re-rendering) on every drawer toggle
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Close stream drawer if open
-      if (isDrawerOpen) {
+      if (isDrawerOpenRef.current) {
         closeDrawer();
         return true;
       }
-      return false; // Let Android handle back normally (exit app)
+      return false;
     });
     return () => backHandler.remove();
-  }, [isDrawerOpen, closeDrawer]);
+  }, [closeDrawer]);
 
   // Compute title and icon for TopBar based on current selection
   const { title, titleIcon } = useMemo(() => {
