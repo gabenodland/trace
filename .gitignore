@@ -98,3 +98,4 @@ login.txt
 *.md.local
 
 .mcp.json
+.serena/
