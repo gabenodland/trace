@@ -136,7 +136,6 @@ export function useEntryManagementEffects(options: UseEntryManagementEffectsOpti
               ...prev,
               entry_latitude: location.coords.latitude,
               entry_longitude: location.coords.longitude,
-              location_radius: location.coords.accuracy ?? null,
             };
           });
           // Also update originalEntry so this doesn't mark as dirty
@@ -146,7 +145,6 @@ export function useEntryManagementEffects(options: UseEntryManagementEffectsOpti
               ...prev,
               entry_latitude: location.coords.latitude,
               entry_longitude: location.coords.longitude,
-              location_radius: location.coords.accuracy ?? null,
             };
           });
         }

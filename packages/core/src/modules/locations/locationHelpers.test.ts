@@ -4,20 +4,20 @@ import {
   formatDistance,
   parseMapboxHierarchy,
   extractMapboxCoordinates,
-  adjustCoordinatesForPrecision,
-  getLocationDisplayText,
   getLocationLabel,
   hasLocationLabel,
   getStateAbbreviation,
   isSameLocation,
-  roundCoordinates,
   isValidLatitude,
   isValidLongitude,
   isValidCoordinates,
   formatCoordinates,
   formatFullAddress,
   findNearbyLocation,
+  analyzeLocationIssues,
+  getPlaceIssueKey,
 } from "./locationHelpers";
+import type { PlaceForAnalysis, SavedLocationForAnalysis } from "./locationHelpers";
 import type { Coordinates, LocationData, MapboxReverseGeocodeResponse } from "./LocationTypes";
 
 describe("locationHelpers", () => {
@@ -46,16 +46,16 @@ describe("locationHelpers", () => {
       expect(getLocationLabel({ country: "United States" })).toBe("United States");
     });
 
-    it("returns 'Unnamed Location' for empty object", () => {
-      expect(getLocationLabel({})).toBe("Unnamed Location");
+    it("returns 'Unnamed Place' for empty object", () => {
+      expect(getLocationLabel({})).toBe("Unnamed Place");
     });
 
-    it("returns 'Unnamed Location' for null", () => {
-      expect(getLocationLabel(null)).toBe("Unnamed Location");
+    it("returns 'Unnamed Place' for null", () => {
+      expect(getLocationLabel(null)).toBe("Unnamed Place");
     });
 
-    it("returns 'Unnamed Location' for undefined", () => {
-      expect(getLocationLabel(undefined)).toBe("Unnamed Location");
+    it("returns 'Unnamed Place' for undefined", () => {
+      expect(getLocationLabel(undefined)).toBe("Unnamed Place");
     });
 
     it("trims whitespace from values", () => {
@@ -315,87 +315,6 @@ describe("locationHelpers", () => {
     });
   });
 
-  describe("adjustCoordinatesForPrecision", () => {
-    const coords: Coordinates = { latitude: 40.712776, longitude: -74.005974 };
-    const hierarchy = {};
-
-    it("returns exact coordinates for 'coords' precision", () => {
-      const result = adjustCoordinatesForPrecision(coords, hierarchy, "coords");
-      expect(result).toEqual(coords);
-    });
-
-    it("rounds to ~100m for poi/address/neighborhood", () => {
-      const result = adjustCoordinatesForPrecision(coords, hierarchy, "poi");
-      expect(result?.latitude).toBe(40.713);
-      expect(result?.longitude).toBe(-74.006);
-    });
-
-    it("rounds to city level", () => {
-      const result = adjustCoordinatesForPrecision(coords, hierarchy, "city");
-      expect(result?.latitude).toBe(40.7);
-      expect(result?.longitude).toBe(-74);
-    });
-
-    it("returns null for country level", () => {
-      const result = adjustCoordinatesForPrecision(coords, hierarchy, "country");
-      expect(result).toBeNull();
-    });
-  });
-
-  describe("getLocationDisplayText", () => {
-    it("returns name for coords precision", () => {
-      const location: LocationData = {
-        precision: "coords",
-        name: "My Location",
-        latitude: 40.7128,
-        longitude: -74.006,
-      };
-      expect(getLocationDisplayText(location)).toBe("My Location");
-    });
-
-    it("returns coordinates when no name", () => {
-      const location: LocationData = {
-        precision: "coords",
-        latitude: 40.7128,
-        longitude: -74.006,
-      };
-      const result = getLocationDisplayText(location);
-      expect(result).toContain("40.712800");
-    });
-
-    it("returns neighborhood for neighborhood precision", () => {
-      const location: LocationData = {
-        precision: "neighborhood",
-        neighborhood: "Tribeca",
-        city: "New York",
-      };
-      expect(getLocationDisplayText(location)).toBe("Tribeca");
-    });
-
-    it("falls back to city when no neighborhood", () => {
-      const location: LocationData = {
-        precision: "neighborhood",
-        city: "New York",
-      };
-      expect(getLocationDisplayText(location)).toBe("New York");
-    });
-
-    it("returns city for city precision", () => {
-      const location: LocationData = {
-        precision: "city",
-        city: "New York",
-      };
-      expect(getLocationDisplayText(location)).toBe("New York");
-    });
-
-    it("returns name when no precision set", () => {
-      const location: LocationData = {
-        name: "Default Location",
-      };
-      expect(getLocationDisplayText(location)).toBe("Default Location");
-    });
-  });
-
   describe("isSameLocation", () => {
     it("matches by Foursquare ID", () => {
       const loc1 = { foursquareFsqId: "fsq123" };
@@ -447,24 +366,6 @@ describe("locationHelpers", () => {
       const loc1 = { name: "Place" };
       const loc2 = { name: "Place" };
       expect(isSameLocation(loc1, loc2)).toBe(false);
-    });
-  });
-
-  describe("roundCoordinates", () => {
-    it("rounds to specified decimals", () => {
-      const coords: Coordinates = { latitude: 40.712776, longitude: -74.005974 };
-
-      const result = roundCoordinates(coords, 2);
-      expect(result.latitude).toBe(40.71);
-      expect(result.longitude).toBe(-74.01);
-    });
-
-    it("rounds to 0 decimals", () => {
-      const coords: Coordinates = { latitude: 40.712776, longitude: -74.005974 };
-
-      const result = roundCoordinates(coords, 0);
-      expect(result.latitude).toBe(41);
-      expect(result.longitude).toBe(-74);
     });
   });
 
@@ -663,6 +564,359 @@ describe("locationHelpers", () => {
       expect(result.location).not.toBeNull();
       expect(typeof result.distanceMeters).toBe("number");
       expect(result.distanceMeters).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // analyzeLocationIssues
+  // ──────────────────────────────────────────────────────────────────────────
+
+  describe("getPlaceIssueKey", () => {
+    it("produces correct composite key", () => {
+      expect(getPlaceIssueKey({
+        place_name: "KFC", address: "123 Main St", city: "Austin", region: "Texas", country: "US",
+      })).toBe("KFC|123 Main St|Austin|Texas|US");
+    });
+
+    it("handles nulls as empty strings", () => {
+      expect(getPlaceIssueKey({
+        place_name: null, address: null, city: "Austin", region: null, country: null,
+      })).toBe("||Austin||");
+    });
+  });
+
+  describe("analyzeLocationIssues", () => {
+    const makeSavedLocation = (overrides: Partial<SavedLocationForAnalysis> = {}): SavedLocationForAnalysis => ({
+      location_id: "loc-1",
+      name: "KFC",
+      latitude: 30.2672,
+      longitude: -97.7431,
+      address: "123 Main St",
+      city: "Austin",
+      region: "Texas",
+      country: "US",
+      ...overrides,
+    });
+
+    const makePlace = (overrides: Partial<PlaceForAnalysis> = {}): PlaceForAnalysis => ({
+      place_name: "Coffee Shop",
+      address: "456 Oak Ave",
+      city: "Austin",
+      region: "Texas",
+      country: "US",
+      avg_latitude: 30.5,
+      avg_longitude: -97.5,
+      is_favorite: false,
+      location_id: null,
+      ...overrides,
+    });
+
+    it("detects missing data on favorites", () => {
+      const place = makePlace({ is_favorite: true, location_id: "loc-1", city: null, region: null });
+      const result = analyzeLocationIssues([place], []);
+      const key = getPlaceIssueKey(place);
+      const issues = result.get(key);
+
+      expect(issues).toBeDefined();
+      expect(issues!.length).toBe(1);
+      expect(issues![0].type).toBe("missing_data");
+      expect(issues![0].message).toContain("city");
+      expect(issues![0].message).toContain("region");
+    });
+
+    it("does NOT flag missing data when saved location has the fields filled in", () => {
+      // Entry-derived data has null city/region, but the actual saved location has them
+      const saved = makeSavedLocation({ location_id: "loc-1", city: "Austin", region: "Texas", country: "US" });
+      const place = makePlace({ is_favorite: true, location_id: "loc-1", city: null, region: null });
+      const result = analyzeLocationIssues([place], [saved]);
+      const key = getPlaceIssueKey(place);
+      const issues = result.get(key) || [];
+
+      expect(issues.find(i => i.type === "missing_data")).toBeUndefined();
+    });
+
+    it("does NOT flag missing data on non-favorites", () => {
+      const place = makePlace({ is_favorite: false, city: null, region: null });
+      const result = analyzeLocationIssues([place], []);
+      const key = getPlaceIssueKey(place);
+
+      expect(result.has(key)).toBe(false);
+    });
+
+    it("detects snap candidate at exact same location (different names)", () => {
+      // Same GPS point (< 10m) — flags even with different names
+      const saved = makeSavedLocation({ latitude: 30.2672, longitude: -97.7431 });
+      const place = makePlace({
+        is_favorite: false,
+        avg_latitude: 30.2672,
+        avg_longitude: -97.7431,
+      });
+      const result = analyzeLocationIssues([place], [saved]);
+      const key = getPlaceIssueKey(place);
+      const issues = result.get(key);
+
+      expect(issues).toBeDefined();
+      const snapIssue = issues!.find(i => i.type === "snap_candidate");
+      expect(snapIssue).toBeDefined();
+      expect(snapIssue!.targetLocationName).toBe("KFC");
+      expect(snapIssue!.targetLocationId).toBe("loc-1");
+    });
+
+    it("detects snap candidate within 50m when names match", () => {
+      // ~40m apart but same name — should flag
+      const saved = makeSavedLocation({ name: "Starbucks", latitude: 30.2672, longitude: -97.7431 });
+      const place = makePlace({
+        place_name: "Starbucks",
+        is_favorite: false,
+        avg_latitude: 30.26755,  // ~40m north
+        avg_longitude: -97.7431,
+      });
+      const result = analyzeLocationIssues([place], [saved]);
+      const key = getPlaceIssueKey(place);
+      const issues = result.get(key);
+
+      expect(issues).toBeDefined();
+      expect(issues!.find(i => i.type === "snap_candidate")).toBeDefined();
+    });
+
+    it("does NOT flag snap within 30m when names differ", () => {
+      // ~20m apart but different names — should NOT flag (different businesses nearby)
+      const saved = makeSavedLocation({ name: "KFC", latitude: 30.2672, longitude: -97.7431 });
+      const place = makePlace({
+        place_name: "Subway",
+        is_favorite: false,
+        avg_latitude: 30.26738,  // ~20m north
+        avg_longitude: -97.7431,
+      });
+      const result = analyzeLocationIssues([place], [saved]);
+      const key = getPlaceIssueKey(place);
+      const issues = result.get(key) || [];
+
+      expect(issues.find(i => i.type === "snap_candidate")).toBeUndefined();
+    });
+
+    it("does NOT flag snap on favorites", () => {
+      const saved = makeSavedLocation({ latitude: 30.2672, longitude: -97.7431 });
+      const place = makePlace({
+        is_favorite: true,
+        location_id: "loc-2",
+        avg_latitude: 30.2672,
+        avg_longitude: -97.7431,
+      });
+      const result = analyzeLocationIssues([place], [saved]);
+      const key = getPlaceIssueKey(place);
+      const issues = result.get(key) || [];
+
+      expect(issues.find(i => i.type === "snap_candidate")).toBeUndefined();
+    });
+
+    it("does NOT flag snap when distance is large", () => {
+      const saved = makeSavedLocation({ latitude: 30.2672, longitude: -97.7431 });
+      // Place far away
+      const place = makePlace({
+        is_favorite: false,
+        avg_latitude: 31.0,
+        avg_longitude: -97.0,
+      });
+      const result = analyzeLocationIssues([place], [saved]);
+      const key = getPlaceIssueKey(place);
+
+      expect(result.has(key)).toBe(false);
+    });
+
+    it("detects merge candidates with same normalized name+address", () => {
+      const place1 = makePlace({ place_name: "Starbucks", address: "100 Main St", city: "Austin" });
+      const place2 = makePlace({ place_name: "Starbucks", address: "100 Main St", city: "Dallas" });
+      const result = analyzeLocationIssues([place1, place2], []);
+
+      const issues1 = result.get(getPlaceIssueKey(place1));
+      const issues2 = result.get(getPlaceIssueKey(place2));
+
+      expect(issues1).toBeDefined();
+      expect(issues1!.find(i => i.type === "merge_candidate")).toBeDefined();
+      expect(issues2).toBeDefined();
+      expect(issues2!.find(i => i.type === "merge_candidate")).toBeDefined();
+    });
+
+    it("merge detection is case-insensitive", () => {
+      const place1 = makePlace({ place_name: "STARBUCKS", address: "100 main st", city: "Austin" });
+      const place2 = makePlace({ place_name: "starbucks", address: "100 Main St", city: "Dallas" });
+      const result = analyzeLocationIssues([place1, place2], []);
+
+      expect(result.get(getPlaceIssueKey(place1))?.find(i => i.type === "merge_candidate")).toBeDefined();
+    });
+
+    it("merge_candidate includes mergeTargetLocationId when target is a saved location", () => {
+      // Two saved places with same name+address but different cities (different getPlaceIssueKey)
+      const place1 = makePlace({
+        place_name: "Troost Coffee",
+        address: "100 Main St",
+        city: "Austin",
+        is_favorite: true,
+        location_id: "loc-A",
+      });
+      const place2 = makePlace({
+        place_name: "Troost Coffee",
+        address: "100 Main St",
+        city: "Dallas",
+        is_favorite: true,
+        location_id: "loc-B",
+      });
+      const result = analyzeLocationIssues([place1, place2], []);
+
+      const issues1 = result.get(getPlaceIssueKey(place1))!;
+      const merge1 = issues1.find(i => i.type === "merge_candidate");
+      expect(merge1).toBeDefined();
+      expect(merge1!.mergeTargetLocationId).toBe("loc-B");
+
+      const issues2 = result.get(getPlaceIssueKey(place2))!;
+      const merge2 = issues2.find(i => i.type === "merge_candidate");
+      expect(merge2).toBeDefined();
+      expect(merge2!.mergeTargetLocationId).toBe("loc-A");
+    });
+
+    it("detects merge_candidate for favorites at same location with different names", () => {
+      // Two saved places at same GPS point but different names
+      const saved1 = makeSavedLocation({ location_id: "loc-A", name: "Troost Coffee", latitude: 30.2672, longitude: -97.7431 });
+      const saved2 = makeSavedLocation({ location_id: "loc-B", name: "Troost Coffee Shop", latitude: 30.2672, longitude: -97.7431 });
+      const place1 = makePlace({
+        place_name: "Troost Coffee",
+        address: "100 Main St",
+        city: "Austin",
+        is_favorite: true,
+        location_id: "loc-A",
+        avg_latitude: 30.2672,
+        avg_longitude: -97.7431,
+      });
+      const place2 = makePlace({
+        place_name: "Troost Coffee Shop",
+        address: "100 Main St",
+        city: "Austin",
+        is_favorite: true,
+        location_id: "loc-B",
+        avg_latitude: 30.2672,
+        avg_longitude: -97.7431,
+      });
+      const result = analyzeLocationIssues([place1, place2], [saved1, saved2]);
+
+      const issues1 = result.get(getPlaceIssueKey(place1))!;
+      const merge1 = issues1.find(i => i.type === "merge_candidate");
+      expect(merge1).toBeDefined();
+      expect(merge1!.mergeTargetName).toBe("Troost Coffee Shop");
+      expect(merge1!.mergeTargetLocationId).toBe("loc-B");
+
+      const issues2 = result.get(getPlaceIssueKey(place2))!;
+      const merge2 = issues2.find(i => i.type === "merge_candidate");
+      expect(merge2).toBeDefined();
+      expect(merge2!.mergeTargetName).toBe("Troost Coffee");
+      expect(merge2!.mergeTargetLocationId).toBe("loc-A");
+    });
+
+    it("merge_candidate has no mergeTargetLocationId when target has no location_id", () => {
+      const place1 = makePlace({ place_name: "Starbucks", address: "100 Main St", city: "Austin" });
+      const place2 = makePlace({ place_name: "Starbucks", address: "100 Main St", city: "Dallas" });
+      const result = analyzeLocationIssues([place1, place2], []);
+
+      const issues1 = result.get(getPlaceIssueKey(place1))!;
+      const merge1 = issues1.find(i => i.type === "merge_candidate");
+      expect(merge1).toBeDefined();
+      expect(merge1!.mergeTargetLocationId).toBeUndefined();
+    });
+
+    it("merge_candidate is suppressed by merge_ignore_ids", () => {
+      const saved1 = makeSavedLocation({ location_id: "loc-A", name: "John's Place", latitude: 30.2672, longitude: -97.7431 });
+      const saved2 = makeSavedLocation({ location_id: "loc-B", name: "Mark's Place", latitude: 30.2672, longitude: -97.7431 });
+      // Place A has loc-B in its ignore list
+      const place1 = makePlace({
+        place_name: "John's Place", address: "100 Main St", city: "Austin",
+        is_favorite: true, location_id: "loc-A",
+        avg_latitude: 30.2672, avg_longitude: -97.7431,
+        merge_ignore_ids: JSON.stringify(["loc-B"]),
+      });
+      const place2 = makePlace({
+        place_name: "Mark's Place", address: "100 Main St", city: "Austin",
+        is_favorite: true, location_id: "loc-B",
+        avg_latitude: 30.2672, avg_longitude: -97.7431,
+        merge_ignore_ids: JSON.stringify(["loc-A"]),
+      });
+      const result = analyzeLocationIssues([place1, place2], [saved1, saved2]);
+
+      // Neither should have merge_candidate
+      const issues1 = result.get(getPlaceIssueKey(place1));
+      const merge1 = issues1?.find(i => i.type === "merge_candidate");
+      expect(merge1).toBeUndefined();
+
+      const issues2 = result.get(getPlaceIssueKey(place2));
+      const merge2 = issues2?.find(i => i.type === "merge_candidate");
+      expect(merge2).toBeUndefined();
+    });
+
+    it("returns empty map for clean data", () => {
+      const place = makePlace({
+        is_favorite: false,
+        city: "Austin",
+        region: "Texas",
+        country: "US",
+      });
+      const saved = makeSavedLocation({ latitude: 31.0, longitude: -97.0 }); // far away
+      const result = analyzeLocationIssues([place], [saved]);
+
+      expect(result.size).toBe(0);
+    });
+
+    it("can detect multiple issue types on one place", () => {
+      // Favorite with missing data AND merge candidate
+      const place1 = makePlace({
+        is_favorite: true,
+        location_id: "loc-1",
+        place_name: "Cafe",
+        address: "1 Main",
+        city: null,
+      });
+      const place2 = makePlace({
+        place_name: "Cafe",
+        address: "1 Main",
+        city: "Austin",
+      });
+      const result = analyzeLocationIssues([place1, place2], []);
+      const issues = result.get(getPlaceIssueKey(place1));
+
+      expect(issues).toBeDefined();
+      expect(issues!.find(i => i.type === "missing_data")).toBeDefined();
+      expect(issues!.find(i => i.type === "merge_candidate")).toBeDefined();
+    });
+
+    it("detects needs_geocoding when ungeocoded_count > 0", () => {
+      const place = makePlace({ ungeocoded_count: 3 });
+      const result = analyzeLocationIssues([place], []);
+      const key = getPlaceIssueKey(place);
+      const issues = result.get(key);
+
+      expect(issues).toBeDefined();
+      const geocodeIssue = issues!.find(i => i.type === "needs_geocoding");
+      expect(geocodeIssue).toBeDefined();
+      expect(geocodeIssue!.message).toBe("3 entries need geocoding");
+    });
+
+    it("singular message for 1 ungeocoded entry", () => {
+      const place = makePlace({ ungeocoded_count: 1 });
+      const result = analyzeLocationIssues([place], []);
+      const key = getPlaceIssueKey(place);
+      const issues = result.get(key)!;
+
+      expect(issues.find(i => i.type === "needs_geocoding")!.message).toBe("1 entry needs geocoding");
+    });
+
+    it("does NOT flag needs_geocoding when ungeocoded_count is 0", () => {
+      const place = makePlace({ ungeocoded_count: 0 });
+      const result = analyzeLocationIssues([place], []);
+      expect(result.has(getPlaceIssueKey(place))).toBe(false);
+    });
+
+    it("does NOT flag needs_geocoding when ungeocoded_count is undefined", () => {
+      const place = makePlace(); // no ungeocoded_count field
+      const result = analyzeLocationIssues([place], []);
+      expect(result.has(getPlaceIssueKey(place))).toBe(false);
     });
   });
 });

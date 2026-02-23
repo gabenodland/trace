@@ -546,7 +546,6 @@ describe("entrySortHelpers", () => {
       mentions: [],
       entry_latitude: null,
       entry_longitude: null,
-      location_radius: null,
       location_id: null,
       place_name: null,
       address: null,

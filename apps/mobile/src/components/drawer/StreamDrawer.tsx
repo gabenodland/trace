@@ -154,11 +154,10 @@ export function StreamDrawer() {
 
   // Always render the drawer - it starts off-screen (translateX = -DRAWER_WIDTH)
   // and backdrop is invisible (opacity = 0). Using pointerEvents to control interaction.
-  // This ensures the drawer is ready to respond immediately to swipe gestures.
-  const isActive = isOpen || isVisible || isDragging;
-
+  // Only interactive when fully open — during swipe-to-open gesture, the overlay must stay
+  // non-interactive so it doesn't steal touch events from the screen's PanResponder.
   return (
-    <View style={styles.container} pointerEvents={isActive ? "auto" : "none"}>
+    <View style={styles.container} pointerEvents={isOpen ? "auto" : "none"}>
       {/* Backdrop */}
       <TouchableWithoutFeedback onPress={() => animateClose()}>
         <Animated.View

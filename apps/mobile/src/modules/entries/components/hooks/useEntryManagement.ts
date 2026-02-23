@@ -20,7 +20,7 @@ import { createAttachment } from '../../../attachments/mobileAttachmentApi';
 import {
   buildGpsFields,
   buildLocationHierarchyFields,
-  getOrCreateLocationId,
+  getLocationId,
   extractContentMetadata,
   hasUserContent,
 } from '../helpers/entrySaveHelpers';
@@ -183,11 +183,8 @@ export function useEntryManagement({
       const geocodeStatus = currentEntry.geocode_status ?? null;
       const locationHierarchyFields = buildLocationHierarchyFields(locationData, geocodeStatus);
 
-      // Get or create location record
-      let location_id = await getOrCreateLocationId(locationData);
-      if (location_id && locationData && !locationData.location_id) {
-        setEntry(prev => prev ? { ...prev, location_id } : prev);
-      }
+      // Use location_id from picker (only set when "Save to My Places" was on)
+      const location_id = getLocationId(locationData);
 
       if (isNewEntry) {
         // === CREATE new entry ===
@@ -278,6 +275,7 @@ export function useEntryManagement({
         queryClient.invalidateQueries({ queryKey: ['tags'] });
         queryClient.invalidateQueries({ queryKey: ['mentions'] });
         queryClient.invalidateQueries({ queryKey: ['locationHierarchy'] });
+        queryClient.invalidateQueries({ queryKey: ['locations'] });
 
         log.info('Entry created successfully', { entryId: newEntry.entry_id });
         if (!isAutosave) {
@@ -349,6 +347,7 @@ export function useEntryManagement({
         queryClient.invalidateQueries({ queryKey: ['locationHierarchy'] });
         queryClient.invalidateQueries({ queryKey: ['streams'] });
         queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
+        queryClient.invalidateQueries({ queryKey: ['locations'] });
 
         log.info('Entry updated successfully', { entryId: currentEntry.entry_id });
         if (!isAutosave) {
@@ -545,7 +544,6 @@ export function useEntryManagement({
       is_archived: cachedEntry.is_archived,
       entry_latitude: cachedEntry.entry_latitude,
       entry_longitude: cachedEntry.entry_longitude,
-      location_radius: cachedEntry.location_radius,
       location_id: cachedEntry.location_id,
       place_name: cachedEntry.place_name,
       address: cachedEntry.address,

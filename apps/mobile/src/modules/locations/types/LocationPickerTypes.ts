@@ -14,8 +14,9 @@ import type { Location, POIItem } from '@trace/core';
  * - 'select': Interactive - browse nearby/search, click map/POI to move marker
  * - 'create': Marker locked - enter name, OK/Select New/Remove buttons
  * - 'view': Read-only - only Select New/Remove buttons shown
+ * - 'manage': Management - view/edit place from Places screen (no entry context)
  */
-export type LocationPickerMode = 'select' | 'create' | 'view';
+export type LocationPickerMode = 'select' | 'create' | 'view' | 'manage';
 
 /**
  * Single source of truth for the current location selection
@@ -120,12 +121,10 @@ export function createSelectionFromPOI(poi: POIItem): LocationSelection {
 
 /**
  * Helper to create selection from map tap
- * @param locationRadius - Optional radius to preserve from existing location (for edit mode)
  */
 export function createSelectionFromMapTap(
   latitude: number,
   longitude: number,
-  locationRadius?: number | null
 ): LocationSelection {
   return {
     type: 'map_tap',
@@ -134,7 +133,7 @@ export function createSelectionFromMapTap(
       longitude,
       name: null, // Will be filled by reverse geocoding
       source: 'user_custom',
-      locationRadius: locationRadius !== undefined ? locationRadius : 0, // Preserve existing or default to Exact (0)
+      locationRadius: 0, // Default to Exact (0)
     },
     tempCoordinates: { latitude, longitude },
     isLoadingDetails: true,

@@ -2,7 +2,7 @@
  * Location Types
  *
  * Type definitions for location/mapping features including geocoding,
- * POI discovery, and privacy controls.
+ * POI discovery, and location management.
  */
 
 // ============================================================================
@@ -17,19 +17,6 @@ export type LocationNameSource =
   | 'foursquare_poi'  // POI from Foursquare nearby/autocomplete
   | 'google_poi'      // POI from Google Maps marker tap
   | 'user_custom';    // User-typed custom name
-
-/**
- * Privacy precision levels for location sharing
- * From most precise to least precise
- */
-export type LocationPrecision =
-  | 'coords'         // Exact coordinates (lat/lng)
-  | 'poi'            // Point of interest (specific place)
-  | 'address'        // Street address level
-  | 'neighborhood'   // Neighborhood level
-  | 'city'           // City level
-  | 'region'         // State/province level
-  | 'country';       // Country level
 
 // ============================================================================
 // MAPBOX API TYPES
@@ -173,7 +160,7 @@ export interface LocationData {
   gpsLatitude: number | null;
   gpsLongitude: number | null;
 
-  // Display coordinates (public, respects privacy level)
+  // Display coordinates
   latitude: number | null;
   longitude: number | null;
 
@@ -190,15 +177,9 @@ export interface LocationData {
   region: string | null;                    // State/province
   country: string | null;
 
-  // Privacy and metadata
-  precision: LocationPrecision | null;      // Selected privacy level
-
   // API identifiers (for deduplication)
   mapboxPlaceId: string | null;
   foursquareFsqId: string | null;
-
-  // Full API response (for future features)
-  mapboxJson: MapboxReverseGeocodeResponse | null;
 }
 
 /**
@@ -209,15 +190,13 @@ export interface Location {
   // Database ID (if this location was previously saved)
   location_id?: string;
 
-  // Display coordinates (respecting privacy level)
+  // Display coordinates
   latitude: number;
   longitude: number;
 
   // Original GPS coordinates (exact reading, for entry_latitude/entry_longitude)
   originalLatitude?: number;
   originalLongitude?: number;
-  // User-selected radius for location generalization (privacy feature)
-  locationRadius?: number | null;
 
   // Basic info (required)
   name: string | null;
@@ -233,14 +212,11 @@ export interface Location {
   region?: string | null;
   country?: string | null;
 
-  // Privacy level selected by user
-  privacyLevel?: 'exact' | 'address' | 'postal_code' | 'neighborhood' | 'city' | 'subdivision' | 'region' | 'country';
-
   // Metadata
   distance?: number;
 
-  // Full Mapbox response (temporary, for privacy level selection)
-  mapboxJson?: MapboxReverseGeocodeResponse | null;
+  // Deprecated - kept for LocationPicker compatibility (being rewritten separately)
+  locationRadius?: number | null;
 }
 
 /**
@@ -262,13 +238,15 @@ export interface LocationEntity {
   subdivision: string | null;
   region: string | null;
   country: string | null;
-  // User-selected radius for location generalization (privacy feature)
-  location_radius: number | null;
   mapbox_place_id: string | null;
   foursquare_fsq_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+  // Deprecated - column still in DB but no longer read/written
+  location_radius?: number | null;
+  /** JSON array of location_ids to suppress merge suggestions with */
+  merge_ignore_ids?: string | null;
   // Sync tracking fields (mobile only)
   synced?: number;
   sync_action?: 'create' | 'update' | 'delete' | null;
@@ -290,8 +268,6 @@ export interface CreateLocationInput {
   subdivision?: string | null;
   region?: string | null;
   country?: string | null;
-  // User-selected radius for location generalization (privacy feature)
-  location_radius?: number | null;
   mapbox_place_id?: string | null;
   foursquare_fsq_id?: string | null;
 }
@@ -484,7 +460,6 @@ export function locationToCreateInput(location: Location): CreateLocationInput {
     subdivision: location.subdivision,
     region: location.region,
     country: location.country,
-    location_radius: location.locationRadius,
   };
 }
 
@@ -497,7 +472,6 @@ export function locationToEntryGpsFields(location: Location | null) {
     return {
       entry_latitude: null,
       entry_longitude: null,
-      location_radius: null,
     };
   }
 
@@ -505,6 +479,5 @@ export function locationToEntryGpsFields(location: Location | null) {
     // GPS coordinates (where user was when creating entry - original exact coordinates)
     entry_latitude: location.originalLatitude ?? location.latitude,
     entry_longitude: location.originalLongitude ?? location.longitude,
-    location_radius: location.locationRadius ?? null,
   };
 }

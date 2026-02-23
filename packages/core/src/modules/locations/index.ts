@@ -23,5 +23,9 @@ export { parseMapboxHierarchy, geocodeResponseToEntryFields, findNearbyLocation 
 export type { EntryLocationFields, LocationSnapResult } from './locationHelpers';
 
 // Location label helper - single source of truth for display names
-export { getLocationLabel, hasLocationLabel, getStateAbbreviation } from './locationHelpers';
+export { getLocationLabel, hasLocationLabel, getStateAbbreviation, UNNAMED_PLACE_LABEL } from './locationHelpers';
 export type { LocationLabelFields } from './locationHelpers';
+
+// Location issue analysis
+export { analyzeLocationIssues, getPlaceIssueKey } from './locationHelpers';
+export type { LocationIssue, LocationIssueType, PlaceForAnalysis, SavedLocationForAnalysis } from './locationHelpers';

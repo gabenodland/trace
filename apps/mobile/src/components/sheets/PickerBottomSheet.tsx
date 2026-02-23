@@ -41,6 +41,10 @@ interface PickerBottomSheetProps {
   swipeArea?: "grabber" | "full";
   /** Remove padding from content area for edge-to-edge layouts (maps, etc). Header/actions keep their own padding. Default: false */
   noPadding?: boolean;
+  /** Custom content for left side of header (e.g., Cancel button). Renders before the title. */
+  headerLeft?: React.ReactNode;
+  /** Custom content for right side of header. When provided, replaces the default X close button. */
+  headerRight?: React.ReactNode;
 }
 
 export function PickerBottomSheet({
@@ -55,6 +59,8 @@ export function PickerBottomSheet({
   dismissKeyboard = false,
   swipeArea = "full",
   noPadding = false,
+  headerLeft,
+  headerRight,
 }: PickerBottomSheetProps) {
   const dynamicTheme = useTheme();
   const keyboardHeight = useKeyboardHeight();
@@ -75,7 +81,8 @@ export function PickerBottomSheet({
       <View style={[styles.container, noPadding && styles.containerNoPadding]}>
         {/* Header */}
         <View style={[styles.header, noPadding && styles.headerPadded]}>
-          <View style={styles.titleContainer}>
+          {headerLeft}
+          <View style={[styles.titleContainer, headerLeft != null && styles.titleCentered]}>
             <Text
               style={[
                 styles.title,
@@ -102,12 +109,14 @@ export function PickerBottomSheet({
               </Text>
             )}
           </View>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={onClose}
-          >
-            <Icon name="X" size={20} color={dynamicTheme.colors.text.tertiary} />
-          </TouchableOpacity>
+          {headerRight != null ? headerRight : (
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={onClose}
+            >
+              <Icon name="X" size={20} color={dynamicTheme.colors.text.tertiary} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Content */}
@@ -215,6 +224,9 @@ const styles = StyleSheet.create({
   titleContainer: {
     flex: 1,
     flexDirection: "column",
+  },
+  titleCentered: {
+    alignItems: "center",
   },
   title: {
     fontSize: 18,

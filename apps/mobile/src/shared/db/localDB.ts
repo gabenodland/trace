@@ -727,6 +727,23 @@ class LocalDatabase {
     } catch (error) {
       log.error('Migration error (locations sync_error)', error);
     }
+
+    // Migration: Add merge_ignore_ids column to locations table
+    try {
+      const mergeIgnoreCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('locations') WHERE name = 'merge_ignore_ids'`
+      );
+
+      if (!mergeIgnoreCheck) {
+        log.info('Running migration: Adding merge_ignore_ids column to locations table');
+        await this.db.execAsync(`
+          ALTER TABLE locations ADD COLUMN merge_ignore_ids TEXT;
+        `);
+        log.info('Migration complete: merge_ignore_ids added to locations');
+      }
+    } catch (error) {
+      log.error('Migration error (locations merge_ignore_ids)', error);
+    }
   }
 
   private async createTables(): Promise<void> {
@@ -750,6 +767,7 @@ class LocalDatabase {
         region TEXT,
         country TEXT,
         location_radius REAL,         -- User-selected radius in meters for location generalization
+        merge_ignore_ids TEXT,        -- JSON array of location_ids to suppress merge suggestions
         mapbox_place_id TEXT,
         foursquare_fsq_id TEXT,
         created_at INTEGER NOT NULL,
@@ -978,7 +996,7 @@ class LocalDatabase {
       `INSERT OR REPLACE INTO entries (
         entry_id, user_id, title, content, tags, mentions,
         stream_id, entry_date,
-        entry_latitude, entry_longitude, location_radius,
+        entry_latitude, entry_longitude,
         location_id,
         place_name, address, neighborhood, postal_code, city, subdivision, region, country,
         geocode_status,
@@ -989,7 +1007,7 @@ class LocalDatabase {
         version, base_version,
         conflict_status, conflict_backup,
         last_edited_by, last_edited_device
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.entry_id,
         entry.user_id,
@@ -999,9 +1017,8 @@ class LocalDatabase {
         JSON.stringify(entry.mentions || []),
         entry.stream_id || null,
         entry.entry_date ? Date.parse(entry.entry_date) : (entry.created_at ? Date.parse(entry.created_at) : now),
-        entry.entry_latitude || null,
-        entry.entry_longitude || null,
-        entry.location_radius || null,
+        entry.entry_latitude ?? null,
+        entry.entry_longitude ?? null,
         entry.location_id || null,
         entry.place_name || null,
         entry.address || null,
@@ -1104,7 +1121,10 @@ class LocalDatabase {
     filter_city?: string;
     filter_neighborhood?: string;
     filter_place_name?: string;
-    filter_no_location?: boolean;
+    filter_address?: string;
+    filter_no_place?: boolean;
+    filter_has_place?: boolean;
+    filter_unnamed?: boolean;
   }): Promise<Entry[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
@@ -1182,9 +1202,24 @@ class LocalDatabase {
         params.push(filter.filter_place_name);
       }
 
-      // Filter for entries with no location data
-      if (filter.filter_no_location) {
+      if (filter.filter_address) {
+        query += ' AND e.address = ?';
+        params.push(filter.filter_address);
+      }
+
+      // Filter for entries with no place data at all
+      if (filter.filter_no_place) {
         query += ' AND e.country IS NULL AND e.region IS NULL AND e.city IS NULL AND e.neighborhood IS NULL AND e.place_name IS NULL AND e.entry_latitude IS NULL';
+      }
+
+      // Filter for entries that have any location/place data (GPS coords exist)
+      if (filter.filter_has_place) {
+        query += ' AND e.entry_latitude IS NOT NULL';
+      }
+
+      // Filter for unnamed entries (have GPS/geocode data but no place_name)
+      if (filter.filter_unnamed) {
+        query += ' AND e.place_name IS NULL AND e.location_id IS NULL AND e.entry_latitude IS NOT NULL';
       }
 
       // Privacy filtering - exclude entries from private streams
@@ -1317,7 +1352,7 @@ class LocalDatabase {
       `UPDATE entries SET
         title = ?, content = ?, tags = ?, mentions = ?,
         stream_id = ?, entry_date = ?,
-        entry_latitude = ?, entry_longitude = ?, location_radius = ?,
+        entry_latitude = ?, entry_longitude = ?,
         location_id = ?,
         place_name = ?, address = ?, neighborhood = ?, postal_code = ?,
         city = ?, subdivision = ?, region = ?, country = ?,
@@ -1337,9 +1372,8 @@ class LocalDatabase {
         JSON.stringify(updated.mentions || []),
         updated.stream_id || null,
         updated.entry_date ? Date.parse(updated.entry_date) : null,
-        updated.entry_latitude || null,
-        updated.entry_longitude || null,
-        updated.location_radius || null,
+        updated.entry_latitude ?? null,
+        updated.entry_longitude ?? null,
         updated.location_id || null,
         updated.place_name || null,
         updated.address || null,
@@ -1493,28 +1527,45 @@ class LocalDatabase {
    * Returns total entries and entries with no stream - fast COUNT queries
    * "Total" count excludes entries from private streams (same as "All Entries" view)
    */
-  async getEntryCounts(): Promise<{ total: number; noStream: number }> {
+  async getEntryCounts(): Promise<{ total: number; noStream: number; hasPlace: number; noPlace: number }> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    const [totalResult, noStreamResult] = await Promise.all([
+    const privateStreamExclusion = `AND (stream_id IS NULL OR stream_id NOT IN (
+           SELECT stream_id FROM streams WHERE is_private = 1 AND (sync_action IS NULL OR sync_action != 'delete')
+         ))`;
+
+    const [totalResult, noStreamResult, hasPlaceResult, noPlaceResult] = await Promise.all([
       // Total count excludes private streams - same filtering as getAllEntries with excludePrivateStreams=true
       this.db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM entries
          WHERE deleted_at IS NULL
-         AND (stream_id IS NULL OR stream_id NOT IN (
-           SELECT stream_id FROM streams WHERE is_private = 1 AND (sync_action IS NULL OR sync_action != 'delete')
-         ))`
+         ${privateStreamExclusion}`
       ),
       // Unassigned count - entries with no stream are never private
       this.db.getFirstAsync<{ count: number }>(
         'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NULL AND stream_id IS NULL'
+      ),
+      // Has place - entries with any GPS coordinates (excludes private streams)
+      this.db.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM entries
+         WHERE deleted_at IS NULL AND entry_latitude IS NOT NULL
+         ${privateStreamExclusion}`
+      ),
+      // No place - entries without any location data (excludes private streams)
+      this.db.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM entries
+         WHERE deleted_at IS NULL
+         AND country IS NULL AND region IS NULL AND city IS NULL AND neighborhood IS NULL AND place_name IS NULL AND entry_latitude IS NULL
+         ${privateStreamExclusion}`
       ),
     ]);
 
     return {
       total: totalResult?.count || 0,
       noStream: noStreamResult?.count || 0,
+      hasPlace: hasPlaceResult?.count || 0,
+      noPlace: noPlaceResult?.count || 0,
     };
   }
 
@@ -1533,7 +1584,6 @@ class LocalDatabase {
       entry_date: row.entry_date ? new Date(row.entry_date).toISOString() : null,
       entry_latitude: row.entry_latitude,
       entry_longitude: row.entry_longitude,
-      location_radius: row.location_radius,
       location_id: row.location_id,
       // Location hierarchy fields
       place_name: row.place_name || null,
@@ -1590,8 +1640,8 @@ class LocalDatabase {
       `INSERT OR REPLACE INTO locations (
         location_id, user_id, name, latitude, longitude,
         source, address, neighborhood, postal_code, city,
-        subdivision, region, country, location_radius, mapbox_place_id, foursquare_fsq_id,
-        created_at, updated_at, synced, sync_action
+        subdivision, region, country, mapbox_place_id, foursquare_fsq_id,
+        merge_ignore_ids, created_at, updated_at, synced, sync_action
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         location.location_id,
@@ -1607,9 +1657,9 @@ class LocalDatabase {
         location.subdivision || null,
         location.region || null,
         location.country || null,
-        location.location_radius ?? null,
         location.mapbox_place_id || null,
         location.foursquare_fsq_id || null,
+        location.merge_ignore_ids || null,
         location.created_at ? Date.parse(location.created_at) : now,
         location.updated_at ? Date.parse(location.updated_at) : now,
         location.synced !== undefined ? location.synced : 0,
@@ -1695,6 +1745,204 @@ class LocalDatabase {
   }
 
   /**
+   * Get entry-only location groups — entries with GPS but no saved location
+   * Groups by city/region/country, returns counts and average coordinates
+   */
+  async getEntryOnlyLocationGroups(): Promise<Array<{
+    city: string | null;
+    region: string | null;
+    country: string | null;
+    entry_count: number;
+    avg_latitude: number;
+    avg_longitude: number;
+    has_ungeocoded: boolean;
+  }>> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    let query = `
+      SELECT
+        city, region, country,
+        COUNT(*) as entry_count,
+        AVG(entry_latitude) as avg_latitude,
+        AVG(entry_longitude) as avg_longitude,
+        SUM(CASE WHEN geocode_status IS NULL THEN 1 ELSE 0 END) as ungeocoded_count
+      FROM entries
+      WHERE location_id IS NULL
+        AND entry_latitude IS NOT NULL
+        AND deleted_at IS NULL
+    `;
+    const params: any[] = [];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    query += ' GROUP BY city, region, country ORDER BY entry_count DESC';
+
+    const rows = await this.db.getAllAsync<any>(query, params);
+
+    return rows.map(row => ({
+      city: row.city || null,
+      region: row.region || null,
+      country: row.country || null,
+      entry_count: row.entry_count || 0,
+      avg_latitude: row.avg_latitude || 0,
+      avg_longitude: row.avg_longitude || 0,
+      has_ungeocoded: (row.ungeocoded_count || 0) > 0,
+    }));
+  }
+
+  /**
+   * Get entry-derived places — ALL entries grouped by place_name + address
+   * Uses denormalized entry data directly (not the locations table).
+   * This is the universal view of places across all entries regardless of location_id.
+   */
+  async getEntryDerivedPlaces(): Promise<Array<{
+    place_name: string | null;
+    address: string | null;
+    city: string | null;
+    region: string | null;
+    country: string | null;
+    entry_count: number;
+    avg_latitude: number;
+    avg_longitude: number;
+    is_favorite: boolean;
+    location_id: string | null;
+    ungeocoded_count: number;
+  }>> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const params: any[] = [];
+    if (this.currentUserId) params.push(this.currentUserId); // entries query
+    if (this.currentUserId) params.push(this.currentUserId); // locations query
+
+    const query = `
+      SELECT place_name, address, city, region, country, entry_count, avg_latitude, avg_longitude, is_favorite, location_id, ungeocoded_count
+      FROM (
+        -- Entry-derived places (grouped by place fields)
+        SELECT
+          place_name, address, city, region, country,
+          COUNT(*) as entry_count,
+          AVG(entry_latitude) as avg_latitude,
+          AVG(entry_longitude) as avg_longitude,
+          MAX(CASE WHEN location_id IS NOT NULL THEN 1 ELSE 0 END) as is_favorite,
+          MAX(location_id) as location_id,
+          SUM(CASE WHEN geocode_status IS NULL OR geocode_status = 'error' THEN 1 ELSE 0 END) as ungeocoded_count
+        FROM entries
+        WHERE (place_name IS NOT NULL OR city IS NOT NULL)
+          AND deleted_at IS NULL
+          ${this.currentUserId ? 'AND user_id = ?' : ''}
+        GROUP BY COALESCE(place_name, ''), COALESCE(address, ''), city, region, country
+
+        UNION ALL
+
+        -- Saved locations with 0 entries (not represented in entries table)
+        SELECT
+          l.name as place_name,
+          l.address,
+          l.city,
+          l.region,
+          l.country,
+          0 as entry_count,
+          l.latitude as avg_latitude,
+          l.longitude as avg_longitude,
+          1 as is_favorite,
+          l.location_id,
+          0 as ungeocoded_count
+        FROM locations l
+        WHERE l.deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM entries e
+          WHERE e.location_id = l.location_id
+            AND e.deleted_at IS NULL
+        )
+        ${this.currentUserId ? 'AND l.user_id = ?' : ''}
+      )
+      ORDER BY entry_count DESC`;
+
+    const rows = await this.db.getAllAsync<any>(query, params);
+
+    return rows.map(row => ({
+      place_name: row.place_name || null,
+      address: row.address || null,
+      city: row.city || null,
+      region: row.region || null,
+      country: row.country || null,
+      entry_count: row.entry_count || 0,
+      avg_latitude: row.avg_latitude || 0,
+      avg_longitude: row.avg_longitude || 0,
+      is_favorite: !!row.is_favorite,
+      location_id: row.location_id || null,
+      ungeocoded_count: row.ungeocoded_count || 0,
+    }));
+  }
+
+  /**
+   * Get location health counts for the health tab
+   */
+  async getLocationHealthCounts(): Promise<{
+    missingHierarchy: number;
+    duplicates: number;
+    unlinkedEntries: number;
+    unusedLocations: number;
+  }> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const userFilter = this.currentUserId ? ' AND user_id = ?' : '';
+    const userFilterAliased = this.currentUserId ? ' AND l.user_id = ?' : '';
+    const userParams = this.currentUserId ? [this.currentUserId] : [];
+
+    const [missingResult, duplicateResult, unlinkedResult, unusedResult] = await Promise.all([
+      // Locations with missing hierarchy data
+      this.db.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM locations
+         WHERE deleted_at IS NULL
+           AND (city IS NULL OR region IS NULL OR country IS NULL)${userFilter}`,
+        userParams
+      ),
+      // Duplicate locations (same name + address, case insensitive)
+      this.db.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM (
+          SELECT LOWER(name) as n, LOWER(COALESCE(address, '')) as a
+          FROM locations
+          WHERE deleted_at IS NULL${userFilter}
+          GROUP BY LOWER(name), LOWER(COALESCE(address, ''))
+          HAVING COUNT(*) > 1
+        )`,
+        userParams
+      ),
+      // Entries with GPS that need snapping/geocoding (not yet processed)
+      this.db.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM entries
+         WHERE deleted_at IS NULL
+           AND entry_latitude IS NOT NULL
+           AND entry_longitude IS NOT NULL
+           AND (geocode_status IS NULL OR geocode_status = 'error')${userFilter}`,
+        userParams
+      ),
+      // Locations not referenced by any entry
+      this.db.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM locations l
+         LEFT JOIN entries e ON l.location_id = e.location_id AND e.deleted_at IS NULL
+         WHERE l.deleted_at IS NULL
+           AND e.entry_id IS NULL${userFilterAliased}`,
+        userParams
+      ),
+    ]);
+
+    return {
+      missingHierarchy: missingResult?.count ?? 0,
+      duplicates: duplicateResult?.count ?? 0,
+      unlinkedEntries: unlinkedResult?.count ?? 0,
+      unusedLocations: unusedResult?.count ?? 0,
+    };
+  }
+
+  /**
    * Update a location
    */
   async updateLocation(locationId: string, updates: Partial<LocationEntity>): Promise<LocationEntity> {
@@ -1713,8 +1961,8 @@ class LocalDatabase {
       `UPDATE locations SET
         name = ?, latitude = ?, longitude = ?,
         source = ?, address = ?, neighborhood = ?, postal_code = ?,
-        city = ?, subdivision = ?, region = ?, country = ?, location_radius = ?,
-        mapbox_place_id = ?, foursquare_fsq_id = ?,
+        city = ?, subdivision = ?, region = ?, country = ?,
+        mapbox_place_id = ?, foursquare_fsq_id = ?, merge_ignore_ids = ?,
         updated_at = ?, synced = ?, sync_action = ?
       WHERE location_id = ?`,
       [
@@ -1729,9 +1977,9 @@ class LocalDatabase {
         updates.subdivision !== undefined ? updates.subdivision : existing.subdivision,
         updates.region !== undefined ? updates.region : existing.region,
         updates.country !== undefined ? updates.country : existing.country,
-        updates.location_radius !== undefined ? updates.location_radius : existing.location_radius,
         updates.mapbox_place_id !== undefined ? updates.mapbox_place_id : existing.mapbox_place_id,
         updates.foursquare_fsq_id !== undefined ? updates.foursquare_fsq_id : existing.foursquare_fsq_id,
+        updates.merge_ignore_ids !== undefined ? updates.merge_ignore_ids : existing.merge_ignore_ids || null,
         updatedAt,
         updates.synced !== undefined ? updates.synced : 0,
         updates.sync_action !== undefined ? updates.sync_action : 'update',
@@ -1831,9 +2079,9 @@ class LocalDatabase {
       subdivision: row.subdivision,
       region: row.region,
       country: row.country,
-      location_radius: row.location_radius,
       mapbox_place_id: row.mapbox_place_id,
       foursquare_fsq_id: row.foursquare_fsq_id,
+      merge_ignore_ids: row.merge_ignore_ids || null,
       created_at: new Date(row.created_at).toISOString(),
       updated_at: new Date(row.updated_at).toISOString(),
       deleted_at: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
@@ -2976,6 +3224,15 @@ class LocalDatabase {
 
     const result = await this.db.getAllAsync(sql, params || []);
     return result;
+  }
+
+  /**
+   * Execute a SQL statement that does not return rows (e.g. BEGIN, COMMIT, ROLLBACK)
+   */
+  async execSQL(sql: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.execAsync(sql);
   }
 
   /**

@@ -165,3 +165,72 @@ import { splitTitleAndBody, combineTitleAndBody, extractTitle, extractBody, hasT
 | `packages/core/src/modules/editor/TitleExtension.ts` | Title node extension |
 | `packages/core/src/modules/editor/TitleDocument.ts` | Document schema |
 | `src/components/editor/RichTextEditor.tsx` | RN component |
+
+---
+
+## 📍 Places (Location System)
+
+### Terminology
+
+User-facing text uses **"Place"** — never "location". The word "location" is reserved for code-level identifiers (table names, variables, types).
+
+| Tier | User Label | Condition | DB State |
+|------|-----------|-----------|----------|
+| **Unnamed Place** | "Unnamed Place" | GPS/geo coordinates only, no name | `place_name` is null, no `location_id` |
+| **Place** | (shows place name) | Has GPS, geo, and a name | `place_name` set, no `location_id` |
+| **My Place** | (shows place name) | Saved to `locations` table | Has `location_id`, `is_favorite = true` |
+
+Old terms → new terms:
+- ~~"Dropped Pin"~~ → **"Unnamed Place"**
+- ~~"Location"~~ (user-facing) → **"Place"**
+- ~~"Saved Location"~~ → **"My Place"** / **"My Places"**
+- ~~"Save Location"~~ → **"Save to My Places"**
+
+### Icons
+
+All place icons live in `src/shared/components/Icon.tsx` as custom SVGs.
+
+**Map markers (solid filled):**
+
+| Icon Name | Appearance | Used For |
+|-----------|------------|----------|
+| `MapPinFilled` | Solid teardrop, no inner shape | Unnamed Place marker |
+| `MapPinSolid` | Solid teardrop + white circle | Place marker (named, not saved) |
+| `MapPinFavorite` | Solid teardrop + white star cutout | My Place marker |
+
+**List/UI icons (outline):**
+
+| Icon Name | Appearance | Used For |
+|-----------|------------|----------|
+| `MapPinEmpty` | Outline teardrop only | Unnamed Place in lists |
+| `MapPin` | Lucide library `map-pin` | Place in lists (named, not saved) |
+| `MapPinFavoriteLine` | Outline teardrop + filled star | My Place in lists |
+
+**Rule:** Solid variants on maps, outline variants in lists/drawers/pickers. Always use the `<Icon>` component — never hardcode SVG paths inline.
+
+### Module Structure
+
+```
+modules/locations/
+├── mobileLocationApi.ts       # SQLite DB ops (internal)
+├── mobileLocationHooks.ts     # React Query hooks (useLocations, usePlaces)
+├── components/
+│   └── LocationPicker/        # Place picker modal
+│       ├── LocationPicker.tsx          # Orchestrator
+│       ├── hooks/useLocationPicker.ts  # Picker state
+│       └── components/
+│           ├── CurrentLocationView.tsx  # View/edit current place
+│           ├── LocationSelectView.tsx   # Search/select saved places
+│           └── CreateLocationView.tsx   # Create new place
+├── styles/
+└── types/
+```
+
+### Key Screens
+
+| Screen | File | Purpose |
+|--------|------|---------|
+| Places Management | `src/screens/LocationsScreen.tsx` | CRUD for My Places |
+| Edit Place | (inline in LocationPicker via `useLocationPicker.isEditingPlace`) | Inline edit in CurrentLocationView |
+| Map | `src/screens/MapScreen.tsx` | Map with three-tier markers |
+| Drawer (Places tab) | `src/components/drawer/StreamDrawerContent.tsx` | Entry-derived place list |

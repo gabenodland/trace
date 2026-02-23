@@ -24,7 +24,6 @@ export function buildLocationFromEntry(entry: EntryWithRelations | null): Locati
   return {
     latitude: entry.entry_latitude,
     longitude: entry.entry_longitude,
-    locationRadius: entry.location_radius ?? undefined,
     location_id: entry.location_id ?? undefined,
     name: entry.place_name ?? null,
     source: 'user_custom',

@@ -8,6 +8,7 @@
 import { useRef, useImperativeHandle, forwardRef, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Keyboard } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
+import { Icon } from '../../../../../shared/components';
 import {
   type POIItem,
   type LocationEntity,
@@ -69,8 +70,8 @@ interface LocationSelectViewProps {
   tappedGooglePOI: TappedGooglePOI | null;
 
   // Preview Marker
-  previewMarker: { latitude: number; longitude: number; name: string; locationRadius?: number | null } | null;
-  setPreviewMarker: React.Dispatch<React.SetStateAction<{ latitude: number; longitude: number; name: string; locationRadius?: number | null } | null>>;
+  previewMarker: { latitude: number; longitude: number; name: string } | null;
+  setPreviewMarker: React.Dispatch<React.SetStateAction<{ latitude: number; longitude: number; name: string } | null>>;
 
   // Selected List Item
   selectedListItemId: string | null;
@@ -85,7 +86,7 @@ interface LocationSelectViewProps {
 
   // Handlers
   handlePOISelect: (poi: POIItem) => void;
-  handlePOIQuickSelect: (poi: POIItem) => Promise<void>;
+  handlePOIQuickSelect: (poi: POIItem) => void;
   handleSavedLocationSelect: (location: LocationEntity & { distance: number }) => void;
 
   // Keyboard
@@ -396,46 +397,30 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
       ? [styles.poiIconContainer, styles.poiIconContainerCompact]
       : [styles.poiIconContainer];
 
-    // Saved items: yellow star normally, accentSecondary pin when selected (matches preview marker)
+    // My Places: star-in-pin normally, solid star-pin when selected
     if (item.type === 'saved') {
-      if (isSelected) {
-        return (
-          <View style={[...containerStyle, styles.poiIconContainerSaved, { backgroundColor: `${dynamicTheme.colors.functional.accentSecondary}20` }]}>
-            <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accentSecondary} stroke={dynamicTheme.colors.functional.accentSecondary} strokeWidth={2}>
-              <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-              <Circle cx={12} cy={10} r={3} fill="white" />
-            </Svg>
-          </View>
-        );
-      }
+      const color = isSelected ? dynamicTheme.colors.functional.accentSecondary : dynamicTheme.colors.functional.accent;
+      const bgColor = isSelected ? `${color}20` : `${color}15`;
       return (
-        <View style={[...containerStyle, styles.poiIconContainerSaved, { backgroundColor: '#fef3c720' }]}>
-          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth={2}>
-            <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+        <View style={[...containerStyle, styles.poiIconContainerSaved, { backgroundColor: bgColor }]}>
+          <Icon name={isSelected ? 'MapPinFavorite' : 'MapPinFavoriteLine'} size={iconSize} color={color} />
         </View>
       );
     }
 
-    // Selected non-saved items show accentSecondary pin (matches preview marker on map)
+    // Selected non-saved items show solid pin (matches preview marker on map)
     if (isSelected) {
       return (
         <View style={[...containerStyle, styles.poiIconContainerSelected, { backgroundColor: `${dynamicTheme.colors.functional.accentSecondary}20` }]}>
-          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill={dynamicTheme.colors.functional.accentSecondary} stroke={dynamicTheme.colors.functional.accentSecondary} strokeWidth={2}>
-            <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-            <Circle cx={12} cy={10} r={3} fill="white" />
-          </Svg>
+          <Icon name="MapPinSolid" size={iconSize} color={dynamicTheme.colors.functional.accentSecondary} />
         </View>
       );
     }
 
-    // Default: gray pin
+    // Default: outline pin
     return (
       <View style={[...containerStyle, { backgroundColor: dynamicTheme.colors.background.secondary }]}>
-        <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
-          <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" strokeLinecap="round" strokeLinejoin="round" />
-          <Circle cx={12} cy={10} r={3} fill={dynamicTheme.colors.text.tertiary} />
-        </Svg>
+        <Icon name="MapPin" size={iconSize} color={dynamicTheme.colors.text.tertiary} />
       </View>
     );
   };
@@ -483,9 +468,11 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
           ]}
           onPress={() => setActiveListTab(activeListTab === 'saved' ? 'nearby' : 'saved')}
         >
-          <Svg width={14} height={14} viewBox="0 0 24 24" fill={activeListTab === 'saved' ? dynamicTheme.colors.functional.accent : 'none'} stroke={activeListTab === 'saved' ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.tertiary} strokeWidth={2}>
-            <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <Icon
+            name={activeListTab === 'saved' ? 'MapPinFavorite' : 'MapPinFavoriteLine'}
+            size={14}
+            color={activeListTab === 'saved' ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.tertiary}
+          />
           <Text style={[
             styles.savedOnlyText,
             { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.secondary },
@@ -517,7 +504,7 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
             <Circle cx={12} cy={20} r={0.5} fill="#ffffff" stroke="none" />
           </Svg>
           <Text style={{ color: '#ffffff', fontSize: 12, fontFamily: dynamicTheme.typography.fontFamily.medium }}>
-            Offline - Showing saved locations only
+            Offline — Showing My Places only
           </Text>
         </View>
       )}
@@ -646,14 +633,12 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
                     // 3-click zoom pattern: street -> city -> state -> street
                     let coords: { latitude: number; longitude: number } | null = null;
                     let name = item.name;
-                    let locationRadius: number | null = null;
 
                     if (item.type === 'saved' && item.savedLocation) {
                       coords = {
                         latitude: item.savedLocation.latitude,
                         longitude: item.savedLocation.longitude,
                       };
-                      locationRadius = item.savedLocation.location_radius ?? null;
                     } else if (item.type === 'poi' && item.poi) {
                       coords = {
                         latitude: item.poi.latitude,
@@ -692,7 +677,6 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
                         latitude: coords.latitude,
                         longitude: coords.longitude,
                         name: name,
-                        locationRadius: locationRadius,
                       });
                     }
                   }}
@@ -769,15 +753,15 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
               {ui.searchQuery.length >= 2
                 ? 'No results found'
                 : activeListTab === 'saved'
-                  ? 'No saved locations'
+                  ? 'No My Places yet'
                   : 'No nearby places found'}
             </Text>
             <Text style={[styles.emptyStateSubtext, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.tertiary }]}>
               {ui.searchQuery.length >= 2
                 ? 'Try a different search term'
                 : activeListTab === 'saved'
-                  ? 'Select a location and save it'
-                  : 'Tap the map to drop a pin'}
+                  ? 'Save a place to see it here'
+                  : 'Tap the map to set a place'}
             </Text>
           </View>
         )}

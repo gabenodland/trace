@@ -25,9 +25,11 @@ interface ActionSheetProps {
   items: ActionSheetItem[];
   title?: string;
   subtitle?: string;
+  /** Warning/info notices shown as a banner above the action items */
+  notices?: string[];
 }
 
-export function ActionSheet({ visible, onClose, items, title, subtitle }: ActionSheetProps) {
+export function ActionSheet({ visible, onClose, items, title, subtitle, notices }: ActionSheetProps) {
   const theme = useTheme();
 
   const normalItems = items.filter(item => !item.isDanger);
@@ -48,6 +50,26 @@ export function ActionSheet({ visible, onClose, items, title, subtitle }: Action
       height="auto"
       swipeArea="full"
     >
+      {/* Notices banner */}
+      {notices && notices.length > 0 && (
+        <View style={[styles.noticesBanner, { backgroundColor: theme.colors.functional.overdue + '14' }]}>
+          <Icon name="AlertCircle" size={16} color={theme.colors.functional.overdue} />
+          <View style={styles.noticesTextContainer}>
+            {notices.map((notice, i) => (
+              <Text
+                key={i}
+                style={[styles.noticeText, {
+                  color: theme.colors.text.primary,
+                  fontFamily: theme.typography.fontFamily.regular,
+                }]}
+              >
+                {notice}
+              </Text>
+            ))}
+          </View>
+        </View>
+      )}
+
       {/* Normal items */}
       {normalItems.map((item, index) => (
         <TouchableOpacity
@@ -128,5 +150,21 @@ const styles = StyleSheet.create({
   dangerSection: {
     marginTop: themeBase.spacing.sm,
     borderTopWidth: 1,
+  },
+  noticesBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  noticesTextContainer: {
+    flex: 1,
+    gap: 2,
+  },
+  noticeText: {
+    fontSize: 14,
+    lineHeight: 20,
   },
 });

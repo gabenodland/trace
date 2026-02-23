@@ -5,7 +5,8 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Clipboard, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { supabase, reverseGeocode, parseMapboxHierarchy, findNearbyLocation, geocodeResponseToEntryFields } from '@trace/core';
+import { supabase } from '@trace/core';
+import * as locationCleanup from '../modules/locations/mobileLocationApi';
 import { useNavigate } from '../shared/navigation';
 import { SecondaryHeader } from '../components/layout/SecondaryHeader';
 import { localDB } from '../shared/db/localDB';
@@ -280,20 +281,20 @@ export function DatabaseInfoScreen() {
 
   const handleClearLocalLocations = () => {
     Alert.alert(
-      'Clear Local Locations',
-      'This will delete all locations from local SQLite. They will automatically re-sync on next sync.',
+      'Clear Local Places',
+      'This will delete all places from local SQLite. They will automatically re-sync on next sync.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear Locations',
+          text: 'Clear Places',
           style: 'destructive',
           onPress: async () => {
             try {
               await localDB.runCustomQuery('DELETE FROM locations');
               setRefreshKey(prev => prev + 1);
-              Alert.alert('Success', 'All local locations cleared. Next sync will re-download from Cloud.');
+              Alert.alert('Success', 'All local places cleared. Next sync will re-download from Cloud.');
             } catch (error) {
-              Alert.alert('Error', `Failed to clear locations: ${error}`);
+              Alert.alert('Error', `Failed to clear places: ${error}`);
             }
           },
         },
@@ -302,411 +303,93 @@ export function DatabaseInfoScreen() {
   };
 
   const handleDeleteUnusedLocations = async () => {
-    try {
-      // Find locations that are not referenced by any entry
-      const unusedLocations = await localDB.runCustomQuery(`
-        SELECT l.location_id, l.name
-        FROM locations l
-        LEFT JOIN entries e ON l.location_id = e.location_id
-        WHERE e.entry_id IS NULL
-      `);
-
-      if (unusedLocations.length === 0) {
-        Alert.alert('All Good', 'No unused locations found. All locations are referenced by entries.');
-        return;
-      }
-
-      Alert.alert(
-        'Delete Unused Locations',
-        `Found ${unusedLocations.length} location${unusedLocations.length === 1 ? '' : 's'} not referenced by any entry. Delete them?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                // Delete unused locations and mark for sync deletion
-                for (const loc of unusedLocations) {
-                  await localDB.runCustomQuery(
-                    'UPDATE locations SET deleted_at = ?, synced = 0, sync_action = ? WHERE location_id = ?',
-                    [new Date().toISOString(), 'delete', loc.location_id]
-                  );
-                }
-
-                setRefreshKey(prev => prev + 1);
-                Alert.alert('Success', `Marked ${unusedLocations.length} unused location${unusedLocations.length === 1 ? '' : 's'} for deletion.`);
-              } catch (error) {
-                Alert.alert('Error', `Failed to delete unused locations: ${error}`);
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Error', `Failed to find unused locations: ${error}`);
-    }
+    Alert.alert('Delete Unused Places', 'Delete saved places with 0 entries?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const result = await locationCleanup.deleteUnusedLocations();
+            setRefreshKey(prev => prev + 1);
+            Alert.alert('Success', `Deleted ${result.processed} unused place${result.processed === 1 ? '' : 's'}.`);
+          } catch (error) {
+            Alert.alert('Error', `Failed to delete unused places: ${error}`);
+          }
+        },
+      },
+    ]);
   };
 
   const handleMergeDuplicateLocations = async () => {
-    try {
-      // Find duplicate locations (same name AND address, case insensitive)
-      // Only consider locations with an address
-      const duplicates = await localDB.runCustomQuery(`
-        SELECT
-          LOWER(name) as name_lower,
-          LOWER(address) as address_lower,
-          COUNT(*) as count
-        FROM locations
-        WHERE address IS NOT NULL AND address != '' AND deleted_at IS NULL
-        GROUP BY LOWER(name), LOWER(address)
-        HAVING COUNT(*) > 1
-        LIMIT 1
-      `);
-
-      if (duplicates.length === 0) {
-        Alert.alert('All Good', 'No duplicate locations found.');
-        return;
-      }
-
-      const duplicate = duplicates[0];
-
-      // Get all locations matching this name/address
-      const matchingLocations = await localDB.runCustomQuery(`
-        SELECT l.location_id, l.name, l.address,
-          (SELECT COUNT(*) FROM entries e WHERE e.location_id = l.location_id) as entry_count
-        FROM locations l
-        WHERE LOWER(l.name) = ? AND LOWER(l.address) = ? AND l.deleted_at IS NULL
-        ORDER BY entry_count DESC
-      `, [duplicate.name_lower, duplicate.address_lower]);
-
-      if (matchingLocations.length < 2) {
-        Alert.alert('All Good', 'No duplicate locations found.');
-        return;
-      }
-
-      // Winner is the one with most entries
-      const winner = matchingLocations[0];
-      const losers = matchingLocations.slice(1);
-      const totalEntriesToMove = losers.reduce((sum: number, loc: any) => sum + loc.entry_count, 0);
-
-      Alert.alert(
-        'Merge Duplicate Locations',
-        `Found ${matchingLocations.length} locations named "${winner.name}" at "${winner.address}".\n\n` +
-        `Winner: ${winner.entry_count} entries\n` +
-        `Losers: ${losers.length} location(s) with ${totalEntriesToMove} entries\n\n` +
-        `Merge all entries to the winner and delete the duplicates?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Merge',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                // Move all entries from losers to winner
-                for (const loser of losers) {
-                  // Update entries to point to winner
-                  await localDB.runCustomQuery(
-                    'UPDATE entries SET location_id = ?, synced = 0, sync_action = CASE WHEN sync_action = "create" THEN "create" ELSE "update" END WHERE location_id = ?',
-                    [winner.location_id, loser.location_id]
-                  );
-
-                  // Mark loser location for deletion
-                  await localDB.runCustomQuery(
-                    'UPDATE locations SET deleted_at = ?, synced = 0, sync_action = ? WHERE location_id = ?',
-                    [new Date().toISOString(), 'delete', loser.location_id]
-                  );
-                }
-
-                setRefreshKey(prev => prev + 1);
-
-                // Trigger immediate sync to push changes to cloud
-                triggerPushSync();
-
-                Alert.alert(
-                  'Success',
-                  `Merged ${losers.length} duplicate location(s). ${totalEntriesToMove} entries moved to "${winner.name}". Syncing changes...`
-                );
-              } catch (error) {
-                Alert.alert('Error', `Failed to merge locations: ${error}`);
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Error', `Failed to find duplicate locations: ${error}`);
-    }
+    Alert.alert('Merge Duplicate Places', 'Merge places with the same name and address?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Merge',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const result = await locationCleanup.mergeDuplicateLocations();
+            setRefreshKey(prev => prev + 1);
+            Alert.alert(
+              result.errors > 0 ? 'Partial Success' : 'Success',
+              `Merged ${result.processed} duplicate place${result.processed === 1 ? '' : 's'}.${result.errors > 0 ? ` ${result.errors} failed.` : ''}`
+            );
+          } catch (error) {
+            Alert.alert('Error', `Failed to merge places: ${error}`);
+          }
+        },
+      },
+    ]);
   };
 
   const handleEnrichLocationHierarchy = async () => {
-    try {
-      // Find locations with NULL hierarchy data (not yet enriched)
-      // Empty string '' means "checked but no data available"
-      const locationsToEnrich = await localDB.runCustomQuery(`
-        SELECT location_id, name, latitude, longitude
-        FROM locations
-        WHERE deleted_at IS NULL
-          AND (
-            neighborhood IS NULL
-            OR postal_code IS NULL
-            OR city IS NULL
-            OR subdivision IS NULL
-            OR region IS NULL
-            OR country IS NULL
-          )
-      `);
-
-      if (locationsToEnrich.length === 0) {
-        Alert.alert('All Good', 'All locations already have complete hierarchy data.');
-        return;
-      }
-
-      Alert.alert(
-        'Enrich Location Data',
-        `Found ${locationsToEnrich.length} location${locationsToEnrich.length === 1 ? '' : 's'} with missing hierarchy data (region, country, etc.).\n\nThis will use Mapbox to lookup and fill in missing data based on GPS coordinates.\n\nThis may take a while for many locations.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Enrich',
-            onPress: async () => {
-              try {
-                let enrichedCount = 0;
-                let errorCount = 0;
-
-                for (const loc of locationsToEnrich) {
-                  try {
-                    // Call Mapbox reverse geocoding
-                    const response = await reverseGeocode({
-                      latitude: loc.latitude,
-                      longitude: loc.longitude,
-                    });
-
-                    // Parse hierarchy from response
-                    const hierarchy = parseMapboxHierarchy(response);
-
-                    // Update location with hierarchy data
-                    // Use empty string '' when no data available (to mark as "checked")
-                    // Only update fields that are currently NULL
-                    await localDB.runCustomQuery(
-                      `UPDATE locations SET
-                        neighborhood = COALESCE(neighborhood, ?),
-                        postal_code = COALESCE(postal_code, ?),
-                        city = COALESCE(city, ?),
-                        subdivision = COALESCE(subdivision, ?),
-                        region = COALESCE(region, ?),
-                        country = COALESCE(country, ?),
-                        synced = 0,
-                        sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END,
-                        updated_at = ?
-                      WHERE location_id = ?`,
-                      [
-                        hierarchy.neighborhood || '',  // empty string if no data
-                        hierarchy.postcode || '',
-                        hierarchy.place || '',  // city
-                        hierarchy.district || '',  // county/subdivision
-                        hierarchy.region || '',
-                        hierarchy.country || '',
-                        Date.now(),
-                        loc.location_id
-                      ]
-                    );
-
-                    enrichedCount++;
-
-                    // Small delay to avoid rate limiting
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                  } catch (err) {
-                    log.error('Failed to enrich location', err, { locationName: loc.name });
-                    errorCount++;
-                  }
-                }
-
-                setRefreshKey(prev => prev + 1);
-
-                if (errorCount > 0) {
-                  Alert.alert(
-                    'Partial Success',
-                    `Enriched ${enrichedCount} location${enrichedCount === 1 ? '' : 's'}.\n${errorCount} location${errorCount === 1 ? '' : 's'} failed.`
-                  );
-                } else {
-                  Alert.alert(
-                    'Success',
-                    `Enriched ${enrichedCount} location${enrichedCount === 1 ? '' : 's'} with hierarchy data.`
-                  );
-                }
-              } catch (error) {
-                Alert.alert('Error', `Failed to enrich locations: ${error}`);
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Error', `Failed to find locations needing enrichment: ${error}`);
-    }
+    Alert.alert('Fill Place Details', 'Use Mapbox to fill in missing city/region/country data?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Enrich',
+        onPress: async () => {
+          try {
+            const result = await locationCleanup.enrichLocationHierarchy();
+            setRefreshKey(prev => prev + 1);
+            Alert.alert(
+              result.errors > 0 ? 'Partial Success' : 'Success',
+              `Filled ${result.processed} place${result.processed === 1 ? '' : 's'}.${result.errors > 0 ? ` ${result.errors} failed.` : ''}`
+            );
+          } catch (error) {
+            Alert.alert('Error', `Failed to fill place details: ${error}`);
+          }
+        },
+      },
+    ]);
   };
 
   const handleSnapAllEntries = async () => {
-    try {
-      // Find entries with GPS coordinates but no geocode_status (never processed)
-      // or with geocode_status = 'error' (failed, can retry)
-      const entriesToProcess = await localDB.runCustomQuery(`
-        SELECT entry_id, title, entry_latitude, entry_longitude
-        FROM entries
-        WHERE deleted_at IS NULL
-          AND entry_latitude IS NOT NULL
-          AND entry_longitude IS NOT NULL
-          AND (geocode_status IS NULL OR geocode_status = 'error')
-      `);
-
-      if (entriesToProcess.length === 0) {
-        Alert.alert('All Good', 'All entries with GPS coordinates have already been processed.');
-        return;
-      }
-
-      Alert.alert(
-        'Snap All Entries',
-        `Found ${entriesToProcess.length} entr${entriesToProcess.length === 1 ? 'y' : 'ies'} with GPS coordinates that haven't been geocoded.\n\nThis will:\n1. Try to snap each entry to a saved location (within 100ft)\n2. If no match, call Mapbox to get city/region/country\n\nThis may take a while.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Process All',
-            onPress: async () => {
-              try {
-                let snappedCount = 0;
-                let geocodedCount = 0;
-                let noDataCount = 0;
-                let errorCount = 0;
-
-                // Threshold for snapping: 100 feet ≈ 30 meters
-                const SNAP_THRESHOLD_METERS = 30;
-
-                for (const entry of entriesToProcess) {
-                  try {
-                    // STEP 1: Try to snap to a saved location
-                    const snapResult = findNearbyLocation(
-                      { latitude: entry.entry_latitude, longitude: entry.entry_longitude },
-                      locations,
-                      SNAP_THRESHOLD_METERS
-                    );
-
-                    if (snapResult.location) {
-                      // Snapped to a saved location
-                      await localDB.runCustomQuery(
-                        `UPDATE entries SET
-                          location_id = ?,
-                          place_name = ?,
-                          address = ?,
-                          neighborhood = ?,
-                          postal_code = ?,
-                          city = ?,
-                          subdivision = ?,
-                          region = ?,
-                          country = ?,
-                          geocode_status = 'snapped',
-                          synced = 0,
-                          sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END,
-                          updated_at = ?
-                        WHERE entry_id = ?`,
-                        [
-                          snapResult.location.location_id,
-                          snapResult.location.name,
-                          snapResult.location.address,
-                          snapResult.location.neighborhood,
-                          snapResult.location.postal_code,
-                          snapResult.location.city,
-                          snapResult.location.subdivision,
-                          snapResult.location.region,
-                          snapResult.location.country,
-                          new Date().toISOString(),
-                          entry.entry_id
-                        ]
-                      );
-                      snappedCount++;
-                      continue;
-                    }
-
-                    // STEP 2: No snap match - call geocode API
-                    const response = await reverseGeocode({
-                      latitude: entry.entry_latitude,
-                      longitude: entry.entry_longitude,
-                    });
-
-                    const fields = geocodeResponseToEntryFields(response);
-
-                    // Update entry with geocoded data
-                    await localDB.runCustomQuery(
-                      `UPDATE entries SET
-                        address = ?,
-                        neighborhood = ?,
-                        postal_code = ?,
-                        city = ?,
-                        subdivision = ?,
-                        region = ?,
-                        country = ?,
-                        geocode_status = ?,
-                        synced = 0,
-                        sync_action = CASE WHEN sync_action = 'create' THEN 'create' ELSE 'update' END,
-                        updated_at = ?
-                      WHERE entry_id = ?`,
-                      [
-                        fields.address,
-                        fields.neighborhood,
-                        fields.postal_code,
-                        fields.city,
-                        fields.subdivision,
-                        fields.region,
-                        fields.country,
-                        fields.geocode_status,
-                        new Date().toISOString(),
-                        entry.entry_id
-                      ]
-                    );
-
-                    if (fields.geocode_status === 'success') {
-                      geocodedCount++;
-                    } else {
-                      noDataCount++;
-                    }
-
-                    // Small delay to avoid rate limiting
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                  } catch (err) {
-                    log.error('Failed to process entry', err, { entryTitle: entry.title, entryId: entry.entry_id });
-                    errorCount++;
-                  }
-                }
-
-                setRefreshKey(prev => prev + 1);
-
-                // Sync changes to cloud
-                try {
-                  await sync();
-                } catch (syncError) {
-                  log.error('Sync failed after processing', syncError);
-                }
-
-                const results = [];
-                if (snappedCount > 0) results.push(`${snappedCount} snapped to saved locations`);
-                if (geocodedCount > 0) results.push(`${geocodedCount} geocoded via API`);
-                if (noDataCount > 0) results.push(`${noDataCount} with no address data`);
-                if (errorCount > 0) results.push(`${errorCount} failed`);
-
-                Alert.alert(
-                  errorCount > 0 ? 'Partial Success' : 'Success',
-                  `Processed ${entriesToProcess.length} entries:\n\n${results.join('\n')}\n\nChanges synced to cloud.`
-                );
-              } catch (error) {
-                Alert.alert('Error', `Failed to process entries: ${error}`);
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Error', `Failed to find entries: ${error}`);
-    }
+    Alert.alert('Snap All Entries', 'Snap unlinked entries to saved places or geocode via Mapbox?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Process All',
+        onPress: async () => {
+          try {
+            const snapResult = await locationCleanup.snapEntriesToLocations();
+            const geocodeResult = await locationCleanup.geocodeEntries();
+            setRefreshKey(prev => prev + 1);
+            const parts: string[] = [];
+            if (snapResult.snapped > 0) parts.push(`${snapResult.snapped} snapped to saved places`);
+            if (geocodeResult.geocoded > 0) parts.push(`${geocodeResult.geocoded} geocoded via API`);
+            if (geocodeResult.noData > 0) parts.push(`${geocodeResult.noData} with no address data`);
+            const totalErrors = snapResult.errors + geocodeResult.errors;
+            if (totalErrors > 0) parts.push(`${totalErrors} failed`);
+            Alert.alert(
+              totalErrors > 0 ? 'Partial Success' : 'Success',
+              parts.join('\n') || 'No entries to process.'
+            );
+          } catch (error) {
+            Alert.alert('Error', `Failed to process entries: ${error}`);
+          }
+        },
+      },
+    ]);
   };
 
   const handleClearLocalPhotos = () => {
@@ -1501,16 +1184,16 @@ export function DatabaseInfoScreen() {
                 <Text style={styles.buttonText}>📍 Snap All Entries</Text>
               </TouchableOpacity>
               <Text style={styles.helperText}>
-                Process old entries: snap to saved locations or geocode via API
+                Process old entries: snap to saved places or geocode via API
               </Text>
               <TouchableOpacity style={[styles.cleanupButton, { marginTop: 12 }]} onPress={handleEnrichLocationHierarchy}>
-                <Text style={styles.cleanupButtonText}>🌍 Enrich Location Hierarchy</Text>
+                <Text style={styles.cleanupButtonText}>🌍 Fill Place Details</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.dangerButton, { marginTop: 8 }]} onPress={handleMergeDuplicateLocations}>
-                <Text style={styles.dangerButtonText}>🔀 Merge Duplicate Locations</Text>
+                <Text style={styles.dangerButtonText}>🔀 Merge Duplicate Places</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.dangerButton, { marginTop: 8 }]} onPress={handleDeleteUnusedLocations}>
-                <Text style={styles.dangerButtonText}>🗑️ Delete Unused Locations</Text>
+                <Text style={styles.dangerButtonText}>🗑️ Delete Unused Places</Text>
               </TouchableOpacity>
             </View>
 
@@ -1518,7 +1201,7 @@ export function DatabaseInfoScreen() {
             <View style={styles.section}>
               {filteredLocations.length === 0 ? (
                 <View style={styles.infoBox}>
-                  <Text style={styles.infoText}>No locations found</Text>
+                  <Text style={styles.infoText}>No places found</Text>
                 </View>
               ) : (
                 filteredLocations.map((location, index) => (

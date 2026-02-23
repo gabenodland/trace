@@ -290,7 +290,10 @@ export function AttributeBar({
             <TouchableOpacity style={styles.attribute} onPress={onLocationPress}>
               <View style={styles.attributeContent}>
                 <Icon
-                  name="MapPin"
+                  name={hasLocation
+                    ? entry.location_id ? "MapPinFavoriteLine" : entry.place_name ? "MapPin" : "MapPinEmpty"
+                    : "MapPin"
+                  }
                   size={12}
                   color={
                     hasLocation
@@ -312,7 +315,7 @@ export function AttributeBar({
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
-                  {locationLabel || 'Set Location'}
+                  {locationLabel || 'Set Place'}
                 </Text>
               </View>
             </TouchableOpacity>

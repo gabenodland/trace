@@ -279,6 +279,7 @@ export type Database = {
           location_id: string
           longitude: number
           mapbox_place_id: string | null
+          merge_ignore_ids: string | null
           name: string
           neighborhood: string | null
           postal_code: string | null
@@ -299,6 +300,7 @@ export type Database = {
           location_id?: string
           longitude: number
           mapbox_place_id?: string | null
+          merge_ignore_ids?: string | null
           name: string
           neighborhood?: string | null
           postal_code?: string | null
@@ -319,6 +321,7 @@ export type Database = {
           location_id?: string
           longitude?: number
           mapbox_place_id?: string | null
+          merge_ignore_ids?: string | null
           name?: string
           neighborhood?: string | null
           postal_code?: string | null

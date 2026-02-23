@@ -329,7 +329,6 @@ async function syncEntry(
         : entry.entry_date),
       entry_latitude: entry.entry_latitude,
       entry_longitude: entry.entry_longitude,
-      location_radius: entry.location_radius,
       location_id: entry.location_id,
       // Location hierarchy (owned by entry)
       place_name: entry.place_name || null,
@@ -580,6 +579,7 @@ async function syncLocation(location: LocationEntity): Promise<void> {
     country: location.country,
     mapbox_place_id: location.mapbox_place_id,
     foursquare_fsq_id: location.foursquare_fsq_id,
+    merge_ignore_ids: location.merge_ignore_ids || null,
     created_at: location.created_at,
     updated_at: location.updated_at,
     deleted_at: location.deleted_at,

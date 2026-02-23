@@ -7,14 +7,15 @@
 import type {
   Coordinates,
   DistanceResult,
-  LocationPrecision,
+  LocationData,
   MapboxFeature,
   MapboxReverseGeocodeResponse,
   MapboxLocationHierarchy,
   FoursquarePlace,
   POIItem,
-  LocationData,
 } from './LocationTypes';
+
+export const UNNAMED_PLACE_LABEL = 'Unnamed Place';
 
 // ============================================================================
 // LOCATION LABEL (Single source of truth for display names)
@@ -43,7 +44,7 @@ export interface LocationLabelFields {
  * 3. neighborhood - Neighborhood like "Westport"
  * 4. region - State/province like "Missouri", "California"
  * 5. country - Country name as last resort
- * 6. "Unnamed Location" - Final fallback when no data available
+ * 6. "Unnamed Place" - Final fallback when no data available
  *
  * @param location - Object containing location fields (any subset)
  * @returns Display label string, never null/undefined
@@ -56,11 +57,11 @@ export interface LocationLabelFields {
  * getLocationLabel({ city: "Kansas City", region: "Missouri" }) // => "Kansas City"
  *
  * // No data at all
- * getLocationLabel({}) // => "Unnamed Location"
+ * getLocationLabel({}) // => "Unnamed Place"
  */
 export function getLocationLabel(location: LocationLabelFields | null | undefined): string {
   if (!location) {
-    return 'Unnamed Location';
+    return UNNAMED_PLACE_LABEL;
   }
 
   // Priority 1: Named place (name or place_name field)
@@ -90,14 +91,14 @@ export function getLocationLabel(location: LocationLabelFields | null | undefine
   }
 
   // Final fallback
-  return 'Unnamed Location';
+  return UNNAMED_PLACE_LABEL;
 }
 
 /**
- * Check if a location has any displayable label data beyond "Unnamed Location"
+ * Check if a location has any displayable label data beyond "Unnamed Place"
  */
 export function hasLocationLabel(location: LocationLabelFields | null | undefined): boolean {
-  return getLocationLabel(location) !== 'Unnamed Location';
+  return getLocationLabel(location) !== UNNAMED_PLACE_LABEL;
 }
 
 // US state and Canadian province name to abbreviation mapping
@@ -368,48 +369,37 @@ export function extractMapboxCoordinates(feature: MapboxFeature): Coordinates {
  * Convert Foursquare place to POI item for display
  */
 export function foursquareToPOI(place: FoursquarePlace): POIItem {
-  try {
-    console.log('[foursquareToPOI] Converting place:', place.name);
+  // Use fsq_place_id or fsq_id (different responses use different field names)
+  const id = place.fsq_place_id || place.fsq_id || place.name;
+  const category = place.categories?.[0]?.name || 'Place';
 
-    // Use fsq_place_id or fsq_id (different responses use different field names)
-    const id = place.fsq_place_id || place.fsq_id || place.name;
-    const category = place.categories?.[0]?.name || 'Place';
+  // Ensure address is a string or undefined (never an object)
+  const formattedAddress = place.location?.formatted_address;
+  const address = place.location?.address;
+  const addressString = typeof formattedAddress === 'string' ? formattedAddress :
+                        typeof address === 'string' ? address :
+                        undefined;
 
-    // Ensure address is a string or undefined (never an object)
-    const formattedAddress = place.location?.formatted_address;
-    const address = place.location?.address;
-    const addressString = typeof formattedAddress === 'string' ? formattedAddress :
-                          typeof address === 'string' ? address :
-                          undefined;
+  // Extract location hierarchy from Foursquare response
+  const city = place.location?.locality || undefined;
+  const region = place.location?.region || undefined;
+  const country = place.location?.country || undefined;
+  const postalCode = place.location?.postcode || undefined;
 
-    // Extract location hierarchy from Foursquare response
-    const city = place.location?.locality || undefined;
-    const region = place.location?.region || undefined;
-    const country = place.location?.country || undefined;
-    const postalCode = place.location?.postcode || undefined;
-
-    const poi = {
-      id,
-      source: 'foursquare' as const,
-      name: place.name,
-      address: addressString,
-      category,
-      distance: place.distance,
-      latitude: place.latitude,
-      longitude: place.longitude,
-      // Include location hierarchy from Foursquare
-      city,
-      region,
-      country,
-      postalCode,
-    };
-
-    console.log('[foursquareToPOI] ✅ Successfully converted to POI:', poi.name, 'with hierarchy:', { city, region, country, postalCode });
-    return poi;
-  } catch (error) {
-    console.error('[foursquareToPOI] ❌ Error converting place:', place.name, error);
-    throw error;
-  }
+  return {
+    id,
+    source: 'foursquare' as const,
+    name: place.name,
+    address: addressString,
+    category,
+    distance: place.distance,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    city,
+    region,
+    country,
+    postalCode,
+  };
 }
 
 /**
@@ -425,92 +415,6 @@ export function mapboxToPOI(feature: MapboxFeature): POIItem {
     latitude: feature.center[1],
     longitude: feature.center[0],
   };
-}
-
-// ============================================================================
-// PRIVACY & PRECISION
-// ============================================================================
-
-/**
- * Adjust coordinates based on privacy precision level
- * Returns modified coordinates for public display
- */
-export function adjustCoordinatesForPrecision(
-  gpsCoords: Coordinates,
-  _hierarchyData: MapboxLocationHierarchy,
-  precision: LocationPrecision
-): Coordinates | null {
-  switch (precision) {
-    case 'coords':
-      // Return exact GPS coordinates
-      return gpsCoords;
-
-    case 'poi':
-    case 'address':
-    case 'neighborhood':
-      // For these levels, we'd ideally return the POI/address/neighborhood center
-      // For now, round coordinates to ~100m precision
-      return {
-        latitude: Math.round(gpsCoords.latitude * 1000) / 1000,
-        longitude: Math.round(gpsCoords.longitude * 1000) / 1000,
-      };
-
-    case 'city':
-      // City level - very approximate coordinates
-      return {
-        latitude: Math.round(gpsCoords.latitude * 10) / 10,
-        longitude: Math.round(gpsCoords.longitude * 10) / 10,
-      };
-
-    case 'region':
-      // Region level - even more approximate
-      return {
-        latitude: Math.round(gpsCoords.latitude * 5) / 5,
-        longitude: Math.round(gpsCoords.longitude * 5) / 5,
-      };
-
-    case 'country':
-      // Country level - no specific coordinates
-      return null;
-
-    default:
-      return gpsCoords;
-  }
-}
-
-/**
- * Get display text for location based on precision level
- */
-export function getLocationDisplayText(
-  locationData: LocationData
-): string | null {
-  if (!locationData.precision) {
-    return locationData.name;
-  }
-
-  switch (locationData.precision) {
-    case 'coords':
-      return locationData.name || `${locationData.latitude?.toFixed(6)}, ${locationData.longitude?.toFixed(6)}`;
-
-    case 'poi':
-    case 'address':
-      return locationData.name;
-
-    case 'neighborhood':
-      return locationData.neighborhood || locationData.city;
-
-    case 'city':
-      return locationData.city;
-
-    case 'region':
-      return locationData.region;
-
-    case 'country':
-      return locationData.country;
-
-    default:
-      return locationData.name;
-  }
 }
 
 // ============================================================================
@@ -551,17 +455,6 @@ export function isSameLocation(
   }
 
   return false;
-}
-
-/**
- * Round coordinates to specified decimal places
- */
-export function roundCoordinates(coords: Coordinates, decimals: number): Coordinates {
-  const factor = Math.pow(10, decimals);
-  return {
-    latitude: Math.round(coords.latitude * factor) / factor,
-    longitude: Math.round(coords.longitude * factor) / factor,
-  };
 }
 
 // ============================================================================
@@ -772,4 +665,235 @@ export function geocodeResponseToEntryFields(
     country: hierarchy.country || null,
     geocode_status: hasData ? 'success' : 'no_data',
   };
+}
+
+// ============================================================================
+// LOCATION ISSUE ANALYSIS
+// ============================================================================
+
+export type LocationIssueType = 'missing_data' | 'snap_candidate' | 'merge_candidate' | 'needs_geocoding';
+
+export interface LocationIssue {
+  type: LocationIssueType;
+  /** Human-readable description */
+  message: string;
+  /** For snap_candidate: the saved location that can be snapped to */
+  targetLocationName?: string;
+  targetLocationId?: string;
+  distanceMeters?: number;
+  /** For merge_candidate: the other place that has the same normalized name+address */
+  mergeTargetName?: string;
+  mergeTargetLocationId?: string;
+}
+
+/** Minimal place shape for issue analysis */
+export interface PlaceForAnalysis {
+  place_name: string | null;
+  address: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  avg_latitude: number;
+  avg_longitude: number;
+  is_favorite: boolean;
+  location_id: string | null;
+  /** Number of entries in this group with null/error geocode_status */
+  ungeocoded_count?: number;
+  /** JSON array of location_ids to suppress merge suggestions with (favorites only) */
+  merge_ignore_ids?: string | null;
+}
+
+/** Minimal saved location shape for snap + missing data detection */
+export interface SavedLocationForAnalysis {
+  location_id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  address: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+}
+
+/** Distance where GPS points are essentially identical (same doorstep) */
+const SNAP_EXACT_METERS = 10;
+/** Wider radius, but only flags if names also match */
+const SNAP_NAME_MATCH_METERS = 50;
+
+/**
+ * Get composite key for a place (matches GROUP BY logic in getEntryDerivedPlaces)
+ */
+export function getPlaceIssueKey(place: {
+  place_name: string | null;
+  address: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+}): string {
+  return `${place.place_name || ''}|${place.address || ''}|${place.city || ''}|${place.region || ''}|${place.country || ''}`;
+}
+
+/**
+ * Analyze entry-derived places for data quality issues.
+ *
+ * Returns a Map keyed by composite key (place_name|address|city|region|country)
+ * where each value is an array of detected issues for that place.
+ */
+export function analyzeLocationIssues(
+  places: PlaceForAnalysis[],
+  savedLocations: SavedLocationForAnalysis[],
+): Map<string, LocationIssue[]> {
+  const issueMap = new Map<string, LocationIssue[]>();
+
+  // Build normalized name+address index for merge detection
+  const normalizedIndex = new Map<string, Array<{ key: string; name: string; location_id: string | null; is_favorite: boolean }>>();
+  for (const p of places) {
+    const normKey = `${(p.place_name || '').toLowerCase().trim()}|${(p.address || '').toLowerCase().trim()}`;
+    if (normKey === '|') continue; // skip entries with no name and no address
+    const key = getPlaceIssueKey(p);
+    if (!normalizedIndex.has(normKey)) normalizedIndex.set(normKey, []);
+    normalizedIndex.get(normKey)!.push({
+      key,
+      name: p.place_name || p.city || 'Unknown',
+      location_id: p.location_id || null,
+      is_favorite: !!p.is_favorite,
+    });
+  }
+
+  // Build saved location lookup by ID for accurate missing data checks
+  const savedLocationById = new Map<string, SavedLocationForAnalysis>();
+  for (const loc of savedLocations) {
+    savedLocationById.set(loc.location_id, loc);
+  }
+
+  for (const place of places) {
+    const key = getPlaceIssueKey(place);
+    const issues: LocationIssue[] = [];
+
+    // 1. Missing data (favorites only — check actual location record, not entry-derived data)
+    if (place.is_favorite && place.location_id) {
+      const savedLoc = savedLocationById.get(place.location_id);
+      const checkCity = savedLoc ? savedLoc.city : place.city;
+      const checkRegion = savedLoc ? savedLoc.region : place.region;
+      const checkCountry = savedLoc ? savedLoc.country : place.country;
+      if (checkCity === null || checkRegion === null || checkCountry === null) {
+        const missing: string[] = [];
+        if (checkCity === null) missing.push('city');
+        if (checkRegion === null) missing.push('region');
+        if (checkCountry === null) missing.push('country');
+        issues.push({
+          type: 'missing_data',
+          message: `Missing ${missing.join(', ')}`,
+        });
+      }
+    }
+
+    // 2. Snap candidate (non-favorites near a saved location)
+    // Only flag when it's clearly the same place:
+    //   - Within 10m (same GPS point) regardless of name
+    //   - Within 50m AND names match (same business, slightly different pin)
+    if (!place.is_favorite && place.avg_latitude != null && place.avg_longitude != null) {
+      let nearestName: string | null = null;
+      let nearestId: string | null = null;
+      let nearestDist = Infinity;
+      const placeNameNorm = (place.place_name || '').toLowerCase().trim();
+
+      for (const loc of savedLocations) {
+        const dist = calculateDistance(
+          { latitude: place.avg_latitude, longitude: place.avg_longitude },
+          { latitude: loc.latitude, longitude: loc.longitude },
+        );
+        const locNameNorm = (loc.name || '').toLowerCase().trim();
+        const namesMatch = placeNameNorm && locNameNorm && placeNameNorm === locNameNorm;
+        const threshold = namesMatch ? SNAP_NAME_MATCH_METERS : SNAP_EXACT_METERS;
+
+        if (dist.meters <= threshold && dist.meters < nearestDist) {
+          nearestName = loc.name;
+          nearestId = loc.location_id;
+          nearestDist = dist.meters;
+        }
+      }
+
+      if (nearestName && nearestId) {
+        issues.push({
+          type: 'snap_candidate',
+          message: `May be the same as "${nearestName}" in My Places`,
+          targetLocationName: nearestName,
+          targetLocationId: nearestId,
+          distanceMeters: nearestDist,
+        });
+      }
+    }
+
+    // Parse merge ignore list for this place (favorites only)
+    const ignoreIds: Set<string> = new Set();
+    if (place.merge_ignore_ids) {
+      try {
+        const parsed = JSON.parse(place.merge_ignore_ids);
+        if (Array.isArray(parsed)) parsed.forEach((id: string) => ignoreIds.add(id));
+      } catch { /* ignore parse errors */ }
+    }
+
+    // 3a. Merge candidate (same normalized name+address as another row)
+    let alreadyMergeCandidate = false;
+    const normKey = `${(place.place_name || '').toLowerCase().trim()}|${(place.address || '').toLowerCase().trim()}`;
+    if (normKey !== '|') {
+      const matches = normalizedIndex.get(normKey);
+      if (matches && matches.length > 1) {
+        const other = matches.find(m => m.key !== key && !(m.location_id && ignoreIds.has(m.location_id)));
+        if (other) {
+          alreadyMergeCandidate = true;
+          issues.push({
+            type: 'merge_candidate',
+            message: `Possible duplicate of "${other.name}"`,
+            mergeTargetName: other.name,
+            mergeTargetLocationId: other.location_id || undefined,
+          });
+        }
+      }
+    }
+
+    // 3b. Favorite-to-favorite proximity merge (different name, same address or within 10m)
+    // Catches saved places at the same spot with different names (e.g. "Troost Coffee" vs "Troost Coffee Shop")
+    if (!alreadyMergeCandidate && place.is_favorite && place.location_id && place.avg_latitude != null && place.avg_longitude != null) {
+      let nearestFav: { name: string; id: string; dist: number } | null = null;
+
+      for (const loc of savedLocations) {
+        if (loc.location_id === place.location_id) continue;
+        if (ignoreIds.has(loc.location_id)) continue;
+        const dist = calculateDistance(
+          { latitude: place.avg_latitude, longitude: place.avg_longitude },
+          { latitude: loc.latitude, longitude: loc.longitude },
+        );
+        if (dist.meters <= SNAP_EXACT_METERS && (!nearestFav || dist.meters < nearestFav.dist)) {
+          nearestFav = { name: loc.name, id: loc.location_id, dist: dist.meters };
+        }
+      }
+
+      if (nearestFav) {
+        issues.push({
+          type: 'merge_candidate',
+          message: `Possible duplicate of "${nearestFav.name}"`,
+          mergeTargetName: nearestFav.name,
+          mergeTargetLocationId: nearestFav.id,
+        });
+      }
+    }
+
+    // 4. Needs geocoding (entries with null/error geocode_status)
+    if (place.ungeocoded_count && place.ungeocoded_count > 0) {
+      issues.push({
+        type: 'needs_geocoding',
+        message: place.ungeocoded_count === 1
+          ? '1 entry needs geocoding'
+          : `${place.ungeocoded_count} entries need geocoding`,
+      });
+    }
+
+    if (issues.length > 0) {
+      issueMap.set(key, issues);
+    }
+  }
+
+  return issueMap;
 }

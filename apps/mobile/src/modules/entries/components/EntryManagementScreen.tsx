@@ -132,7 +132,6 @@ function buildNewEntry(options?: NewEntryOptions, userId?: string): EntryWithRel
     updated_at: now,
     entry_latitude: null,
     entry_longitude: null,
-    location_radius: null,
     location_id: null,
     place_name: null,
     address: null,
@@ -223,6 +222,12 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         entry.entry_latitude !== originalEntry.entry_latitude ||
         entry.entry_longitude !== originalEntry.entry_longitude ||
         entry.place_name !== originalEntry.place_name ||
+        entry.location_id !== originalEntry.location_id ||
+        entry.city !== originalEntry.city ||
+        entry.address !== originalEntry.address ||
+        entry.neighborhood !== originalEntry.neighborhood ||
+        entry.region !== originalEntry.region ||
+        entry.country !== originalEntry.country ||
         (entry.attachments?.length || 0) !== (originalEntry.attachments?.length || 0)
       );
       if (dirty) {
@@ -981,7 +986,6 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
             ...prev,
             entry_latitude: location.latitude,
             entry_longitude: location.longitude,
-            location_radius: location.locationRadius ?? null,
             location_id: location.location_id ?? null,
             place_name: location.name ?? null,
             address: location.address ?? null,
@@ -995,7 +999,6 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
             ...prev,
             entry_latitude: null,
             entry_longitude: null,
-            location_radius: null,
             location_id: null,
             place_name: null,
             address: null,

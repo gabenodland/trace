@@ -172,7 +172,6 @@ export function CaptureForm() {
           entry_date: entryDate,
           location_lat: latitude,
           location_lng: longitude,
-          location_radius: accuracy,
           stream_id: streamId,
           status,
           due_date: dueDate,

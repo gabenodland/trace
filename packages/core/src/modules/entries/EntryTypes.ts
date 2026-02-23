@@ -87,8 +87,6 @@ export interface BaseEntry {
   // GPS coordinates captured when entry was created (private, exact, never changes)
   entry_latitude: number | null;
   entry_longitude: number | null;
-  // User-selected radius for location generalization (privacy feature)
-  location_radius: number | null;
   // Location reference (optional - points to anchor in locations table)
   location_id: string | null;
   // Location hierarchy (owned by entry - copied from anchor or reverse geocode)
@@ -147,7 +145,6 @@ export interface CreateEntryInput {
   entry_date?: string | null; // When the memory/event actually happened
   entry_latitude?: number | null;
   entry_longitude?: number | null;
-  location_radius?: number | null;
   location_id?: string | null;
   // Location hierarchy (copied from anchor or reverse geocode)
   place_name?: string | null;
@@ -176,7 +173,6 @@ export interface UpdateEntryInput {
   entry_date?: string | null; // When the memory/event actually happened
   entry_latitude?: number | null;
   entry_longitude?: number | null;
-  location_radius?: number | null;
   location_id?: string | null;
   // Location hierarchy (copied from anchor or reverse geocode)
   place_name?: string | null;

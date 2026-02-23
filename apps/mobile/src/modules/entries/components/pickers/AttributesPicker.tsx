@@ -157,7 +157,14 @@ export function AttributesPicker({
               onPress={onShowLocationPicker}
             >
               <View style={styles.optionIcon}>
-                <Icon name="MapPin" size={16} color={hasLocationData ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
+                <Icon
+                  name={hasLocationData
+                    ? locationData?.location_id ? "MapPinFavoriteLine" : locationData?.name ? "MapPin" : "MapPinEmpty"
+                    : "MapPin"
+                  }
+                  size={16}
+                  color={hasLocationData ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary}
+                />
               </View>
               <Text
                 style={[
@@ -170,7 +177,7 @@ export function AttributesPicker({
                 numberOfLines={1}
                 ellipsizeMode="tail"
               >
-                {hasLocationData ? `Location: ${getLocationLabel(locationData)}` : "Set Location"}
+                {hasLocationData ? `Place: ${getLocationLabel(locationData)}` : "Set Place"}
               </Text>
             </TouchableOpacity>
           )}

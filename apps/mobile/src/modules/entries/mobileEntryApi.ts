@@ -41,7 +41,10 @@ export interface MobileEntryFilter extends EntryFilter {
   filter_city?: string;
   filter_neighborhood?: string;
   filter_place_name?: string;
-  filter_no_location?: boolean; // Filter entries with no location data
+  filter_address?: string;
+  filter_no_place?: boolean; // Filter entries with no place data at all
+  filter_has_place?: boolean; // Filter entries that have any location/place data
+  filter_unnamed?: boolean; // Filter entries with GPS but no place_name (combine with city for unnamed-in-city)
 }
 
 /**
@@ -68,6 +71,14 @@ export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEn
   // No Stream - show only entries without a stream
   if (selectedStreamId === "no-stream" || selectedStreamId === null) {
     return { stream_id: null };
+  }
+
+  // Location quick filters
+  if (selectedStreamId === "has-place") {
+    return { filter_has_place: true };
+  }
+  if (selectedStreamId === "no-place") {
+    return { filter_no_place: true };
   }
 
   // Navigation items - treat like "all"
@@ -100,7 +111,7 @@ export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEn
     const geoType = parts[1];
 
     if (geoType === 'none') {
-      return { filter_no_location: true };
+      return { filter_no_place: true };
     } else if (geoType === 'country') {
       const countryName = parts.slice(2).join(':');
       return { filter_country: countryName };
@@ -120,6 +131,16 @@ export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEn
         ...(regionName && { filter_region: regionName }),
         ...(countryName && { filter_country: countryName }),
       };
+    } else if (geoType === 'unnamed-city') {
+      const cityName = parts[2];
+      const regionName = parts[3] || undefined;
+      const countryName = parts[4] || undefined;
+      return {
+        filter_unnamed: true,
+        ...(cityName && { filter_city: cityName }),
+        ...(regionName && { filter_region: regionName }),
+        ...(countryName && { filter_country: countryName }),
+      };
     } else if (geoType === 'neighborhood') {
       const neighborhoodName = parts[2];
       const cityName = parts[3] || undefined;
@@ -132,12 +153,17 @@ export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEn
         ...(countryName && { filter_country: countryName }),
       };
     } else if (geoType === 'place') {
-      const placeName = parts[2];
-      const cityName = parts[3] || undefined;
-      const regionName = parts[4] || undefined;
-      const countryName = parts[5] || undefined;
+      // Variable parts use || delimiter (address can contain colons)
+      const afterPrefix = selectedStreamId.substring('geo:place:'.length);
+      const placeParts = afterPrefix.split('||');
+      const placeName = placeParts[0] || undefined;
+      const address = placeParts[1] || undefined;
+      const cityName = placeParts[2] || undefined;
+      const regionName = placeParts[3] || undefined;
+      const countryName = placeParts[4] || undefined;
       return {
-        filter_place_name: placeName,
+        ...(placeName && { filter_place_name: placeName }),
+        ...(address && { filter_address: address }),
         ...(cityName && { filter_city: cityName }),
         ...(regionName && { filter_region: regionName }),
         ...(countryName && { filter_country: countryName }),
@@ -290,7 +316,7 @@ export async function getUnsyncedCount(): Promise<number> {
 /**
  * Get entry counts for navigation display (fast COUNT queries)
  */
-export async function getEntryCounts(): Promise<{ total: number; noStream: number }> {
+export async function getEntryCounts(): Promise<{ total: number; noStream: number; hasPlace: number; noPlace: number }> {
   return await localDB.getEntryCounts();
 }
 
@@ -341,9 +367,8 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     mentions: data.mentions || [],
     stream_id: data.stream_id || null,
     // GPS coordinates (where user was when creating entry)
-    entry_latitude: data.entry_latitude || null,
-    entry_longitude: data.entry_longitude || null,
-    location_radius: data.location_radius || null,
+    entry_latitude: data.entry_latitude ?? null,
+    entry_longitude: data.entry_longitude ?? null,
     // Location reference (optional - points to anchor in locations table)
     location_id: data.location_id || null,
     // Location hierarchy (owned by entry - copied from anchor or reverse geocode)
@@ -511,7 +536,6 @@ export async function copyEntry(id: string): Promise<string> {
     // Copy all location fields from original
     entry_latitude: originalEntry.entry_latitude,
     entry_longitude: originalEntry.entry_longitude,
-    location_radius: originalEntry.location_radius,
     location_id: originalEntry.location_id,
     place_name: originalEntry.place_name,
     address: originalEntry.address,

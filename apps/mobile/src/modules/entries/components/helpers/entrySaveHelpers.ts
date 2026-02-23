@@ -1,5 +1,4 @@
-import { extractTagsAndMentions, locationToCreateInput, type Location as LocationType } from "@trace/core";
-import { createLocation } from '../../../locations/mobileLocationApi';
+import { extractTagsAndMentions, type Location as LocationType } from "@trace/core";
 
 /** Geocode status for tracking how location hierarchy data was obtained */
 export type GeocodeStatus =
@@ -17,7 +16,6 @@ export type GeocodeStatus =
 export interface GpsFields {
   entry_latitude: number | null;
   entry_longitude: number | null;
-  location_radius: number | null;
 }
 
 /**
@@ -37,20 +35,18 @@ export interface LocationHierarchyFields {
 
 /**
  * Build GPS fields from location data for entry save.
- * Extracts coordinates and privacy radius.
+ * Extracts coordinates.
  */
 export function buildGpsFields(locationData: LocationType | null): GpsFields {
   if (locationData) {
     return {
       entry_latitude: locationData.latitude,
       entry_longitude: locationData.longitude,
-      location_radius: locationData.locationRadius ?? null,
     };
   }
   return {
     entry_latitude: null,
     entry_longitude: null,
-    location_radius: null,
   };
 }
 
@@ -89,27 +85,15 @@ export function buildLocationHierarchyFields(
 }
 
 /**
- * Get or create a location ID from location data.
- * Reuses existing location_id if present, otherwise creates new location.
- *
- * @returns location_id or null if no named location
+ * Get location ID from location data.
+ * Returns existing location_id if the user chose "Save to My Places" in the
+ * location picker (which creates the location record at picker-dismiss time).
+ * Returns null otherwise — entry saves with denormalized fields only.
  */
-export async function getOrCreateLocationId(
+export function getLocationId(
   locationData: LocationType | null
-): Promise<string | null> {
-  if (!locationData || !locationData.name) {
-    return null;
-  }
-
-  // Check if this is a saved location (has existing location_id)
-  if (locationData.location_id) {
-    return locationData.location_id;
-  }
-
-  // Create a new location in the locations table
-  const locationInput = locationToCreateInput(locationData);
-  const savedLocation = await createLocation(locationInput);
-  return savedLocation.location_id;
+): string | null {
+  return locationData?.location_id ?? null;
 }
 
 /**

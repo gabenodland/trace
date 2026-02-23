@@ -6,7 +6,7 @@
  *
  * Sections:
  * - Profile header with avatar, name, subscription badge
- * - Content Management (Streams, Locations)
+ * - Content Management (Streams, Places)
  * - Settings
  * - Sign Out
  */
@@ -174,7 +174,7 @@ export function AccountScreen() {
           <View style={[styles.rowDivider, { backgroundColor: theme.colors.border.light }]} />
           <AccountRow
             icon={<Icon name="MapPin" size={22} color={theme.colors.text.secondary} />}
-            label="Locations"
+            label="Places"
             onPress={() => navigate("locations")}
           />
         </View>

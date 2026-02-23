@@ -91,7 +91,7 @@ export function EntryListItemMetadata({
       {/* Location Badge - only show if stream supports location */}
       {showLocation && (locationName || (entry.entry_latitude !== null && entry.entry_latitude !== undefined && entry.entry_longitude !== null && entry.entry_longitude !== undefined)) && (
         <View style={[styles.locationBadge, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Icon name={(entry.location_id || entry.place_name) ? "MapPin" : "Compass"} size={10} color={theme.colors.text.tertiary} />
+          <Icon name={entry.location_id ? "MapPinFavoriteLine" : entry.place_name ? "MapPin" : "MapPinEmpty"} size={10} color={theme.colors.text.tertiary} />
           <Text style={[styles.locationText, { color: theme.colors.text.tertiary }]}>
             {locationName || getLocationLabel({ name: entry.place_name, city: entry.city, neighborhood: entry.neighborhood, region: entry.region, country: entry.country })}
           </Text>

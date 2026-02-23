@@ -31,7 +31,7 @@ import {
   type MapboxReverseGeocodeResponse,
 } from '@trace/core';
 import { useAuth } from '../../../../../shared/contexts/AuthContext';
-import { useLocationsWithCounts, useUpdateLocationDetails } from '../../../mobileLocationHooks';
+import { useLocationsWithCounts, useUpdateLocationDetails, useDeleteLocation } from '../../../mobileLocationHooks';
 import { createLocation } from '../../../mobileLocationApi';
 import { createScopedLogger, LogScopes } from '../../../../../shared/utils/logger';
 
@@ -67,7 +67,6 @@ interface PreviewMarker {
   latitude: number;
   longitude: number;
   name: string;
-  locationRadius?: number | null;
 }
 
 /**
@@ -127,13 +126,16 @@ export function useLocationPicker({
   // Mutation for updating location details (name and address)
   const updateLocationDetailsMutation = useUpdateLocationDetails();
 
+  // Mutation for deleting a saved location (used by handleToggleMyPlace)
+  const deleteLocationMutation = useDeleteLocation();
+
   // UNIFIED STATE ARCHITECTURE
   // 1. Selection state - SINGLE SOURCE OF TRUTH for what user has chosen
   const [selection, setSelection] = useState<LocationSelection>(createEmptySelection());
 
   // 2. UI state - View mode and input fields
   const [ui, setUI] = useState<LocationPickerUI>({
-    showingDetails: propMode === 'view' ? false : !!initialLocation,
+    showingDetails: (propMode === 'view' || propMode === 'manage') ? false : !!initialLocation,
     searchQuery: '',
     editableNameInput: '',
     editableAddressInput: '',
@@ -148,8 +150,8 @@ export function useLocationPicker({
   // Tab state for Nearby/Saved
   const [activeListTab, setActiveListTab] = useState<'nearby' | 'saved'>('nearby');
 
-  // Save to My Places toggle (defaults to true for new locations)
-  const [saveToMyPlaces, setSaveToMyPlaces] = useState(true);
+  // Save to My Places toggle (defaults to false — user must opt in)
+  const [saveToMyPlaces, setSaveToMyPlaces] = useState(false);
 
   // 3. Map state - Separate from selection (map can pan independently)
   const [mapState, setMapState] = useState<MapState>({
@@ -186,11 +188,6 @@ export function useLocationPicker({
   // State to track if "Selected Location" row is highlighted
   const [isSelectedLocationHighlighted, setIsSelectedLocationHighlighted] = useState(false);
 
-  // Location radius in meters (for circle on map)
-  // Set by: GPS sensor accuracy, initial location's locationRadius, or user precision slider
-  // Cleared to 0 when user taps map (exact point selection)
-  const [radius, setRadius] = useState<number>(0);
-
   // Refs
   const mapRef = useRef<MapView>(null);
   const blueMarkerRef = useRef<any>(null);
@@ -200,6 +197,12 @@ export function useLocationPicker({
   useEffect(() => {
     if (visible) {
       setModeOverride(null);
+
+      // Clear stale state from previous picker usage
+      setPreviewMarker(null);
+      setTappedGooglePOI(null);
+      setSelectedListItemId(null);
+      setIsSelectedLocationHighlighted(false);
 
       if (initialLocation) {
         const hasLocationName = !!initialLocation.name;
@@ -219,7 +222,6 @@ export function useLocationPicker({
           ? createSelectionFromMapTap(
               initialLocation.originalLatitude || initialLocation.latitude,
               initialLocation.originalLongitude || initialLocation.longitude,
-              initialLocation.locationRadius // Preserve existing locationRadius for dropped pins
             )
           : createSelectionFromLocation(initialLocation);
 
@@ -238,14 +240,14 @@ export function useLocationPicker({
           entryCount,
           // In view mode, don't show loading since we're not reverse geocoding
           // (createSelectionFromMapTap sets isLoadingDetails: true by default)
-          isLoadingDetails: propMode === 'view' ? false : newSelection.isLoadingDetails,
+          isLoadingDetails: (propMode === 'view' || propMode === 'manage') ? false : newSelection.isLoadingDetails,
         });
 
         setUI(prev => ({
           ...prev,
           // In view mode, never show details (CreateLocationView) - just show CurrentLocationView
           // In select mode, show details if location has a name (user is editing)
-          showingDetails: propMode === 'view' ? false : hasLocationName,
+          showingDetails: (propMode === 'view' || propMode === 'manage') ? false : hasLocationName,
           editableNameInput: initialLocation.name || '',
         }));
 
@@ -262,16 +264,9 @@ export function useLocationPicker({
           },
         });
 
-        // Set location radius for the precision ring on the map
-        if (initialLocation.locationRadius && initialLocation.locationRadius > 0) {
-          setRadius(initialLocation.locationRadius);
-        } else {
-          setRadius(0);
-        }
-
         // Only reverse geocode in SELECT mode (not view mode)
         // In view mode, we use the saved data as-is to respect user's cleared address
-        if (propMode !== 'view') {
+        if (propMode !== 'view' && propMode !== 'manage') {
           setReverseGeocodeRequest({
             latitude: initialLocation.originalLatitude || initialLocation.latitude,
             longitude: initialLocation.originalLongitude || initialLocation.longitude,
@@ -283,7 +278,6 @@ export function useLocationPicker({
         }
       } else {
         setSelection(createEmptySelection());
-        setTappedGooglePOI(null);
         setUI({
           showingDetails: false,
           searchQuery: '',
@@ -300,7 +294,6 @@ export function useLocationPicker({
           region: undefined,
           markerPosition: undefined,
         });
-        setRadius(0);
       }
     }
   }, [visible]);
@@ -358,10 +351,6 @@ export function useLocationPicker({
                 },
                 markerPosition: coords,
               });
-              // Store GPS accuracy for circle display
-              if (location.coords.accuracy) {
-                setRadius(location.coords.accuracy);
-              }
               const newSelection = createSelectionFromMapTap(coords.latitude, coords.longitude);
               setSelection(newSelection);
               setReverseGeocodeRequest(coords);
@@ -543,17 +532,15 @@ export function useLocationPicker({
       postalCode: location.postal_code,
       neighborhood: location.neighborhood,
       subdivision: location.subdivision,
-      locationRadius: location.location_radius ?? null,
     };
 
     onSelect(finalLocation);
     onClose();
   }, [onSelect, onClose]);
 
-  // Handler: POI quick select - immediately saves to Location table and applies to entry
+  // Handler: POI quick select - applies POI data to entry without saving to favorites
   // Used when user clicks "Select" button on a POI in the list
-  const handlePOIQuickSelect = useCallback(async (poi: POIItem) => {
-    // Build location object from POI data
+  const handlePOIQuickSelect = useCallback((poi: POIItem) => {
     const poiLocation: LocationType = {
       latitude: poi.latitude,
       longitude: poi.longitude,
@@ -564,34 +551,15 @@ export function useLocationPicker({
       address: poi.address || null,
       city: poi.city || null,
       category: poi.category || null,
-      // These will be null - POIs don't have full geo data
       region: null,
       country: null,
       postalCode: null,
       neighborhood: null,
       subdivision: null,
-      locationRadius: null,
     };
 
-    try {
-      // Save to Location table
-      const locationInput = locationToCreateInput(poiLocation);
-      const savedLocation = await createLocation(locationInput);
-
-      // Apply location with location_id to entry
-      const finalLocation: LocationType = {
-        ...poiLocation,
-        location_id: savedLocation.location_id,
-      };
-
-      onSelect(finalLocation);
-      onClose();
-    } catch (error) {
-      log.error('Failed to save POI location', error);
-      // Still apply the location even if save fails (just without location_id)
-      onSelect(poiLocation);
-      onClose();
-    }
+    onSelect(poiLocation);
+    onClose();
   }, [onSelect, onClose]);
 
   // Handler: POI selected from list - goes to CreateLocationView for naming/editing
@@ -691,9 +659,6 @@ export function useLocationPicker({
     setPreviewMarker(null);
     setSelectedListItemId(null);
     setIsSelectedLocationHighlighted(false);
-    // Clear radius - user is manually selecting an exact point
-    setRadius(0);
-
     if (ui.showingDetails) {
       const coords = {
         latitude: coordinate.latitude,
@@ -715,7 +680,10 @@ export function useLocationPicker({
           ...prev.location,
           latitude: coordinate.latitude,
           longitude: coordinate.longitude,
+          location_id: undefined, // Clear — user is picking a new spot
         } : null,
+        locationId: undefined,
+        entryCount: undefined,
         tempCoordinates: { latitude: coordinate.latitude, longitude: coordinate.longitude },
         isLoadingDetails: true,
       }));
@@ -819,7 +787,6 @@ export function useLocationPicker({
         country: selection.location.country,
         category: selection.location.category,
         distance: selection.location.distance,
-        locationRadius: selection.location.locationRadius ?? null,
       };
 
       // Only save to My Places if toggle is on AND we have a name
@@ -1010,44 +977,44 @@ export function useLocationPicker({
     onClose();
   }, [onSelect, onClose]);
 
-  // Handler: Edit location details (name, address, location_radius) - updates location and all entries using it
-  const handleEditLocation = useCallback(async (newName: string, newAddress?: string | null, newLocationRadius?: number | null) => {
-    if (!selection.locationId || !newName.trim()) return;
+  // Handler: Edit location details (name, address)
+  // Two paths:
+  // 1. Saved location (has locationId) — updates locations table + propagates to entry
+  // 2. Non-saved entry (no locationId) — updates entry place fields directly via onSelect
+  const handleEditLocation = useCallback(async (newName: string, newAddress?: string | null) => {
+    if (!selection.location) return;
 
-    // Use provided address if passed, otherwise use current selection address
+    const trimmedName = newName.trim();
     const finalAddress = newAddress !== undefined ? newAddress : (selection.location?.address ?? null);
-    // Use provided location_radius if passed, otherwise use current selection locationRadius
-    const finalLocationRadius = newLocationRadius !== undefined ? newLocationRadius : (selection.location?.locationRadius ?? null);
 
-    try {
-      await updateLocationDetailsMutation.mutateAsync({
-        locationId: selection.locationId,
-        name: newName.trim(),
-        address: finalAddress,
-        location_radius: finalLocationRadius,
-      });
+    if (selection.locationId) {
+      // Saved location — requires a name, updates the locations table
+      if (!trimmedName) return;
 
-      // Update local selection with new name, address, and locationRadius
-      const updatedLocation = selection.location ? { ...selection.location, name: newName.trim(), address: finalAddress, locationRadius: finalLocationRadius } : null;
+      try {
+        await updateLocationDetailsMutation.mutateAsync({
+          locationId: selection.locationId,
+          name: trimmedName,
+          address: finalAddress,
+        });
 
-      setSelection(prev => ({
-        ...prev,
-        location: updatedLocation,
-      }));
+        // Update local selection with new name and address
+        const updatedLocation = { ...selection.location, name: trimmedName, address: finalAddress };
 
-      // Update the editable name input
-      setUI(prev => ({ ...prev, editableNameInput: newName.trim() }));
+        setSelection(prev => ({
+          ...prev,
+          location: updatedLocation,
+        }));
+        setUI(prev => ({ ...prev, editableNameInput: trimmedName, showingDetails: false }));
 
-      // Propagate update to parent form - this ensures the current entry's form state is updated
-      // without closing the picker (user can continue viewing/editing)
-      if (updatedLocation) {
+        // Propagate update to parent form
         const finalLocation: LocationType = {
           location_id: selection.locationId,
           latitude: updatedLocation.latitude,
           longitude: updatedLocation.longitude,
           originalLatitude: updatedLocation.originalLatitude ?? updatedLocation.latitude,
           originalLongitude: updatedLocation.originalLongitude ?? updatedLocation.longitude,
-          name: newName.trim(),
+          name: trimmedName,
           source: updatedLocation.source,
           address: finalAddress,
           postalCode: updatedLocation.postalCode,
@@ -1058,14 +1025,147 @@ export function useLocationPicker({
           country: updatedLocation.country,
           category: updatedLocation.category,
           distance: updatedLocation.distance,
-          locationRadius: finalLocationRadius,
         };
         onSelect(finalLocation);
+      } catch (error) {
+        log.error('Failed to update location details', error);
       }
-    } catch (error) {
-      log.error('Failed to update location details', error);
+    } else {
+      // Non-saved entry — update entry place fields directly (no DB mutation needed)
+      const updatedLocation: LocationType = {
+        latitude: selection.location.latitude,
+        longitude: selection.location.longitude,
+        originalLatitude: selection.location.originalLatitude ?? selection.location.latitude,
+        originalLongitude: selection.location.originalLongitude ?? selection.location.longitude,
+        name: trimmedName || null,
+        source: selection.location.source,
+        address: finalAddress,
+        postalCode: selection.location.postalCode,
+        neighborhood: selection.location.neighborhood,
+        city: selection.location.city,
+        subdivision: selection.location.subdivision,
+        region: selection.location.region,
+        country: selection.location.country,
+        category: selection.location.category,
+        distance: selection.location.distance,
+      };
+
+      setSelection(prev => ({
+        ...prev,
+        location: updatedLocation,
+      }));
+      setUI(prev => ({ ...prev, editableNameInput: trimmedName, showingDetails: false }));
+
+      onSelect(updatedLocation);
     }
   }, [selection.locationId, selection.location, updateLocationDetailsMutation, setSelection, setUI, onSelect]);
+
+  // Handler: Toggle My Places status (save/unsave)
+  // If saved → delete location record, unlink entry
+  // If not saved AND has a name → create location record, link entry
+  const handleToggleMyPlace = useCallback(async () => {
+    if (!selection.location) return;
+
+    if (selection.locationId) {
+      // Currently saved → remove from My Places
+      try {
+        await deleteLocationMutation.mutateAsync(selection.locationId);
+
+        // Unlink: keep all geo data but clear locationId
+        const unlinkedLocation: LocationType = {
+          latitude: selection.location.latitude,
+          longitude: selection.location.longitude,
+          originalLatitude: selection.location.originalLatitude ?? selection.location.latitude,
+          originalLongitude: selection.location.originalLongitude ?? selection.location.longitude,
+          name: selection.location.name,
+          source: selection.location.source,
+          address: selection.location.address,
+          postalCode: selection.location.postalCode,
+          neighborhood: selection.location.neighborhood,
+          city: selection.location.city,
+          subdivision: selection.location.subdivision,
+          region: selection.location.region,
+          country: selection.location.country,
+          category: selection.location.category,
+          distance: selection.location.distance,
+          // No location_id — no longer linked
+        };
+
+        setSelection(prev => ({
+          ...prev,
+          location: unlinkedLocation,
+          locationId: undefined,
+          entryCount: undefined,
+        }));
+
+        onSelect(unlinkedLocation);
+      } catch (error) {
+        log.error('Failed to remove from My Places', error);
+      }
+    } else if (selection.location.name) {
+      // Not saved AND has a name → save to My Places
+      try {
+        const locationInput = locationToCreateInput(selection.location);
+        const savedLocation = await createLocation(locationInput);
+
+        const linkedLocation: LocationType = {
+          ...selection.location,
+          location_id: savedLocation.location_id,
+        };
+
+        setSelection(prev => ({
+          ...prev,
+          location: linkedLocation,
+          locationId: savedLocation.location_id,
+          entryCount: 1,
+        }));
+
+        onSelect(linkedLocation);
+      } catch (error) {
+        log.error('Failed to save to My Places', error);
+      }
+    }
+  }, [selection.location, selection.locationId, deleteLocationMutation, onSelect]);
+
+  // ── Inline editing state (lifted so LocationPicker can control header/actions) ──
+  const [isEditingPlace, setIsEditingPlace] = useState(false);
+  const [editPlaceName, setEditPlaceName] = useState('');
+  const [editPlaceAddress, setEditPlaceAddress] = useState('');
+
+  const startEditingPlace = useCallback(() => {
+    setEditPlaceName(selection.location?.name || '');
+    setEditPlaceAddress(selection.location?.address || '');
+    setIsEditingPlace(true);
+  }, [selection.location]);
+
+  const cancelEditPlace = useCallback(() => {
+    setIsEditingPlace(false);
+    setEditPlaceName('');
+    setEditPlaceAddress('');
+  }, []);
+
+  const saveEditPlace = useCallback(async () => {
+    try {
+      await handleEditLocation(editPlaceName, editPlaceAddress.trim() || null);
+      setIsEditingPlace(false);
+    } catch (error) {
+      // Error already logged in handleEditLocation
+    }
+  }, [editPlaceName, editPlaceAddress, handleEditLocation]);
+
+  const hasEditChanges = isEditingPlace && (
+    editPlaceName !== (selection.location?.name || '') ||
+    editPlaceAddress !== (selection.location?.address || '')
+  );
+
+  // Reset editing state when picker closes
+  useEffect(() => {
+    if (!visible && isEditingPlace) {
+      setIsEditingPlace(false);
+      setEditPlaceName('');
+      setEditPlaceAddress('');
+    }
+  }, [visible, isEditingPlace]);
 
   // Displayed POIs
   const displayedPOIs = ui.searchQuery.length >= 2 ? searchResults : nearbyPOIs;
@@ -1126,10 +1226,6 @@ export function useLocationPicker({
     isSelectedLocationHighlighted,
     setIsSelectedLocationHighlighted,
 
-    // Location radius (for circle on map) - unified from GPS accuracy and user precision slider
-    radius,
-    setRadius,
-
     // Reverse Geocode Request
     setReverseGeocodeRequest,
 
@@ -1149,6 +1245,18 @@ export function useLocationPicker({
     handleRemoveLocation,
     handleRemovePin,
     handleEditLocation,
+    handleToggleMyPlace,
+
+    // Inline editing (lifted for header/action control)
+    isEditingPlace,
+    editPlaceName,
+    setEditPlaceName,
+    editPlaceAddress,
+    setEditPlaceAddress,
+    startEditingPlace,
+    cancelEditPlace,
+    saveEditPlace,
+    hasEditChanges,
 
     // Helpers
     calculateSearchRadius,

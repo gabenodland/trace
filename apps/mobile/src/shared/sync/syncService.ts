@@ -184,7 +184,6 @@ class SyncService {
         stream_id: serverEntry.stream_id,
         entry_latitude: serverEntry.entry_latitude || null,
         entry_longitude: serverEntry.entry_longitude || null,
-        location_radius: (serverEntry as any).location_radius || null,
         location_id: serverEntry.location_id || null,
         // Location hierarchy (owned by entry)
         place_name: serverEntry.place_name || null,
@@ -613,7 +612,6 @@ class SyncService {
       stream_id: payloadData.stream_id,
       entry_latitude: payloadData.entry_latitude || null,
       entry_longitude: payloadData.entry_longitude || null,
-      location_radius: payloadData.location_radius || null,
       location_id: payloadData.location_id || null,
       // Location hierarchy (owned by entry)
       place_name: payloadData.place_name || null,
@@ -665,6 +663,7 @@ class SyncService {
     this.queryClient.invalidateQueries({ queryKey: ['entries'] });
     this.queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
     this.queryClient.invalidateQueries({ queryKey: ['streams'] });
+    this.queryClient.invalidateQueries({ queryKey: ['locations'] });
   }
 
   private setEntryQueryData(entryId: string, entry: Entry | null): void {

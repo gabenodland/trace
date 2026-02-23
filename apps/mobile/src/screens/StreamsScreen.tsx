@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,30 +9,77 @@ import {
   Alert,
 } from "react-native";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
-import { Icon, EmptyState, LoadingState } from "../shared/components";
+import { Icon, EmptyState, LoadingState, SortBar, type SortOption } from "../shared/components";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import type { Stream } from "@trace/core";
 import { useNavigate } from "../shared/navigation";
+import { useDrawer } from "../shared/contexts/DrawerContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { ActionSheet, type ActionSheetItem } from "../components/sheets";
 
 const log = createScopedLogger(LogScopes.Streams);
 
+// ─── Sort ────────────────────────────────────────────────────────────────────────
+
+type StreamSortKey = "name" | "count" | "recent";
+
+const STREAM_SORT_OPTIONS: SortOption<StreamSortKey>[] = [
+  { key: "name", label: "Name" },
+  { key: "count", label: "Count" },
+  { key: "recent", label: "Recent" },
+];
+
+function sortStreams(streams: Stream[], sortKey: StreamSortKey, ascending: boolean): Stream[] {
+  const sorted = [...streams];
+  switch (sortKey) {
+    case "name":
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+    case "count":
+      sorted.sort((a, b) => b.entry_count - a.entry_count);
+      break;
+    case "recent":
+      sorted.sort((a, b) => {
+        const aDate = a.last_entry_updated_at ?? "";
+        const bDate = b.last_entry_updated_at ?? "";
+        if (bDate > aDate) return 1;
+        if (bDate < aDate) return -1;
+        return 0;
+      });
+      break;
+  }
+  return ascending ? sorted : sorted.reverse();
+}
+
 export function StreamsScreen() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const { setSelectedStreamId, setSelectedStreamName } = useDrawer();
   const { streams, isLoading, streamMutations } = useStreams();
 
   const [searchText, setSearchText] = useState("");
   const [actionSheetStream, setActionSheetStream] = useState<Stream | null>(null);
 
+  // Sort state
+  const [sortKey, setSortKey] = useState<StreamSortKey>("name");
+  const [sortAsc, setSortAsc] = useState(true);
+
+  const handleSortPress = useCallback((key: StreamSortKey) => {
+    if (key === sortKey) {
+      setSortAsc(prev => !prev);
+    } else {
+      setSortKey(key);
+      setSortAsc(true);
+    }
+  }, [sortKey]);
+
   const sortedStreams = useMemo(() => {
     const filtered = searchText.trim()
       ? streams.filter((s) => s.name.toLowerCase().includes(searchText.toLowerCase()))
       : streams;
-    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [streams, searchText]);
+    return sortStreams(filtered, sortKey, sortAsc);
+  }, [streams, searchText, sortKey, sortAsc]);
 
   const handleCreateStream = () => {
     navigate("stream-properties", { streamId: null });
@@ -65,7 +112,9 @@ export function StreamsScreen() {
   };
 
   const handleOpenEntries = (stream: Stream) => {
-    navigate("inbox", { returnStreamId: stream.stream_id, returnStreamName: stream.name });
+    setSelectedStreamId(stream.stream_id);
+    setSelectedStreamName(stream.name);
+    navigate("inbox");
   };
 
   const actionSheetItems: ActionSheetItem[] = actionSheetStream
@@ -131,6 +180,14 @@ export function StreamsScreen() {
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Sort bar */}
+          <SortBar
+            options={STREAM_SORT_OPTIONS}
+            activeKey={sortKey}
+            ascending={sortAsc}
+            onPress={handleSortPress}
+          />
 
           {sortedStreams.length === 0 ? (
             <View style={styles.noResultsContainer}>

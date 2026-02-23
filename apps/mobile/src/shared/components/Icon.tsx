@@ -74,6 +74,7 @@ const CustomIcons = {
   ),
 
   // Solid filled map pin with white circle cutout (original pre-Lucide marker icon)
+  // Filled teardrop with white circle inside — named/favorite location marker
   MapPinSolid: (props: any) => (
     <Svg viewBox="0 0 24 24" {...props}>
       <Path
@@ -85,7 +86,64 @@ const CustomIcons = {
     </Svg>
   ),
 
-  // Add more custom icons here as needed
+  // Filled teardrop without circle — unnamed/dropped pin marker
+  MapPinFilled: (props: any) => (
+    <Svg viewBox="0 0 24 24" {...props}>
+      <Path
+        d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+        fill={props.fill || props.color}
+        stroke="none"
+      />
+    </Svg>
+  ),
+
+  // Solid filled map pin with white star cutout — "My Place" (saved favorite) icon
+  MapPinFavorite: (props: any) => (
+    <Svg viewBox="0 0 24 24" {...props}>
+      <Path
+        d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+        fill={props.fill || props.color}
+        stroke="none"
+      />
+      <Path
+        d="M12 4.2 L13.3 7.8 L17.2 7.9 L14 10.3 L15.1 13.9 L12 11.8 L8.9 13.9 L10 10.3 L6.8 7.9 L10.7 7.8 Z"
+        fill="#ffffff"
+        stroke="none"
+      />
+    </Svg>
+  ),
+
+  // Outline map pin with filled star inside — "My Place" icon for lists/UI (non-map)
+  MapPinFavoriteLine: (props: any) => (
+    <Svg viewBox="0 0 24 24" fill="none" {...props}>
+      <Path
+        d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+        stroke={props.stroke || props.color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 3.6 L13.5 7.7 L17.8 7.8 L14.3 10.5 L15.5 14.5 L12 12.1 L8.5 14.5 L9.7 10.5 L6.2 7.8 L10.5 7.7 Z"
+        fill={props.fill || props.color}
+        stroke="none"
+      />
+    </Svg>
+  ),
+
+  // Map pin outline only — "Unnamed Place" icon (no inner shape)
+  MapPinEmpty: (props: any) => (
+    <Svg viewBox="0 0 24 24" fill="none" {...props}>
+      <Path
+        d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+        stroke={props.stroke || props.color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  ),
+
 };
 
 // Type for custom icon names

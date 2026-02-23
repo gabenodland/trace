@@ -10,16 +10,16 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, PanResponder, Ani
 import { useDrawer } from "../../shared/contexts/DrawerContext";
 import { IOS_SPRING } from "../../shared/constants/animations";
 import { Icon } from "../../shared/components";
-import { useTheme } from "../../shared/contexts/ThemeContext";
+import { useTheme, type ThemeContextValue } from "../../shared/contexts/ThemeContext";
 import { useStreams } from "../../modules/streams/mobileStreamHooks";
 import { useEntryCounts, useTags, useMentions } from "../../modules/entries/mobileEntryHooks";
-import { useLocationsWithCounts } from "../../modules/locations/mobileLocationHooks";
+import { useEntryDerivedPlaces } from "../../modules/locations/mobileLocationHooks";
 import { StreamDrawerItem, QuickFilterItem } from "./StreamDrawerItem";
 import { useNavigate } from "../../shared/navigation/hooks";
 import * as ExpoLocation from "expo-location";
 import { calculateDistance, formatDistanceWithUnits, getStateAbbreviation } from "@trace/core";
 import { useSettings } from "../../shared/contexts/SettingsContext";
-import type { Stream, LocationEntity } from "@trace/core";
+import type { Stream } from "@trace/core";
 import type { IconName } from "../../shared/components";
 
 // ─── Tab Configuration ─────────────────────────────────────────────────────────
@@ -142,12 +142,29 @@ const tabBarStyles = StyleSheet.create({
 
 type LocationSortKey = "name" | "city" | "count" | "distance";
 
-type LocationWithCount = LocationEntity & { entry_count: number };
-
-interface LocationGroup {
-  header: string;
-  locations: LocationWithCount[];
+interface EntryDerivedPlace {
+  place_name: string | null;
+  address: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  entry_count: number;
+  avg_latitude: number;
+  avg_longitude: number;
+  is_favorite: boolean;
+  location_id: string | null;
+  ungeocoded_count: number;
 }
+
+interface PlaceGroup {
+  header: string;
+  places: DrawerPlaceItem[];
+}
+
+/** A display item in the drawer: either an individual place or a collapsed city group */
+type DrawerPlaceItem =
+  | { kind: "place"; place: EntryDerivedPlace }
+  | { kind: "city_group"; city: string | null; region: string | null; country: string | null; entry_count: number; avg_latitude: number; avg_longitude: number };
 
 function getDistanceMeters(
   userLat: number, userLng: number, locLat: number, locLng: number,
@@ -158,32 +175,197 @@ function getDistanceMeters(
   ).meters;
 }
 
-function getLocationSubtitle(loc: LocationEntity): string {
-  const isUSA = loc.country === "United States" || loc.country === "USA" || loc.country === "US";
-  if (isUSA && loc.city && loc.region) {
-    return `${loc.city}, ${getStateAbbreviation(loc.region)}`;
+function getPlaceLabel(place: EntryDerivedPlace): string {
+  return place.place_name || place.address || place.city || "Unknown Place";
+}
+
+function formatCityLine(city: string | null, region: string | null, country: string | null): string {
+  const isUSA = country === "United States" || country === "USA" || country === "US";
+  const isCanada = country === "Canada";
+  if ((isUSA || isCanada) && city && region) {
+    return `${city}, ${getStateAbbreviation(region)}`;
   }
-  return [loc.city, loc.country].filter(Boolean).join(", ");
+  return [city, country].filter(Boolean).join(", ");
 }
 
-function getCityGroupKey(loc: LocationEntity): string {
-  return getLocationSubtitle(loc) || "Unknown";
+function getPlaceCityLine(place: EntryDerivedPlace): string {
+  return formatCityLine(place.city, place.region, place.country);
 }
 
-function groupLocationsByCity(locations: LocationWithCount[]): LocationGroup[] {
-  const groups = new Map<string, LocationWithCount[]>();
-  for (const loc of locations) {
-    const key = getCityGroupKey(loc);
+function getDrawerItemLabel(item: DrawerPlaceItem): string {
+  if (item.kind === "place") return getPlaceLabel(item.place);
+  return formatCityLine(item.city, item.region, item.country) || "Unknown";
+}
+
+function getDrawerItemEntryCount(item: DrawerPlaceItem): number {
+  if (item.kind === "place") return item.place.entry_count;
+  return item.entry_count;
+}
+
+/**
+ * Collapse unnamed places by city for drawer display.
+ * Named places (with place_name) stay individual.
+ * Unnamed places in the same city become a single "city_group" row.
+ */
+function collapsePlaces(places: EntryDerivedPlace[]): DrawerPlaceItem[] {
+  const items: DrawerPlaceItem[] = [];
+  const unnamedByCity = new Map<string, { city: string | null; region: string | null; country: string | null; totalEntries: number; latSum: number; lngSum: number; count: number }>();
+
+  for (const p of places) {
+    if (p.place_name) {
+      items.push({ kind: "place", place: p });
+    } else {
+      const key = formatCityLine(p.city, p.region, p.country) || "Unknown";
+      const existing = unnamedByCity.get(key);
+      if (existing) {
+        existing.totalEntries += p.entry_count;
+        existing.latSum += p.avg_latitude;
+        existing.lngSum += p.avg_longitude;
+        existing.count += 1;
+      } else {
+        unnamedByCity.set(key, { city: p.city, region: p.region, country: p.country, totalEntries: p.entry_count, latSum: p.avg_latitude, lngSum: p.avg_longitude, count: 1 });
+      }
+    }
+  }
+
+  for (const [, group] of unnamedByCity) {
+    items.push({
+      kind: "city_group",
+      city: group.city,
+      region: group.region,
+      country: group.country,
+      entry_count: group.totalEntries,
+      avg_latitude: group.count > 0 ? group.latSum / group.count : 0,
+      avg_longitude: group.count > 0 ? group.lngSum / group.count : 0,
+    });
+  }
+
+  return items;
+}
+
+function getDrawerItemCityGroupKey(item: DrawerPlaceItem): string {
+  if (item.kind === "place") return getPlaceCityLine(item.place) || "Unknown";
+  return formatCityLine(item.city, item.region, item.country) || "Unknown";
+}
+
+function groupDrawerItemsByCity(items: DrawerPlaceItem[]): PlaceGroup[] {
+  const groups = new Map<string, DrawerPlaceItem[]>();
+  for (const item of items) {
+    const key = getDrawerItemCityGroupKey(item);
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(loc);
+    groups.get(key)!.push(item);
   }
   return Array.from(groups.entries())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([header, locs]) => ({
+    .map(([header, groupItems]) => ({
       header,
-      locations: locs.sort((a, b) => a.name.localeCompare(b.name)),
+      places: groupItems.sort((a, b) => getDrawerItemLabel(a).localeCompare(getDrawerItemLabel(b))),
     }));
 }
+
+// ─── Drawer Location Row ────────────────────────────────────────────────────────
+
+interface DrawerLocationRowProps {
+  item: DrawerPlaceItem;
+  isGrouped: boolean;
+  selectedStreamId: string | null;
+  locationSort: LocationSortKey;
+  userPosition: { lat: number; lng: number } | null;
+  units: "metric" | "imperial";
+  theme: ThemeContextValue;
+  drawerTextPrimary: string;
+  drawerTextSecondary: string;
+  drawerTextTertiary: string;
+  onPress: (item: DrawerPlaceItem) => void;
+}
+
+function getDrawerItemFilterId(item: DrawerPlaceItem): string {
+  if (item.kind === "place") {
+    const p = item.place;
+    return p.is_favorite && p.location_id
+      ? `location:${p.location_id}`
+      : `geo:place:${p.place_name || ""}||${p.address || ""}||${p.city || ""}||${p.region || ""}||${p.country || ""}`;
+  }
+  return `geo:unnamed-city:${item.city || ""}:${item.region || ""}:${item.country || ""}`;
+}
+
+const DrawerLocationRow = memo(function DrawerLocationRow({
+  item, isGrouped, selectedStreamId, locationSort, userPosition, units,
+  theme, drawerTextPrimary, drawerTextSecondary, drawerTextTertiary, onPress,
+}: DrawerLocationRowProps) {
+  const filterId = getDrawerItemFilterId(item);
+  const isSelected = selectedStreamId === filterId;
+  const label = getDrawerItemLabel(item);
+  const entryCount = getDrawerItemEntryCount(item);
+  const isFavorite = item.kind === "place" && item.place.is_favorite;
+  const isCityGroup = item.kind === "city_group";
+
+  // Subtitle for flat list (non-grouped) view
+  let subtitle: string | null = null;
+  if (!isGrouped && item.kind === "place") {
+    const cityLine = getPlaceCityLine(item.place);
+    if (locationSort === "distance" && userPosition) {
+      const dist = formatDistanceWithUnits(
+        getDistanceMeters(userPosition.lat, userPosition.lng, item.place.avg_latitude, item.place.avg_longitude),
+        units,
+      );
+      subtitle = cityLine ? `${cityLine} · ${dist}` : dist;
+    } else {
+      subtitle = cityLine;
+    }
+  }
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.filterItem,
+        isGrouped && styles.groupedItem,
+        isSelected && { backgroundColor: theme.colors.background.tertiary },
+      ]}
+      onPress={() => onPress(item)}
+      activeOpacity={0.6}
+      delayPressIn={0}
+    >
+      <Icon
+        name={isFavorite ? "MapPinFavoriteLine" : (item.kind === "place" && item.place.place_name) ? "MapPin" : "MapPinEmpty"}
+        size={12}
+        color={isFavorite ? theme.colors.functional.accent : drawerTextTertiary}
+      />
+      <View style={styles.locationItemText}>
+        <Text
+          style={[
+            styles.locationItemName,
+            { color: drawerTextPrimary },
+            isCityGroup && { fontStyle: "italic" },
+            isSelected && { fontFamily: theme.typography.fontFamily.semibold },
+          ]}
+          numberOfLines={1}
+        >
+          {isCityGroup ? `Unnamed · ${label}` : label}
+        </Text>
+        {subtitle ? (
+          <Text
+            style={[styles.locationItemSubtitle, { color: drawerTextTertiary }]}
+            numberOfLines={1}
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {entryCount > 0 && (
+        <Text
+          style={[
+            styles.filterCount,
+            { color: drawerTextTertiary },
+            isSelected && { color: drawerTextSecondary },
+          ]}
+        >
+          {entryCount}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+});
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
@@ -196,12 +378,22 @@ export function StreamDrawerContent() {
 
   const {
     closeDrawer,
+    drawerControl,
     onStreamSelect,
     onStreamLongPress,
     selectedStreamId,
     setSelectedStreamId,
     setSelectedStreamName,
   } = useDrawer();
+
+  // Prefer animated close (spring) over raw closeDrawer (instant snap)
+  const animatedClose = useCallback(() => {
+    if (drawerControl?.animateClose) {
+      drawerControl.animateClose();
+    } else {
+      closeDrawer();
+    }
+  }, [drawerControl, closeDrawer]);
   const navigate = useNavigate();
   const { settings } = useSettings();
   const { streams } = useStreams();
@@ -251,13 +443,15 @@ export function StreamDrawerContent() {
   }, []);
 
   // Data hooks
-  const { data: locationsWithCounts } = useLocationsWithCounts();
-  const locations = locationsWithCounts ?? [];
+  const { data: entryDerivedData } = useEntryDerivedPlaces();
+  const places: EntryDerivedPlace[] = (entryDerivedData ?? []) as EntryDerivedPlace[];
   const { tags } = useTags();
   const { mentions } = useMentions();
 
   const allEntriesCount = entryCounts?.total || 0;
   const noStreamCount = entryCounts?.noStream || 0;
+  const hasPlaceCount = entryCounts?.hasPlace || 0;
+  const noPlaceCount = entryCounts?.noPlace || 0;
 
   const sortedTags = useMemo(() => {
     return [...tags]
@@ -298,35 +492,41 @@ export function StreamDrawerContent() {
     return opts;
   }, [userPosition]);
 
-  // Sorted/grouped locations
-  const sortedLocations = useMemo(() => {
+  // Collapse unnamed places by city for drawer display
+  const drawerItems = useMemo(() => collapsePlaces(places), [places]);
+
+  // Sorted/grouped drawer items
+  const sortedItems = useMemo(() => {
     if (locationSort === "city") return null;
-    const sorted = [...locations];
+    const sorted = [...drawerItems];
     switch (locationSort) {
       case "name":
-        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        sorted.sort((a, b) => getDrawerItemLabel(a).localeCompare(getDrawerItemLabel(b)));
         break;
       case "count":
-        sorted.sort((a, b) => b.entry_count - a.entry_count);
+        sorted.sort((a, b) => getDrawerItemEntryCount(b) - getDrawerItemEntryCount(a));
         break;
       case "distance":
         if (userPosition) {
           sorted.sort((a, b) => {
-            const distA = getDistanceMeters(userPosition.lat, userPosition.lng, a.latitude, a.longitude);
-            const distB = getDistanceMeters(userPosition.lat, userPosition.lng, b.latitude, b.longitude);
-            return distA - distB;
+            const aLat = a.kind === "place" ? a.place.avg_latitude : a.avg_latitude;
+            const aLng = a.kind === "place" ? a.place.avg_longitude : a.avg_longitude;
+            const bLat = b.kind === "place" ? b.place.avg_latitude : b.avg_latitude;
+            const bLng = b.kind === "place" ? b.place.avg_longitude : b.avg_longitude;
+            return getDistanceMeters(userPosition.lat, userPosition.lng, aLat, aLng)
+              - getDistanceMeters(userPosition.lat, userPosition.lng, bLat, bLng);
           });
         }
         break;
     }
     return locationSortAsc ? sorted : sorted.reverse();
-  }, [locations, locationSort, userPosition, locationSortAsc]);
+  }, [drawerItems, locationSort, userPosition, locationSortAsc]);
 
-  const groupedLocations = useMemo(() => {
+  const groupedItems = useMemo(() => {
     if (locationSort !== "city") return null;
-    const groups = groupLocationsByCity(locations);
+    const groups = groupDrawerItemsByCity(drawerItems);
     return locationSortAsc ? groups : groups.reverse();
-  }, [locations, locationSort, locationSortAsc]);
+  }, [drawerItems, locationSort, locationSortAsc]);
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
@@ -337,38 +537,47 @@ export function StreamDrawerContent() {
       if (onStreamSelect) {
         onStreamSelect(streamId, streamName);
       }
-      closeDrawer();
+      animatedClose();
     },
-    [onStreamSelect, closeDrawer, setSelectedStreamId, setSelectedStreamName],
+    [onStreamSelect, animatedClose, setSelectedStreamId, setSelectedStreamName],
   );
 
   const handleStreamLongPress = useCallback(
     (streamId: string) => {
-      closeDrawer();
+      animatedClose();
       if (onStreamLongPress) {
         onStreamLongPress(streamId);
       }
     },
-    [onStreamLongPress, closeDrawer],
+    [onStreamLongPress, animatedClose],
   );
 
-  const handleLocationSelect = useCallback(
-    (location: LocationWithCount) => {
-      const filterId = `location:${location.location_id}`;
-      setSelectedStreamId(filterId);
-      setSelectedStreamName(location.name);
-      if (onStreamSelect) {
-        onStreamSelect(filterId, location.name);
+  const handleDrawerItemSelect = useCallback(
+    (item: DrawerPlaceItem) => {
+      const filterId = getDrawerItemFilterId(item);
+      let label: string;
+
+      if (item.kind === "place") {
+        label = getPlaceLabel(item.place);
+      } else {
+        const cityLabel = formatCityLine(item.city, item.region, item.country);
+        label = cityLabel ? `Unnamed · ${cityLabel}` : "Unnamed Places";
       }
-      closeDrawer();
+
+      setSelectedStreamId(filterId);
+      setSelectedStreamName(label);
+      if (onStreamSelect) {
+        onStreamSelect(filterId, label);
+      }
+      animatedClose();
     },
-    [onStreamSelect, closeDrawer, setSelectedStreamId, setSelectedStreamName],
+    [onStreamSelect, animatedClose, setSelectedStreamId, setSelectedStreamName],
   );
 
   const handleManageLocations = useCallback(() => {
-    closeDrawer();
+    animatedClose();
     navigate("locations");
-  }, [closeDrawer, navigate]);
+  }, [animatedClose, navigate]);
 
   const handleTagSelect = useCallback(
     (type: "tag" | "mention", value: string, label: string) => {
@@ -378,15 +587,15 @@ export function StreamDrawerContent() {
       if (onStreamSelect) {
         onStreamSelect(filterId, label);
       }
-      closeDrawer();
+      animatedClose();
     },
-    [onStreamSelect, closeDrawer, setSelectedStreamId, setSelectedStreamName],
+    [onStreamSelect, animatedClose, setSelectedStreamId, setSelectedStreamName],
   );
 
   const handleManageStreams = useCallback(() => {
-    closeDrawer();
+    animatedClose();
     navigate("streams");
-  }, [closeDrawer, navigate]);
+  }, [animatedClose, navigate]);
 
   const handleStreamSortPress = useCallback((key: StreamSortKey) => {
     if (key === streamSort) {
@@ -653,10 +862,34 @@ export function StreamDrawerContent() {
                 </TouchableOpacity>
               </View>
 
+              {/* Fixed location quick filters */}
+              <View style={[styles.quickFilters, { backgroundColor: theme.colors.surface.overlay }]}>
+                <QuickFilterItem
+                  label="Has Place"
+                  icon="MapPin"
+                  count={hasPlaceCount}
+                  isSelected={selectedStreamId === "has-place"}
+                  onPress={() => handleStreamSelect("has-place", "Has Place")}
+                  textColor={drawerTextPrimary}
+                  textColorSecondary={drawerTextSecondary}
+                  textColorTertiary={drawerTextTertiary}
+                />
+                <QuickFilterItem
+                  label="No Place"
+                  icon="MapPinOff"
+                  count={noPlaceCount}
+                  isSelected={selectedStreamId === "no-place"}
+                  onPress={() => handleStreamSelect("no-place", "No Place")}
+                  textColor={drawerTextPrimary}
+                  textColorSecondary={drawerTextSecondary}
+                  textColorTertiary={drawerTextTertiary}
+                />
+              </View>
+
               <ScrollView ref={locationScrollRef} style={styles.scrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-                {locations.length > 0 ? (
-                  locationSort === "city" && groupedLocations ? (
-                    groupedLocations.map((group) => (
+                {drawerItems.length > 0 ? (
+                  locationSort === "city" && groupedItems ? (
+                    groupedItems.map((group: PlaceGroup) => (
                       <View key={group.header}>
                         <View style={[styles.sectionHeader, { borderBottomColor: theme.colors.border.light }]}>
                           <Text
@@ -666,111 +899,56 @@ export function StreamDrawerContent() {
                             {group.header}
                           </Text>
                         </View>
-                        {group.locations.map((loc) => {
-                          const filterId = `location:${loc.location_id}`;
-                          const isSelected = selectedStreamId === filterId;
+                        {group.places.map((item: DrawerPlaceItem) => {
+                          const itemKey = item.kind === "place"
+                            ? `p|${item.place.place_name || ""}|${item.place.address || ""}|${item.place.city || ""}|${item.place.region || ""}|${item.place.country || ""}`
+                            : `cg|${item.city || ""}|${item.region || ""}`;
                           return (
-                            <TouchableOpacity
-                              key={loc.location_id}
-                              style={[
-                                styles.filterItem,
-                                styles.groupedItem,
-                                isSelected && { backgroundColor: theme.colors.background.tertiary },
-                              ]}
-                              onPress={() => handleLocationSelect(loc)}
-                              activeOpacity={0.6}
-                              delayPressIn={0}
-                            >
-                              <View style={styles.locationItemText}>
-                                <Text
-                                  style={[
-                                    styles.locationItemName,
-                                    { color: drawerTextPrimary },
-                                    isSelected && { fontFamily: theme.typography.fontFamily.semibold },
-                                  ]}
-                                  numberOfLines={1}
-                                >
-                                  {loc.name}
-                                </Text>
-                              </View>
-                              {loc.entry_count > 0 && (
-                                <Text
-                                  style={[
-                                    styles.filterCount,
-                                    { color: drawerTextTertiary },
-                                    isSelected && { color: drawerTextSecondary },
-                                  ]}
-                                >
-                                  {loc.entry_count}
-                                </Text>
-                              )}
-                            </TouchableOpacity>
+                            <DrawerLocationRow
+                              key={itemKey}
+                              item={item}
+                              isGrouped
+                              selectedStreamId={selectedStreamId}
+                              locationSort={locationSort}
+                              userPosition={userPosition}
+                              units={settings.units}
+                              theme={theme}
+                              drawerTextPrimary={drawerTextPrimary}
+                              drawerTextSecondary={drawerTextSecondary}
+                              drawerTextTertiary={drawerTextTertiary}
+                              onPress={handleDrawerItemSelect}
+                            />
                           );
                         })}
                       </View>
                     ))
                   ) : (
-                    (sortedLocations ?? []).map((loc) => {
-                      const filterId = `location:${loc.location_id}`;
-                      const isSelected = selectedStreamId === filterId;
-                      const locSubtitle = getLocationSubtitle(loc);
-                      const distance =
-                        locationSort === "distance" && userPosition
-                          ? formatDistanceWithUnits(getDistanceMeters(userPosition.lat, userPosition.lng, loc.latitude, loc.longitude), settings.units)
-                          : null;
-                      const subtitle = distance
-                        ? (locSubtitle ? `${locSubtitle} · ${distance}` : distance)
-                        : locSubtitle;
+                    (sortedItems ?? []).map((item: DrawerPlaceItem) => {
+                      const itemKey = item.kind === "place"
+                        ? `p|${item.place.place_name || ""}|${item.place.address || ""}|${item.place.city || ""}|${item.place.region || ""}|${item.place.country || ""}`
+                        : `cg|${item.city || ""}|${item.region || ""}`;
                       return (
-                        <TouchableOpacity
-                          key={loc.location_id}
-                          style={[
-                            styles.filterItem,
-                            isSelected && { backgroundColor: theme.colors.background.tertiary },
-                          ]}
-                          onPress={() => handleLocationSelect(loc)}
-                          activeOpacity={0.6}
-                          delayPressIn={0}
-                        >
-                          <View style={styles.locationItemText}>
-                            <Text
-                              style={[
-                                styles.locationItemName,
-                                { color: drawerTextPrimary },
-                                isSelected && { fontFamily: theme.typography.fontFamily.semibold },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {loc.name}
-                            </Text>
-                            {subtitle ? (
-                              <Text
-                                style={[styles.locationItemSubtitle, { color: drawerTextTertiary }]}
-                                numberOfLines={1}
-                              >
-                                {subtitle}
-                              </Text>
-                            ) : null}
-                          </View>
-                          {loc.entry_count > 0 && (
-                            <Text
-                              style={[
-                                styles.filterCount,
-                                { color: drawerTextTertiary },
-                                isSelected && { color: drawerTextSecondary },
-                              ]}
-                            >
-                              {loc.entry_count}
-                            </Text>
-                          )}
-                        </TouchableOpacity>
+                        <DrawerLocationRow
+                          key={itemKey}
+                          item={item}
+                          isGrouped={false}
+                          selectedStreamId={selectedStreamId}
+                          locationSort={locationSort}
+                          userPosition={userPosition}
+                          units={settings.units}
+                          theme={theme}
+                          drawerTextPrimary={drawerTextPrimary}
+                          drawerTextSecondary={drawerTextSecondary}
+                          drawerTextTertiary={drawerTextTertiary}
+                          onPress={handleDrawerItemSelect}
+                        />
                       );
                     })
                   )
                 ) : (
                   <View style={styles.emptyState}>
                     <Text style={[styles.emptyText, { color: drawerTextTertiary }]}>
-                      No locations yet
+                      No places yet
                     </Text>
                   </View>
                 )}

@@ -147,7 +147,7 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
     if (typeof selectedStreamId === 'string' &&
         (selectedStreamId.startsWith("location:") || selectedStreamId.startsWith("geo:"))) {
       return {
-        title: selectedStreamName || "Location",
+        title: selectedStreamName || "Place",
         titleIcon: (
           <Icon name="MapPin" size={22} color={theme.colors.text.primary} />
         ),

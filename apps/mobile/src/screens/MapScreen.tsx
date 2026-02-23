@@ -95,7 +95,7 @@ function ClusterMarker({ cluster, onPress, isSelected = false }: ClusterMarkerPr
         </View>
       ) : (
         <View style={styles.singleMarker}>
-          <Icon name="MapPinSolid" size={32} color={markerColor} />
+          <Icon name={cluster.entries[0]?.location_id ? "MapPinFavorite" : cluster.entries[0]?.place_name ? "MapPinSolid" : "MapPinFilled"} size={32} color={markerColor} />
         </View>
       )}
     </Marker>

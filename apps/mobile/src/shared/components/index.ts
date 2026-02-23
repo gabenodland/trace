@@ -3,3 +3,4 @@ export { Snackbar, useSnackbar } from './Snackbar';
 export { Button } from './Button';
 export { EmptyState } from './EmptyState';
 export { LoadingState } from './LoadingState';
+export { SortBar, type SortOption } from './SortBar';

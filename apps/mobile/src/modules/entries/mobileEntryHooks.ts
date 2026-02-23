@@ -111,6 +111,7 @@ function useCreateEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
       queryClient.invalidateQueries({ queryKey: ['locationHierarchy'] });
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
     },
   });
 }
@@ -161,6 +162,7 @@ function useUpdateEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
       queryClient.invalidateQueries({ queryKey: ['locationHierarchy'] });
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
     },
   });
 }
@@ -195,6 +197,7 @@ function useDeleteEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['mentions'] });
       queryClient.invalidateQueries({ queryKey: ['locationHierarchy'] });
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
     },
   });
 }

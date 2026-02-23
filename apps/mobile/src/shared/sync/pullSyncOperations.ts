@@ -219,9 +219,9 @@ export async function pullLocations(forceFullPull: boolean): Promise<{ new: numb
         subdivision: remoteLocation.subdivision,
         region: remoteLocation.region,
         country: remoteLocation.country,
-        location_radius: (remoteLocation as { location_radius?: number | null }).location_radius ?? null,
         mapbox_place_id: remoteLocation.mapbox_place_id,
         foursquare_fsq_id: remoteLocation.foursquare_fsq_id,
+        merge_ignore_ids: remoteLocation.merge_ignore_ids || null,
         created_at: remoteLocation.created_at || new Date().toISOString(),
         updated_at: remoteLocation.updated_at || new Date().toISOString(),
         deleted_at: remoteLocation.deleted_at,
@@ -320,7 +320,6 @@ export async function pullEntries(
         stream_id: remoteEntry.stream_id,
         entry_latitude: remoteEntry.entry_latitude || null,
         entry_longitude: remoteEntry.entry_longitude || null,
-        location_radius: (remoteEntry as any).location_radius || null,
         location_id: remoteEntry.location_id || null,
         // Location hierarchy (owned by entry)
         place_name: remoteEntry.place_name || null,
