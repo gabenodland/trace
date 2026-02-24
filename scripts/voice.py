@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Optional
 
 from filelock import FileLock
 
@@ -46,7 +47,7 @@ def get_voice_for_agent(agent_id: str) -> str:
     return DEFAULT_VOICE
 
 
-async def list_voices(language_filter: str | None = None):
+async def list_voices(language_filter: Optional[str] = None):
     """List available voices, optionally filtered by language."""
     import edge_tts
 
@@ -66,6 +67,7 @@ async def list_voices(language_filter: str | None = None):
 async def speak(text: str, voice: str = DEFAULT_VOICE):
     """Generate speech and play it. Uses file lock to prevent overlapping speech."""
     import edge_tts
+    import platform
 
     with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
         temp_path = f.name
@@ -76,10 +78,14 @@ async def speak(text: str, voice: str = DEFAULT_VOICE):
 
         lock = FileLock(SPEECH_LOCK_FILE, timeout=-1)
         with lock:
-            subprocess.run(
-                ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", temp_path],
-                check=True
-            )
+            # Use platform-appropriate audio player
+            if platform.system() == "Darwin":  # macOS
+                subprocess.run(["afplay", temp_path], check=True)
+            else:  # Windows/Linux
+                subprocess.run(
+                    ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", temp_path],
+                    check=True
+                )
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)

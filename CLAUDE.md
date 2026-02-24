@@ -9,9 +9,9 @@ Start every response with "OK [ModelName] here to help". Push back if asked to d
 2. **Plan first** — Present your plan and get approval before implementing.
 3. **Minimal dependencies** — Ask before adding libraries.
 4. **ALWAYS USE VOICE** — MANDATORY in the SAME response as every completion or question:
-   `python c:/projects/trace/scripts/voice.py "<message>" --agent {model}-{role}`
+   `python3 /Users/gaben/projects/trace/scripts/voice.py "<message>" --agent {model}-{role}`
    Models: `sonnet`, `opus`, `haiku`. Roles: `main`, `explore`, `test`, `plan`, etc.
-   Example: `python c:/projects/trace/scripts/voice.py "Task completed" --agent sonnet-main`
+   Example: `python3 /Users/gaben/projects/trace/scripts/voice.py "Task completed" --agent sonnet-main`
    Include the Bash voice call IN YOUR RESPONSE, not as a follow-up. DO NOT skip this.
 5. **No git commit** — Never commit until explicitly asked.
 6. **No `> nul`** — Use `/dev/null` in bash. Never Windows syntax.
