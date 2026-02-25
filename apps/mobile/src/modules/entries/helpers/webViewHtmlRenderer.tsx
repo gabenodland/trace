@@ -4,7 +4,7 @@
  * Custom renderers handle TipTap task lists (data-type="taskList") and tables.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, useWindowDimensions } from 'react-native';
 import RenderHtml, { TNodeChildrenRenderer } from 'react-native-render-html';
 import type { CustomRendererProps, TBlock, MixedStyleRecord, CustomTagRendererRecord } from 'react-native-render-html';
 import { extractAttachmentIds } from '@trace/core';
@@ -68,6 +68,17 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
         `<img src="${uri}" data-photo-id="${photoId}" style="width:100%;max-height:200px;border-radius:8px;margin:8px 0;" />`
       );
     }
+
+    // Flatten task item internals — TipTap generates <label>...</label><div><p>text</p></div>
+    // Both <div> and <p> add block margins, causing excessive spacing between checkboxes.
+    // Strip all <p>, </p>, <div>, </div> inside each task item to leave just inline content.
+    result = result.replace(/<li\s[^>]*data-type="taskItem"[^>]*>[\s\S]*?<\/li>/g, (match) => {
+      return match
+        .replace(/<p[^>]*>/g, '')
+        .replace(/<\/p>/g, '')
+        .replace(/<div[^>]*>/g, '')
+        .replace(/<\/div>/g, '');
+    });
 
     return result;
   }, [html, photoUris]);
@@ -147,24 +158,7 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
     li: {
       marginBottom: 4,
     },
-    table: {
-      marginTop: 8,
-      marginBottom: 8,
-      borderWidth: 1,
-      borderColor: theme.colors.border.dark,
-    },
-    th: {
-      padding: 6,
-      borderWidth: 1,
-      borderColor: theme.colors.border.dark,
-      backgroundColor: theme.colors.background.tertiary,
-      fontFamily: theme.typography.fontFamily.semibold,
-    },
-    td: {
-      padding: 6,
-      borderWidth: 1,
-      borderColor: theme.colors.border.dark,
-    },
+    // table/th/td handled by custom table renderer
     img: {
       borderRadius: 8,
       marginTop: 8,
@@ -172,8 +166,75 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
     },
   }), [theme, strikethrough]);
 
-  // Custom renderers for task lists (TipTap data-type="taskList"/"taskItem")
+  // Extract plain text from a tnode tree (for table cells)
+  const extractText = useCallback((tnode: any): string => {
+    if (tnode.type === 'text') return tnode.data || '';
+    if (tnode.children) return tnode.children.map(extractText).join('');
+    return '';
+  }, []);
+
+  // Custom renderers
   const renderers = useMemo<CustomTagRendererRecord>(() => ({
+    // Table — flexbox grid layout
+    table: ({ tnode }: CustomRendererProps<TBlock>) => {
+      // Walk: table > (thead|tbody|direct) > tr > th/td
+      const rows: { cells: { text: string; isHeader: boolean }[] }[] = [];
+      const walkChildren = (node: any) => {
+        if (!node.children) return;
+        for (const child of node.children) {
+          if (child.tagName === 'tr') {
+            const cells: { text: string; isHeader: boolean }[] = [];
+            for (const cell of (child.children || [])) {
+              if (cell.tagName === 'th' || cell.tagName === 'td') {
+                cells.push({ text: extractText(cell), isHeader: cell.tagName === 'th' });
+              }
+            }
+            if (cells.length > 0) rows.push({ cells });
+          } else if (child.tagName === 'thead' || child.tagName === 'tbody' || child.tagName === 'colgroup') {
+            walkChildren(child);
+          }
+        }
+      };
+      walkChildren(tnode);
+
+      if (rows.length === 0) return null;
+
+      const borderColor = theme.colors.border.dark;
+      const colCount = Math.max(...rows.map(r => r.cells.length));
+      const minCellWidth = 80;
+      const tableWidth = Math.max(contentWidth, colCount * minCellWidth);
+
+      return (
+        <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ marginTop: 8, marginBottom: 8 }}>
+          <View style={{ width: tableWidth, borderWidth: 1, borderColor }}>
+            {rows.map((row, ri) => (
+              <View key={ri} style={{ flexDirection: 'row', borderTopWidth: ri > 0 ? 1 : 0, borderColor }}>
+                {row.cells.map((cell, ci) => (
+                  <View
+                    key={ci}
+                    style={{
+                      flex: 1,
+                      padding: 6,
+                      borderLeftWidth: ci > 0 ? 1 : 0,
+                      borderColor,
+                      backgroundColor: cell.isHeader ? theme.colors.background.tertiary : undefined,
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 14,
+                      color: theme.colors.text.primary,
+                      fontFamily: cell.isHeader ? theme.typography.fontFamily.semibold : theme.typography.fontFamily.regular,
+                    }}>
+                      {cell.text}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      );
+    },
     // Handle <ul data-type="taskList"> — render without bullets
     ul: ({ TDefaultRenderer, tnode, ...props }: CustomRendererProps<TBlock>) => {
       if (tnode.attributes?.['data-type'] === 'taskList') {
