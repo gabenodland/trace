@@ -27,20 +27,13 @@ interface DefaultProps extends EntryListItemCommonProps {
   onOpenPhotoViewer?: () => void;
 }
 
-// How far into HTML source to look for rich block elements
-const EARLY_CONTENT_THRESHOLD = 500;
-
-// Max height for short-mode rich content preview (tables, lists)
+// Max height for short-mode rich content preview
 const SHORT_RICH_MAX_HEIGHT = 180;
 
-/** Check if HTML has a rich block element near the top that needs WebView rendering */
-function hasEarlyRichContent(html: string | null | undefined): boolean {
+/** Check if HTML has block elements that need the native HTML renderer (tables, lists, task lists) */
+function hasRichContent(html: string | null | undefined): boolean {
   if (!html) return false;
-  const prefix = html.substring(0, EARLY_CONTENT_THRESHOLD);
-  if (prefix.includes('<table')) return true;
-  if (prefix.includes('<ul')) return true;
-  if (prefix.includes('<ol')) return true;
-  return false;
+  return html.includes('<table') || html.includes('<ul') || html.includes('<ol');
 }
 
 export function EntryListItemDefault({
@@ -201,7 +194,7 @@ export function EntryListItemDefault({
                   { color: theme.colors.text.secondary },
                 ]}
               />
-            ) : displayMode === 'short' && (hasEarlyRichContent(entry.content)) ? (
+            ) : displayMode === 'short' && (hasRichContent(entry.content)) ? (
               <View style={{ maxHeight: SHORT_RICH_MAX_HEIGHT, overflow: 'hidden' }}>
                 <WebViewHtmlRenderer
                   html={entry.content || ''}
@@ -270,7 +263,7 @@ export function EntryListItemDefault({
                 ]}
               />
             </>
-          ) : displayMode === 'short' && (hasEarlyRichContent(entry.content)) ? (
+          ) : displayMode === 'short' && (hasRichContent(entry.content)) ? (
             /* Short mode with rich content — render via WebView with height cap */
             <View style={{ maxHeight: SHORT_RICH_MAX_HEIGHT, overflow: 'hidden' }}>
               <WebViewHtmlRenderer
