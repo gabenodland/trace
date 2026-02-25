@@ -343,11 +343,16 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         pendingResumeRestoreLength: pendingResumeRestore.current?.length || 0,
       });
 
-      // New entry or manual reload - restore from React state
+      // Recovery reload — restore content with verification (handles race condition
+      // where editor signals ready but isn't actually accepting content yet)
       if (pendingResumeRestore.current) {
-        log.info('🔄 Editor ready after reload, restoring content from state', { length: pendingResumeRestore.current.length });
-        editorRef.current?.setContent(pendingResumeRestore.current);
+        const contentToRestore = pendingResumeRestore.current;
         pendingResumeRestore.current = null;
+        log.info('🔄 Editor ready after reload, restoring content with verify', { length: contentToRestore.length });
+        editorRef.current?.setContentAndClearHistory(contentToRestore);
+        verifyEditorContent(contentToRestore, () => {
+          log.info('🔄 Recovery content verified successfully');
+        });
         return;
       }
 
