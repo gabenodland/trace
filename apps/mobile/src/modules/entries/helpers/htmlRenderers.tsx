@@ -218,12 +218,19 @@ function TableRenderer(props: CustomRendererProps<TBlock>) {
   const maxWidthsRef = useRef<number[]>([]);
   const measuredCountRef = useRef(0);
   // Generation counter — prevents stale onLayout callbacks from corrupting state
-  // after a tnode change triggers measurement reset
+  // after a tnode change triggers measurement reset. Only incremented on RE-measurements
+  // (not initial mount), because on mount colWidths is already null and setColWidths(null)
+  // is a no-op — no re-render to capture the new generation.
   const generationRef = useRef(0);
+  const isInitialMount = useRef(true);
 
   // Reset measurement when content or column count changes
   useEffect(() => {
-    generationRef.current++;
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+    } else {
+      generationRef.current++;
+    }
     maxWidthsRef.current = new Array(numColumns).fill(0);
     measuredCountRef.current = 0;
 
