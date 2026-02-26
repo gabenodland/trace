@@ -151,12 +151,19 @@ const EditorWithContent = ({ initialContent }: { initialContent: string }) => {
           editor.commands.scrollIntoView();
           break;
 
+        // Canonical path: EditorWebBridge injects window.editorCommand("indent"/"outdent")
+        // which is handled in editor-web/index.tsx. This case is a fallback for
+        // direct TenTap bridge calls that bypass EditorWebBridge.
         case 'indent':
-          editor.commands.sinkListItem('listItem');
+          if (!editor.commands.sinkListItem('listItem')) {
+            editor.commands.sinkListItem('taskItem');
+          }
           break;
 
         case 'outdent':
-          editor.commands.liftListItem('listItem');
+          if (!editor.commands.liftListItem('listItem')) {
+            editor.commands.liftListItem('taskItem');
+          }
           break;
 
         case 'toggleBold':

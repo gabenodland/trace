@@ -22,6 +22,7 @@ import type { EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/cor
 import { EntryList, type EntryListRef } from "../modules/entries/components/EntryList";
 import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
+import { HtmlRenderProvider } from "../modules/entries/components/HtmlRenderProvider";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useDrawerGestures, useFilteredEntries, useEntryActions } from "./hooks";
 
@@ -334,28 +335,30 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
         isOffline={isOffline}
       />
 
-      <EntryList
-        ref={entryListRef}
-        entries={filteredEntries}
-        sections={filteredSections}
-        isLoading={isLoading}
-        onEntryPress={handleEntryPress}
-        onTagPress={handleTagPress}
-        onMentionPress={handleMentionPress}
-        onStreamPress={handleStreamPress}
-        onMove={handleMoveEntry}
-        onCopy={handleCopyEntry}
-        onDelete={handleDeleteEntry}
-        onPin={handlePinEntry}
-        onArchive={handleArchiveEntry}
-        streams={streams}
-        locations={locations}
-        currentStreamId={typeof selectedStreamId === 'string' && !selectedStreamId.includes(':') ? selectedStreamId : null}
-        displayMode={displayMode}
-        fullStreams={streams}
-        entryCount={filteredEntries.length}
-        totalCount={sortedEntries.length}
-      />
+      <HtmlRenderProvider>
+        <EntryList
+          ref={entryListRef}
+          entries={filteredEntries}
+          sections={filteredSections}
+          isLoading={isLoading}
+          onEntryPress={handleEntryPress}
+          onTagPress={handleTagPress}
+          onMentionPress={handleMentionPress}
+          onStreamPress={handleStreamPress}
+          onMove={handleMoveEntry}
+          onCopy={handleCopyEntry}
+          onDelete={handleDeleteEntry}
+          onPin={handlePinEntry}
+          onArchive={handleArchiveEntry}
+          streams={streams}
+          locations={locations}
+          currentStreamId={typeof selectedStreamId === 'string' && !selectedStreamId.includes(':') ? selectedStreamId : null}
+          displayMode={displayMode}
+          fullStreams={streams}
+          entryCount={filteredEntries.length}
+          totalCount={sortedEntries.length}
+        />
+      </HtmlRenderProvider>
 
       {/* Move Stream Picker */}
       <StreamPicker

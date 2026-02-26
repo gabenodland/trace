@@ -8,7 +8,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import type { EntryDisplayMode } from "@trace/core";
 import { Icon } from "../../../../shared/components";
-import { getFirstLineOfText, getFormattedContent, getDisplayModeLines, formatEntryDateOnly } from "@trace/core";
+import { getFirstLineOfText, formatEntryDateOnly } from "@trace/core";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import { WebViewHtmlRenderer } from "../../helpers/webViewHtmlRenderer";
@@ -27,21 +27,8 @@ interface DefaultProps extends EntryListItemCommonProps {
   onOpenPhotoViewer?: () => void;
 }
 
-// How far into HTML source to look for rich block elements
-const EARLY_CONTENT_THRESHOLD = 500;
-
-// Max height for short-mode rich content preview (tables, lists)
+// Max height for short-mode content preview (same rendering as flow, height-capped)
 const SHORT_RICH_MAX_HEIGHT = 180;
-
-/** Check if HTML has a rich block element near the top that needs WebView rendering */
-function hasEarlyRichContent(html: string | null | undefined): boolean {
-  if (!html) return false;
-  const prefix = html.substring(0, EARLY_CONTENT_THRESHOLD);
-  if (prefix.includes('<table')) return true;
-  if (prefix.includes('<ul')) return true;
-  if (prefix.includes('<ol')) return true;
-  return false;
-}
 
 export function EntryListItemDefault({
   entry,
@@ -76,10 +63,6 @@ export function EntryListItemDefault({
 }: DefaultProps) {
   const theme = useTheme();
   const isSelectedOnMap = selectedEntryId === entry.entry_id;
-
-  // Format content based on display mode (title mode doesn't need content formatting)
-  const formattedContent = displayMode !== 'title' ? getFormattedContent(entry.content || '', displayMode) : null;
-  const maxLines = displayMode !== 'title' ? getDisplayModeLines(displayMode) : 0;
 
   return (
     <>
@@ -196,31 +179,16 @@ export function EntryListItemDefault({
             {displayMode === 'flow' ? (
               <WebViewHtmlRenderer
                 html={entry.content || ''}
-                style={[
-                  styles.preview,
-                  { color: theme.colors.text.secondary },
-                ]}
+                style={styles.webViewSpacing}
               />
-            ) : displayMode === 'short' && (hasEarlyRichContent(entry.content)) ? (
+            ) : displayMode === 'short' ? (
               <View style={{ maxHeight: SHORT_RICH_MAX_HEIGHT, overflow: 'hidden' }}>
                 <WebViewHtmlRenderer
                   html={entry.content || ''}
-                  style={[
-                    styles.preview,
-                    { color: theme.colors.text.secondary },
-                  ]}
+                  style={styles.webViewSpacing}
                 />
               </View>
-            ) : (
-              formattedContent && (
-                <Text style={[
-                  styles.preview,
-                  { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular },
-                ]} numberOfLines={maxLines}>
-                  {formattedContent}
-                </Text>
-              )
-            )}
+            ) : null}
           </>
         ) : (
           /* No title - show content after first line */
@@ -264,46 +232,18 @@ export function EntryListItemDefault({
               )}
               <WebViewHtmlRenderer
                 html={entry.content || ''}
-                style={[
-                  styles.content,
-                  { color: theme.colors.text.primary },
-                ]}
+                style={styles.webViewSpacing}
               />
             </>
-          ) : displayMode === 'short' && (hasEarlyRichContent(entry.content)) ? (
-            /* Short mode with rich content — render via WebView with height cap */
+          ) : displayMode === 'short' ? (
+            /* Short mode — same rendering as flow, height-capped */
             <View style={{ maxHeight: SHORT_RICH_MAX_HEIGHT, overflow: 'hidden' }}>
               <WebViewHtmlRenderer
                 html={entry.content || ''}
-                style={[
-                  styles.content,
-                  { color: theme.colors.text.primary },
-                ]}
+                style={styles.webViewSpacing}
               />
             </View>
-          ) : (
-            /* Show remaining lines after first line was shown above */
-            <>
-              {displayMode === 'short' && onPhotoCountChange && (
-                <PhotoGallery
-                  entryId={entry.entry_id}
-                  attachments={entry.attachments}
-                  collapsible={false}
-                  isCollapsed={false}
-                  onPhotoCountChange={onPhotoCountChange}
-                  photoSize={70}
-                />
-              )}
-              {formattedContent && formattedContent.includes('\n') && (
-                <Text style={[
-                  styles.content,
-                  { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular },
-                ]} numberOfLines={maxLines ? maxLines - 1 : undefined}>
-                  {formattedContent.substring(formattedContent.indexOf('\n') + 1)}
-                </Text>
-              )}
-            </>
-          )
+          ) : null
         )
       )}
 
@@ -412,14 +352,7 @@ const styles = StyleSheet.create({
     marginBottom: themeBase.spacing.md,
     flexWrap: "wrap",
   },
-  preview: {
-    fontSize: themeBase.typography.fontSize.sm,
-    lineHeight: themeBase.typography.fontSize.sm * themeBase.typography.lineHeight.relaxed,
-    marginTop: themeBase.spacing.sm,
-  },
-  content: {
-    fontSize: themeBase.typography.fontSize.base,
-    lineHeight: themeBase.typography.fontSize.base * themeBase.typography.lineHeight.relaxed,
+  webViewSpacing: {
     marginTop: themeBase.spacing.sm,
   },
   metadata: {

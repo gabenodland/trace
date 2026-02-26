@@ -1,49 +1,46 @@
 /**
- * WebView-based HTML renderer for React Native
- * Uses react-native-webview to render HTML with full browser support
- * This properly renders task lists with checkboxes, unlike react-native-render-html
+ * Native HTML renderer for entry list items
+ *
+ * Uses react-native-render-html's RenderHTMLSource (lightweight) which
+ * expects to be inside a HtmlRenderProvider (TRenderEngineProvider +
+ * RenderHTMLConfigProvider). This replaces the old WebView-per-item
+ * approach that caused 200+ WebViews and Android OOM kills.
+ *
+ * Photo URIs are resolved and injected into img tags for inline display.
  */
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { View, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { WebView } from 'react-native-webview';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, useWindowDimensions, StyleSheet } from 'react-native';
+import type { ViewStyle, StyleProp } from 'react-native';
+import { RenderHTMLSource } from 'react-native-render-html';
 import { extractAttachmentIds } from '@trace/core';
 import { getAttachmentUri } from '../../attachments/mobileAttachmentApi';
-import { PhotoViewer } from '../../photos/components/PhotoViewer';
-import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { sanitizeHtmlColors } from '../../../shared/utils/htmlUtils';
+import { HTML_CONTENT_HORIZONTAL_PADDING } from './htmlRenderConfig';
 
 interface WebViewHtmlRendererProps {
   html: string;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
   strikethrough?: boolean;
 }
 
 /**
- * Render HTML content using WebView for full browser support
- * Supports task lists with checkboxes, proper indentation, etc.
+ * Render HTML content natively using react-native-render-html.
+ * Must be rendered inside a <HtmlRenderProvider>.
  */
 export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlRendererProps) {
-  // Don't render anything for empty content — avoids whitespace from the WebView's default height
-  const stripped = html.replace(/<[^>]*>/g, '').trim();
-  if (!stripped) return null;
+  const { width: windowWidth } = useWindowDimensions();
+  const contentWidth = windowWidth - HTML_CONTENT_HORIZONTAL_PADDING;
 
-  const theme = useTheme();
   const [photoUris, setPhotoUris] = useState<Record<string, string>>({});
-  const [photoIds, setPhotoIds] = useState<string[]>([]);
-  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
-  const [viewerVisible, setViewerVisible] = useState(false);
-  const [webViewHeight, setWebViewHeight] = useState(100);
-  const webViewRef = useRef<WebView>(null);
-  // Track if this is the first render - only then use default height
-  const hasInitializedRef = useRef(false);
 
   // Load photo URIs when HTML changes
   useEffect(() => {
+    let cancelled = false;
+
     async function loadPhotos() {
       const extractedIds = extractAttachmentIds(html);
       if (extractedIds.length === 0) return;
 
-      setPhotoIds(extractedIds);
       const uris: Record<string, string> = {};
 
       for (const photoId of extractedIds) {
@@ -53,317 +50,54 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
         }
       }
 
-      setPhotoUris(uris);
+      if (!cancelled) setPhotoUris(uris);
     }
 
     loadPhotos();
+    return () => { cancelled = true; };
   }, [html]);
 
-  // Process HTML to replace photo placeholders with actual URIs
-  // Also sanitize inline color styles that override theme
+  // Process HTML: sanitize colors, decode entities, replace photo placeholders
   const processedHtml = useMemo(() => {
     let result = sanitizeHtmlColors(html);
+
+    // Decode &nbsp; entities to actual non-breaking space character.
+    // TipTap's JSON→HTML roundtrip can double-encode (&amp;nbsp; → &nbsp; after
+    // first decode), causing RNRH to show literal "&nbsp;" text.
+    result = result.replace(/&amp;nbsp;/g, '\u00A0').replace(/&nbsp;/g, '\u00A0');
 
     // Replace photo placeholders with actual image URIs
     for (const [photoId, uri] of Object.entries(photoUris)) {
       result = result.replace(
         new RegExp(`<img[^>]*data-photo-id="${photoId}"[^>]*>`, 'g'),
-        `<img src="${uri}" data-photo-id="${photoId}" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin:8px 0;" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({type:'photo',photoId:'${photoId}'}))" />`
+        `<img src="${uri}" data-photo-id="${photoId}" style="width:100%;border-radius:8px;margin:8px 0;" />`,
       );
     }
 
     return result;
   }, [html, photoUris]);
 
-  // CSS for proper HTML rendering including task lists
-  // Use theme colors and fonts for text to ensure readability on all theme backgrounds
-  const textColor = theme.colors.text.primary;
-  const accentColor = theme.colors.functional.accent;
-  const borderColor = theme.colors.border.dark;
-  const headerBg = theme.colors.background.tertiary;
-  const webFontUrl = theme.typography.webFontUrl;
-  const webFontFamily = theme.typography.webFontFamily;
-  const css = `
-    @import url('${webFontUrl}');
-    * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
-    html, body {
-      height: auto;
-      min-height: 0;
-      overflow: visible;
-    }
-    #content {
-      display: flow-root;
-    }
-    body {
-      font-family: ${webFontFamily};
-      font-size: 15px;
-      line-height: 1.5;
-      color: ${textColor};
-      margin: 0;
-      padding: 0;
-      ${strikethrough ? 'text-decoration: line-through; opacity: 0.6;' : ''}
-    }
-    p {
-      margin: 0 0 8px 0;
-      padding: 0;
-    }
-    p:last-child {
-      margin-bottom: 0;
-    }
+  const source = useMemo(() => ({ html: processedHtml }), [processedHtml]);
 
-    /* Headings - sized below entry title (19px) so they stay subordinate */
-    h1 {
-      font-size: 17px;
-      font-weight: 700;
-      margin: 12px 0 4px 0;
-    }
-    h2 {
-      font-size: 16px;
-      font-weight: 700;
-      margin: 8px 0 4px 0;
-    }
-    h3 {
-      font-size: 15px;
-      font-weight: 600;
-      margin: 4px 0 2px 0;
-      opacity: 0.85;
-    }
-    h4, h5, h6 {
-      font-size: 15px;
-      font-weight: 600;
-      margin: 4px 0 2px 0;
-      opacity: 0.85;
-    }
-    /* Remove top margin from first element to prevent extra space and margin collapsing */
-    #content > :first-child {
-      margin-top: 0;
-    }
-
-    /* Regular list styling */
-    ul, ol {
-      margin: 0 0 8px 0;
-      padding-left: 24px;
-    }
-    ul:last-child, ol:last-child {
-      margin-bottom: 0;
-    }
-    li {
-      margin-bottom: 4px;
-    }
-
-    /* Nested regular lists */
-    ul:not([data-type="taskList"]) ul:not([data-type="taskList"]),
-    ol ul:not([data-type="taskList"]),
-    ul:not([data-type="taskList"]) ol,
-    ol ol {
-      padding-left: 20px;
-    }
-
-    /* Numbered list hierarchy: 1 -> a -> i -> A -> I */
-    ol { list-style-type: decimal; }
-    ol ol { list-style-type: lower-alpha; }
-    ol ol ol { list-style-type: lower-roman; }
-    ol ol ol ol { list-style-type: upper-alpha; }
-    ol ol ol ol ol { list-style-type: upper-roman; }
-
-    /* Task list (checkbox) styling */
-    ul[data-type="taskList"] {
-      padding-left: 0;
-      margin-left: 0;
-      list-style: none;
-    }
-    ul[data-type="taskList"] li {
-      display: flex;
-      align-items: flex-start;
-    }
-    ul[data-type="taskList"] li > label {
-      margin-right: 8px;
-      user-select: none;
-      display: flex;
-      align-items: center;
-    }
-    ul[data-type="taskList"] li > label input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      margin: 2px 0 0 0;
-      cursor: pointer;
-      accent-color: ${textColor};
-    }
-    ul[data-type="taskList"] li > label span {
-      display: none;
-    }
-    ul[data-type="taskList"] li > div {
-      flex: 1;
-    }
-    ul[data-type="taskList"] li > div p {
-      margin: 0;
-    }
-
-    /* Nested task lists */
-    ul[data-type="taskList"] ul[data-type="taskList"],
-    li[data-type="taskItem"] ul[data-type="taskList"] {
-      padding-left: 24px;
-      margin-left: 0;
-    }
-
-    /* Text formatting */
-    strong, b { font-weight: 600; }
-    em, i { font-style: italic; }
-
-    /* Images */
-    img {
-      max-width: 100%;
-      height: auto;
-      border-radius: 8px;
-      margin: 8px 0;
-    }
-
-    /* Links */
-    a {
-      color: ${accentColor} !important;
-      text-decoration: underline;
-    }
-
-    /* Tables */
-    table {
-      border-collapse: collapse;
-      width: auto;
-      min-width: 100%;
-      margin: 8px 0;
-      display: block;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    th, td {
-      border: 1px solid ${borderColor};
-      padding: 6px 8px;
-      min-width: 50px;
-      text-align: left;
-      vertical-align: top;
-      color: ${textColor};
-    }
-    th {
-      background: ${headerBg};
-      font-weight: 600;
-      white-space: nowrap;
-    }
-    th p, td p {
-      margin: 0 !important;
-    }
-  `;
-
-  // Full HTML document
-  const fullHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-      <style>${css}</style>
-    </head>
-    <body>
-      <div id="content">${processedHtml}</div>
-      <script>
-        let lastHeight = 0;
-
-        // Calculate and send content height using getBoundingClientRect for accuracy
-        function sendHeight() {
-          const content = document.getElementById('content');
-          if (content) {
-            const rect = content.getBoundingClientRect();
-            const height = Math.ceil(rect.height);
-            // Only send if height changed to avoid unnecessary updates
-            if (height !== lastHeight && height > 0) {
-              lastHeight = height;
-              window.ReactNativeWebView.postMessage(JSON.stringify({type:'height', height: height}));
-            }
-          }
-        }
-
-        // Use ResizeObserver for continuous monitoring
-        if (typeof ResizeObserver !== 'undefined') {
-          const content = document.getElementById('content');
-          if (content) {
-            const observer = new ResizeObserver(() => {
-              sendHeight();
-            });
-            observer.observe(content);
-          }
-        }
-
-        // Wait for web fonts to load before measuring — fixes cutoff with h1/h2 tags
-        if (document.fonts && document.fonts.ready) {
-          document.fonts.ready.then(sendHeight);
-        }
-
-        // Send height after content loads
-        window.onload = sendHeight;
-
-        // Send height after images load
-        document.querySelectorAll('img').forEach(img => {
-          img.onload = sendHeight;
-        });
-
-        // Multiple checks to catch layout shifts
-        setTimeout(sendHeight, 0);
-        setTimeout(sendHeight, 50);
-        setTimeout(sendHeight, 150);
-        setTimeout(sendHeight, 300);
-        setTimeout(sendHeight, 600);
-      </script>
-    </body>
-    </html>
-  `;
-
-  // Handle messages from WebView
-  const handleMessage = (event: any) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-
-      if (data.type === 'height') {
-        setWebViewHeight(data.height);
-      } else if (data.type === 'photo') {
-        const index = photoIds.indexOf(data.photoId);
-        setSelectedPhotoIndex(index >= 0 ? index : 0);
-        setViewerVisible(true);
-      }
-    } catch (e) {
-      // Ignore parse errors
-    }
-  };
+  // Don't render anything for empty content — check after hooks to avoid rules violation
+  const isEmpty = useMemo(() => !html.replace(/<[^>]*>/g, '').trim(), [html]);
+  if (isEmpty) return null;
 
   return (
-    <>
-      <View style={[{ height: webViewHeight, overflow: 'hidden' }, style]}>
-        <WebView
-          ref={webViewRef}
-          source={{ html: fullHtml }}
-          style={{ flex: 1, backgroundColor: 'transparent' }}
-          scrollEnabled={false}
-          showsVerticalScrollIndicator={false}
-          showsHorizontalScrollIndicator={false}
-          onMessage={handleMessage}
-          originWhitelist={['*']}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          startInLoadingState={false}
-          scalesPageToFit={false}
-        />
-      </View>
-      <PhotoViewer
-        visible={viewerVisible}
-        photos={photoIds.map(id => ({
-          photoId: id,
-          uri: photoUris[id] || null,
-        }))}
-        initialIndex={selectedPhotoIndex}
-        onClose={() => {
-          setViewerVisible(false);
-          setSelectedPhotoIndex(0);
-        }}
+    <View style={[styles.container, strikethrough && styles.strikethrough, style]}>
+      <RenderHTMLSource
+        source={source}
+        contentWidth={contentWidth}
       />
-    </>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    overflow: 'hidden',
+  },
+  strikethrough: {
+    opacity: 0.6,
+  },
+});

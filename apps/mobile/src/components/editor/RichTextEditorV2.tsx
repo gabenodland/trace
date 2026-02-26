@@ -185,6 +185,37 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
       margin-right: 8px !important;
       user-select: none !important;
     }
+    ul[data-type="taskList"] li > label input[type="checkbox"] {
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      width: 18px !important;
+      height: 18px !important;
+      min-width: 18px !important;
+      margin: 2px 0 0 0 !important;
+      border: 1.5px solid ${theme.colors.border.dark} !important;
+      border-radius: 4px !important;
+      background-color: ${theme.colors.background.primary} !important;
+      cursor: pointer;
+      position: relative;
+    }
+    ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+      background-color: ${theme.colors.functional.accent} !important;
+      border-color: ${theme.colors.functional.accent} !important;
+    }
+    ul[data-type="taskList"] li > label input[type="checkbox"]:checked::after {
+      content: '✓' !important;
+      position: absolute !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      color: #FFFFFF !important;
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      line-height: 1 !important;
+    }
+    ul[data-type="taskList"] li[data-checked="true"] > div {
+      opacity: 0.6 !important;
+    }
     ul[data-type="taskList"] ul[data-type="taskList"],
     li[data-type="taskItem"] ul[data-type="taskList"] {
       padding-left: 20px !important;

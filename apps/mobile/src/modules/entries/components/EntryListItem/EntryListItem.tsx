@@ -12,6 +12,7 @@ import { EntryListItemDefault } from "./EntryListItemDefault";
 import { PhotoViewer } from "../../../photos/components/PhotoViewer";
 import { ActionSheet, type ActionSheetItem } from "../../../../components/sheets/ActionSheet";
 import { getAttachmentUri } from "../../../attachments/mobileAttachmentApi";
+import { HtmlContentPressContext } from "../../helpers/htmlRenderers";
 import type { EntryListItemProps } from "./types";
 
 export const SELECTED_COLOR = '#ef4444';
@@ -209,15 +210,17 @@ export function EntryListItem({
         onPress={onPress}
         activeOpacity={0.7}
       >
-        <EntryListItemDefault
-          {...commonProps}
-          displayMode={displayMode}
-          photoCount={photoCount}
-          photosCollapsed={photosCollapsed}
-          onPhotoCountChange={setPhotoCount}
-          onPhotosCollapsedChange={setPhotosCollapsed}
-          onOpenPhotoViewer={handleOpenPhotoViewer}
-        />
+        <HtmlContentPressContext.Provider value={onPress ?? null}>
+          <EntryListItemDefault
+            {...commonProps}
+            displayMode={displayMode}
+            photoCount={photoCount}
+            photosCollapsed={photosCollapsed}
+            onPhotoCountChange={setPhotoCount}
+            onPhotosCollapsedChange={setPhotosCollapsed}
+            onOpenPhotoViewer={handleOpenPhotoViewer}
+          />
+        </HtmlContentPressContext.Provider>
       </TouchableOpacity>
       <ActionSheet
         visible={showMenu}

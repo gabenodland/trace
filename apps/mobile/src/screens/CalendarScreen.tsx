@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useRef, useCallback, memo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Modal, PanResponder, Dimensions, Switch } from "react-native";
+import { useState, useMemo, useEffect, useCallback, memo } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Switch } from "react-native";
 import { Icon } from "../shared/components/Icon";
 import type { EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
 import {
@@ -24,6 +24,8 @@ import { DisplayModeSelector } from "../modules/entries/components/DisplayModeSe
 import { SortModeSelector } from "../modules/entries/components/SortModeSelector";
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { useEntryActions } from "./hooks/useEntryActions";
+import { useDrawerGestures } from "./hooks/useDrawerGestures";
+import { HtmlRenderProvider } from "../modules/entries/components/HtmlRenderProvider";
 import { Snackbar, useSnackbar } from "../shared/components";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { DayView } from "./calendar/DayView";
@@ -60,54 +62,8 @@ export const CalendarScreen = memo(function CalendarScreen() {
   const displayName = profile?.name || (profile?.username ? `@${profile.username}` : null) || user?.email || null;
   const avatarUrl = profile?.avatar_url || null;
 
-  // Screen width for swipe threshold calculation (1/3 of screen)
-  const screenWidth = Dimensions.get("window").width;
-  const SWIPE_THRESHOLD = screenWidth / 3;
-
-  // Ref to hold current drawerControl - needed because PanResponder callbacks
-  // capture values at creation time, so we need a ref to access current value
-  const drawerControlRef = useRef(drawerControl);
-  useEffect(() => {
-    drawerControlRef.current = drawerControl;
-  }, [drawerControl]);
-
-  // Swipe-right gesture for opening drawer
-  const drawerPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
-        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
-        const isSwipingRight = gestureState.dx > 20;
-        const notInBackZone = evt.nativeEvent.pageX > 25;
-        return isHorizontalSwipe && isSwipingRight && notInBackZone;
-      },
-      onMoveShouldSetPanResponder: () => false,
-      onPanResponderGrant: () => {},
-      onPanResponderMove: (_, gestureState) => {
-        const control = drawerControlRef.current;
-        if (control && gestureState.dx > 0) {
-          control.setPosition(gestureState.dx);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const control = drawerControlRef.current;
-        if (!control) return;
-        const shouldOpen = gestureState.dx > SWIPE_THRESHOLD || gestureState.vx > 0.5;
-        if (shouldOpen) {
-          control.animateOpen();
-        } else {
-          control.animateClose();
-        }
-      },
-      onPanResponderTerminate: () => {
-        const control = drawerControlRef.current;
-        if (control) {
-          control.animateClose();
-        }
-      },
-    })
-  ).current;
+  // Shared drawer swipe gesture (bubble phase — lets child ScrollViews scroll first)
+  const { panHandlers: drawerPanHandlers } = useDrawerGestures({ drawerControl });
 
   // Context-backed state
   const zoomLevel = calendarZoom;
@@ -323,7 +279,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...drawerPanResponder.panHandlers}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...drawerPanHandlers}>
       <TopBar
         title={selectedStreamName}
         titleIcon={titleIcon}
@@ -456,43 +412,45 @@ export const CalendarScreen = memo(function CalendarScreen() {
       </View>
 
       {/* Views — conditional rendering, but counts are precomputed for instant mount */}
-      {zoomLevel === "day" && (
-        <DayView
-          entries={entries}
-          selectedDate={selectedDate}
-          dateField={dateField}
-          viewingMonth={viewingMonth}
-          viewingYear={viewingYear}
-          entryCounts={dayCounts}
-          onSelectDate={setSelectedDate}
-          onPrevMonth={handlePrevMonth}
-          onNextMonth={handleNextMonth}
-          onToday={handleToday}
-          {...displayProps}
-          {...entryActionProps}
-        />
-      )}
-      {zoomLevel === "month" && (
-        <MonthView
-          entries={entries}
-          dateField={dateField}
-          monthCounts={monthCounts}
-          initialYear={monthViewInitialYear}
-          onDrillDown={handleMonthDrillDown}
-          {...displayProps}
-          {...entryActionProps}
-        />
-      )}
-      {zoomLevel === "year" && (
-        <YearView
-          entries={entries}
-          dateField={dateField}
-          yearCounts={yearCounts}
-          onDrillDown={handleYearDrillDown}
-          {...displayProps}
-          {...entryActionProps}
-        />
-      )}
+      <HtmlRenderProvider>
+        {zoomLevel === "day" && (
+          <DayView
+            entries={entries}
+            selectedDate={selectedDate}
+            dateField={dateField}
+            viewingMonth={viewingMonth}
+            viewingYear={viewingYear}
+            entryCounts={dayCounts}
+            onSelectDate={setSelectedDate}
+            onPrevMonth={handlePrevMonth}
+            onNextMonth={handleNextMonth}
+            onToday={handleToday}
+            {...displayProps}
+            {...entryActionProps}
+          />
+        )}
+        {zoomLevel === "month" && (
+          <MonthView
+            entries={entries}
+            dateField={dateField}
+            monthCounts={monthCounts}
+            initialYear={monthViewInitialYear}
+            onDrillDown={handleMonthDrillDown}
+            {...displayProps}
+            {...entryActionProps}
+          />
+        )}
+        {zoomLevel === "year" && (
+          <YearView
+            entries={entries}
+            dateField={dateField}
+            yearCounts={yearCounts}
+            onDrillDown={handleYearDrillDown}
+            {...displayProps}
+            {...entryActionProps}
+          />
+        )}
+      </HtmlRenderProvider>
 
       <BottomNavBar
         viewMode={viewMode}

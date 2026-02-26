@@ -41,6 +41,7 @@ import {
 } from '@10play/tentap-editor/web';
 import Text from '@tiptap/extension-text';
 import Paragraph from '@tiptap/extension-paragraph';
+import TaskItem from '@tiptap/extension-task-item';
 import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
@@ -202,6 +203,20 @@ window.editorCommand = (command: string, payload?: any) => {
         break;
       }
 
+      // Indent/outdent — try listItem first, then taskItem
+      case 'indent': {
+        if (!editor.commands.sinkListItem('listItem')) {
+          editor.commands.sinkListItem('taskItem');
+        }
+        break;
+      }
+      case 'outdent': {
+        if (!editor.commands.liftListItem('listItem')) {
+          editor.commands.liftListItem('taskItem');
+        }
+        break;
+      }
+
       // Table commands
       case 'insertTable': {
         // Don't allow nested tables
@@ -318,6 +333,8 @@ function TiptapEditor() {
         // Title-first document schema (overrides default Document)
         TitleDocument,
         Title,
+        // Enable nested task lists (checkboxes can be indented)
+        TaskItem.configure({ nested: true }),
         // Custom placeholder handling - TipTap's Placeholder doesn't work with our custom schema
         // Title.ts handles title placeholder, BodyPlaceholder handles first paragraph
         BodyPlaceholder,

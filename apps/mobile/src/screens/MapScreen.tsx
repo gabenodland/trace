@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, PanResponder, Dimensions } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
 
 const log = createScopedLogger(LogScopes.Map);
@@ -30,6 +30,8 @@ import type { EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/cor
 import type { EntryWithRelations } from "../modules/entries/EntryWithRelationsTypes";
 import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, sortEntries } from "@trace/core";
 import { useEntryActions } from "./hooks/useEntryActions";
+import { useDrawerGestures } from "./hooks/useDrawerGestures";
+import { HtmlRenderProvider } from "../modules/entries/components/HtmlRenderProvider";
 
 // Cluster entries that are close together
 interface EntryCluster {
@@ -159,54 +161,8 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   const setShowPinnedFirst = (show: boolean) => setStreamSortPreference(viewPrefKey, { showPinnedFirst: show });
   const setDisplayMode = (mode: EntryDisplayMode) => setStreamSortPreference(viewPrefKey, { displayMode: mode });
 
-  // Screen width for swipe threshold calculation (1/3 of screen)
-  const screenWidth = Dimensions.get("window").width;
-  const SWIPE_THRESHOLD = screenWidth / 3;
-
-  // Ref to hold current drawerControl - needed because PanResponder callbacks
-  // capture values at creation time, so we need a ref to access current value
-  const drawerControlRef = useRef(drawerControl);
-  useEffect(() => {
-    drawerControlRef.current = drawerControl;
-  }, [drawerControl]);
-
-  // Swipe-right gesture for opening drawer - only on lower portion (not map)
-  const drawerPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
-        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
-        const isSwipingRight = gestureState.dx > 20;
-        const notInBackZone = evt.nativeEvent.pageX > 25;
-        return isHorizontalSwipe && isSwipingRight && notInBackZone;
-      },
-      onMoveShouldSetPanResponder: () => false,
-      onPanResponderGrant: () => {},
-      onPanResponderMove: (_, gestureState) => {
-        const control = drawerControlRef.current;
-        if (control && gestureState.dx > 0) {
-          control.setPosition(gestureState.dx);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const control = drawerControlRef.current;
-        if (!control) return;
-        const shouldOpen = gestureState.dx > SWIPE_THRESHOLD || gestureState.vx > 0.5;
-        if (shouldOpen) {
-          control.animateOpen();
-        } else {
-          control.animateClose();
-        }
-      },
-      onPanResponderTerminate: () => {
-        const control = drawerControlRef.current;
-        if (control) {
-          control.animateClose();
-        }
-      },
-    })
-  ).current;
+  // Shared drawer swipe gesture (bubble phase — lets table ScrollViews scroll first)
+  const { panHandlers: drawerPanHandlers } = useDrawerGestures({ drawerControl });
 
   // Parse selection into filter using shared helper
   const entryFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
@@ -726,7 +682,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
       </View>
 
       {/* Lower portion with swipe gesture for drawer */}
-      <View style={styles.lowerSection} {...drawerPanResponder.panHandlers}>
+      <View style={styles.lowerSection} {...drawerPanHandlers}>
         {/* Entry count and map height toggle */}
         <View style={[styles.countBar, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
           <Text style={[styles.countBarText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>
@@ -764,28 +720,30 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
           </View>
         ) : (
           <View style={[styles.entryList, { backgroundColor: theme.colors.background.primary }]}>
-            <EntryList
-              entries={displayedEntries}
-              isLoading={false}
-              onEntryPress={handleEntryPress}
-              onSelectOnMap={handleSelectOnMap}
-              selectedEntryId={selectedEntryId}
-              onMove={handleMoveEntry}
-              onCopy={handleCopyEntry}
-              onDelete={handleDeleteEntry}
-              onPin={handlePinEntry}
-              onArchive={handleArchiveEntry}
-              onTagPress={handleTagPress}
-              onMentionPress={handleMentionPress}
-              onStreamPress={handleStreamPress}
-              streams={streams}
-              locations={locations}
-              displayMode={displayMode}
-              fullStreams={streams}
-              entryCount={displayedEntries.length}
-              totalCount={(selectedEntryId || selectedClusterEntryIds) ? undefined : sortedVisibleEntries.length}
-              selectionActive={!!(selectedEntryId || selectedClusterEntryIds)}
-            />
+            <HtmlRenderProvider>
+              <EntryList
+                entries={displayedEntries}
+                isLoading={false}
+                onEntryPress={handleEntryPress}
+                onSelectOnMap={handleSelectOnMap}
+                selectedEntryId={selectedEntryId}
+                onMove={handleMoveEntry}
+                onCopy={handleCopyEntry}
+                onDelete={handleDeleteEntry}
+                onPin={handlePinEntry}
+                onArchive={handleArchiveEntry}
+                onTagPress={handleTagPress}
+                onMentionPress={handleMentionPress}
+                onStreamPress={handleStreamPress}
+                streams={streams}
+                locations={locations}
+                displayMode={displayMode}
+                fullStreams={streams}
+                entryCount={displayedEntries.length}
+                totalCount={(selectedEntryId || selectedClusterEntryIds) ? undefined : sortedVisibleEntries.length}
+                selectionActive={!!(selectedEntryId || selectedClusterEntryIds)}
+              />
+            </HtmlRenderProvider>
           </View>
         )}
       </View>
