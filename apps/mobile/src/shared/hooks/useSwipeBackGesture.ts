@@ -30,6 +30,7 @@ import { Animated, Easing, PanResponder, Dimensions, GestureResponderHandlers, K
 import { createScopedLogger, LogScopes } from "../utils/logger";
 import { IOS_SPRING } from "../constants/animations";
 import { getIsModalOpen } from "../navigation";
+import { getIsNativeTableTouched } from "../../modules/entries/helpers/htmlRenderers";
 
 const log = createScopedLogger(LogScopes.Navigation);
 
@@ -83,10 +84,28 @@ export function startPushAnimation(onComplete?: () => void) {
 
 // Global flag: set by WebView when user is touching a scrollable table
 let isTableTouched = false;
+// Timestamp of last tableTouchEnd — used for cooldown after table interaction.
+// Prevents swipe-back from triggering immediately after the user lifts their finger
+// from a table (common pattern: scroll table, lift, re-swipe triggers navigation).
+let _lastTableTouchEndTime = 0;
+const TABLE_TOUCH_COOLDOWN_MS = 200;
 
 /** Call from EditorWebBridge when touch starts/ends on a table in the WebView */
 export function setTableTouched(touched: boolean): void {
   isTableTouched = touched;
+  if (!touched) {
+    _lastTableTouchEndTime = Date.now();
+  }
+}
+
+/** Read the current isTableTouched state (used by drawer gesture to yield to table scroll) */
+export function getIsTableTouched(): boolean {
+  return isTableTouched;
+}
+
+/** Check if a table was recently touched (within cooldown window) */
+function isInTableCooldown(): boolean {
+  return Date.now() - _lastTableTouchEndTime < TABLE_TOUCH_COOLDOWN_MS;
 }
 
 interface UseSwipeBackGestureOptions {
@@ -188,8 +207,9 @@ export function useSwipeBackGesture({
         if (getIsModalOpen()) {
           return false;
         }
-        // Don't capture when user is scrolling a table in the editor
-        if (isTableTouched) {
+        // Don't capture when user is scrolling a table — either in the editor
+        // (async WebView flag + cooldown) or in native RNRH tables (synchronous flag)
+        if (isTableTouched || isInTableCooldown() || getIsNativeTableTouched()) {
           return false;
         }
         // Require clear horizontal swipe to the right

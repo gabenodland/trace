@@ -35,6 +35,9 @@ import {
 } from "@10play/tentap-editor";
 import type { WebViewMessageEvent } from "react-native-webview";
 import { setTableTouched } from "../../shared/hooks/useSwipeBackGesture";
+import { createScopedLogger, LogScopes } from "../../shared/utils/logger";
+
+const log = createScopedLogger(LogScopes.Editor);
 
 // Our custom editor bundle with title-first schema
 // @ts-ignore - JS file
@@ -94,9 +97,9 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
   ({ initialContent = "", onChange, customCSS, backgroundColor }, ref) => {
     // Debug: log what content we receive on mount
     useEffect(() => {
-      console.log(`[EditorWebBridge] Mounted with initialContent: ${initialContent.length} chars`);
+      log.debug(`[EditorWebBridge] Mounted with initialContent: ${initialContent.length} chars`);
       if (initialContent) {
-        console.log(`[EditorWebBridge] Content preview: ${initialContent.substring(0, 50)}...`);
+        log.debug(`[EditorWebBridge] Content preview: ${initialContent.substring(0, 50)}...`);
       }
     }, []);
 
@@ -129,7 +132,7 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
     // Re-inject CSS when theme changes (customCSS prop changes)
     useEffect(() => {
       if (customCSS && customCSS !== previousCSSRef.current) {
-        console.log('[EditorWebBridge] Theme changed, injecting new CSS');
+        log.debug('[EditorWebBridge] Theme changed, injecting new CSS');
         editor.injectCSS(customCSS, 'theme-styles');
         previousCSSRef.current = customCSS;
       }
@@ -139,20 +142,20 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
     useImperativeHandle(ref, () => ({
       // Content
       setContent: (html: string) => {
-        console.log(`[EditorWebBridge] setContent called: ${html.length} chars`);
+        log.debug(`[EditorWebBridge] setContent called: ${html.length} chars`);
         editor.setContent(html);
       },
       getHTML: () => {
-        console.log(`[EditorWebBridge] getHTML called`);
+        log.debug(`[EditorWebBridge] getHTML called`);
         return editor.getHTML();
       },
       // Focus
       focus: () => {
         // Request native WebView focus first (required for keyboard to appear)
         const webview = (editor as any).webviewRef?.current;
-        console.log('[EditorWebBridge] focus called, webview:', webview ? 'found' : 'null');
+        log.debug('[EditorWebBridge] focus called, webview:', { found: !!webview });
         if (webview) {
-          console.log('[EditorWebBridge] calling webview.requestFocus()');
+          log.debug('[EditorWebBridge] calling webview.requestFocus()');
           webview.requestFocus();
         }
         editor.focus('end');
@@ -166,9 +169,13 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
       toggleOrderedList: () => editor.toggleOrderedList(),
       toggleTaskList: () => editor.toggleTaskList(),
       toggleHeading: (level: 1 | 2 | 3 | 4 | 5 | 6) => editor.toggleHeading(level),
-      // List manipulation
-      sink: () => editor.sink(),
-      lift: () => editor.lift(),
+      // List manipulation — route through custom command handler to support both listItem and taskItem
+      sink: () => {
+        (editor as any).webviewRef?.current?.injectJavaScript(`window.editorCommand('indent');true;`);
+      },
+      lift: () => {
+        (editor as any).webviewRef?.current?.injectJavaScript(`window.editorCommand('outdent');true;`);
+      },
       // History
       undo: () => editor.undo(),
       redo: () => editor.redo(),
@@ -176,33 +183,33 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
         // Inject JS to call our custom command handler
         const webview = (editor as any).webviewRef?.current;
         if (webview) {
-          console.log('[EditorWebBridge] clearHistory: Injecting command to WebView');
+          log.debug('[EditorWebBridge] clearHistory: Injecting command to WebView');
           webview.injectJavaScript(`window.editorCommand('clearHistory');true;`);
         } else {
-          console.warn('[EditorWebBridge] clearHistory: webview ref not available');
+          log.warn('[EditorWebBridge] clearHistory: webview ref not available');
         }
       },
       setContentAndClearHistory: (html: string) => {
         const webview = (editor as any).webviewRef?.current;
         if (webview) {
-          console.log('[EditorWebBridge] setContentAndClearHistory called', { length: html.length });
+          log.debug('[EditorWebBridge] setContentAndClearHistory called', { length: html.length });
           // Escape the HTML for safe injection into JavaScript
           const escapedHtml = JSON.stringify(html);
           const script = `window.editorCommand('setContentAndClearHistory', { html: ${escapedHtml} });true;`;
-          console.log('[EditorWebBridge] Injecting setContentAndClearHistory script');
+          log.debug('[EditorWebBridge] Injecting setContentAndClearHistory script');
           webview.injectJavaScript(script);
         } else {
-          console.warn('[EditorWebBridge] setContentAndClearHistory: webview ref not available, falling back to setContent');
+          log.warn('[EditorWebBridge] setContentAndClearHistory: webview ref not available, falling back to setContent');
           editor.setContent(html);
         }
       },
       reloadWebView: () => {
         const webview = (editor as any).webviewRef?.current;
         if (webview) {
-          console.log('[EditorWebBridge] reloadWebView called');
+          log.debug('[EditorWebBridge] reloadWebView called');
           webview.reload();
         } else {
-          console.warn('[EditorWebBridge] reloadWebView: webview ref not available');
+          log.warn('[EditorWebBridge] reloadWebView: webview ref not available');
         }
       },
       // Table commands - injected via editorCommand since no TenTap bridge exists
@@ -255,7 +262,7 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
       return () => setTableTouched(false);
     }, []);
 
-    // Handle messages from WebView (table touch events for swipe-back blocking)
+    // Handle messages from WebView (table touch events + console forwarding)
     const handleMessage = useCallback((event: WebViewMessageEvent) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
@@ -263,6 +270,12 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
           setTableTouched(true);
         } else if (data.type === 'tableTouchEnd') {
           setTableTouched(false);
+        } else if (data.type === 'console') {
+          // Forward WebView console logs to RN console
+          const prefix = '[WebView]';
+          if (data.level === 'error') log.error(`${prefix} ${data.message}`);
+          else if (data.level === 'warn') log.warn(`${prefix} ${data.message}`);
+          else log.debug(`${prefix} ${data.message}`);
         }
       } catch {
         // Not JSON or not our message — TenTap handles its own messages

@@ -41,9 +41,6 @@ export function StreamDrawer() {
     outputRange: [0, 0.5],
   });
 
-  // Track if drawer is currently visible (for pointer events)
-  // Using state instead of ref so changes trigger re-render and update pointerEvents
-  const [isVisible, setIsVisible] = useState(false);
   // Track if being dragged externally (swipe-to-open from list)
   const [isDragging, setIsDragging] = useState(false);
   // Counter to prevent useEffect from double-firing animations when animateClose/animateOpen already started them.
@@ -53,8 +50,11 @@ export function StreamDrawer() {
   // Set drawer position directly (for external gesture control)
   // Position is in terms of how far drawer has moved: 0 = fully closed, DRAWER_WIDTH = fully open
   const setPosition = useCallback((position: number) => {
+    // Stop any running open/close spring so it doesn't fight with setValue.
+    // Without this, a new swipe during the close animation appears stuck.
+    translateX.stopAnimation();
+    animationIdRef.current = 0;
     setIsDragging(true);
-    setIsVisible(true);
     // translateX goes from -DRAWER_WIDTH (closed) to 0 (open)
     // position goes from 0 (closed) to DRAWER_WIDTH (open)
     const clampedPosition = Math.max(0, Math.min(position, DRAWER_WIDTH));
@@ -66,7 +66,6 @@ export function StreamDrawer() {
   const animateOpen = useCallback((velocity?: number) => {
     const myId = ++animationIdRef.current;
     setIsDragging(false);
-    setIsVisible(true);
     openDrawer(); // Update state
     Animated.spring(translateX, {
       toValue: 0,
@@ -94,7 +93,6 @@ export function StreamDrawer() {
     }).start(({ finished }) => {
       if (animationIdRef.current !== myId) return;
       animationIdRef.current = 0;
-      if (finished) setIsVisible(false);
     });
   }, [translateX, closeDrawer]);
 
@@ -145,7 +143,6 @@ export function StreamDrawer() {
     if (animationIdRef.current !== 0) return;
 
     if (isOpen) {
-      setIsVisible(true);
       Animated.spring(translateX, {
         toValue: 0,
         ...IOS_SPRING,
@@ -156,20 +153,17 @@ export function StreamDrawer() {
         ...IOS_SPRING,
         restDisplacementThreshold: 0.1,
         restSpeedThreshold: 0.1,
-      }).start(({ finished }) => {
-        if (finished) setIsVisible(false);
-      });
+      }).start();
     }
   }, [isOpen, isDragging]); // translateX is a stable ref
 
-  // Always render the drawer - it starts off-screen (translateX = -DRAWER_WIDTH)
-  // and backdrop is invisible (opacity = 0). Using pointerEvents to control interaction.
-  // Interactive when open or visible (drag released, close animating) so the backdrop
-  // blocks touches to entries underneath and tapping it dismisses the drawer.
-  // Not using isDragging here — during active drag the EntryListScreen PanResponder
-  // owns the gesture and we must not intercept its move events.
+  // Always render the drawer — it starts off-screen (translateX = -DRAWER_WIDTH)
+  // and backdrop is invisible (opacity = 0).
+  // pointerEvents driven by both isOpen and isDragging:
+  // - "auto" when open or being dragged (backdrop tap-to-dismiss works)
+  // - "none" during close animation (touches pass through for immediate re-swipe)
   return (
-    <View style={styles.container} pointerEvents={isOpen || isVisible ? "auto" : "none"}>
+    <View style={styles.container} pointerEvents={isOpen || isDragging ? "auto" : "none"}>
       {/* Backdrop */}
       <TouchableWithoutFeedback onPress={() => animateClose()}>
         <Animated.View
