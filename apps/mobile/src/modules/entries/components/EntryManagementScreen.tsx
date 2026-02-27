@@ -25,7 +25,7 @@ import { EntryDatePicker, TimePicker, StatusPicker, RatingPicker, PriorityPicker
 import { StreamPicker } from '../../streams/components/StreamPicker';
 import { LocationPicker } from '../../locations/components/LocationPicker/LocationPicker';
 import { PhotoGallery } from '../../photos/components/PhotoGallery';
-import { RichTextEditorV2, type RichTextEditorV2Ref } from '../../../components/editor/RichTextEditorV2';
+import { RichTextEditorV2, type RichTextEditorV2Ref, type CursorContext } from '../../../components/editor/RichTextEditorV2';
 import { Snackbar, useSnackbar } from '../../../shared/components';
 import { getEntryWithRelations, copyEntry, deleteEntry } from '../mobileEntryApi';
 import { useEntryManagementPhotos } from './hooks/useEntryManagementPhotos';
@@ -197,6 +197,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
 
     // Photo gallery collapsed state - when collapsed, photos show in AttributeBar
     const [isGalleryCollapsed, setIsGalleryCollapsed] = useState(false);
+    const [isInTableCell, setIsInTableCell] = useState(false);
 
     // Ref for RichTextEditorV2
     const editorRef = useRef<RichTextEditorV2Ref>(null);
@@ -352,6 +353,10 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       }
 
       log.debug('🔄 handleEditorReady: no pending restore (normal startup)');
+    }, []);
+
+    const handleCursorContext = useCallback((ctx: CursorContext) => {
+      setIsInTableCell(ctx.isInTableCell);
     }, []);
 
     // =========================================================================
@@ -1113,6 +1118,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
               onChange={handleContentChange}
               editable={isEditMode}
               onReady={handleEditorReady}
+              onCursorContext={handleCursorContext}
             />
           </View>
         </View>
@@ -1123,6 +1129,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
             <EditorToolbar
               editorRef={editorRef}
               onDone={exitEditMode}
+              isInTableCell={isInTableCell}
             />
           </BottomBar>
         )}

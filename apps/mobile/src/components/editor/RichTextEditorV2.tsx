@@ -38,7 +38,8 @@ import { View, StyleSheet, DeviceEventEmitter } from "react-native";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { createScopedLogger } from "../../shared/utils/logger";
 import { sanitizeHtmlColors } from "../../shared/utils/htmlUtils";
-import { EditorWebBridge, EditorWebBridgeRef } from "./EditorWebBridge";
+import { EditorWebBridge, EditorWebBridgeRef, CursorContext } from "./EditorWebBridge";
+export type { CursorContext };
 
 const log = createScopedLogger('RichTextEditorV2', '📝');
 
@@ -90,12 +91,15 @@ interface RichTextEditorV2Props {
   editable?: boolean;
   /** Called when editor is ready */
   onReady?: () => void;
+  /** Called when cursor context changes (e.g. entering/leaving a table cell) */
+  onCursorContext?: (ctx: CursorContext) => void;
 }
 
 export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2Props>(({
   onChange,
   editable = true,
   onReady,
+  onCursorContext,
 }, ref) => {
   const theme = useTheme();
   const l2Ref = useRef<EditorWebBridgeRef>(null);
@@ -402,6 +406,7 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
       <EditorWebBridge
         ref={l2Ref}
         onChange={handleL2Change}
+        onCursorContext={onCursorContext}
         customCSS={customCSS}
         backgroundColor={theme.colors.background.primary}
       />

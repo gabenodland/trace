@@ -30,18 +30,15 @@ import {
   CoreBridge,
   BoldBridge,
   ItalicBridge,
+  UnderlineBridge,
   HeadingBridge,
   BulletListBridge,
   OrderedListBridge,
-  ListItemBridge,
   TaskListBridge,
   HistoryBridge,
   HardBreakBridge,
   LinkBridge,
 } from '@10play/tentap-editor/web';
-import Text from '@tiptap/extension-text';
-import Paragraph from '@tiptap/extension-paragraph';
-import TaskItem from '@tiptap/extension-task-item';
 import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
@@ -142,6 +139,54 @@ declare global {
 // Global editor reference for commands injected from React Native
 window.__editorInstance = null;
 
+// Track previous cursor context to only post on changes
+let _prevIsInTableCell = false;
+
+/**
+ * Table scroll lock — prevents browser's native caret-following from
+ * scrolling the body when the cursor is inside a table cell.
+ *
+ * Root cause: table has display:block + overflow-x:auto, which CSS spec
+ * coerces to a scroll container. The browser's native scroll-to-caret
+ * miscalculates through this nested scroll context and jumps body.scrollTop
+ * to the wrong position. This is NOT ProseMirror's scrollIntoView — it's
+ * the browser's input handling, below JavaScript.
+ *
+ * Fix: on beforeinput, check if cursor is visible. If yes, save scrollTop
+ * and restore on the next scroll event (block the bad scroll). If cursor
+ * is off-screen, don't lock — let the browser scroll to bring it into view.
+ */
+let _tableScrollLock: number | null = null;
+
+// Save scroll position before browser processes input in table cells —
+// but ONLY if the cursor is already visible on screen. If the cursor is
+// off-screen, don't lock — let the browser scroll to bring it into view.
+// NOTE: getBoundingClientRect forces a synchronous layout, but this is
+// necessary — the check must happen BEFORE the browser scrolls, not after.
+document.addEventListener('beforeinput', () => {
+  if (!_prevIsInTableCell) return;
+
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+
+  const rect = sel.getRangeAt(0).getBoundingClientRect();
+  if (rect.top >= 0 && rect.bottom <= window.innerHeight) {
+    _tableScrollLock = document.body.scrollTop;
+  }
+}, true);
+
+// Restore scroll position after browser's native scroll-to-caret fires.
+document.addEventListener('scroll', (e) => {
+  if (_tableScrollLock !== null) {
+    const target = e.target as HTMLElement;
+    if (target === document.body || target === document.documentElement) {
+      document.body.scrollTop = _tableScrollLock;
+      document.documentElement.scrollTop = _tableScrollLock;
+      _tableScrollLock = null;
+    }
+  }
+}, true);
+
 /**
  * Command handler for React Native to call via injectJavaScript
  *
@@ -176,6 +221,10 @@ window.editorCommand = (command: string, payload?: any) => {
       }
 
       case 'setContentAndClearHistory': {
+        // Reset scroll lock state for new content
+        _prevIsInTableCell = false;
+        _tableScrollLock = null;
+
         const html = payload?.html || '';
         const { view, schema } = editor;
 
@@ -307,34 +356,94 @@ const watchForReady = () => {
 watchForReady();
 
 // Minimal bridge kit - only what toolbar actually uses
-// Reduces bundle size by removing unused: Code, Blockquote, Color, Highlight, Image, Strikethrough, Underline
+// Reduces bundle size by removing unused: Code, Blockquote, Color, Highlight, Image, Strikethrough
+// NOTE: ListItemBridge omitted — indent/outdent uses custom editorCommand handler instead.
+// Bridges provide core schema (doc, paragraph, text, listItem, taskItem) — don't re-add in extensions.
 const MinimalBridgeKit = [
-  CoreBridge,      // Essential - editor state
-  HistoryBridge,   // Undo/redo
-  BoldBridge,      // Bold text
-  ItalicBridge,    // Italic text
-  HeadingBridge,   // H1, H2
-  BulletListBridge, // Bullet lists
-  OrderedListBridge, // Numbered lists
-  ListItemBridge,  // List item handling (indent/outdent)
-  TaskListBridge,  // Checkbox lists
-  HardBreakBridge, // Line breaks
-  LinkBridge,      // Links (for pasted content)
+  CoreBridge,        // Essential - editor state (provides Document, Paragraph, Text)
+  HistoryBridge,     // Undo/redo
+  BoldBridge,        // Bold text
+  ItalicBridge,      // Italic text
+  UnderlineBridge,   // Underline text
+  HeadingBridge,     // H1, H2
+  BulletListBridge,  // Bullet lists (provides ListItem as dep)
+  OrderedListBridge, // Numbered lists (provides ListItem as dep)
+  TaskListBridge,    // Checkbox lists (provides TaskItem with nested:true as dep)
+  HardBreakBridge,   // Line breaks
+  LinkBridge,        // Links (for pasted content)
 ];
 
 function TiptapEditor() {
   const editor = useTenTap({
     bridges: MinimalBridgeKit,
     tiptapOptions: {
+      editorProps: {
+        // Override ProseMirror's default scroll-to-selection behavior.
+        // ProseMirror's scrollRectIntoView walks up every scrollable ancestor,
+        // including tables with display:block + overflow-x:auto. CSS coerces
+        // overflow-y to auto, making tables vertical scroll containers.
+        // ProseMirror then sets table.scrollTop, corrupting the scroll chain
+        // and jumping to top. Once corrupted, coords for ALL cells are wrong,
+        // causing a cascade where every subsequent selection also jumps.
+        // Fix: suppress ProseMirror's scroll only when cursor is in a table.
+        // For non-table content, let ProseMirror scroll normally.
+        handleScrollToSelection(view) {
+          // Check table state directly from selection (not _prevIsInTableCell)
+          // because ProseMirror calls this BEFORE onSelectionUpdate fires,
+          // so the flag would be stale on the transition frame.
+          const { $from } = view.state.selection;
+          let inTable = false;
+          for (let d = $from.depth; d > 0; d--) {
+            const name = $from.node(d).type.name;
+            if (name === 'tableCell' || name === 'tableHeader') {
+              inTable = true;
+              break;
+            }
+          }
+          // Outside tables — let ProseMirror handle scroll normally
+          if (!inTable) {
+            return false;
+          }
+          // Inside table — check if cursor is visible
+          const { head } = view.state.selection;
+          try {
+            const coords = view.coordsAtPos(head);
+            // Cursor is on-screen: suppress ProseMirror's scroll to prevent
+            // it corrupting the table's scrollTop via nested overflow contexts
+            if (coords.top >= 0 && coords.bottom <= window.innerHeight) {
+              return true;
+            }
+          } catch {
+            // coordsAtPos can throw — fall through to default
+          }
+          // Cursor is off-screen in a table: let ProseMirror scroll to it.
+          // Not ideal (may still corrupt table scroll in some cases) but
+          // better than leaving cursor invisible.
+          return false;
+        },
+      },
+      onSelectionUpdate: ({ editor: e }) => {
+        const { $from } = e.state.selection;
+        let isInTableCell = false;
+        for (let d = $from.depth; d > 0; d--) {
+          const name = $from.node(d).type.name;
+          if (name === 'tableCell' || name === 'tableHeader') {
+            isInTableCell = true;
+            break;
+          }
+        }
+        if (isInTableCell !== _prevIsInTableCell) {
+          _prevIsInTableCell = isInTableCell;
+          window.ReactNativeWebView?.postMessage?.(JSON.stringify({
+            type: 'cursorContext',
+            isInTableCell,
+          }));
+        }
+      },
       extensions: [
-        // Core schema types - must be explicitly included to prevent race condition
-        Text,
-        Paragraph,
-        // Title-first document schema (overrides default Document)
+        // Title-first document schema (overrides CoreBridge's default Document)
         TitleDocument,
         Title,
-        // Enable nested task lists (checkboxes can be indented)
-        TaskItem.configure({ nested: true }),
         // Custom placeholder handling - TipTap's Placeholder doesn't work with our custom schema
         // Title.ts handles title placeholder, BodyPlaceholder handles first paragraph
         BodyPlaceholder,

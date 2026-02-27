@@ -23,6 +23,8 @@ import { RichTextEditorV2, RichTextEditorV2Ref } from "../components/editor/Rich
 
 const SAMPLE_CONTENT = `<h1 class="entry-title">Test Entry Title</h1><p>This content was set via setContent().</p><ul><li><p>Bullet item 1</p></li><li><p>Bullet item 2</p></li></ul><p>Try typing below to test onChange detection.</p>`;
 
+const TABLE_CONTENT = `<h1 class="entry-title">Table Scroll Test</h1><p>Text above the table.</p><table><thead><tr><th>Name</th><th>Value</th><th>Notes</th></tr></thead><tbody><tr><td>Alpha</td><td>100</td><td>First row</td></tr><tr><td>Beta</td><td>200</td><td>Second row</td></tr><tr><td>Gamma</td><td>300</td><td>Third row</td></tr><tr><td>Delta</td><td>400</td><td>Fourth row</td></tr></tbody></table><p>Text below the table.</p>`;
+
 export function RichTextEditorV2TestScreen() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -55,6 +57,11 @@ export function RichTextEditorV2TestScreen() {
   const handleSetContent = () => {
     addLog("Setting sample content...");
     editorRef.current?.setContent(SAMPLE_CONTENT);
+  };
+
+  const handleSetTable = () => {
+    addLog("Setting table content...");
+    editorRef.current?.setContent(TABLE_CONTENT);
   };
 
   // === RELOAD + SET simulations (reproduces activity recreation bug) ===
@@ -297,6 +304,12 @@ export function RichTextEditorV2TestScreen() {
               onPress={handleSetContent}
             >
               <Text style={styles.buttonText}>Set Content</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#e67e22' }]}
+              onPress={handleSetTable}
+            >
+              <Text style={styles.buttonText}>Load Table</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.button, { backgroundColor: theme.colors.interactive.secondary }]}

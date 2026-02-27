@@ -296,12 +296,33 @@ When a parent PanResponder wants to claim (via `onMoveShouldSetPanResponder: tru
 - **Async-only protection for fast swipes**: WebView `postMessage` has ~16ms latency. `onMoveShouldSetPanResponder` can fire before the message arrives. Can't be solved with synchronous flags on the WebView container because it blocks too aggressively
 - **`isVisible` state for `pointerEvents`**: During close animation, `isVisible` stays true → full-screen overlay blocks all touches for ~800ms
 
+### Editor Table Scroll Fix
+When typing in a table cell inside the editor WebView, the browser's **native caret-following behavior** (NOT ProseMirror's `scrollIntoView`) miscalculates the scroll target through the table's nested overflow context (`display: block; overflow-x: auto` creates an unintentional vertical scroll container). The browser jumps `body.scrollTop` to the wrong position, pushing the cursor to the very top of the visible area.
+
+**Root cause**: CSS spec coerces `overflow-y` to `auto` when `overflow-x` is `auto`. This makes the table a vertical scroll container. The browser's native scroll-to-caret algorithm walks through this nested scroll context and produces wrong coordinates.
+
+**Fix** (two mechanisms in `editor-web/index.tsx`):
+
+1. **Table scroll lock** (`beforeinput` + `scroll` event listeners):
+   - On `beforeinput`, if cursor is in a table cell AND visible on screen, saves `document.body.scrollTop`
+   - On `scroll` event, if a saved position exists, immediately restores `body.scrollTop`
+   - Does NOT lock when cursor is off-screen — allows legitimate scroll-to-cursor
+
+2. **`handleScrollToSelection`** (ProseMirror EditorView prop):
+   - Outside tables: returns `false` → ProseMirror scrolls normally
+   - In table + cursor visible: returns `true` → suppresses ProseMirror's scroll (which would corrupt table scrollTop)
+   - In table + cursor off-screen: returns `false` → lets ProseMirror scroll to bring cursor into view
+
+**Key detail**: The table context flag `_prevIsInTableCell` is set by `onSelectionUpdate` in the TipTap options. `handleScrollToSelection` detects table state directly from the ProseMirror selection (not the flag) because ProseMirror calls it before `onSelectionUpdate` fires. Cursor visibility is checked inline via `getBoundingClientRect`/`coordsAtPos`.
+
+**Key lesson**: `editorHtml.js` is **gitignored**. Previous scroll fixes that lived only in the built bundle were silently lost when the bundle was rebuilt. Always commit source changes to `index.tsx`/`index.html`, not just rebuild.
+
 ### Editor Bundle
-The `editor-web/index.html` is compiled into `editor-web/build/editorHtml.js` via:
+The `editor-web/index.tsx` and `index.html` are compiled into `editor-web/build/editorHtml.js` via:
 ```
 npm run editor:build    # in apps/mobile/
 ```
-**Any changes to `editor-web/index.html` require rebuilding this bundle.** The WebView loads the bundled version, not the source HTML. Forgetting to rebuild means your WebView JS changes silently don't take effect.
+**Any changes to `editor-web/index.tsx` or `index.html` require rebuilding this bundle.** The output `editorHtml.js` is gitignored — Metro caches it, so restart with `npx expo start --clear` after rebuilding. The WebView loads the bundled version, not the source files. Forgetting to rebuild means your WebView JS changes silently don't take effect.
 
 ---
 
