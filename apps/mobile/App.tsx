@@ -6,7 +6,7 @@ import "./src/config/initializeCore";
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated, Linking as RNLinking, Modal, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated, Linking as RNLinking, Modal, TouchableOpacity, DeviceEventEmitter } from "react-native";
 import { useFonts } from "expo-font";
 // Theme fonts - all loaded upfront, user selects independently of theme
 import { MavenPro_400Regular, MavenPro_500Medium, MavenPro_600SemiBold, MavenPro_700Bold } from "@expo-google-fonts/maven-pro";
@@ -29,7 +29,7 @@ import * as Linking from "expo-linking";
 import { setSession } from "@trace/core";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
-import { useNavigationState, getNavigationVersion } from "./src/shared/navigation";
+import { useNavigationState, getNavigationVersion, navigate } from "./src/shared/navigation";
 import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
 import { ThemeProvider, useTheme } from "./src/shared/contexts/ThemeContext";
 import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/DrawerContext";
@@ -87,6 +87,18 @@ function AuthGate() {
 
   // Track initialization state to prevent duplicate initialization
   const hasInitializedRef = useRef(false);
+
+  // Key-based full remount — triggered by 'restartApp' event from Settings → Developer.
+  // navigate('inbox') resets NavigationService singleton (shared with AppContent)
+  // before the React tree remount, so AppContent renders the main screen on remount.
+  const [restartKey, setRestartKey] = useState(0);
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('restartApp', () => {
+      navigate('inbox');
+      setRestartKey(k => k + 1);
+    });
+    return () => sub.remove();
+  }, []);
 
   // Initialize database and sync when authenticated
   useEffect(() => {
@@ -171,13 +183,15 @@ function AuthGate() {
   // Navigation state is managed by NavigationService singleton
   return (
     <>
-      <CalendarStateProvider>
-        <MapStateProvider>
-          <DrawerProvider>
-            <AppContent />
-          </DrawerProvider>
-        </MapStateProvider>
-      </CalendarStateProvider>
+      <View key={restartKey} style={{ flex: 1 }}>
+        <CalendarStateProvider>
+          <MapStateProvider>
+            <DrawerProvider>
+              <AppContent />
+            </DrawerProvider>
+          </MapStateProvider>
+        </CalendarStateProvider>
+      </View>
 
       {/* Update Modal */}
       <Modal

@@ -14,7 +14,7 @@
 
 import { useRef, useImperativeHandle, forwardRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { View, Text, StyleSheet, Keyboard, Alert, AppState, AppStateStatus } from 'react-native';
+import { View, Text, StyleSheet, Keyboard, Alert, AppState, AppStateStatus, DeviceEventEmitter } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EntryHeader } from './EntryHeader';
 import { AttributeBar } from './AttributeBar';
@@ -586,6 +586,18 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       const subscription = AppState.addEventListener('change', handleAppStateChange);
       return () => subscription.remove();
     }, [checkWebViewHealth, handleEditorReload, entryId]);
+
+    // Listen for manual editor reload from Settings → Developer
+    // Stable ref avoids listener churn when handleEditorReload identity changes
+    const handleEditorReloadRef = useRef(handleEditorReload);
+    handleEditorReloadRef.current = handleEditorReload;
+    useEffect(() => {
+      const sub = DeviceEventEmitter.addListener('reloadEditor', () => {
+        log.info('🔄 Manual editor reload triggered from Settings');
+        handleEditorReloadRef.current();
+      });
+      return () => sub.remove();
+    }, []);
 
     // Handle editor content changes - split title from body
     const handleContentChange = useCallback((html: string) => {

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking, Alert, DeviceEventEmitter } from "react-native";
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "../shared/components";
 import { getAppVersion, getBuildNumber } from "../config/appVersionService";
@@ -353,7 +353,7 @@ export function SettingsScreen() {
             {/* RichTextEditorV2 Test (Layer 3) — dev mode only */}
             {isDevMode && (
               <TouchableOpacity
-                style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
+                style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
                 onPress={() => navigate("editorV2Test")}
                 activeOpacity={0.7}
               >
@@ -368,6 +368,45 @@ export function SettingsScreen() {
                 </View>
               </TouchableOpacity>
             )}
+
+            {/* Reload Editor — reloads WebView, preserves content */}
+            <TouchableOpacity
+              style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+              onPress={() => {
+                DeviceEventEmitter.emit('reloadEditor');
+                Alert.alert('Editor Reload', 'Editor WebView reload triggered.');
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Reload Editor</Text>
+                <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                  Reload editor WebView (preserves content)
+                </Text>
+              </View>
+              <View style={styles.settingValue}>
+                <Icon name="RotateCcw" size={16} color={theme.colors.text.tertiary} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Restart App — full React tree remount */}
+            <TouchableOpacity
+              style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}
+              onPress={() => {
+                DeviceEventEmitter.emit('restartApp');
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingLabel, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.medium }]}>Restart App</Text>
+                <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                  Full app restart (loses unsaved changes)
+                </Text>
+              </View>
+              <View style={styles.settingValue}>
+                <Icon name="Power" size={16} color={theme.colors.functional.overdue} />
+              </View>
+            </TouchableOpacity>
           </View>
         )}
 
