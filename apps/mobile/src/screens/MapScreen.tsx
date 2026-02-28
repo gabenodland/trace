@@ -626,13 +626,14 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
       {/* Map */}
       <View style={[styles.mapContainer, { height: isMapExpanded ? 300 : 150 }]}>
         <MapView
+          key={theme.isDark ? "dark" : "light"}
           ref={mapRef}
           style={styles.map}
           initialRegion={region}
           onMapReady={() => setIsMapReady(true)}
           onRegionChangeComplete={handleRegionChange}
           mapType="standard"
-          userInterfaceStyle="light"
+          userInterfaceStyle={theme.isDark ? "dark" : "light"}
           showsUserLocation={false}
           showsMyLocationButton={false}
           showsCompass={false}
@@ -719,7 +720,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
             <Text style={[styles.emptySubtext, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>Add GPS coordinates to your entries to see them on the map</Text>
           </View>
         ) : (
-          <View style={[styles.entryList, { backgroundColor: theme.colors.background.primary }]}>
+          <View style={[styles.entryList, { backgroundColor: theme.colors.background.secondary }]}>
             <HtmlRenderProvider>
               <EntryList
                 entries={displayedEntries}
