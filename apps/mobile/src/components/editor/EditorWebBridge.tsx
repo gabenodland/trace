@@ -53,7 +53,7 @@ export interface EditorWebBridgeRef {
   // Formatting
   toggleBold: () => void;
   toggleItalic: () => void;
-  toggleUnderline: () => void;
+  toggleStrikethrough: () => void;
   toggleBulletList: () => void;
   toggleOrderedList: () => void;
   toggleTaskList: () => void;
@@ -82,11 +82,17 @@ export interface EditorWebBridgeRef {
   toggleHeaderColumn: () => void;
 }
 
+export interface CursorContext {
+  isInTableCell: boolean;
+}
+
 interface EditorWebBridgeProps {
   /** Initial content (optional) */
   initialContent?: string;
   /** Called when content changes */
   onChange?: () => void;
+  /** Called when cursor context changes (e.g. entering/leaving a table cell) */
+  onCursorContext?: (ctx: CursorContext) => void;
   /** Custom CSS to inject (theme styles) */
   customCSS?: string;
   /** Background color for WebView (prevents white flash in dark mode) */
@@ -94,7 +100,7 @@ interface EditorWebBridgeProps {
 }
 
 export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgeProps>(
-  ({ initialContent = "", onChange, customCSS, backgroundColor }, ref) => {
+  ({ initialContent = "", onChange, onCursorContext, customCSS, backgroundColor }, ref) => {
     // Debug: log what content we receive on mount
     useEffect(() => {
       log.debug(`[EditorWebBridge] Mounted with initialContent: ${initialContent.length} chars`);
@@ -164,7 +170,7 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
       // Formatting
       toggleBold: () => editor.toggleBold(),
       toggleItalic: () => editor.toggleItalic(),
-      toggleUnderline: () => editor.toggleUnderline(),
+      toggleStrikethrough: () => editor.toggleStrike(),
       toggleBulletList: () => editor.toggleBulletList(),
       toggleOrderedList: () => editor.toggleOrderedList(),
       toggleTaskList: () => editor.toggleTaskList(),
@@ -262,7 +268,11 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
       return () => setTableTouched(false);
     }, []);
 
-    // Handle messages from WebView (table touch events + console forwarding)
+    // Stable ref for onCursorContext to avoid recreating handleMessage
+    const cursorContextRef = useRef(onCursorContext);
+    cursorContextRef.current = onCursorContext;
+
+    // Handle messages from WebView (table touch events, cursor context, console forwarding)
     const handleMessage = useCallback((event: WebViewMessageEvent) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
@@ -270,6 +280,8 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
           setTableTouched(true);
         } else if (data.type === 'tableTouchEnd') {
           setTableTouched(false);
+        } else if (data.type === 'cursorContext') {
+          cursorContextRef.current?.({ isInTableCell: !!data.isInTableCell });
         } else if (data.type === 'console') {
           // Forward WebView console logs to RN console
           const prefix = '[WebView]';

@@ -99,3 +99,5 @@ login.txt
 
 .mcp.json
 .serena/
+scripts/voice_log.jsonl
+scripts/__pycache__/

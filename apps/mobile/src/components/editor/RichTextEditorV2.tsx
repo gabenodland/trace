@@ -47,7 +47,7 @@ export interface RichTextEditorV2Ref {
   // Formatting
   toggleBold: () => void;
   toggleItalic: () => void;
-  toggleUnderline: () => void;
+  toggleStrikethrough: () => void;
   toggleBulletList: () => void;
   toggleOrderedList: () => void;
   toggleTaskList: () => void;
@@ -315,7 +315,7 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
     // Formatting - direct delegation to L2
     toggleBold: () => l2Ref.current?.toggleBold(),
     toggleItalic: () => l2Ref.current?.toggleItalic(),
-    toggleUnderline: () => l2Ref.current?.toggleUnderline(),
+    toggleStrikethrough: () => l2Ref.current?.toggleStrikethrough(),
     toggleBulletList: () => l2Ref.current?.toggleBulletList(),
     toggleOrderedList: () => l2Ref.current?.toggleOrderedList(),
     toggleTaskList: () => l2Ref.current?.toggleTaskList(),

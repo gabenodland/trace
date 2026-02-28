@@ -8,11 +8,13 @@ Start every response with "OK [ModelName] here to help". Push back if asked to d
 1. **Never make up data** — Ask if you need information.
 2. **Plan first** — Present your plan and get approval before implementing.
 3. **Minimal dependencies** — Ask before adding libraries.
-4. **ALWAYS USE VOICE** — MANDATORY in the SAME response as every completion or question:
-   `python c:/projects/trace/scripts/voice.py "<message>" --agent {model}-{role}`
-   Models: `sonnet`, `opus`, `haiku`. Roles: `main`, `explore`, `test`, `plan`, etc.
-   Example: `python c:/projects/trace/scripts/voice.py "Task completed" --agent sonnet-main`
-   Include the Bash voice call IN YOUR RESPONSE, not as a follow-up. DO NOT skip this.
+4. **ALWAYS USE VOICE** — MANDATORY: call the `voice_speak` MCP tool with every completion or question.
+   - `model`: your model — `opus`, `sonnet`, or `haiku`
+   - `role`: your role — `main`, `explore`, `test`, `plan`, `review`, etc.
+   - `project`: project name — just your cwd name (e.g. `trace`). No slashes.
+   - `session`: what the user asked for — one word (e.g. `editor`, `map-perf`). No slashes.
+   - `task`: what you are doing — `main` for main agents, or a short name for subagents (e.g. `research`, `tests`).
+   - When spawning subagents, tell them the project, session, and their task name.
 5. **No git commit** — Never commit until explicitly asked.
 6. **No `> nul`** — Use `/dev/null` in bash. Never Windows syntax.
 7. **Be direct** — No sugar coating, no people-pleasing. Harsh and critical.

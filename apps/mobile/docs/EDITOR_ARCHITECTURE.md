@@ -91,7 +91,7 @@ flowchart TB
 **Ref Methods**:
 - Content: `setContent`, `getHTML`
 - Focus: `focus`, `blur`
-- Formatting: `toggleBold`, `toggleItalic`, `toggleUnderline`
+- Formatting: `toggleBold`, `toggleItalic`, `toggleStrikethrough`
 - Lists: `toggleBulletList`, `toggleOrderedList`, `toggleTaskList`
 - Indentation: `sink` (indent), `lift` (outdent)
 - Headings: `toggleHeading(level)`

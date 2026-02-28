@@ -8,12 +8,354 @@ import type { ToolContext } from "./mod";
 // ============================================================================
 
 /**
+ * Find the end position of a balanced HTML tag block starting at `start`.
+ * `start` should point to the '<' of the opening tag.
+ * Returns the index AFTER the closing tag, or -1 if not found.
+ */
+function findBalancedTagEnd(html: string, tagName: string, start: number): number {
+  const lower = html.toLowerCase();
+  const openTag = `<${tagName.toLowerCase()}`;
+  const closeTag = `</${tagName.toLowerCase()}>`;
+  const firstAngle = html.indexOf('>', start);
+  if (firstAngle === -1) return -1;
+  let depth = 1;
+  let pos = firstAngle + 1;
+  while (depth > 0 && pos < html.length) {
+    const nextOpen = lower.indexOf(openTag, pos);
+    const nextClose = lower.indexOf(closeTag, pos);
+    if (nextClose === -1) return -1;
+    let validOpen = -1;
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      const c = html[nextOpen + openTag.length];
+      if (c === ' ' || c === '>' || c === '\n' || c === '\t' || c === undefined) {
+        validOpen = nextOpen;
+      }
+    }
+    if (validOpen !== -1) {
+      depth++;
+      pos = validOpen + openTag.length;
+    } else {
+      depth--;
+      pos = nextClose + closeTag.length;
+    }
+  }
+  return depth === 0 ? pos : -1;
+}
+
+/**
+ * Extract direct child elements of a given tag name from HTML.
+ * Uses balanced tag matching to handle nesting correctly.
+ */
+function extractDirectChildren(html: string, tagName: string): string[] {
+  const items: string[] = [];
+  const lower = html.toLowerCase();
+  const open = `<${tagName.toLowerCase()}`;
+  let pos = 0;
+  while (pos < html.length) {
+    const start = lower.indexOf(open, pos);
+    if (start === -1) break;
+    const c = html[start + open.length];
+    if (c !== ' ' && c !== '>' && c !== '\n' && c !== '\t') { pos = start + 1; continue; }
+    const end = findBalancedTagEnd(html, tagName, start);
+    if (end === -1) break;
+    items.push(html.substring(start, end));
+    pos = end;
+  }
+  return items;
+}
+
+/**
+ * Convert inline HTML to markdown (for content inside list items).
+ */
+function inlineHtmlToMd(html: string): string {
+  return html
+    .replace(/<label[^>]*>[\s\S]*?<\/label>/gi, '')
+    .replace(/<div[^>]*>/gi, '').replace(/<\/div>/gi, '')
+    .replace(/<p[^>]*>/gi, '').replace(/<\/p>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
+    .replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**')
+    .replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
+    .replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
+    .replace(/<s[^>]*>(.*?)<\/s>/gi, '~~$1~~')
+    .replace(/<strike[^>]*>(.*?)<\/strike>/gi, '~~$1~~')
+    .replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`')
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Separate nested <ul>/<ol> blocks from text content inside a list item.
+ */
+function separateNestedLists(content: string): { text: string; nested: string[] } {
+  const nested: string[] = [];
+  let text = content;
+  let found = true;
+  while (found) {
+    found = false;
+    for (const tag of ['ul', 'ol']) {
+      const lower = text.toLowerCase();
+      const idx = lower.indexOf(`<${tag}`);
+      if (idx === -1) continue;
+      const c = text[idx + tag.length + 1];
+      if (c !== ' ' && c !== '>' && c !== '\n' && c !== '\t') continue;
+      const end = findBalancedTagEnd(text, tag, idx);
+      if (end === -1) continue;
+      nested.push(text.substring(idx, end));
+      text = text.substring(0, idx) + text.substring(end);
+      found = true;
+      break;
+    }
+  }
+  return { text, nested };
+}
+
+/**
+ * Recursively convert an HTML list block (<ul>/<ol>) to markdown with proper nesting.
+ */
+function listBlockToMd(listHtml: string, depth: number): string {
+  const outerTag = listHtml.match(/^<(ul|ol)[^>]*>/i);
+  if (!outerTag) return '';
+  const tagName = outerTag[1].toLowerCase();
+  const isOrdered = tagName === 'ol';
+  const openEnd = listHtml.indexOf('>') + 1;
+  const closeIdx = listHtml.toLowerCase().lastIndexOf(`</${tagName}>`);
+  if (closeIdx === -1) return '';
+  const innerHtml = listHtml.substring(openEnd, closeIdx);
+  const items = extractDirectChildren(innerHtml, 'li');
+  const indent = '  '.repeat(depth);
+  let md = '';
+  let orderNum = 1;
+  for (const itemHtml of items) {
+    const liTag = itemHtml.match(/^<li[^>]*>/i)?.[0] || '<li>';
+    const isChecked = /data-checked=["']true["']/i.test(liTag);
+    const isUnchecked = /data-checked=["']false["']/i.test(liTag);
+    const contentStart = liTag.length;
+    const contentEnd = itemHtml.length - 5; // '</li>'.length
+    const rawContent = itemHtml.substring(contentStart, contentEnd);
+    const { text: textPart, nested } = separateNestedLists(rawContent);
+    const cleanText = inlineHtmlToMd(textPart);
+    if (isChecked || isUnchecked) {
+      md += `${indent}- [${isChecked ? 'x' : ' '}] ${cleanText}\n`;
+    } else if (isOrdered) {
+      md += `${indent}${orderNum}. ${cleanText}\n`;
+      orderNum++;
+    } else {
+      md += `${indent}- ${cleanText}\n`;
+    }
+    for (const nestedList of nested) {
+      md += listBlockToMd(nestedList, depth + 1);
+    }
+  }
+  return md;
+}
+
+/**
+ * Find and convert all top-level HTML list blocks to markdown.
+ * Replaces each <ul>/<ol> block (including nested children) with properly indented markdown.
+ */
+function convertHtmlListsToMd(html: string): string {
+  let result = html;
+  const blocks: { start: number; end: number }[] = [];
+  let pos = 0;
+  while (pos < result.length) {
+    const lower = result.toLowerCase();
+    let nextStart = -1;
+    let tag = '';
+    const nextUl = lower.indexOf('<ul', pos);
+    const nextOl = lower.indexOf('<ol', pos);
+    // Pick the nearest valid list tag
+    for (const [idx, t] of [[nextUl, 'ul'], [nextOl, 'ol']] as [number, string][]) {
+      if (idx === -1) continue;
+      const c = result[idx + t.length + 1];
+      if (c !== ' ' && c !== '>' && c !== '\n' && c !== '\t') continue;
+      if (nextStart === -1 || idx < nextStart) { nextStart = idx; tag = t; }
+    }
+    if (nextStart === -1) break;
+    const end = findBalancedTagEnd(result, tag, nextStart);
+    if (end === -1) { pos = nextStart + 1; continue; }
+    blocks.push({ start: nextStart, end });
+    pos = end;
+  }
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const { start, end } = blocks[i];
+    const blockHtml = result.substring(start, end);
+    const md = listBlockToMd(blockHtml, 0);
+    result = result.substring(0, start) + '\n' + md + result.substring(end);
+  }
+  return result;
+}
+
+// --- Markdown → HTML list helpers ---
+
+interface MdListItem {
+  indent: number;
+  type: 'task-checked' | 'task-unchecked' | 'bullet' | 'ordered';
+  content: string;
+}
+
+function isMarkdownListLine(line: string): boolean {
+  return /^\s*(- \[x\] |- \[ \] |- |\d+\. )/.test(line);
+}
+
+function parseMdListLine(line: string): MdListItem | null {
+  const match = line.match(/^(\s*)(- \[x\] |- \[ \] |- |\d+\. )(.*)$/);
+  if (!match) return null;
+  const indent = match[1].length;
+  const marker = match[2].trimEnd();
+  const content = match[3];
+  let type: MdListItem['type'];
+  if (marker === '- [x]') type = 'task-checked';
+  else if (marker === '- [ ]') type = 'task-unchecked';
+  else if (marker === '-') type = 'bullet';
+  else type = 'ordered';
+  return { indent, type, content };
+}
+
+function buildNestedListHtml(items: MdListItem[], startIdx: number, baseIndent: number): { html: string; nextIdx: number } {
+  if (startIdx >= items.length) return { html: '', nextIdx: startIdx };
+  const first = items[startIdx];
+  const isTask = first.type === 'task-checked' || first.type === 'task-unchecked';
+  const isOrdered = first.type === 'ordered';
+  const openTag = isTask ? '<ul data-type="taskList">' : (isOrdered ? '<ol>' : '<ul>');
+  const closeTag = isTask ? '</ul>' : (isOrdered ? '</ol>' : '</ul>');
+  let html = openTag;
+  let i = startIdx;
+  while (i < items.length && items[i].indent >= baseIndent) {
+    if (items[i].indent > baseIndent) {
+      const nested = buildNestedListHtml(items, i, items[i].indent);
+      // Reopen previous li to attach nested list, then close it
+      if (html.endsWith('</li>')) {
+        html = html.slice(0, -5) + nested.html + '</li>';
+      } else {
+        html += nested.html;
+      }
+      i = nested.nextIdx;
+      continue;
+    }
+    const item = items[i];
+    if (item.type === 'task-checked' || item.type === 'task-unchecked') {
+      const checked = item.type === 'task-checked';
+      html += `<li data-type="taskItem" data-checked="${checked}"><label><input type="checkbox"${checked ? ' checked="checked"' : ''}><span></span></label><div><p>${item.content}</p></div>`;
+    } else {
+      html += `<li><p>${item.content}</p>`;
+    }
+    i++;
+    if (i < items.length && items[i].indent > baseIndent) {
+      const nested = buildNestedListHtml(items, i, items[i].indent);
+      html += nested.html;
+      i = nested.nextIdx;
+    }
+    html += '</li>';
+  }
+  html += closeTag;
+  return { html, nextIdx: i };
+}
+
+function convertMdListsToHtml(text: string): string {
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (isMarkdownListLine(lines[i])) {
+      const listLines: string[] = [];
+      while (i < lines.length) {
+        if (isMarkdownListLine(lines[i])) {
+          listLines.push(lines[i]);
+          i++;
+        } else if (lines[i].trim() === '' && i + 1 < lines.length && isMarkdownListLine(lines[i + 1])) {
+          i++; // Skip blank line between list items
+        } else {
+          break;
+        }
+      }
+      const items = listLines.map(parseMdListLine).filter((x): x is MdListItem => x !== null);
+      if (items.length > 0) {
+        const { html } = buildNestedListHtml(items, 0, items[0].indent);
+        result.push(html);
+      }
+    } else {
+      result.push(lines[i]);
+      i++;
+    }
+  }
+  return result.join('\n');
+}
+
+/**
  * Convert HTML content to Markdown for AI readability
  */
-function htmlToMarkdown(html: string): string {
+export function htmlToMarkdown(html: string): string {
   if (!html) return "";
 
   let md = html;
+
+  // Handle tables FIRST — before any other transforms that would inject
+  // markdown syntax (headings, lists, blockquotes) into cell content.
+  // Tables are extracted from raw HTML so cell content is still HTML tags.
+  md = md.replace(/<colgroup>[\s\S]*?<\/colgroup>/gi, "");
+  md = md.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, (_match: string, tableContent: string) => {
+    const rows: string[][] = [];
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+    while ((rowMatch = rowRegex.exec(tableContent)) !== null) {
+      const cells: string[] = [];
+      const cellRegex = /<(?:th|td)[^>]*>([\s\S]*?)<\/(?:th|td)>/gi;
+      let cellMatch;
+      while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
+        let cellContent = cellMatch[1]
+          // Strip block-level HTML tags (cells should be inline content in GFM)
+          .replace(/<p[^>]*>/gi, "")
+          .replace(/<\/p>/gi, " ")
+          .replace(/<br\s*\/?>/gi, " ")
+          .replace(/<h[1-6][^>]*>/gi, "")
+          .replace(/<\/h[1-6]>/gi, " ")
+          .replace(/<ul[^>]*>/gi, "")
+          .replace(/<\/ul>/gi, "")
+          .replace(/<ol[^>]*>/gi, "")
+          .replace(/<\/ol>/gi, "")
+          .replace(/<li[^>]*>/gi, "")
+          .replace(/<\/li>/gi, " ")
+          .replace(/<blockquote[^>]*>/gi, "")
+          .replace(/<\/blockquote>/gi, " ");
+        // Convert inline formatting to markdown
+        cellContent = cellContent.replace(/<strong[^>]*>(.*?)<\/strong>/gi, "**$1**");
+        cellContent = cellContent.replace(/<b[^>]*>(.*?)<\/b>/gi, "**$1**");
+        cellContent = cellContent.replace(/<em[^>]*>(.*?)<\/em>/gi, "*$1*");
+        cellContent = cellContent.replace(/<i[^>]*>(.*?)<\/i>/gi, "*$1*");
+        cellContent = cellContent.replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`");
+        cellContent = cellContent.replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)");
+        // Strip any remaining HTML tags
+        cellContent = cellContent.replace(/<[^>]+>/g, "");
+        // Escape pipe characters that would break GFM table syntax
+        cellContent = cellContent.replace(/\|/g, "\\|");
+        // Collapse whitespace
+        cellContent = cellContent.replace(/\s+/g, " ").trim();
+        if (!cellContent) cellContent = " ";
+        cells.push(cellContent);
+      }
+      if (cells.length > 0) rows.push(cells);
+    }
+    if (rows.length === 0) return "";
+
+    const colCount = Math.max(...rows.map((r) => r.length));
+    const lines: string[] = [];
+    const header = rows[0];
+    while (header.length < colCount) header.push(" ");
+    lines.push("| " + header.join(" | ") + " |");
+    lines.push("| " + header.map(() => "---").join(" | ") + " |");
+    for (let i = 1; i < rows.length; i++) {
+      while (rows[i].length < colCount) rows[i].push(" ");
+      lines.push("| " + rows[i].join(" | ") + " |");
+    }
+    return "\n" + lines.join("\n") + "\n\n";
+  });
+
+  // Handle lists — recursive parser for proper nesting (must run before
+  // headings/formatting regexes which would mangle content inside <li> tags)
+  md = convertHtmlListsToMd(md);
 
   // Handle headings (h1-h6)
   md = md.replace(/<h1[^>]*>(.*?)<\/h1>/gi, "# $1\n\n");
@@ -28,7 +370,6 @@ function htmlToMarkdown(html: string): string {
   md = md.replace(/<b[^>]*>(.*?)<\/b>/gi, "**$1**");
   md = md.replace(/<em[^>]*>(.*?)<\/em>/gi, "*$1*");
   md = md.replace(/<i[^>]*>(.*?)<\/i>/gi, "*$1*");
-  md = md.replace(/<u[^>]*>(.*?)<\/u>/gi, "_$1_");
   md = md.replace(/<s[^>]*>(.*?)<\/s>/gi, "~~$1~~");
   md = md.replace(/<strike[^>]*>(.*?)<\/strike>/gi, "~~$1~~");
   md = md.replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`");
@@ -40,19 +381,7 @@ function htmlToMarkdown(html: string): string {
   md = md.replace(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*\/?>/gi, "![$2]($1)");
   md = md.replace(/<img[^>]*src="([^"]*)"[^>]*\/?>/gi, "![]($1)");
 
-  // Handle Tiptap task lists (must come before regular lists)
-  // Task list items: <li data-type="taskItem" data-checked="true/false">
-  md = md.replace(/<li[^>]*data-checked="true"[^>]*>(.*?)<\/li>/gi, "- [x] $1\n");
-  md = md.replace(/<li[^>]*data-checked="false"[^>]*>(.*?)<\/li>/gi, "- [ ] $1\n");
-
-  // Handle lists - unordered
-  md = md.replace(/<ul[^>]*>/gi, "\n");
-  md = md.replace(/<\/ul>/gi, "\n");
-  md = md.replace(/<li[^>]*>(.*?)<\/li>/gi, "- $1\n");
-
-  // Handle lists - ordered (basic support)
-  md = md.replace(/<ol[^>]*>/gi, "\n");
-  md = md.replace(/<\/ol>/gi, "\n");
+  // Lists already handled by convertHtmlListsToMd above
 
   // Handle blockquotes
   md = md.replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gis, (_, content) => {
@@ -96,7 +425,7 @@ function htmlToMarkdown(html: string): string {
 /**
  * Convert Markdown content to HTML for storage
  */
-function markdownToHtml(md: string): string {
+export function markdownToHtml(md: string): string {
   if (!md) return "";
 
   let html = md;
@@ -113,6 +442,48 @@ function markdownToHtml(md: string): string {
 
   // Handle inline code
   html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // Handle GFM tables FIRST — before heading/list/blockquote transforms
+  // that would corrupt cell content containing markdown syntax.
+  // Separator validation requires each column to match :?-+:? (proper GFM).
+  html = html.replace(
+    /^(\|.+\|)\n(\|[\s|:-]+\|)\n((?:\|.+\|(?:\n|$))*)/gm,
+    (_match, headerLine: string, separator: string, bodyBlock: string) => {
+      const parseRow = (line: string): string[] =>
+        line.split("|").slice(1, -1).map((cell) => cell.trim());
+
+      // Validate separator — each column must be :?-+:?
+      const sepCells = parseRow(separator);
+      const validSep = sepCells.every((cell) => /^\s*:?-+:?\s*$/.test(cell));
+      if (!validSep || sepCells.length === 0) return _match;
+
+      const headers = parseRow(headerLine);
+      const colCount = headers.length;
+      if (colCount === 0) return _match;
+
+      const colgroup =
+        "<colgroup>" + headers.map(() => "<col>").join("") + "</colgroup>";
+
+      const headerCells = headers
+        .map((h) => `<th colspan="1" rowspan="1"><p>${h || ""}</p></th>`)
+        .join("");
+      const headerRow = `<tr>${headerCells}</tr>`;
+
+      const bodyLines = bodyBlock.trim().split("\n").filter(Boolean);
+      const bodyRows = bodyLines
+        .map((line: string) => {
+          const cells = parseRow(line);
+          while (cells.length < colCount) cells.push("");
+          const tds = cells
+            .map((c) => `<td colspan="1" rowspan="1"><p>${c || ""}</p></td>`)
+            .join("");
+          return `<tr>${tds}</tr>`;
+        })
+        .join("");
+
+      return `<table class="trace-table">${colgroup}<thead>${headerRow}</thead><tbody>${bodyRows}</tbody></table>`;
+    }
+  );
 
   // Handle headings
   html = html.replace(/^###### (.+)$/gm, "<h6>$1</h6>");
@@ -143,18 +514,8 @@ function markdownToHtml(md: string): string {
   // Handle blockquotes
   html = html.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>");
 
-  // Handle task list items (checkboxes) - must come before regular lists
-  // - [ ] unchecked, - [x] checked
-  // Structure must match what Tiptap/TenTap expects: label with checkbox + div with content
-  html = html.replace(/^- \[x\] (.+)$/gm, '<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked="checked"><span></span></label><div><p>$1</p></div></li>');
-  html = html.replace(/^- \[ \] (.+)$/gm, '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>$1</p></div></li>');
-
-  // Wrap consecutive task items in taskList
-  html = html.replace(/(<li data-type="taskItem"[^>]*>.*?<\/li>\n?)+/g, (match) => `<ul data-type="taskList">${match}</ul>`);
-
-  // Handle regular unordered lists (items not already processed as tasks)
-  html = html.replace(/^- (.+)$/gm, "<li>$1</li>");
-  html = html.replace(/(<li>(?!.*data-type).*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`);
+  // Handle lists — recursive parser for proper nesting
+  html = convertMdListsToHtml(html);
 
   // Handle paragraphs (lines not already wrapped)
   const lines = html.split("\n\n");
@@ -163,7 +524,7 @@ function markdownToHtml(md: string): string {
       const trimmed = line.trim();
       if (!trimmed) return "";
       // Skip if already has block-level tags
-      if (/^<(h[1-6]|ul|ol|li|pre|blockquote|hr|p)/.test(trimmed)) {
+      if (/^<(h[1-6]|ul|ol|li|pre|blockquote|hr|p|table)/.test(trimmed)) {
         return trimmed;
       }
       return `<p>${trimmed}</p>`;
@@ -727,7 +1088,7 @@ export async function createEntry(
     content: markdownToHtml(p.content), // Convert Markdown to HTML
     tags: p.tags || null,
     stream_id: p.stream_id || null,
-    status: p.status || streamSettings?.entry_default_status || "draft",
+    status: p.status || streamSettings?.entry_default_status || "none",
     entry_date: p.entry_date || now.split("T")[0],
     created_at: now,
     updated_at: now,

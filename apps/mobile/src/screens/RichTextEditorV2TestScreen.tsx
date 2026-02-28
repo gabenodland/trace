@@ -215,9 +215,9 @@ export function RichTextEditorV2TestScreen() {
     addLog("toggleItalic() called");
   };
 
-  const handleUnderline = () => {
-    editorRef.current?.toggleUnderline();
-    addLog("toggleUnderline() called");
+  const handleStrikethrough = () => {
+    editorRef.current?.toggleStrikethrough();
+    addLog("toggleStrikethrough() called");
   };
 
   const handleBulletList = () => {
@@ -390,9 +390,9 @@ export function RichTextEditorV2TestScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.button, { backgroundColor: theme.colors.border.dark }]}
-              onPress={handleUnderline}
+              onPress={handleStrikethrough}
             >
-              <Text style={[styles.buttonText, { textDecorationLine: 'underline' }]}>U</Text>
+              <Text style={[styles.buttonText, { textDecorationLine: 'line-through' }]}>S</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.button, { backgroundColor: theme.colors.border.dark }]}

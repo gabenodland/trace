@@ -1,50 +1,50 @@
 # Voice
 
-Speak a message using Microsoft Edge neural text-to-speech. Each agent randomly picks a unique voice and keeps it for the session.
+Speak a message using Microsoft Edge neural text-to-speech. Each session/agent combo gets a unique random voice from a curated pool. Voices persist across restarts.
 
 ## Usage
 
 ```
-/voice "Your message here" --agent main
-/voice "Message" --agent explore
-/voice --show-session
-/voice --reset-session
+/voice "Your message here" --agent opus-main --session editor
+/voice "Message" --agent sonnet-explore --session editor
+/voice --assignments
+/voice --reset
 ```
 
 ## Instructions
 
-When this command is invoked, run the voice.py script:
+When this command is invoked, use the `voice_speak` MCP tool. If MCP is unavailable, fall back to:
 
 ```bash
-python c:/projects/trace/scripts/voice.py $ARGUMENTS
+python c:/projects/claude-voice-mcp/voice.py $ARGUMENTS
 ```
 
-## Agent Voice System
+## Session System
 
-Each agent type gets a randomly assigned voice on first use. The voice persists for the entire session so you can distinguish agents by their voices.
+Sessions group agents working on the same task. The registry key is `session/agent`, so:
+- `editor/opus-main` and `settings/opus-main` get **different voices**
+- `editor/opus-main` and `editor/sonnet-explore` get **different voices**
+- Same `session/agent` combo always gets the **same voice** (persisted to disk)
 
-**Common agent types:**
-- `main` - Primary Claude instance
-- `explore` - Explorer/research agent
-- `plan` - Planning agent
-- `code` - Code writing agent
-- `bash` - Command execution agent
-- `test` - Test runner agent
-- `build` - Build agent
+If `--session` is omitted, defaults to the cwd folder name (e.g. `trace`).
 
-**Voice pool (14 voices):**
-- US English: Aria, Guy, Jenny, Christopher, Eric, Michelle
-- British: Sonia, Ryan
-- Australian: Natasha, William
-- Irish: Emily, Connor
-- Indian: Neerja
-- Canadian: Clara
+**Subagents:** When spawning subagents, tell them to use the same `--session` value so they're grouped with you in the UI.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `--show-session` | Show which voice each agent has |
-| `--reset-session` | Clear all assignments, agents pick new voices |
-| `--list-pool` | List available voices in the pool |
+| `"text" --agent ID --session NAME` | Speak with auto-assigned voice |
+| `"text" --agent ID --name NAME` | Speak with custom display name |
+| `"text" --voice VOICE` | Speak with explicit voice override |
+| `--assignments` | Show all session/agent voice mappings |
+| `--assign AGENT VOICE` | Manually assign a voice |
+| `--pool` | Show the 14 curated voices and assignments |
+| `--stop` | Stop current playback |
+| `--status` | Show playback state |
+| `--reset` | Clear all assignments |
 | `--list-voices` | List ALL Edge TTS voices (300+) |
+
+## Voice Pool (42 voices across 14 locales)
+
+Run `python c:/projects/claude-voice-mcp/voice.py --pool` to see current assignments.

@@ -2,14 +2,14 @@
  * EditorToolbar - Bottom toolbar for rich text editing
  *
  * Layout:
- * - Top bar: B, I, U, H1, H2 | [List] [Table] mode toggles | ✓ Done (right-aligned)
+ * - Top bar: B, I, S, H1, H2 | [List] [Table] mode toggles | ✓ Done (right-aligned)
  * - List sub-bar: Bullet, Ordered, Task | Indent, Outdent
  * - Table sub-bar: +Table, +Col, +Row | -Col, -Row, Delete | Header
  *
  * Only one sub-bar open at a time. Mode toggles are visually distinct pill buttons.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { Icon } from "../../../shared/components";
@@ -20,17 +20,27 @@ type SubBar = 'none' | 'list' | 'table';
 interface EditorToolbarProps {
   editorRef: React.RefObject<RichTextEditorV2Ref | null>;
   onDone: () => void;
+  /** When true, block-level buttons (H1, H2, lists) are disabled */
+  isInTableCell?: boolean;
 }
 
-export function EditorToolbar({ editorRef, onDone }: EditorToolbarProps) {
+export function EditorToolbar({ editorRef, onDone, isInTableCell = false }: EditorToolbarProps) {
   const theme = useTheme();
   const [activeSubBar, setActiveSubBar] = useState<SubBar>('none');
   const iconColor = theme.colors.text.secondary;
   const activeColor = theme.colors.functional.accent;
+  const disabledColor = theme.colors.text.disabled;
 
   const toggleSubBar = (bar: SubBar) => {
     setActiveSubBar(prev => prev === bar ? 'none' : bar);
   };
+
+  // Close list sub-bar when entering a table cell
+  useEffect(() => {
+    if (isInTableCell) {
+      setActiveSubBar(prev => prev === 'list' ? 'none' : prev);
+    }
+  }, [isInTableCell]);
 
   return (
     <View style={s.container}>
@@ -43,14 +53,14 @@ export function EditorToolbar({ editorRef, onDone }: EditorToolbarProps) {
         <TouchableOpacity style={s.btn} onPress={() => editorRef.current?.toggleItalic()} accessibilityLabel="Italic" accessibilityRole="button">
           <Icon name="Italic" size={18} color={iconColor} />
         </TouchableOpacity>
-        <TouchableOpacity style={s.btn} onPress={() => editorRef.current?.toggleUnderline()} accessibilityLabel="Underline" accessibilityRole="button">
-          <Icon name="Underline" size={18} color={iconColor} />
+        <TouchableOpacity style={s.btn} onPress={() => editorRef.current?.toggleStrikethrough()} accessibilityLabel="Strikethrough" accessibilityRole="button">
+          <Icon name="Strikethrough" size={18} color={iconColor} />
         </TouchableOpacity>
-        <TouchableOpacity style={s.btn} onPress={() => editorRef.current?.toggleHeading(1)} accessibilityLabel="Heading 1" accessibilityRole="button">
-          <Text style={[s.headingText, { color: iconColor, fontFamily: theme.typography.fontFamily.bold }]}>H1</Text>
+        <TouchableOpacity style={s.btn} onPress={() => editorRef.current?.toggleHeading(1)} disabled={isInTableCell} accessibilityLabel="Heading 1" accessibilityRole="button">
+          <Text style={[s.headingText, { color: isInTableCell ? disabledColor : iconColor, fontFamily: theme.typography.fontFamily.bold }]}>H1</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={s.btn} onPress={() => editorRef.current?.toggleHeading(2)} accessibilityLabel="Heading 2" accessibilityRole="button">
-          <Text style={[s.headingText, { color: iconColor, fontFamily: theme.typography.fontFamily.bold }]}>H2</Text>
+        <TouchableOpacity style={s.btn} onPress={() => editorRef.current?.toggleHeading(2)} disabled={isInTableCell} accessibilityLabel="Heading 2" accessibilityRole="button">
+          <Text style={[s.headingText, { color: isInTableCell ? disabledColor : iconColor, fontFamily: theme.typography.fontFamily.bold }]}>H2</Text>
         </TouchableOpacity>
 
         <View style={[s.divider, { backgroundColor: theme.colors.border.medium }]} />
@@ -61,8 +71,10 @@ export function EditorToolbar({ editorRef, onDone }: EditorToolbarProps) {
             s.modePill,
             { borderColor: activeSubBar === 'list' ? activeColor : theme.colors.border.dark },
             activeSubBar === 'list' && { backgroundColor: theme.colors.functional.accentLight },
+            isInTableCell && { opacity: 0.4 },
           ]}
           onPress={() => toggleSubBar('list')}
+          disabled={isInTableCell}
           accessibilityLabel="List tools"
           accessibilityRole="button"
           accessibilityState={{ expanded: activeSubBar === 'list' }}
@@ -117,8 +129,8 @@ export function EditorToolbar({ editorRef, onDone }: EditorToolbarProps) {
       {/* Table sub-bar */}
       {activeSubBar === 'table' && (
         <View style={[s.subBar, { backgroundColor: theme.colors.background.tertiary, borderTopColor: theme.colors.border.light }]}>
-          <TouchableOpacity style={s.subBtn} onPress={() => editorRef.current?.insertTable()} accessibilityLabel="Insert table" accessibilityRole="button">
-            <Icon name="Grid2x2Plus" size={15} color={iconColor} />
+          <TouchableOpacity style={s.subBtn} onPress={() => editorRef.current?.insertTable()} disabled={isInTableCell} accessibilityLabel="Insert table" accessibilityRole="button">
+            <Icon name="Grid2x2Plus" size={15} color={isInTableCell ? disabledColor : iconColor} />
           </TouchableOpacity>
           <TouchableOpacity style={s.subBtn} onPress={() => editorRef.current?.addColumnAfter()} accessibilityLabel="Add column" accessibilityRole="button">
             <Icon name="BetweenVerticalEnd" size={15} color={iconColor} />

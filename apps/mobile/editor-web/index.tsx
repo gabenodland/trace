@@ -30,7 +30,7 @@ import {
   CoreBridge,
   BoldBridge,
   ItalicBridge,
-  UnderlineBridge,
+  StrikeBridge,
   HeadingBridge,
   BulletListBridge,
   OrderedListBridge,
@@ -356,7 +356,7 @@ const watchForReady = () => {
 watchForReady();
 
 // Minimal bridge kit - only what toolbar actually uses
-// Reduces bundle size by removing unused: Code, Blockquote, Color, Highlight, Image, Strikethrough
+// Reduces bundle size by removing unused: Code, Blockquote, Color, Highlight, Image, Underline
 // NOTE: ListItemBridge omitted — indent/outdent uses custom editorCommand handler instead.
 // Bridges provide core schema (doc, paragraph, text, listItem, taskItem) — don't re-add in extensions.
 const MinimalBridgeKit = [
@@ -364,7 +364,7 @@ const MinimalBridgeKit = [
   HistoryBridge,     // Undo/redo
   BoldBridge,        // Bold text
   ItalicBridge,      // Italic text
-  UnderlineBridge,   // Underline text
+  StrikeBridge,      // Strikethrough text
   HeadingBridge,     // H1, H2
   BulletListBridge,  // Bullet lists (provides ListItem as dep)
   OrderedListBridge, // Numbered lists (provides ListItem as dep)
