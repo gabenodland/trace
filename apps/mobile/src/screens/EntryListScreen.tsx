@@ -124,7 +124,7 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
 
   // Handler for long-press on stream in drawer (navigate to stream settings)
   const handleStreamLongPress = useCallback((streamId: string) => {
-    navigate("stream-properties", { streamId, returnTo: "inbox" });
+    navigate("stream-properties", { streamId, returnTo: "allEntries" });
   }, [navigate]);
 
   // Register long-press handler for drawer

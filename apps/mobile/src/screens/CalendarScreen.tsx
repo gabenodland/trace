@@ -187,13 +187,13 @@ export const CalendarScreen = memo(function CalendarScreen() {
   const handleTagPress = useCallback((tag: string) => {
     setSelectedStreamId(`tag:${tag}`);
     setSelectedStreamName(`#${tag}`);
-    navigate("inbox");
+    navigate("allEntries");
   }, [setSelectedStreamId, setSelectedStreamName, navigate]);
 
   const handleMentionPress = useCallback((mention: string) => {
     setSelectedStreamId(`mention:${mention}`);
     setSelectedStreamName(`@${mention}`);
-    navigate("inbox");
+    navigate("allEntries");
   }, [setSelectedStreamId, setSelectedStreamName, navigate]);
 
   const handleAddEntry = useCallback(() => {
@@ -204,7 +204,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     setViewMode(mode);
     if (mode === "list") {
-      navigate("inbox");
+      navigate("allEntries");
     } else if (mode === "map") {
       navigate("map");
     }

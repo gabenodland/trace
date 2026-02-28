@@ -2,7 +2,7 @@
  * NavigationService - Refs-based navigation for instant screen switching
  *
  * Design goals:
- * - 4 main screens (list, map, calendar, entryManagement) never re-render on navigation
+ * - 4 main screens (allEntries, map, calendar, entryManagement) never re-render on navigation
  * - Only the screen container (AppContent) re-renders to update visibility
  * - navigate() is stable and never causes re-renders in screens
  * - Settings screens mount/unmount as needed
@@ -13,7 +13,7 @@
 import { createScopedLogger } from '../utils/logger';
 const log = createScopedLogger('Navigation', '🧭');
 
-export type MainScreen = 'inbox' | 'map' | 'calendar' | 'entryManagement';
+export type MainScreen = 'allEntries' | 'map' | 'calendar' | 'entryManagement';
 export type SettingsScreen = 'account' | 'profile' | 'settings' | 'debug' |
   'editorV2Test' | 'locations' | 'streams' |
   'stream-properties' | 'subscription' | 'capture';  // capture = legacy entry screen
@@ -22,7 +22,7 @@ export type SettingsScreen = 'account' | 'profile' | 'settings' | 'debug' |
 export type ScreenName = string;
 
 // Main view screens - back from these exits app
-const MAIN_VIEW_SCREENS: MainScreen[] = ['inbox', 'map', 'calendar'];
+const MAIN_VIEW_SCREENS: MainScreen[] = ['allEntries', 'map', 'calendar'];
 
 // Entry screens — persistent overlay, don't participate in back stack
 const ENTRY_SCREENS = ['entryManagement', 'capture'];
@@ -54,9 +54,9 @@ interface NavigationState {
 
 // Singleton state
 const state: NavigationState = {
-  activeScreen: 'inbox',
+  activeScreen: 'allEntries',
   navParams: {},
-  lastMainView: 'inbox',
+  lastMainView: 'allEntries',
   isModalOpen: false,
   beforeBackHandler: null,
   history: [],
@@ -90,7 +90,7 @@ function notifyListener(): void {
  * Navigate to a screen
  *
  * Back stack behavior:
- * - Navigating to a main view (inbox/map/calendar): clears entire history
+ * - Navigating to a main view (allEntries/map/calendar): clears entire history
  * - Navigating to entry screen: no history change (entry has its own back)
  * - Navigating to a sub-screen already in history: pops back to it (treats as back navigation)
  * - Navigating forward to a new sub-screen: pushes current screen onto history

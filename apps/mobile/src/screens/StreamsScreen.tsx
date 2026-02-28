@@ -114,7 +114,7 @@ export function StreamsScreen() {
   const handleOpenEntries = (stream: Stream) => {
     setSelectedStreamId(stream.stream_id);
     setSelectedStreamName(stream.name);
-    navigate("inbox");
+    navigate("allEntries");
   };
 
   const actionSheetItems: ActionSheetItem[] = actionSheetStream

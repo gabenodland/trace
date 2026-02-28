@@ -39,7 +39,7 @@ const log = createScopedLogger(LogScopes.Streams);
 
 interface StreamPropertiesScreenProps {
   streamId: string | null;
-  returnTo?: string;
+  returnTo?: "streams" | "allEntries";
 }
 
 export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: StreamPropertiesScreenProps) {
@@ -51,7 +51,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
   const keyboardHeight = useKeyboardHeight();
 
   const isCreateMode = streamId === null;
-  const backDestination = returnTo as "streams" | "inbox";
+  const backDestination = returnTo;
 
   const screenTitle = isCreateMode ? "New Stream" : stream?.name || "Stream";
 

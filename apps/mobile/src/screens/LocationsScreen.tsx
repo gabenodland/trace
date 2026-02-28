@@ -340,7 +340,7 @@ export function LocationsScreen() {
     setManagePlaceId(null);
     setSelectedStreamId(`location:${managePlaceId}`);
     setSelectedStreamName(placeName);
-    navigate('inbox');
+    navigate('allEntries');
   }, [managePlaceId, entryDerivedPlaces, navigate, setSelectedStreamId, setSelectedStreamName]);
 
   const handleManageToggleMyPlace = useCallback(() => {
@@ -444,7 +444,7 @@ export function LocationsScreen() {
         onPress: () => {
           setSelectedStreamId(filterId);
           setSelectedStreamName(displayName);
-          navigate("inbox");
+          navigate("allEntries");
         },
       });
     }

@@ -89,12 +89,12 @@ function AuthGate() {
   const hasInitializedRef = useRef(false);
 
   // Key-based full remount — triggered by 'restartApp' event from Settings → Developer.
-  // navigate('inbox') resets NavigationService singleton (shared with AppContent)
+  // navigate('allEntries') resets NavigationService singleton (shared with AppContent)
   // before the React tree remount, so AppContent renders the main screen on remount.
   const [restartKey, setRestartKey] = useState(0);
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('restartApp', () => {
-      navigate('inbox');
+      navigate('allEntries');
       setRestartKey(k => k + 1);
     });
     return () => sub.remove();
@@ -235,7 +235,7 @@ function AuthGate() {
  * AppContent - Inner component that uses navigation and drawer context
  * Handles view mode changes and renders the app content
  *
- * Main view screens (inbox, map, calendar) stay mounted for instant back navigation.
+ * Main view screens (allEntries, map, calendar) stay mounted for instant back navigation.
  * EntryManagementScreen stays mounted (persistent singleton pattern).
  * Other sub-screens (settings, etc.) mount/unmount as needed.
  *
@@ -272,7 +272,7 @@ function AppContent() {
 
   // Map viewMode to screen name
   const screenMap: Record<ViewMode, string> = {
-    list: "inbox",
+    list: "allEntries",
     map: "map",
     calendar: "calendar",
   };
@@ -282,18 +282,18 @@ function AppContent() {
   const [subScreenReady, setSubScreenReady] = useState(false);
 
   // Track the last main view for swipe-back navigation
-  // This remembers which main tab (inbox/map/calendar) the user was on
-  const [lastMainView, setLastMainView] = useState<string>("inbox");
+  // This remembers which main tab (allEntries/map/calendar) the user was on
+  const [lastMainView, setLastMainView] = useState<string>("allEntries");
 
   // Lazy mount: Only mount screens after first visit (reduces startup renders)
   // Screens stay mounted after first visit for instant back navigation
-  const [visitedScreens, setVisitedScreens] = useState<Set<string>>(() => new Set(["inbox"]));
+  const [visitedScreens, setVisitedScreens] = useState<Set<string>>(() => new Set(["allEntries"]));
 
   // Ref for persistent EntryManagementScreen (entry editor)
   const entryManagementRef = useRef<EntryManagementScreenRef>(null);
 
   // Counter to trigger scroll restoration in EntryListScreen
-  // Only increments when navigating BACK to inbox (not away from it)
+  // Only increments when navigating BACK to allEntries (not away from it)
   const [scrollRestoreKey, setScrollRestoreKey] = useState(0);
 
   // Update lastMainView when on a main view, reset subScreenReady
@@ -403,7 +403,7 @@ function AppContent() {
       entryManagementRef.current?.clearEntry();
       // Trigger scroll restoration in EntryListScreen (Android loses scroll
       // offset when parent Animated.View transform changes)
-      if (activeTab === 'inbox') {
+      if (activeTab === 'allEntries') {
         setScrollRestoreKey(k => k + 1);
       }
     }
@@ -526,9 +526,9 @@ function AppContent() {
           style={[
             styles.screenLayer,
             { backgroundColor: theme.colors.background.secondary },
-            !shouldShowMainView("inbox") && styles.screenHidden,
+            !shouldShowMainView("allEntries") && styles.screenHidden,
           ]}
-          pointerEvents={activeTab === "inbox" ? "auto" : "none"}
+          pointerEvents={activeTab === "allEntries" ? "auto" : "none"}
         >
           <ErrorBoundary name="EntryListScreen">
             <EntryListScreen scrollRestoreKey={scrollRestoreKey} />

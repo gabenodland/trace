@@ -580,7 +580,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     setViewMode(mode);
     if (mode === "list") {
-      navigate("inbox");
+      navigate("allEntries");
     } else if (mode === "calendar") {
       navigate("calendar");
     }
