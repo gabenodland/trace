@@ -175,13 +175,7 @@ export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEn
   return { stream_id: selectedStreamId };
 }
 
-/**
- * Get device identifier for attribution
- * Imported from shared utils to avoid circular dependency
- * Re-exported for backwards compatibility
- */
-import { getDeviceName } from '../../shared/utils/deviceUtils';
-export { getDeviceName };
+import { getDeviceId } from '../../config/appVersionService';
 
 /**
  * Generate UUID
@@ -403,7 +397,7 @@ export async function createEntry(data: CreateEntryInput): Promise<Entry> {
     conflict_status: null,
     conflict_backup: null,
     last_edited_by: null, // Will be set during sync if needed
-    last_edited_device: getDeviceName(),
+    last_edited_device: await getDeviceId(),
   };
 
   log.debug('Creating entry', { entryId: entry_id, hasTitle: !!entry.title });
@@ -448,7 +442,7 @@ export async function updateEntry(
   if (isUserEdit) {
     updatesWithSync.version = (currentEntry.version || 1) + 1;
     updatesWithSync.last_edited_by = null; // Will be set during sync if needed
-    updatesWithSync.last_edited_device = getDeviceName();
+    updatesWithSync.last_edited_device = await getDeviceId();
   }
 
   log.debug('Updating entry', {
@@ -569,7 +563,7 @@ export async function copyEntry(id: string): Promise<string> {
     conflict_status: null,
     conflict_backup: null,
     last_edited_by: null,
-    last_edited_device: getDeviceName(),
+    last_edited_device: await getDeviceId(),
   };
 
   // Save entry to database

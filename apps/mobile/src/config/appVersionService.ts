@@ -102,14 +102,6 @@ export async function getDeviceId(): Promise<string> {
 }
 
 /**
- * Get device name (user-set name from OS settings)
- * e.g., "John's iPhone", "Kitchen iPad"
- */
-export function getDeviceName(): string | null {
-  return Device.deviceName || null;
-}
-
-/**
  * Check app version against server requirements
  * Call this on app startup to determine if user needs to update
  */
@@ -163,7 +155,7 @@ export async function checkAppVersion(): Promise<VersionStatus> {
  * Log user session with device/version info
  * Call this when user authenticates
  *
- * Creates/updates a row in app_sessions with composite key (device_id, user_id)
+ * Creates/updates a row in devices table with composite key (device_id, user_id)
  * Same device with different users = separate rows (tracks shared devices)
  */
 export async function logAppSession(userId: string): Promise<void> {
@@ -173,7 +165,7 @@ export async function logAppSession(userId: string): Promise<void> {
     const sessionData = {
       device_id: deviceId,
       user_id: userId,
-      device_name: getDeviceName(),
+      device_name: Device.deviceName || null,
       device_model: Device.modelName || null,
       platform: Platform.OS,
       app_version: getAppVersion(),
@@ -181,11 +173,14 @@ export async function logAppSession(userId: string): Promise<void> {
       is_debug_build: isDebugBuild(),
       os_version: Platform.Version?.toString() || null,
       last_seen_at: new Date().toISOString(),
+      // NOTE: is_active intentionally omitted. Column DEFAULT is true for new devices.
+      // On upsert-update, existing is_active value is preserved (won't undo deactivation).
+      // Fresh sign-in reactivation is handled by reactivateCurrentDevice() in AuthContext.
     };
 
     // Upsert with composite key (device_id, user_id)
     const { error } = await getSupabase()
-      .from('app_sessions')
+      .from('devices')
       .upsert(sessionData, { onConflict: 'device_id,user_id' });
 
     if (error) {
@@ -201,5 +196,29 @@ export async function logAppSession(userId: string): Promise<void> {
   } catch (err) {
     log.error('Session logging error', err);
     // Non-critical, don't throw
+  }
+}
+
+/**
+ * Reactivate the current device — sets is_active = true.
+ * Call ONLY on fresh sign-in (not session restore) to allow
+ * users to sign back in on a previously deactivated device.
+ */
+export async function reactivateCurrentDevice(userId: string): Promise<void> {
+  try {
+    const deviceId = await getDeviceId();
+    const { error } = await getSupabase()
+      .from('devices')
+      .update({ is_active: true })
+      .eq('device_id', deviceId)
+      .eq('user_id', userId);
+
+    if (error) {
+      log.warn('Failed to reactivate device', error);
+      throw error;
+    }
+  } catch (err) {
+    log.error('Device reactivation error', err);
+    throw err;
   }
 }

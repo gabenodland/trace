@@ -15,7 +15,7 @@ const log = createScopedLogger('Navigation', '🧭');
 
 export type MainScreen = 'allEntries' | 'map' | 'calendar' | 'entryManagement';
 export type SettingsScreen = 'account' | 'profile' | 'settings' | 'debug' |
-  'editorV2Test' | 'locations' | 'streams' |
+  'editorV2Test' | 'locations' | 'streams' | 'devices' |
   'stream-properties' | 'subscription' | 'capture';  // capture = legacy entry screen
 
 // Use string for backward compatibility - screens use various string names

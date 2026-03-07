@@ -54,6 +54,7 @@ import { StreamsScreen } from "./src/screens/StreamsScreen";
 import { StreamPropertiesScreen } from "./src/screens/StreamPropertiesScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { SubscriptionScreen } from "./src/screens/SubscriptionScreen";
+import { DevicesScreen } from "./src/screens/DevicesScreen";
 import { localDB } from "./src/shared/db/localDB";
 import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
@@ -481,6 +482,10 @@ function AppContent() {
       case "streams":
         boundaryName = "StreamsScreen";
         content = <StreamsScreen />;
+        break;
+      case "devices":
+        boundaryName = "DevicesScreen";
+        content = <DevicesScreen />;
         break;
       case "stream-properties":
         boundaryName = "StreamPropertiesScreen";

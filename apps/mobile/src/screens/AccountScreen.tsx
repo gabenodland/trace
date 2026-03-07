@@ -20,6 +20,7 @@ import { useNavigate } from "../shared/navigation";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSubscription } from "../shared/hooks/useSubscription";
+import { useDevices } from "../modules/devices";
 import { themeBase } from "../shared/theme/themeBase";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 
@@ -27,11 +28,12 @@ interface AccountRowProps {
   icon: React.ReactNode;
   label: string;
   onPress: () => void;
+  detail?: string;
   showChevron?: boolean;
   destructive?: boolean;
 }
 
-function AccountRow({ icon, label, onPress, showChevron = true, destructive = false }: AccountRowProps) {
+function AccountRow({ icon, label, onPress, detail, showChevron = true, destructive = false }: AccountRowProps) {
   const theme = useTheme();
 
   return (
@@ -48,6 +50,11 @@ function AccountRow({ icon, label, onPress, showChevron = true, destructive = fa
       ]}>
         {label}
       </Text>
+      {detail && (
+        <Text style={[styles.rowDetail, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+          {detail}
+        </Text>
+      )}
       {showChevron && (
         <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
       )}
@@ -58,6 +65,7 @@ function AccountRow({ icon, label, onPress, showChevron = true, destructive = fa
 export function AccountScreen() {
   const theme = useTheme();
   const navigate = useNavigate();
+  const { data: devicesList } = useDevices();
   const { user, signOut } = useAuth();
   const { profile, isOffline } = useMobileProfile(user?.id);
   const { isPro, isDevMode, expiresAt } = useSubscription();
@@ -176,6 +184,13 @@ export function AccountScreen() {
             icon={<Icon name="MapPin" size={22} color={theme.colors.text.secondary} />}
             label="Places"
             onPress={() => navigate("locations")}
+          />
+          <View style={[styles.rowDivider, { backgroundColor: theme.colors.border.light }]} />
+          <AccountRow
+            icon={<Icon name="Smartphone" size={22} color={theme.colors.text.secondary} />}
+            label="Devices"
+            detail={devicesList ? `${devicesList.filter(d => d.is_active).length}` : undefined}
+            onPress={() => navigate("devices")}
           />
         </View>
 
@@ -315,6 +330,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     marginLeft: themeBase.spacing.md,
+  },
+  rowDetail: {
+    fontSize: 14,
+    marginRight: themeBase.spacing.xs,
   },
   rowDivider: {
     height: 1,

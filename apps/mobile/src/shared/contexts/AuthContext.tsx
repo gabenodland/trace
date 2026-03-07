@@ -174,6 +174,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(newSession?.user ?? null);
       setIsOffline(false); // If we got an auth event, we're online
 
+      // Reactivate device on fresh sign-in (not session restore).
+      // This runs after initial load, so SIGNED_IN = user just authenticated.
+      if (_event === 'SIGNED_IN' && newSession?.user) {
+        import('../../config/appVersionService').then(({ reactivateCurrentDevice }) => {
+          reactivateCurrentDevice(newSession.user.id).catch((err) => {
+            log.error('Failed to reactivate device on sign-in', err);
+          });
+        });
+      }
+
       if (!newSession && queryClient) {
         queryClient.clear();
         log.info("Signed out - cleared query cache");

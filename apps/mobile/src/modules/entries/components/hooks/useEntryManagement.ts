@@ -26,7 +26,7 @@ import {
 } from '../helpers/entrySaveHelpers';
 import { buildLocationFromEntry } from '../helpers/entryLocationHelpers';
 import { useAuth } from '../../../../shared/contexts/AuthContext';
-import { getDeviceName } from '../../../../shared/utils/deviceUtils';
+import { getDeviceId } from '../../../../config/appVersionService';
 import { createScopedLogger } from '../../../../shared/utils/logger';
 import type { EntryWithRelations } from '../../EntryWithRelationsTypes';
 import type { RichTextEditorV2Ref } from '../../../../components/editor/RichTextEditorV2';
@@ -57,23 +57,18 @@ interface SaveResult {
 }
 
 /**
- * Check if an entry update is from another device
+ * Check if an entry update is from another device.
+ * Compares device_id (UUID) stored in last_edited_device against local device_id.
  */
-function isExternalUpdate(entry: Entry | null): { isExternal: boolean; device: string } | null {
-  if (!entry) return null;
+function isExternalUpdate(entry: Entry | null, localDeviceId: string | null): { isExternal: boolean; deviceId: string; displayName: string } | null {
+  if (!entry || !localDeviceId) return null;
 
-  let thisDevice = 'Unknown Device';
-  try {
-    thisDevice = getDeviceName();
-  } catch (err) {
-    log.error('getDeviceName threw', err);
-  }
-
-  const editingDevice = entry.last_edited_device || '';
+  const editingDeviceId = entry.last_edited_device || '';
 
   return {
-    isExternal: editingDevice !== thisDevice && editingDevice !== '',
-    device: editingDevice || 'another device',
+    isExternal: editingDeviceId !== localDeviceId && editingDeviceId !== '',
+    deviceId: editingDeviceId, // UUID — for logging
+    displayName: 'another device', // Human-readable — for snackbar/alert
   };
 }
 
@@ -94,6 +89,12 @@ export function useEntryManagement({
 }: UseEntryManagementProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+
+  // === Device ID for external update detection ===
+  const localDeviceIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    getDeviceId().then(id => { localDeviceIdRef.current = id; });
+  }, []);
 
   // === Save State ===
   const [isSaving, setIsSaving] = useState(false);
@@ -500,15 +501,15 @@ export function useEntryManagement({
     if (cachedVersion <= knownVersion) return;
 
     // Version increased - check if external
-    const externalCheck = isExternalUpdate(cachedEntry);
+    const externalCheck = isExternalUpdate(cachedEntry, localDeviceIdRef.current);
     const isExternal = externalCheck?.isExternal ?? false;
-    const editingDevice = externalCheck?.device || 'another device';
+    const editingDevice = externalCheck?.displayName || 'another device';
 
     log.debug('Sync: version change detected', {
       knownVersion,
       cachedVersion,
       isExternal,
-      device: editingDevice,
+      deviceId: externalCheck?.deviceId,
     });
 
     // Update known version
@@ -521,7 +522,7 @@ export function useEntryManagement({
     }
 
     // External update!
-    log.info('Sync: external update detected', { device: editingDevice });
+    log.info('Sync: external update detected', { deviceId: externalCheck?.deviceId });
 
     // If dirty, warn but don't overwrite
     if (isDirty) {

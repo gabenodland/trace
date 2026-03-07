@@ -92,6 +92,14 @@ class SyncService {
   // Post-sync enrichment state
   private isEnriching = false;
 
+  // Cached device ID for realtime revocation checks
+  private localDeviceId: string | null = null;
+  private isSigningOut = false;
+
+  // Device last_seen_at throttle
+  private lastDeviceSeenUpdateTime: number = 0;
+  private readonly DEVICE_SEEN_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
   // ==========================================================================
   // INITIALIZATION
   // ==========================================================================
@@ -107,6 +115,14 @@ class SyncService {
     }
 
     log.debug('Initializing sync service');
+
+    // Cache device ID for revocation checks
+    try {
+      const { getDeviceId } = await import('../../config/appVersionService');
+      this.localDeviceId = await getDeviceId();
+    } catch (err) {
+      log.error('Failed to cache device ID', err);
+    }
 
     // Clean up data from previous users
     await this.cleanupWrongUserData();
@@ -283,6 +299,11 @@ class SyncService {
       return result;
     }
 
+    // Check if this device has been deactivated (only on foreground/reconnect, not post-save)
+    if (trigger !== 'post-save' && !await this.checkDeviceActive()) {
+      return result;
+    }
+
     this.isSyncing = true;
     log.debug(`SYNC STARTED (${trigger})`);
 
@@ -372,6 +393,11 @@ class SyncService {
       result.success = true;
       result.duration = Date.now() - startTime;
 
+      // Update device last_seen_at after successful sync (R4: sync heartbeat)
+      this.updateDeviceLastSeen().catch(err => {
+        log.debug('Failed to update device last_seen_at', { error: err instanceof Error ? err.message : String(err) });
+      });
+
       await this.logSyncResult(trigger, result);
 
       const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.attachments;
@@ -433,6 +459,11 @@ class SyncService {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, (payload) => {
           log.info('📡 Locations realtime event received', { eventType: payload.eventType });
           this.handleRealtimeChange('locations');
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'devices', filter: 'is_active=eq.false' }, (payload) => {
+          this.handleDeviceDeactivation(payload).catch(err => {
+            log.error('Failed to process device realtime event', err);
+          });
         })
         .subscribe(async (status, err) => {
           if (status === 'SUBSCRIBED') {
@@ -1016,6 +1047,93 @@ class SyncService {
       .finally(() => {
         this.isEnriching = false;
       });
+  }
+
+  /**
+   * Handle realtime device UPDATE — check if this device was deactivated.
+   * Only fires for is_active=false changes (filtered at subscription level).
+   */
+  private async handleDeviceDeactivation(payload: any): Promise<void> {
+    const newRecord = payload.new;
+    log.debug('Device deactivation event received', {
+      eventDeviceId: newRecord?.device_id,
+      localDeviceId: this.localDeviceId,
+    });
+
+    if (!newRecord || !this.localDeviceId) return;
+
+    // Only care about our own device being deactivated
+    if (newRecord.device_id !== this.localDeviceId) return;
+
+    log.warn('🚨 Device deactivated remotely — signing out');
+    await this.forceSignOut('This device has been signed out remotely.');
+  }
+
+  /**
+   * Check if current device is still active.
+   * Called on foreground/reconnect syncs (not post-save) as a fallback
+   * for when realtime was disconnected during deactivation.
+   */
+  private async checkDeviceActive(): Promise<boolean> {
+    if (!this.localDeviceId) return true;
+
+    try {
+      const { checkDeviceActive } = await import('../../modules/devices/deviceApi');
+      const isActive = await checkDeviceActive(this.localDeviceId);
+
+      log.debug('Device active check', { isActive });
+
+      if (!isActive) {
+        log.warn('🚨 Device is deactivated — signing out on sync check');
+        await this.forceSignOut('This device has been signed out remotely.');
+        return false;
+      }
+      return true;
+    } catch (err) {
+      // Fail open — don't sign out on network errors
+      log.debug('Device active check failed', { error: err instanceof Error ? err.message : String(err) });
+      return true;
+    }
+  }
+
+  /**
+   * Force sign-out with user-facing alert.
+   * Guarded against double invocation from concurrent realtime + sync paths.
+   */
+  private async forceSignOut(message: string): Promise<void> {
+    if (this.isSigningOut) return;
+    this.isSigningOut = true;
+
+    const { Alert } = await import('react-native');
+    const { signOut } = await import('@trace/core');
+
+    Alert.alert('Signed Out', message);
+
+    try {
+      await signOut();
+    } catch (err) {
+      log.error('Force sign-out failed', err);
+    } finally {
+      this.isSigningOut = false;
+    }
+  }
+
+  /**
+   * Update device's last_seen_at timestamp after successful sync.
+   * Throttled to avoid unnecessary writes on frequent syncs.
+   */
+  private async updateDeviceLastSeen(): Promise<void> {
+    if (!this.localDeviceId) return;
+
+    // Throttle — don't update more often than every 5 minutes
+    const now = Date.now();
+    if (now - this.lastDeviceSeenUpdateTime < this.DEVICE_SEEN_UPDATE_INTERVAL_MS) {
+      return;
+    }
+    this.lastDeviceSeenUpdateTime = now;
+
+    const { updateDeviceLastSeen } = await import('../../modules/devices/deviceApi');
+    await updateDeviceLastSeen(this.localDeviceId);
   }
 
   private async logSyncResult(trigger: SyncTrigger, result: SyncResult): Promise<void> {

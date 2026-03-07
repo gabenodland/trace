@@ -32,42 +32,57 @@ export type Database = {
         }
         Relationships: []
       }
-      app_sessions: {
+      devices: {
         Row: {
+          device_id: string
           user_id: string
+          device_name: string | null
+          custom_name: string | null
+          device_model: string | null
+          platform: string
           app_version: string
           build_number: string | null
-          platform: string
+          is_debug_build: boolean
           os_version: string | null
-          device_model: string | null
+          is_active: boolean
+          first_seen_at: string
           last_seen_at: string
-          created_at: string
         }
         Insert: {
+          device_id: string
           user_id: string
+          device_name?: string | null
+          custom_name?: string | null
+          device_model?: string | null
+          platform: string
           app_version: string
           build_number?: string | null
-          platform: string
+          is_debug_build?: boolean
           os_version?: string | null
-          device_model?: string | null
+          is_active?: boolean
+          first_seen_at?: string
           last_seen_at?: string
-          created_at?: string
         }
         Update: {
+          device_id?: string
           user_id?: string
+          device_name?: string | null
+          custom_name?: string | null
+          device_model?: string | null
+          platform?: string
           app_version?: string
           build_number?: string | null
-          platform?: string
+          is_debug_build?: boolean
           os_version?: string | null
-          device_model?: string | null
+          is_active?: boolean
+          first_seen_at?: string
           last_seen_at?: string
-          created_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "app_sessions_user_id_fkey"
+            foreignKeyName: "devices_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
