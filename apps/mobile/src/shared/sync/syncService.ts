@@ -16,6 +16,7 @@ import { AppState, AppStateStatus } from 'react-native';
 import type { QueryClient } from '@tanstack/react-query';
 import { getDeviceName } from '../utils/deviceUtils';
 import { createScopedLogger } from '../utils/logger';
+import { isNetworkError } from '../utils/networkUtils';
 
 // Lazy imports to break circular dependencies
 // mobileAttachmentApi imports syncApi, which imports this file
@@ -80,6 +81,11 @@ class SyncService {
   private realtimeReconnectTimer: NodeJS.Timeout | null = null;
   private realtimeReconnectAttempts = 0;
   private readonly REALTIME_MAX_BACKOFF_MS = 30000;
+
+  // Debounce timer for realtime INSERT invalidations (batches rapid-fire events)
+  private realtimeInsertDebounceTimer: NodeJS.Timeout | null = null;
+  // Debounce timer for realtime stream invalidations
+  private realtimeStreamDebounceTimer: NodeJS.Timeout | null = null;
 
   // Track entries currently being pushed - prevents race condition with realtime
   private currentlyPushingEntryIds: Set<string> = new Set();
@@ -148,6 +154,15 @@ class SyncService {
   destroy(): void {
     if (this.realtimeDebounceTimer) {
       clearTimeout(this.realtimeDebounceTimer);
+      this.realtimeDebounceTimer = null;
+    }
+    if (this.realtimeInsertDebounceTimer) {
+      clearTimeout(this.realtimeInsertDebounceTimer);
+      this.realtimeInsertDebounceTimer = null;
+    }
+    if (this.realtimeStreamDebounceTimer) {
+      clearTimeout(this.realtimeStreamDebounceTimer);
+      this.realtimeStreamDebounceTimer = null;
     }
     if (this.realtimeReconnectTimer) {
       clearTimeout(this.realtimeReconnectTimer);
@@ -405,8 +420,12 @@ class SyncService {
 
     } catch (error) {
       result.duration = Date.now() - startTime;
-      log.error('SYNC FAILED', error);
-      await localDB.addSyncLog('error', 'sync', `Sync failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (isNetworkError(error)) {
+        log.debug('Sync skipped (offline)');
+      } else {
+        log.error('SYNC FAILED', error);
+        await localDB.addSyncLog('error', 'sync', `Sync failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
     } finally {
       this.isSyncing = false;
       this.lastSyncTime = Date.now();
@@ -425,7 +444,7 @@ class SyncService {
       if (authError) {
         const errorMessage = authError.message || String(authError);
         // Network errors during auth are expected when reconnecting
-        if (errorMessage.includes('Network request failed') || errorMessage.includes('fetch')) {
+        if (isNetworkError(authError)) {
           log.debug('Auth check failed due to network (will retry)', { error: errorMessage });
         } else {
           log.warn('Auth check failed during realtime setup', { error: errorMessage });
@@ -501,7 +520,7 @@ class SyncService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       // Distinguish between network errors (expected during reconnection) and other errors
-      if (errorMessage.includes('Network request failed') || errorMessage.includes('fetch')) {
+      if (isNetworkError(error)) {
         log.debug('Realtime setup failed due to network (will retry)', { error: errorMessage });
       } else {
         log.error('Failed to set up realtime subscription', { error: errorMessage });
@@ -624,9 +643,9 @@ class SyncService {
     const updatedEntry = await this.updateEntryFromPayload(entryId, payload.new);
 
     if (isNewEntry) {
-      // INSERT: Invalidate queries to trigger refetch
-      log.info('📡 New entry from remote - invalidating entry queries', { entryId: entryId.substring(0, 8) });
-      this.invalidateEntryQueries();
+      // INSERT: Debounce invalidation to batch rapid-fire realtime events during sync
+      log.info('📡 New entry from remote - scheduling debounced invalidation', { entryId: entryId.substring(0, 8) });
+      this.debouncedInvalidateEntryQueries();
     } else {
       // UPDATE: Patch the cache directly
       this.setEntryQueryData(entryId, updatedEntry);
@@ -715,6 +734,23 @@ class SyncService {
     this.queryClient.invalidateQueries({ queryKey: ['locations'] });
   }
 
+  /**
+   * Debounced version of invalidateEntryQueries for realtime INSERT events.
+   * Batches rapid-fire events (e.g., 16 entries syncing) into a single invalidation.
+   * Only affects INSERT path — DELETE uses removeEntryFromCache, UPDATE uses setEntryQueryData.
+   */
+  private debouncedInvalidateEntryQueries(): void {
+    if (this.realtimeInsertDebounceTimer) {
+      clearTimeout(this.realtimeInsertDebounceTimer);
+    }
+    this.realtimeInsertDebounceTimer = setTimeout(() => {
+      this.realtimeInsertDebounceTimer = null;
+      if (!this.isInitialized) return;
+      log.info('📡 Executing batched entry query invalidation');
+      this.invalidateEntryQueries();
+    }, 500);
+  }
+
   private setEntryQueryData(entryId: string, entry: Entry | null): void {
     if (!this.queryClient || !entry) return;
 
@@ -779,9 +815,21 @@ class SyncService {
       await this.updateStreamFromPayload(streamId, payloadData);
     }
 
-    if (this.queryClient) {
-      this.queryClient.invalidateQueries({ queryKey: ['streams'] });
+    // Debounce stream invalidation — each pushed entry triggers two stream events
+    // (one from stream upsert, one from entry_count trigger)
+    this.debouncedInvalidateStreamQueries();
+  }
+
+  private debouncedInvalidateStreamQueries(): void {
+    if (this.realtimeStreamDebounceTimer) {
+      clearTimeout(this.realtimeStreamDebounceTimer);
     }
+    this.realtimeStreamDebounceTimer = setTimeout(() => {
+      this.realtimeStreamDebounceTimer = null;
+      if (!this.isInitialized || !this.queryClient) return;
+      log.info('📡 Executing batched stream query invalidation');
+      this.queryClient.invalidateQueries({ queryKey: ['streams'] });
+    }, 500);
   }
 
   private async updateStreamFromPayload(streamId: string, payloadData: any): Promise<void> {
@@ -946,8 +994,12 @@ class SyncService {
     try {
       await this.fullSync('app-foreground');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      log.error('Reconnect sync failed', { error: errorMessage });
+      if (isNetworkError(error)) {
+        log.debug('Reconnect sync skipped (still offline)');
+      } else {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        log.error('Reconnect sync failed', { error: errorMessage });
+      }
     }
   }
 
@@ -956,8 +1008,10 @@ class SyncService {
   // ==========================================================================
 
   private async canSync(): Promise<boolean> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return false;
+    // Use getSession (local cache) instead of getUser (network call)
+    // to avoid a round-trip just to check if the user is authenticated
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return false;
 
     const netState = await NetInfo.fetch();
     return !!(netState.isConnected && netState.isInternetReachable);
@@ -1103,6 +1157,10 @@ class SyncService {
   private async forceSignOut(message: string): Promise<void> {
     if (this.isSigningOut) return;
     this.isSigningOut = true;
+
+    // Capture call stack for diagnostics — helps trace what triggered sign-out
+    const stack = new Error('forceSignOut trace').stack;
+    log.warn('🚨 forceSignOut called', { message, stack });
 
     const { Alert } = await import('react-native');
     const { signOut } = await import('@trace/core');

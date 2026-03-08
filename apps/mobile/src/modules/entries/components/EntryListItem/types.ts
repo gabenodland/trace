@@ -1,6 +1,8 @@
 import type { Entry, EntryStatus, StreamAttributeVisibility, EntryDisplayMode, RatingType } from "@trace/core";
 import type { EntryWithRelations } from "../../EntryWithRelationsTypes";
 
+export const SELECTED_COLOR = '#ef4444';
+
 export interface EntryListItemProps {
   entry: EntryWithRelations;
   onPress: () => void;

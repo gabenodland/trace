@@ -8,6 +8,7 @@
 import { localDB } from '../db/localDB';
 import { supabase, Entry, LocationEntity } from '@trace/core';
 import { createScopedLogger } from '../utils/logger';
+import { isNetworkError } from '../utils/networkUtils';
 import { getDeviceName } from '../utils/deviceUtils';
 
 // Lazy import to break circular dependency

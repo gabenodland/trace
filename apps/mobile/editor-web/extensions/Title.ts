@@ -34,7 +34,7 @@ export const Title = Node.create<TitleOptions>({
   group: 'title',
 
   // Inline content only (text, marks) - no nested blocks
-  content: 'inline*',
+  content: 'text*',
 
   // DESIGN DECISION: No marks (bold, italic, etc.) allowed in title
   //

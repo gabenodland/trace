@@ -1,12 +1,13 @@
 // Initialize core FIRST - before any other @trace/core imports
-
-// Initialize core FIRST - before any other @trace/core imports
 import "./src/config/initializeCore";
 
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated, Linking as RNLinking, Modal, TouchableOpacity, DeviceEventEmitter } from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated, Linking as RNLinking, Modal, TouchableOpacity, DeviceEventEmitter, LogBox } from "react-native";
+
+// Suppress network error toasts — expected when offline, handled gracefully by sync/query layers
+LogBox.ignoreLogs(['TypeError: Network request failed']);
 import { useFonts } from "expo-font";
 // Theme fonts - all loaded upfront, user selects independently of theme
 import { MavenPro_400Regular, MavenPro_500Medium, MavenPro_600SemiBold, MavenPro_700Bold } from "@expo-google-fonts/maven-pro";
@@ -65,10 +66,18 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes
-      retry: 1,
+      retry: (failureCount, error) => {
+        // Don't retry network errors — they'll resolve when connectivity returns
+        if (error instanceof TypeError && error.message === 'Network request failed') {
+          return false;
+        }
+        return failureCount < 1;
+      },
     },
   },
 });
+
+const authGateLog = createScopedLogger('AuthGate');
 
 /**
  * AuthGate - Shows login/signup when not authenticated, main app when authenticated
@@ -124,15 +133,15 @@ function AuthGate() {
     const dbStart = Date.now();
     localDB.init()
       .then(() => {
-        console.log(`⏱️ 3_localDB.init: ${Date.now() - dbStart}ms`);
+        authGateLog.debug(`localDB.init: ${Date.now() - dbStart}ms`);
         setDbInitialized(true);
         const syncStart = Date.now();
         return initializeSync(queryClient).then(() => {
-          console.log(`⏱️ 4_initializeSync: ${Date.now() - syncStart}ms`);
+          authGateLog.debug(`initializeSync: ${Date.now() - syncStart}ms`);
         });
       })
       .catch((error) => {
-        console.error('Failed to initialize:', error);
+        authGateLog.error('Failed to initialize', error);
         hasInitializedRef.current = false;
       });
   }, [isAuthenticated]);
@@ -248,7 +257,7 @@ function AuthGate() {
  */
 const log = createScopedLogger('AppContent', '🎯');
 
-function AppContent() {
+const AppContent = memo(function AppContent() {
   // Get navigation state - this is the ONLY place that re-renders on nav
   const { activeTab, navParams, navigate, goBack, checkBeforeBack, isModalOpen, isOnMainView } = useNavigationState();
   log.debug('RENDER', { activeTab, isOnMainView });
@@ -428,7 +437,7 @@ function AppContent() {
       // It's off-screen due to translateX, but keeping it visible (opacity: 1)
       // ensures Android renders it and it's ready for instant swipe-back
       const result = targetMainView === viewName;
-      console.log(`[shouldShowMainView] viewName=${viewName}, targetMainView=${targetMainView}, result=${result}`);
+      log.debug('shouldShowMainView', { viewName, targetMainView, result });
       return result;
     }
   };
@@ -607,13 +616,15 @@ function AppContent() {
       <ExpoStatusBar style={theme.isDark ? "light" : "dark"} />
     </View>
   );
-}
+});
+
+const deepLinkLog = createScopedLogger('DeepLink');
 
 /**
  * Handle deep link URL for auth callbacks (email confirmation, password reset, etc.)
  */
 async function handleAuthDeepLink(url: string): Promise<boolean> {
-  console.log("[DeepLink] Received URL:", url);
+  deepLinkLog.debug('Received URL', { url });
 
   // Check if this is an auth callback
   if (!url.includes("access_token") && !url.includes("refresh_token") && !url.includes("error")) {
@@ -640,7 +651,7 @@ async function handleAuthDeepLink(url: string): Promise<boolean> {
     }
 
     if (access_token) {
-      console.log("[DeepLink] Setting session from deep link");
+      deepLinkLog.debug('Setting session from deep link');
       await setSession(access_token, refresh_token);
       Alert.alert("Success", "Your email has been confirmed! You are now signed in.");
       return true;
@@ -656,11 +667,13 @@ async function handleAuthDeepLink(url: string): Promise<boolean> {
       }
     }
   } catch (error) {
-    console.error("[DeepLink] Error handling auth URL:", error);
+    deepLinkLog.error('Error handling auth URL', error);
   }
 
   return false;
 }
+
+const appLog = createScopedLogger('App');
 
 /**
  * Root App Component
@@ -732,7 +745,7 @@ export default function App() {
   // Log font loading time
   useEffect(() => {
     if (fontsLoaded) {
-      console.log(`⏱️ 2_fonts: ${Date.now() - fontStartTime.current}ms (${56} font files)`);
+      appLog.debug(`fonts loaded: ${Date.now() - fontStartTime.current}ms (56 font files)`);
     }
   }, [fontsLoaded]);
 
@@ -756,9 +769,7 @@ export default function App() {
   }, []);
 
   // Show loading while fonts are loading
-  console.log('[App] Checking fonts...', { fontsLoaded });
   if (!fontsLoaded) {
-    console.log('[App] Fonts not loaded yet, showing spinner');
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -768,7 +779,7 @@ export default function App() {
     );
   }
 
-  console.log('[App] Fonts loaded, rendering providers...');
+  appLog.debug('Fonts loaded, rendering providers');
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>

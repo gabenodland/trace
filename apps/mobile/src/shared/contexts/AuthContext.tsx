@@ -223,7 +223,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await signOutApi();
+    try {
+      await signOutApi();
+    } catch (err) {
+      log.warn('signOut failed, clearing local session anyway', { error: err instanceof Error ? err.message : String(err) });
+    }
     if (queryClient) {
       queryClient.clear();
       log.info("Cleared query cache on sign out");

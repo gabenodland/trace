@@ -1095,19 +1095,6 @@ class LocalDatabase {
       params.push(this.currentUserId);
     }
 
-    // Debug: Check query plan and table size
-    try {
-      const countResult = await this.db.getFirstAsync<{count: number}>('SELECT COUNT(*) as count FROM entries');
-      const explainResult = await this.db.getAllAsync<any>(`EXPLAIN QUERY PLAN ${query}`, params);
-      console.log('[localDB] ⏱️ DEBUG', {
-        entryCount: countResult?.count,
-        query,
-        plan: JSON.stringify(explainResult)
-      });
-    } catch (e) {
-      console.log('[localDB] DEBUG failed', e);
-    }
-
     const row = await this.db.getFirstAsync<any>(query, params);
     const t2 = performance.now();
 
@@ -1116,7 +1103,7 @@ class LocalDatabase {
     const result = this.rowToEntry(row);
     const t3 = performance.now();
 
-    console.log('[localDB] ⏱️ getEntry timing', {
+    log.debug('getEntry timing', {
       initMs: Math.round(t1 - t0),
       queryMs: Math.round(t2 - t1),
       rowToEntryMs: Math.round(t3 - t2),
@@ -1430,16 +1417,13 @@ class LocalDatabase {
       ]
     );
 
-    log.debug('UPDATE executed, fetching updated entry');
-    const result = await this.getEntry(entryId);
-    if (!result) throw new Error('Entry not found after update');
-    log.debug('Retrieved entry', {
-      entryId: result.entry_id,
-      is_pinned: result.is_pinned,
-      priority: result.priority,
-      rating: result.rating
+    log.debug('UPDATE executed', {
+      entryId: updated.entry_id,
+      is_pinned: updated.is_pinned,
+      priority: updated.priority,
+      rating: updated.rating
     });
-    return result;
+    return updated;
   }
 
   /**
@@ -1497,21 +1481,21 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    const entry = await this.getEntry(entryId);
-
-    if (entry && entry.sync_action === 'delete') {
-      await this.db.runAsync('DELETE FROM entries WHERE entry_id = ?', [entryId]);
-    } else {
-      await this.db.runAsync(
-        `UPDATE entries SET
-          synced = 1,
-          sync_action = NULL,
-          sync_error = NULL,
-          sync_retry_count = 0
-        WHERE entry_id = ?`,
-        [entryId]
-      );
-    }
+    // Hard-delete entries that were marked for deletion and are now synced
+    await this.db.runAsync(
+      'DELETE FROM entries WHERE entry_id = ? AND sync_action = ?',
+      [entryId, 'delete']
+    );
+    // Clear sync fields for all other entries (no-op if row was just deleted)
+    await this.db.runAsync(
+      `UPDATE entries SET
+        synced = 1,
+        sync_action = NULL,
+        sync_error = NULL,
+        sync_retry_count = 0
+      WHERE entry_id = ?`,
+      [entryId]
+    );
   }
 
   /**
@@ -1879,7 +1863,15 @@ class LocalDatabase {
         WHERE l.deleted_at IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM entries e
-          WHERE e.location_id = l.location_id
+          WHERE (e.location_id = l.location_id
+            OR (
+              (e.place_name IS NOT NULL OR e.city IS NOT NULL)
+              AND COALESCE(e.place_name, '') = COALESCE(l.name, '')
+              AND COALESCE(e.address, '') = COALESCE(l.address, '')
+              AND COALESCE(e.city, '') = COALESCE(l.city, '')
+              AND COALESCE(e.region, '') = COALESCE(l.region, '')
+              AND COALESCE(e.country, '') = COALESCE(l.country, '')
+            ))
             AND e.deleted_at IS NULL
         )
         ${this.currentUserId ? 'AND l.user_id = ?' : ''}
@@ -1888,7 +1880,7 @@ class LocalDatabase {
 
     const rows = await this.db.getAllAsync<any>(query, params);
 
-    return rows.map(row => ({
+    const mapped = rows.map(row => ({
       place_name: row.place_name || null,
       address: row.address || null,
       city: row.city || null,
@@ -1901,6 +1893,18 @@ class LocalDatabase {
       location_id: row.location_id || null,
       ungeocoded_count: row.ungeocoded_count || 0,
     }));
+
+    // Dedup safety net: if SQL UNION ALL still produces rows with the same 5-tuple
+    // (e.g., due to address normalization differences), keep the row with location_id
+    const best = new Map<string, typeof mapped[number]>();
+    for (const place of mapped) {
+      const key = `${place.place_name || ''}|${place.address || ''}|${place.city || ''}|${place.region || ''}|${place.country || ''}`;
+      const existing = best.get(key);
+      if (!existing || (place.location_id && !existing.location_id)) {
+        best.set(key, place);
+      }
+    }
+    return Array.from(best.values());
   }
 
   /**

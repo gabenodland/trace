@@ -13,9 +13,8 @@ import { PhotoViewer } from "../../../photos/components/PhotoViewer";
 import { ActionSheet, type ActionSheetItem } from "../../../../components/sheets/ActionSheet";
 import { getAttachmentUri } from "../../../attachments/mobileAttachmentApi";
 import { HtmlContentPressContext } from "../../helpers/htmlRenderers";
+import { SELECTED_COLOR } from "./types";
 import type { EntryListItemProps } from "./types";
-
-export const SELECTED_COLOR = '#ef4444';
 
 export function EntryListItem({
   entry,

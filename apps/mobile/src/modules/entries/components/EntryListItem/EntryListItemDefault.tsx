@@ -14,8 +14,8 @@ import { themeBase } from "../../../../shared/theme/themeBase";
 import { WebViewHtmlRenderer } from "../../helpers/webViewHtmlRenderer";
 import { PhotoGallery } from "../../../photos/components/PhotoGallery";
 import { EntryListItemMetadata } from "./EntryListItemMetadata";
+import { SELECTED_COLOR } from "./types";
 import type { EntryListItemCommonProps } from "./types";
-import { SELECTED_COLOR } from "./EntryListItem";
 
 interface DefaultProps extends EntryListItemCommonProps {
   displayMode: EntryDisplayMode;

@@ -18,6 +18,7 @@ import { localDB } from '../../shared/db/localDB';
 // Import directly from syncApi to avoid circular dependency through sync/index.ts
 import { triggerPushSync } from '../../shared/sync/syncApi';
 import { createScopedLogger } from '../../shared/utils/logger';
+import { isNetworkError } from '../../shared/utils/networkUtils';
 import type { CompressedAttachment, ImageQuality } from '@trace/core';
 
 const log = createScopedLogger('AttachmentApi');
@@ -537,7 +538,11 @@ export async function getAttachmentUri(attachmentId: string): Promise<string | n
 
     return null;
   } catch (error) {
-    log.error('Error getting attachment URI', error, { attachmentId });
+    if (isNetworkError(error)) {
+      log.debug('Attachment URI skipped (offline)', { attachmentId });
+    } else {
+      log.error('Error getting attachment URI', error, { attachmentId });
+    }
     return null;
   }
 }
@@ -586,6 +591,11 @@ export async function ensureAttachmentDownloaded(attachmentId: string): Promise<
 
     if (isNotFound) {
       log.debug('Attachment file missing from storage (orphaned DB entry)', { attachmentId });
+      return null;
+    }
+
+    if (isNetworkError(error)) {
+      log.debug('Attachment download skipped (offline)', { attachmentId });
       return null;
     }
 

@@ -108,7 +108,14 @@ export async function updateDeviceLastSeen(deviceId: string): Promise<void> {
  * Used on reconnect/foreground to detect remote deactivation.
  */
 export async function checkDeviceActive(deviceId: string): Promise<boolean> {
-  const { data, error } = await getSupabase()
+  const supabase = getSupabase();
+
+  // Grab session for diagnostics — don't let it throw on network failure
+  const session = await supabase.auth.getSession()
+    .then(({ data }) => data.session)
+    .catch(() => null);
+
+  const { data, error } = await supabase
     .from('devices')
     .select('is_active')
     .eq('device_id', deviceId)
@@ -119,8 +126,24 @@ export async function checkDeviceActive(deviceId: string): Promise<boolean> {
     return true; // Fail open — don't sign out on network errors
   }
 
-  // No row = device was deleted, treat as deactivated
-  if (!data) return false;
+  // No row could mean: (a) device not registered yet, (b) hard-deleted,
+  // or (c) RLS filtered everything because auth token is stale/expired.
+  // Fail open in all cases — a real deactivation sets is_active=false, not delete.
+  if (!data) {
+    log.warn('checkDeviceActive: no row returned', {
+      deviceId,
+      hasSession: !!session,
+      userId: session?.user?.id ?? 'none',
+    });
+    return true;
+  }
+
+  if (!data.is_active) {
+    log.warn('checkDeviceActive: device explicitly deactivated', {
+      deviceId,
+      hasSession: !!session,
+    });
+  }
 
   return data.is_active;
 }
