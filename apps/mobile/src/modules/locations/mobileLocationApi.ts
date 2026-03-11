@@ -15,19 +15,9 @@ import { localDB } from '../../shared/db/localDB';
 // Import directly from syncApi to avoid circular dependency through sync/index.ts
 import { triggerPushSync } from '../../shared/sync/syncApi';
 import { createScopedLogger } from '../../shared/utils/logger';
+import { generateUUID } from '../../shared/utils/uuid';
 
 const log = createScopedLogger('LocationApi');
-
-/**
- * Generate UUID
- */
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
 
 // ============================================================================
 // READ OPERATIONS (always from local SQLite)

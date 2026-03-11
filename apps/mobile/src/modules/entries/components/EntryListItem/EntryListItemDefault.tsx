@@ -8,7 +8,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import type { EntryDisplayMode } from "@trace/core";
 import { Icon } from "../../../../shared/components";
-import { getFirstLineOfText, formatEntryDateOnly } from "@trace/core";
+import { getFirstLineOfText, formatEntryDateOnly, formatSmashedContent } from "@trace/core";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import { WebViewHtmlRenderer } from "../../helpers/webViewHtmlRenderer";
@@ -63,6 +63,16 @@ export function EntryListItemDefault({
 }: DefaultProps) {
   const theme = useTheme();
   const isSelectedOnMap = selectedEntryId === entry.entry_id;
+
+  // For smashed mode without title: show remaining content after first line
+  const smashedRemaining = displayMode === 'smashed' && !entry.title && entry.content
+    ? (() => {
+        const smashed = formatSmashedContent(entry.content);
+        const firstLine = getFirstLineOfText(entry.content);
+        const rest = smashed.startsWith(firstLine) ? smashed.slice(firstLine.length).trim() : smashed;
+        return rest || null;
+      })()
+    : null;
 
   return (
     <>
@@ -188,6 +198,13 @@ export function EntryListItemDefault({
                   style={styles.webViewSpacing}
                 />
               </View>
+            ) : entry.content ? (
+              <Text style={[
+                styles.smashedContent,
+                { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular },
+              ]} numberOfLines={2}>
+                {formatSmashedContent(entry.content)}
+              </Text>
             ) : null}
           </>
         ) : (
@@ -243,6 +260,13 @@ export function EntryListItemDefault({
                 style={styles.webViewSpacing}
               />
             </View>
+          ) : smashedRemaining ? (
+            <Text style={[
+              styles.smashedContent,
+              { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular },
+            ]} numberOfLines={1}>
+              {smashedRemaining}
+            </Text>
           ) : null
         )
       )}
@@ -351,6 +375,11 @@ const styles = StyleSheet.create({
     marginTop: themeBase.spacing.sm,
     marginBottom: themeBase.spacing.md,
     flexWrap: "wrap",
+  },
+  smashedContent: {
+    fontSize: themeBase.typography.fontSize.sm,
+    lineHeight: themeBase.typography.fontSize.sm * themeBase.typography.lineHeight.relaxed,
+    marginTop: themeBase.spacing.sm,
   },
   webViewSpacing: {
     marginTop: themeBase.spacing.sm,

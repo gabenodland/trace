@@ -5,8 +5,8 @@
  * Delegates to specialized modules for push/pull operations.
  *
  * Sync Order (respects foreign key dependencies):
- * PUSH: Streams → Locations → Entries → Attachments → Deletes
- * PULL: Streams → Locations → Entries → Attachments
+ * PUSH: Streams → Locations → Entries → Attachments → Entry Versions → Deletes
+ * PULL: Streams → Locations → Entries → Attachments → Entry Versions
  */
 
 import { localDB } from '../db/localDB';
@@ -17,6 +17,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { getDeviceName } from '../utils/deviceUtils';
 import { createScopedLogger } from '../utils/logger';
 import { isNetworkError } from '../utils/networkUtils';
+import { createSyncOverwriteIfNeeded } from '../../modules/versions';
 
 // Lazy imports to break circular dependencies
 // mobileAttachmentApi imports syncApi, which imports this file
@@ -362,12 +363,17 @@ class SyncService {
         result.pushed.attachments = attachmentResult.success;
         result.errors.attachments = attachmentResult.errors;
 
+        // Push entry versions (after entries + attachments are on server)
+        const entryVersionResult = await pushOps.pushEntryVersions();
+        result.pushed.entry_versions = entryVersionResult.success;
+        result.errors.entry_versions = entryVersionResult.errors;
+
         // Push entry deletes
         const deleteResult = await pushOps.pushEntryDeletes(localOnlyStreamIds, markPushing, unmarkPushing);
         result.pushed.entries += deleteResult.success;
         result.errors.entries += deleteResult.errors;
 
-        const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.attachments;
+        const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.attachments + result.pushed.entry_versions;
         if (totalPushed > 0) {
           log.debug(`PUSHED ${totalPushed} items`, result.pushed);
         }
@@ -385,16 +391,20 @@ class SyncService {
         const attachmentResult = await pullOps.pullAttachments(forceFullPull);
         result.pulled.attachments = attachmentResult.new + attachmentResult.updated + attachmentResult.deleted;
 
+        // Pull entry versions (after entries exist locally)
+        const entryVersionResult = await pullOps.pullEntryVersions(forceFullPull);
+        result.pulled.entry_versions = entryVersionResult.new + entryVersionResult.updated;
+
         await pullOps.saveLastPullTimestamp(pullStartTime);
 
-        const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.attachments;
+        const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.attachments + result.pulled.entry_versions;
         if (totalPulled > 0) {
           log.debug(`PULLED ${totalPulled} items`, result.pulled);
         }
       }
 
       // Invalidate cache if we pulled new data
-      const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.attachments;
+      const totalPulled = result.pulled.entries + result.pulled.streams + result.pulled.locations + result.pulled.attachments + result.pulled.entry_versions;
       if (totalPulled > 0) {
         this.invalidateQueryCache();
       }
@@ -479,6 +489,11 @@ class SyncService {
           log.info('📡 Locations realtime event received', { eventType: payload.eventType });
           this.handleRealtimeChange('locations');
         })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'entry_versions' }, (payload) => {
+          const entryId = (payload.new as any)?.entry_id;
+          log.info('📡 Entry versions realtime event received', { eventType: payload.eventType, entryId });
+          this.handleRealtimeChange('entry_versions', entryId);
+        })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'devices', filter: 'is_active=eq.false' }, (payload) => {
           this.handleDeviceDeactivation(payload).catch(err => {
             log.error('Failed to process device realtime event', err);
@@ -486,7 +501,7 @@ class SyncService {
         })
         .subscribe(async (status, err) => {
           if (status === 'SUBSCRIBED') {
-            log.info('✅ Global realtime subscription ACTIVE for entries/streams/attachments/locations');
+            log.info('✅ Global realtime subscription ACTIVE for entries/streams/attachments/locations/entry_versions');
             this.realtimeReconnectAttempts = 0;
             if (this.realtimeReconnectTimer) {
               clearTimeout(this.realtimeReconnectTimer);
@@ -716,6 +731,19 @@ class SyncService {
     };
 
     if (localEntry) {
+      const created = await createSyncOverwriteIfNeeded({
+        entryId,
+        userId: entry.user_id,
+        localEntry,
+        remoteEntry: entry,
+        localDeviceId: this.localDeviceId || null,
+        triggeredByDevice: entry.last_edited_device || null,
+      });
+
+      if (created && this.queryClient) {
+        this.queryClient.invalidateQueries({ queryKey: ['versions'] });
+      }
+
       await localDB.updateEntry(entryId, entry);
     } else {
       await localDB.saveEntry(entry);
@@ -1058,6 +1086,7 @@ class SyncService {
       this.queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
       this.queryClient.invalidateQueries({ queryKey: ['tags'] });
       this.queryClient.invalidateQueries({ queryKey: ['mentions'] });
+      this.queryClient.invalidateQueries({ queryKey: ['versions'] });
 
       if (entryIds && entryIds.length > 0) {
         for (const entryId of entryIds) {

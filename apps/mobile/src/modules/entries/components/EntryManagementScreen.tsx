@@ -31,6 +31,8 @@ import { getEntryWithRelations, copyEntry, deleteEntry } from '../mobileEntryApi
 import { useEntryManagementPhotos } from './hooks/useEntryManagementPhotos';
 import { useEntryManagement } from './hooks/useEntryManagement';
 import { useEntryManagementEffects } from './hooks/useEntryManagementEffects';
+import { useSessionSnapshot } from '../../versions/useSessionSnapshot';
+import { VersionHistorySheet } from '../../versions/components/VersionHistorySheet';
 // EntryPickerType - inline type definition (was from useEntryManagementPickers)
 type EntryPickerType = 'entryDate' | 'time' | 'stream' | 'status' | 'rating' | 'priority' | 'location' | 'dueDate' | 'entryOptions' | 'type' | null;
 import { buildLocationFromEntry } from './helpers/entryLocationHelpers';
@@ -188,6 +190,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     const [error, setError] = useState<string | null>(null);
     const [lastFetchMs, setLastFetchMs] = useState<number | null>(null);
     const [isFullScreen, setIsFullScreen] = useState(false);
+    const [showVersionHistory, setShowVersionHistory] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [activePicker, setActivePicker] = useState<EntryPickerType>(null);
 
@@ -284,6 +287,13 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       exitEditMode,
     });
 
+    // Session snapshots — version creation on editor close / app background
+    const {
+      captureOpenSnapshot,
+      createSessionSnapshot,
+      resetSession: resetSnapshotSession,
+    } = useSessionSnapshot();
+
     // Derive includeTime from milliseconds flag (ms=100 means "hide time")
     // This survives DB round-trips since timestamptz has microsecond precision
     const includeTime = entry?.entry_date
@@ -313,17 +323,16 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     const isVisibleRef = useRef(isVisible);
     isVisibleRef.current = isVisible;
 
+    // Track current entry in ref for AppState background snapshot (avoids stale closure)
+    const entrySnapshotRef = useRef(entry);
+    entrySnapshotRef.current = entry;
+
     // When screen becomes invisible, save if dirty, exit edit mode and dismiss keyboard
     // This prevents keyboard from appearing on the entry list during swipe-back
     // and ensures unsaved changes are persisted
     useEffect(() => {
       if (!isVisible) {
-        // If dirty, trigger save (fire-and-forget - save will complete in background)
-        if (isDirty && entry) {
-          log.info('Screen hidden with unsaved changes, auto-saving');
-          handleAutosave(); // Use autosave (silent) rather than handleSave
-        }
-
+        // Dismiss keyboard and exit edit mode immediately (non-blocking)
         if (isEditMode) {
           log.debug('Screen hidden while in edit mode, exiting edit mode');
           Keyboard.dismiss();
@@ -331,8 +340,27 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           setIsEditMode(false);
           setIsFullScreen(false);
         }
+
+        // Autosave then snapshot — must await autosave so the snapshot captures latest content
+        if (entry) {
+          (async () => {
+            let snapshotEntry = entry;
+
+            if (isDirty) {
+              log.info('Screen hidden with unsaved changes, auto-saving before snapshot');
+              const result = await handleAutosave();
+              // Use the freshly-saved entry for the snapshot (has latest editor content)
+              if (result.success && result.updatedEntry) {
+                snapshotEntry = result.updatedEntry;
+              }
+            }
+
+            const attIds = snapshotEntry.attachments?.map(a => a.attachment_id) ?? [];
+            createSessionSnapshot(snapshotEntry, attIds);
+          })();
+        }
       }
-    }, [isVisible, isEditMode, isDirty, entry, handleAutosave]);
+    }, [isVisible, isEditMode, isDirty, entry, handleAutosave, createSessionSnapshot]);
 
     // Track what to restore after WebView reload (manual reload of new/unsaved entry)
     const pendingResumeRestore = useRef<string | null>(null);
@@ -404,6 +432,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
 
         setEntry(data);
         setOriginalEntry(data);
+        captureOpenSnapshot(data, data.attachments?.map(a => a.attachment_id) ?? []);
         setLastFetchMs(fetchTime);
 
         // Initialize version tracking for conflict detection
@@ -516,14 +545,28 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         hasEditorRef: !!editorRef.current,
       });
 
-      if (!entry || !entryId) {
-        log.info('🔄 No entry loaded, just reloading WebView');
+      if (!entryId) {
+        log.info('🔄 No entryId, just reloading WebView');
         editorRef.current?.reloadWebView();
         return;
       }
 
+      // Read from SQLite (source of truth) — React state may be stale after long background
+      let title = entry?.title || '';
+      let content = entry?.content || '';
+      try {
+        const freshEntry = await getEntryWithRelations(entryId);
+        if (freshEntry) {
+          title = freshEntry.title || '';
+          content = freshEntry.content || '';
+          log.info('🔄 Restored content from SQLite', { entryId: entryId.substring(0, 8), titleLen: title.length, contentLen: content.length });
+        }
+      } catch (err) {
+        log.warn('🔄 SQLite read failed, falling back to React state', { error: err });
+      }
+
       // Store content to restore after reload completes
-      const html = combineTitleAndBody(entry.title || '', entry.content || '');
+      const html = combineTitleAndBody(title, content);
       log.info('🔄 Setting pendingResumeRestore before reload', { length: html.length });
       pendingResumeRestore.current = html;
       editorRef.current?.reloadWebView();
@@ -563,10 +606,16 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       }
     }, []);
 
-    // AppState listener - check WebView health when app resumes
+    // AppState listener - check WebView health when app resumes, snapshot on background
     useEffect(() => {
       const handleAppStateChange = async (nextState: AppStateStatus) => {
         log.info('🔄 AppState changed', { nextState, isVisible: isVisibleRef.current, entryId: entryId?.substring(0, 8) || null });
+
+        // App going to background — create session snapshot if entry was modified
+        if (nextState === 'background' && isVisibleRef.current && entrySnapshotRef.current) {
+          const attIds = entrySnapshotRef.current.attachments?.map(a => a.attachment_id) ?? [];
+          createSessionSnapshot(entrySnapshotRef.current, attIds);
+        }
 
         if (nextState === 'active' && isVisibleRef.current) {
           log.info('🔄 App resumed on visible entry screen, checking WebView health');
@@ -585,7 +634,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
 
       const subscription = AppState.addEventListener('change', handleAppStateChange);
       return () => subscription.remove();
-    }, [checkWebViewHealth, handleEditorReload, entryId]);
+    }, [checkWebViewHealth, handleEditorReload, entryId, createSessionSnapshot]);
 
     // Listen for manual editor reload from Settings → Developer
     // Stable ref avoids listener churn when handleEditorReload identity changes
@@ -742,6 +791,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         // Update state with fresh (authoritative) data
         setEntry(data);
         setOriginalEntry(data);
+        captureOpenSnapshot(data, data.attachments?.map(a => a.attachment_id) ?? []);
         setLastFetchMs(fetchTime);
         // Prime React Query cache so useEntry(entryId) in useEntryManagement
         // doesn't trigger a redundant SQLite fetch
@@ -815,6 +865,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           }
           setEntry(entry);
           setOriginalEntry(entry);
+          captureOpenSnapshot(entry, entry.attachments?.map(a => a.attachment_id) ?? []);
           const { stream: _s, ...cachedForQuery } = entry;
           queryClient.setQueryData(['entry', id], cachedForQuery);
           if (entry.version) {
@@ -860,6 +911,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         }
         setEntry(newEntry);
         setOriginalEntry(newEntry);
+        captureOpenSnapshot(newEntry, []);
         setIsLoading(false);
         // Set editor content without adding to undo history
         const editorContent = combineTitleAndBody(newEntry.title || '', newEntry.content || '');
@@ -879,6 +931,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         setIsNewEntry(false);
         setEntry(null);
         setOriginalEntry(null);
+        resetSnapshotSession();
         setError(null);
         setActivePicker(null);
         setIsEditMode(false);
@@ -1263,11 +1316,21 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           onPinToggle={handlePinToggle}
           onArchiveToggle={handleArchiveToggle}
           onDuplicate={handleDuplicate}
+          onVersionHistory={entryId ? () => setShowVersionHistory(true) : undefined}
           onDelete={handleDelete}
         />
 
         {/* Snackbar for notifications */}
         <Snackbar message={snackbarMessage} opacity={snackbarOpacity} />
+
+        {/* Version History Sheet */}
+        {entryId && (
+          <VersionHistorySheet
+            visible={showVersionHistory}
+            onClose={() => setShowVersionHistory(false)}
+            entryId={entryId}
+          />
+        )}
       </View>
     );
   }

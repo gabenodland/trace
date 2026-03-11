@@ -125,8 +125,10 @@ export interface BaseEntry {
   version?: number; // Increments with each edit - used for conflict detection
   base_version?: number; // Server version this edit is based on - used for 3-way merge
   conflict_status?: 'conflicted' | 'resolved' | null; // Conflict state
-  conflict_backup?: string | null; // JSON backup of losing version when conflict detected
-  last_edited_by?: string | null; // User email who last edited
+  /** @deprecated Superseded by entry_versions table. Do not populate. */
+  conflict_backup?: string | null;
+  /** @deprecated Never populated. User attribution handled by device_id on entry_versions. */
+  last_edited_by?: string | null;
   last_edited_device?: string | null; // Device name that last edited
   // Computed field for filtering (not in database, calculated on fetch)
   photo_count?: number; // Number of attachments for this entry

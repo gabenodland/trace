@@ -9,6 +9,8 @@ import { localDB } from '../db/localDB';
 import { supabase, Entry, LocationEntity, isCompletedStatus, ALL_STATUSES, EntryStatus } from '@trace/core';
 import { createScopedLogger } from '../utils/logger';
 import { getDeviceName } from '../utils/deviceUtils';
+import { getDeviceId } from '../../config/appVersionService';
+import { createVersion, buildSnapshot } from '../../modules/versions';
 
 // Lazy import to break circular dependency
 let _uploadAttachmentToSupabase: ((localPath: string, remotePath: string) => Promise<{ url: string; size: number }>) | null = null;
@@ -244,31 +246,132 @@ export async function pushAttachments(localOnlyStreamIds: Set<string>): Promise<
     }
   }
 
-  // Delete attachments
+  // Soft-delete attachments on server (set deleted_at, keep file in storage for version history)
   const attachmentsToDelete = attachmentsNeedingSync.filter(a => a.sync_action === 'delete');
   if (attachmentsToDelete.length > 0) {
-    log.debug('Deleting attachments from server', { count: attachmentsToDelete.length });
+    log.debug('Soft-deleting attachments on server', { count: attachmentsToDelete.length });
 
     for (const attachment of attachmentsToDelete) {
       try {
-        const { error: dbError } = await supabase.from('attachments' as any).delete().eq('attachment_id', attachment.attachment_id);
+        // Convert local deleted_at (Unix ms) to ISO string for Supabase
+        const deletedAtISO = attachment.deleted_at
+          ? new Date(attachment.deleted_at).toISOString()
+          : new Date().toISOString();
+
+        const { error: dbError } = await supabase
+          .from('attachments' as any)
+          .update({ deleted_at: deletedAtISO })
+          .eq('attachment_id', attachment.attachment_id);
+
         if (dbError) {
-          log.error('Failed to delete attachment from DB', { attachmentId: attachment.attachment_id, error: dbError });
+          log.error('Failed to soft-delete attachment on server', { attachmentId: attachment.attachment_id, error: dbError });
         }
-        if (attachment.file_path) {
-          const { error: storageError } = await supabase.storage.from('attachments').remove([attachment.file_path]);
-          if (storageError) {
-            log.warn('Failed to delete attachment from storage', { attachmentId: attachment.attachment_id, error: storageError });
-          }
-        }
-        await localDB.permanentlyDeleteAttachment(attachment.attachment_id);
+
+        // Mark as synced locally — row stays for version history
+        await localDB.updateAttachment(attachment.attachment_id, { synced: 1, sync_action: null });
         success++;
       } catch (error) {
-        log.error('Failed to delete attachment', { attachmentId: attachment.attachment_id, error });
+        log.error('Failed to soft-delete attachment', { attachmentId: attachment.attachment_id, error });
         errors++;
       }
     }
   }
+
+  return { success, errors };
+}
+
+export async function pushEntryVersions(): Promise<{ success: number; errors: number }> {
+  let success = 0;
+  let errors = 0;
+
+  // Get unsynced versions whose parent entry is already synced on server
+  const unsyncedVersions = await localDB.runCustomQuery(
+    `SELECT ev.* FROM entry_versions ev
+     INNER JOIN entries e ON ev.entry_id = e.entry_id
+     WHERE ev.synced = 0 AND e.synced = 1
+     AND e.deleted_at IS NULL AND (e.sync_action IS NULL OR e.sync_action != 'delete')`,
+    []
+  );
+
+  log.info('[VersionSync] Push: found unsynced versions', { count: unsyncedVersions.length });
+
+  if (unsyncedVersions.length === 0) {
+    return { success: 0, errors: 0 };
+  }
+
+  for (const version of unsyncedVersions) {
+    try {
+      // Parse snapshot from JSON text to object for Supabase JSONB
+      let snapshotObj = version.snapshot;
+      if (typeof snapshotObj === 'string') {
+        try {
+          snapshotObj = JSON.parse(snapshotObj);
+        } catch {
+          log.warn('Failed to parse version snapshot JSON', { versionId: version.version_id });
+          continue;
+        }
+      }
+
+      // Parse attachment_ids from JSON text to array
+      let attachmentIdsArr = version.attachment_ids;
+      if (typeof attachmentIdsArr === 'string') {
+        try {
+          attachmentIdsArr = JSON.parse(attachmentIdsArr);
+        } catch {
+          attachmentIdsArr = null;
+        }
+      }
+
+      const supabaseData = {
+        version_id: version.version_id,
+        entry_id: version.entry_id,
+        user_id: version.user_id,
+        version_number: version.version_number,
+        trigger: version.trigger,
+        snapshot: snapshotObj,
+        attachment_ids: attachmentIdsArr,
+        change_summary: version.change_summary || null,
+        device_id: version.device_id || null,
+        triggered_by_device: version.triggered_by_device || null,
+        device_created_at: version.device_created_at
+          ? new Date(version.device_created_at).toISOString()
+          : null,
+        base_entry_version: version.base_entry_version || null,
+        created_at: typeof version.created_at === 'number'
+          ? new Date(version.created_at).toISOString()
+          : version.created_at,
+      };
+
+      const { error } = await supabase
+        .from('entry_versions' as any)
+        .upsert(supabaseData, { onConflict: 'version_id' });
+
+      if (error) {
+        throw new Error(`Supabase upsert failed: ${error.message}`);
+      }
+
+      // Mark as synced in local SQLite
+      await localDB.runCustomQuery(
+        'UPDATE entry_versions SET synced = 1, sync_action = NULL WHERE version_id = ?',
+        [version.version_id]
+      );
+      success++;
+      log.info('[VersionSync] Push: upserted version', {
+        versionId: version.version_id.substring(0, 8),
+        entryId: version.entry_id.substring(0, 8),
+        trigger: version.trigger,
+        baseVersion: version.base_entry_version,
+      });
+    } catch (error) {
+      log.error('[VersionSync] Push FAILED for version', error, {
+        versionId: version.version_id,
+        entryId: version.entry_id,
+      });
+      errors++;
+    }
+  }
+
+  log.info('[VersionSync] Push: complete', { success, errors });
 
   return { success, errors };
 }
@@ -415,7 +518,7 @@ async function syncEntry(
 
           const { data: serverEntry, error: fetchError } = await supabase
             .from('entries')
-            .select('version, title, content, status, tags, mentions, last_edited_by, last_edited_device')
+            .select('version, title, content, status, type, priority, rating, tags, mentions, stream_id, due_date, completed_at, is_pinned, entry_date, is_archived, entry_latitude, entry_longitude, location_id, geocode_status, place_name, address, neighborhood, postal_code, city, subdivision, region, country, last_edited_by, last_edited_device')
             .eq('entry_id', entry.entry_id)
             .single();
 
@@ -426,17 +529,65 @@ async function syncEntry(
           const serverVersion = (serverEntry as any).version || 1;
           const serverData = serverEntry as any;
 
-          // Server wins - take server version
+          // Preserve local state as a conflict version before overwriting
+          try {
+            const localSnapshot = buildSnapshot(entry);
+            const deviceId = await getDeviceId();
+            const now = new Date().toISOString();
+            // Get current attachment IDs for this entry (active only)
+            const entryAttachments = await localDB.getAttachmentsForEntry(entry.entry_id);
+            const attachmentIds = entryAttachments.map(a => a.attachment_id);
+            await createVersion({
+              entry_id: entry.entry_id,
+              user_id: entry.user_id,
+              trigger: 'conflict',
+              snapshot: localSnapshot,
+              attachment_ids: attachmentIds.length > 0 ? attachmentIds : null,
+              change_summary: 'local backup before conflict resolution',
+              device_id: deviceId,
+              triggered_by_device: serverData.last_edited_device || null,
+              device_created_at: now,
+              base_entry_version: String(entry.base_version || 1),
+              created_at: now,
+            });
+            log.info('Saved local state as conflict version', { entryId: entry.entry_id });
+          } catch (versionError) {
+            log.warn('Failed to save conflict version (non-fatal)', { entryId: entry.entry_id, error: versionError });
+          }
+
+          // Server wins - take server version (all substantive fields)
           await localDB.updateEntry(entry.entry_id, {
             title: serverData.title,
             content: serverData.content,
             status: serverData.status,
+            type: serverData.type,
+            priority: serverData.priority,
+            rating: serverData.rating,
             tags: serverData.tags,
             mentions: serverData.mentions,
+            stream_id: serverData.stream_id,
+            due_date: serverData.due_date,
+            completed_at: serverData.completed_at,
+            is_pinned: serverData.is_pinned,
+            entry_date: serverData.entry_date,
+            is_archived: serverData.is_archived,
+            entry_latitude: serverData.entry_latitude,
+            entry_longitude: serverData.entry_longitude,
+            location_id: serverData.location_id,
+            geocode_status: serverData.geocode_status,
+            place_name: serverData.place_name,
+            address: serverData.address,
+            neighborhood: serverData.neighborhood,
+            postal_code: serverData.postal_code,
+            city: serverData.city,
+            subdivision: serverData.subdivision,
+            region: serverData.region,
+            country: serverData.country,
             version: serverVersion,
             base_version: serverVersion,
             last_edited_by: serverData.last_edited_by,
             last_edited_device: serverData.last_edited_device,
+            conflict_status: null, // No UI reads this yet — set when conflict resolution UI is built
             synced: 1,
             sync_action: null,
             sync_error: null,

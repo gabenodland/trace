@@ -10,6 +10,8 @@ import { supabase, Entry, LocationEntity } from '@trace/core';
 import { createScopedLogger } from '../utils/logger';
 import { isNetworkError } from '../utils/networkUtils';
 import { getDeviceName } from '../utils/deviceUtils';
+import { getDeviceId } from '../../config/appVersionService';
+import { createVersion, createSyncOverwriteIfNeeded } from '../../modules/versions';
 
 // Lazy import to break circular dependency
 let _deleteAttachmentFromLocalStorage: ((attachmentId: string) => Promise<void>) | null = null;
@@ -372,6 +374,16 @@ export async function pullEntries(
         const localBaseVersion = localEntry.base_version || 1;
 
         if (remoteVersion > localBaseVersion) {
+          const localDeviceId = await getDeviceId();
+          await createSyncOverwriteIfNeeded({
+            entryId: entry.entry_id,
+            userId: entry.user_id,
+            localEntry,
+            remoteEntry: entry,
+            localDeviceId,
+            triggeredByDevice: entry.last_edited_device || null,
+          });
+
           await localDB.updateEntry(entry.entry_id, entry);
           await localDB.markSynced(entry.entry_id);
           updatedCount++;
@@ -416,25 +428,42 @@ export async function pullAttachments(forceFullPull: boolean): Promise<{ new: nu
 
   for (const remoteAttachment of (remoteAttachments || [])) {
     try {
+      const ra = remoteAttachment as any;
       const localAttachments = await localDB.runCustomQuery(
         'SELECT * FROM attachments WHERE attachment_id = ?',
-        [(remoteAttachment as any).attachment_id]
+        [ra.attachment_id]
       );
       const localAttachment = localAttachments.length > 0 ? localAttachments[0] : null;
 
+      // Handle soft-deleted attachments from server
+      if (ra.deleted_at) {
+        if (localAttachment && !localAttachment.deleted_at) {
+          // Server soft-deleted this attachment — mirror locally
+          const deletedAtMs = new Date(ra.deleted_at).getTime();
+          await localDB.updateAttachment(ra.attachment_id, {
+            deleted_at: deletedAtMs,
+            synced: 1,
+            sync_action: null,
+          });
+          deletedCount++;
+          log.debug('Attachment soft-deleted from server', { attachmentId: ra.attachment_id });
+        }
+        continue;
+      }
+
       const attachment = {
-        attachment_id: (remoteAttachment as any).attachment_id,
-        entry_id: (remoteAttachment as any).entry_id,
-        user_id: (remoteAttachment as any).user_id,
-        file_path: (remoteAttachment as any).file_path,
+        attachment_id: ra.attachment_id,
+        entry_id: ra.entry_id,
+        user_id: ra.user_id,
+        file_path: ra.file_path,
         local_path: localAttachment?.local_path || undefined,
-        mime_type: (remoteAttachment as any).mime_type,
-        file_size: (remoteAttachment as any).file_size || undefined,
-        width: (remoteAttachment as any).width || undefined,
-        height: (remoteAttachment as any).height || undefined,
-        position: (remoteAttachment as any).position,
-        created_at: new Date((remoteAttachment as any).created_at).getTime(),
-        updated_at: new Date((remoteAttachment as any).updated_at).getTime(),
+        mime_type: ra.mime_type,
+        file_size: ra.file_size || undefined,
+        width: ra.width || undefined,
+        height: ra.height || undefined,
+        position: ra.position,
+        created_at: new Date(ra.created_at).getTime(),
+        updated_at: new Date(ra.updated_at).getTime(),
         uploaded: true,
         synced: 1,
         sync_action: null,
@@ -458,16 +487,17 @@ export async function pullAttachments(forceFullPull: boolean): Promise<{ new: nu
     }
   }
 
-  // Detect and delete attachments that exist locally but were deleted on server
+  // Detect attachments that exist locally (synced) but are completely gone from server
+  // These were hard-deleted on server (e.g. by cleanup job) — permanently remove locally
   try {
     const localSyncedAttachments = await localDB.runCustomQuery(
-      'SELECT attachment_id, local_path FROM attachments WHERE user_id = ? AND synced = 1 AND (sync_action IS NULL OR sync_action != ?)',
+      'SELECT attachment_id, local_path FROM attachments WHERE user_id = ? AND synced = 1 AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?)',
       [user.id, 'delete']
     );
 
     for (const localAttachment of localSyncedAttachments) {
       if (!remoteAttachmentIds.has(localAttachment.attachment_id)) {
-        log.info('Attachment deleted on server, removing locally', { attachmentId: localAttachment.attachment_id });
+        log.info('Attachment missing from server, removing locally', { attachmentId: localAttachment.attachment_id });
         // Delete local file if exists
         if (localAttachment.local_path) {
           try {
@@ -486,4 +516,123 @@ export async function pullAttachments(forceFullPull: boolean): Promise<{ new: nu
   }
 
   return { new: newCount, updated: updatedCount, deleted: deletedCount };
+}
+
+export async function pullEntryVersions(forceFullPull: boolean): Promise<{ new: number; updated: number }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { new: 0, updated: 0 };
+
+  // Incremental pull: only fetch versions newer than our last pull.
+  // Versions are immutable — once created they never change, so we only need new ones.
+  let lastPullMs: number | null = null;
+  if (!forceFullPull) {
+    try {
+      const tsResult = await localDB.runCustomQuery(
+        "SELECT value FROM sync_metadata WHERE key = ?",
+        ['last_version_pull_timestamp']
+      );
+      if (tsResult.length > 0 && tsResult[0].value) {
+        lastPullMs = parseInt(tsResult[0].value);
+      }
+    } catch {
+      // Fall through to full pull
+    }
+  }
+
+  let query = supabase
+    .from('entry_versions' as any)
+    .select('*')
+    .eq('user_id', user.id);
+
+  if (lastPullMs) {
+    query = query.gt('created_at', new Date(lastPullMs).toISOString());
+  }
+
+  query = query.order('created_at', { ascending: false }).limit(5000);
+
+  const { data: remoteVersions, error } = await query;
+
+  if (error) {
+    log.error('[VersionSync] Pull: Supabase fetch FAILED', error);
+    return { new: 0, updated: 0 };
+  }
+
+  log.info('[VersionSync] Pull: fetched from Supabase', {
+    count: remoteVersions?.length ?? 0,
+    incremental: !!lastPullMs,
+  });
+
+  if (!remoteVersions || remoteVersions.length === 0) {
+    return { new: 0, updated: 0 };
+  }
+
+  let newCount = 0;
+  let skippedCount = 0;
+  let errorCount = 0;
+
+  for (const remoteVersion of remoteVersions) {
+    try {
+      const rv = remoteVersion as any;
+
+      // Stringify snapshot for SQLite TEXT column
+      const snapshotText = typeof rv.snapshot === 'string'
+        ? rv.snapshot
+        : JSON.stringify(rv.snapshot);
+
+      // Stringify attachment_ids for SQLite TEXT column
+      const attachmentIdsText = rv.attachment_ids
+        ? (typeof rv.attachment_ids === 'string' ? rv.attachment_ids : JSON.stringify(rv.attachment_ids))
+        : null;
+
+      // Convert ISO timestamps to Unix ms
+      const createdAtMs = rv.created_at ? new Date(rv.created_at).getTime() : Date.now();
+      const deviceCreatedAtMs = rv.device_created_at ? new Date(rv.device_created_at).getTime() : null;
+
+      // Versions are immutable — INSERT OR IGNORE skips duplicates without wasting writes
+      const result = await localDB.runCustomQuery(
+        `INSERT OR IGNORE INTO entry_versions (
+          version_id, entry_id, user_id, version_number, trigger, snapshot,
+          attachment_ids, change_summary, device_id, triggered_by_device,
+          device_created_at, base_entry_version, created_at, synced, sync_action
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL)`,
+        [
+          rv.version_id,
+          rv.entry_id,
+          rv.user_id,
+          rv.version_number,
+          rv.trigger,
+          snapshotText,
+          attachmentIdsText,
+          rv.change_summary || null,
+          rv.device_id || null,
+          rv.triggered_by_device || null,
+          deviceCreatedAtMs,
+          rv.base_entry_version || null,
+          createdAtMs,
+        ]
+      );
+      // INSERT OR IGNORE: duplicates silently skipped. Count reflects processed, not necessarily new.
+      newCount++;
+    } catch (error) {
+      errorCount++;
+      log.error('[VersionSync] Pull: FAILED to insert version', error, {
+        versionId: (remoteVersion as any).version_id,
+        entryId: (remoteVersion as any).entry_id,
+      });
+    }
+  }
+
+  // Save the pull timestamp for incremental pulls
+  try {
+    await localDB.runCustomQuery(
+      'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
+      ['last_version_pull_timestamp', Date.now().toString(), Date.now()]
+    );
+  } catch {
+    log.warn('[VersionSync] Failed to save version pull timestamp');
+  }
+
+  log.info('[VersionSync] Pull: complete', { new: newCount, errors: errorCount });
+
+  return { new: newCount, updated: 0 };
 }

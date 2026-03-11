@@ -25,6 +25,7 @@ export interface Attachment {
   // Timestamps
   created_at: string;         // ISO 8601 timestamp when record was created
   updated_at: string;         // ISO 8601 timestamp when record was last updated
+  deleted_at?: string | number | null; // Soft-delete: ISO string (Supabase) or Unix ms (SQLite)
 
   // Sync status (local only fields)
   uploaded?: boolean;         // True if file has been uploaded to Supabase Storage
@@ -54,6 +55,7 @@ export interface UpdateAttachmentInput {
   uploaded?: boolean;
   synced?: number;
   sync_action?: 'create' | 'update' | 'delete' | null;
+  deleted_at?: string | number | null;
 }
 
 /**

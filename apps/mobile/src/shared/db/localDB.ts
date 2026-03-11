@@ -766,6 +766,90 @@ class LocalDatabase {
     } catch (error) {
       log.error('Migration error (locations geocode_status)', error);
     }
+
+    // Migration: Add deleted_at column to attachments table (soft delete for versioning)
+    try {
+      const deletedAtCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('attachments') WHERE name = 'deleted_at'`
+      );
+
+      if (!deletedAtCheck) {
+        log.info('Running migration: Adding deleted_at to attachments table');
+        await this.db.execAsync(`
+          ALTER TABLE attachments ADD COLUMN deleted_at INTEGER;
+        `);
+        log.info('Migration complete: deleted_at added to attachments');
+      }
+    } catch (error) {
+      log.error('Migration error (attachments deleted_at)', error);
+    }
+
+    // Migration: Add conflict_status column to entries table (for versioning)
+    try {
+      const conflictStatusCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM pragma_table_info('entries') WHERE name = 'conflict_status'`
+      );
+
+      if (!conflictStatusCheck) {
+        log.info('Running migration: Adding conflict_status to entries table');
+        await this.db.execAsync(`
+          ALTER TABLE entries ADD COLUMN conflict_status TEXT;
+        `);
+        log.info('Migration complete: conflict_status added to entries');
+      }
+    } catch (error) {
+      log.error('Migration error (entries conflict_status)', error);
+    }
+
+    // Migration: Create entry_versions table if it doesn't exist
+    try {
+      const entryVersionsCheck = await this.db.getFirstAsync<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='entry_versions'`
+      );
+
+      if (!entryVersionsCheck) {
+        log.info('Running migration: Creating entry_versions table');
+        await this.db.execAsync(`
+          CREATE TABLE IF NOT EXISTS entry_versions (
+            version_id TEXT PRIMARY KEY,
+            entry_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            version_number INTEGER NOT NULL,
+            trigger TEXT NOT NULL,
+            snapshot TEXT NOT NULL,
+            attachment_ids TEXT,
+            change_summary TEXT,
+            device_id TEXT,
+            device_created_at INTEGER,
+            base_entry_version TEXT,
+            created_at INTEGER NOT NULL,
+            synced INTEGER NOT NULL DEFAULT 0,
+            sync_action TEXT
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_entry_versions_entry_id ON entry_versions(entry_id);
+          CREATE INDEX IF NOT EXISTS idx_entry_versions_synced ON entry_versions(synced);
+        `);
+        log.info('Migration complete: entry_versions table created');
+      }
+    } catch (error) {
+      log.error('Migration error (entry_versions table)', error);
+    }
+
+    // Migration: Add triggered_by_device column to entry_versions
+    try {
+      const cols = await this.db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(entry_versions)`
+      );
+      const hasTriggeredByDevice = cols.some(c => c.name === 'triggered_by_device');
+      if (!hasTriggeredByDevice) {
+        log.info('Running migration: Adding triggered_by_device to entry_versions');
+        await this.db.execAsync(`ALTER TABLE entry_versions ADD COLUMN triggered_by_device TEXT`);
+        log.info('Migration complete: triggered_by_device added');
+      }
+    } catch (error) {
+      log.error('Migration error (triggered_by_device)', error);
+    }
   }
 
   private async createTables(): Promise<void> {
@@ -923,12 +1007,34 @@ class LocalDatabase {
         updated_at INTEGER NOT NULL,
         uploaded INTEGER DEFAULT 0,
         synced INTEGER DEFAULT 0,
+        deleted_at INTEGER,               -- Unix ms (soft delete for versioning)
         sync_error TEXT,
         sync_action TEXT,
         FOREIGN KEY (entry_id) REFERENCES entries(entry_id) ON DELETE CASCADE
       );
 
       -- Indexes for attachments are created in createIndexes() after migrations
+
+      -- Entry versions table (version history for entries)
+      CREATE TABLE IF NOT EXISTS entry_versions (
+        version_id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL,
+        trigger TEXT NOT NULL,
+        snapshot TEXT NOT NULL,            -- JSON string of entry state
+        attachment_ids TEXT,               -- JSON array string
+        change_summary TEXT,
+        device_id TEXT,
+        triggered_by_device TEXT,          -- Remote device that triggered sync_overwrite/conflict
+        device_created_at INTEGER,         -- Unix ms
+        base_entry_version TEXT,
+        created_at INTEGER NOT NULL,       -- Unix ms
+        synced INTEGER NOT NULL DEFAULT 0, -- 0 = needs sync, 1 = synced
+        sync_action TEXT                   -- 'create' or null
+      );
+
+      -- Indexes for entry_versions are created in createIndexes() after migrations
 
       -- Sync metadata table
       CREATE TABLE IF NOT EXISTS sync_metadata (
@@ -995,6 +1101,14 @@ class LocalDatabase {
       CREATE INDEX IF NOT EXISTS idx_attachments_position ON attachments(entry_id, position);
       CREATE INDEX IF NOT EXISTS idx_attachments_uploaded ON attachments(uploaded);
       CREATE INDEX IF NOT EXISTS idx_attachments_synced ON attachments(synced);
+
+      -- Indexes for entry_versions
+      CREATE INDEX IF NOT EXISTS idx_entry_versions_entry_id ON entry_versions(entry_id);
+      CREATE INDEX IF NOT EXISTS idx_entry_versions_entry_created ON entry_versions(entry_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_entry_versions_synced ON entry_versions(synced);
+
+      -- Index for attachment soft-delete filtering
+      CREATE INDEX IF NOT EXISTS idx_attachments_deleted_at ON attachments(deleted_at);
 
       -- Indexes for sync_logs
       CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp DESC);
@@ -2792,7 +2906,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    let query = 'SELECT * FROM attachments WHERE entry_id = ? AND (sync_action IS NULL OR sync_action != ?)';
+    let query = 'SELECT * FROM attachments WHERE entry_id = ? AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?)';
     const params: any[] = [entryId, 'delete'];
 
     if (this.currentUserId) {
@@ -2828,7 +2942,7 @@ class LocalDatabase {
       const batch = entryIds.slice(i, i + BATCH_SIZE);
       const placeholders = batch.map(() => '?').join(', ');
 
-      let query = `SELECT * FROM attachments WHERE entry_id IN (${placeholders}) AND (sync_action IS NULL OR sync_action != ?)`;
+      let query = `SELECT * FROM attachments WHERE entry_id IN (${placeholders}) AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?)`;
       const params: (string | number)[] = [...batch, 'delete'];
 
       if (this.currentUserId) {
@@ -2877,6 +2991,7 @@ class LocalDatabase {
     uploaded: boolean;
     synced: number;
     sync_action: string | null;
+    deleted_at: number | null;
   }>): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
@@ -2919,6 +3034,10 @@ class LocalDatabase {
     if (updates.sync_action !== undefined) {
       fields.push('sync_action = ?');
       values.push(updates.sync_action);
+    }
+    if (updates.deleted_at !== undefined) {
+      fields.push('deleted_at = ?');
+      values.push(updates.deleted_at);
     }
 
     if (fields.length === 0) return;
@@ -3000,11 +3119,11 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.runAsync(
-      'UPDATE attachments SET sync_action = ?, synced = 0 WHERE attachment_id = ?',
-      ['delete', attachmentId]
+      'UPDATE attachments SET sync_action = ?, synced = 0, deleted_at = ? WHERE attachment_id = ?',
+      ['delete', Date.now(), attachmentId]
     );
 
-    log.debug('Attachment marked for deletion', { attachmentId });
+    log.debug('Attachment soft-deleted', { attachmentId });
   }
 
   /**
@@ -3027,7 +3146,7 @@ class LocalDatabase {
 
     log.debug('Searching for orphaned attachments');
 
-    let query = 'SELECT * FROM attachments WHERE sync_action IS NULL OR sync_action != ?';
+    let query = 'SELECT * FROM attachments WHERE deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?)';
     const params: any[] = ['delete'];
 
     if (this.currentUserId) {
@@ -3064,7 +3183,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    let query = 'SELECT * FROM attachments WHERE uploaded = 0';
+    let query = 'SELECT * FROM attachments WHERE uploaded = 0 AND deleted_at IS NULL';
     const params: any[] = [];
 
     if (this.currentUserId) {
@@ -3113,11 +3232,11 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    let query = 'SELECT * FROM attachments';
+    let query = 'SELECT * FROM attachments WHERE deleted_at IS NULL';
     const params: any[] = [];
 
     if (this.currentUserId) {
-      query += ' WHERE user_id = ?';
+      query += ' AND user_id = ?';
       params.push(this.currentUserId);
     }
 
@@ -3138,7 +3257,7 @@ class LocalDatabase {
     let query = `
       SELECT entry_id, COUNT(*) as count
       FROM attachments
-      WHERE (sync_action IS NULL OR sync_action != 'delete')
+      WHERE deleted_at IS NULL AND (sync_action IS NULL OR sync_action != 'delete')
     `;
     const params: any[] = [];
 
@@ -3156,6 +3275,22 @@ class LocalDatabase {
       counts[row.entry_id] = row.count;
     }
     return counts;
+  }
+
+  /**
+   * Get attachments by IDs — includes soft-deleted (for version history rendering).
+   */
+  async getAttachmentsByIds(attachmentIds: string[]): Promise<Attachment[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+    if (attachmentIds.length === 0) return [];
+
+    const placeholders = attachmentIds.map(() => '?').join(',');
+    const rows = await this.db.getAllAsync<any>(
+      `SELECT * FROM attachments WHERE attachment_id IN (${placeholders}) ORDER BY position ASC`,
+      attachmentIds,
+    );
+    return rows as Attachment[];
   }
 
   // ========================================

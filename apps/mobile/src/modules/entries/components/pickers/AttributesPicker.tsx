@@ -59,6 +59,7 @@ interface AttributesPickerProps {
   onPinToggle?: () => void;
   onArchiveToggle?: () => void;
   onDuplicate?: () => void;
+  onVersionHistory?: () => void;
   onDelete: () => void;
 }
 
@@ -95,6 +96,7 @@ export function AttributesPicker({
   onPinToggle,
   onArchiveToggle,
   onDuplicate,
+  onVersionHistory,
   onDelete,
 }: AttributesPickerProps) {
   const dynamicTheme = useTheme();
@@ -387,6 +389,24 @@ export function AttributesPicker({
               </View>
               <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
                 {isArchived ? "Unarchive Entry" : "Archive Entry"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Version History */}
+          {onVersionHistory && isEditing && (
+            <TouchableOpacity
+              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
+              onPress={() => {
+                onClose();
+                onVersionHistory();
+              }}
+            >
+              <View style={styles.optionIcon}>
+                <Icon name="Clock" size={16} color={dynamicTheme.colors.text.primary} />
+              </View>
+              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
+                Version History
               </Text>
             </TouchableOpacity>
           )}

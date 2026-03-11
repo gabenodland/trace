@@ -17,6 +17,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 // Import directly from syncApi to avoid circular dependency through sync/index.ts
 import { triggerPushSync, refreshEntryFromServer } from '../../shared/sync/syncApi';
 import { createScopedLogger } from '../../shared/utils/logger';
+import { generateUUID } from '../../shared/utils/uuid';
+import { markLocalEdit } from '../versions/localEditTracker';
 import type { EntryWithRelations } from './EntryWithRelationsTypes';
 
 const log = createScopedLogger('EntryApi');
@@ -176,17 +178,6 @@ export function parseStreamIdToFilter(selectedStreamId: string | null): MobileEn
 }
 
 import { getDeviceId } from '../../config/appVersionService';
-
-/**
- * Generate UUID
- */
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
 
 // ============================================================================
 // READ OPERATIONS (always from local SQLite)
@@ -443,6 +434,7 @@ export async function updateEntry(
     updatesWithSync.version = (currentEntry.version || 1) + 1;
     updatesWithSync.last_edited_by = null; // Will be set during sync if needed
     updatesWithSync.last_edited_device = await getDeviceId();
+    markLocalEdit(id);
   }
 
   log.debug('Updating entry', {

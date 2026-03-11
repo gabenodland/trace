@@ -28,6 +28,7 @@ import { buildLocationFromEntry } from '../helpers/entryLocationHelpers';
 import { useAuth } from '../../../../shared/contexts/AuthContext';
 import { getDeviceId } from '../../../../config/appVersionService';
 import { createScopedLogger } from '../../../../shared/utils/logger';
+import { consumeBackupCreated } from '../../../versions/localEditTracker';
 import type { EntryWithRelations } from '../../EntryWithRelationsTypes';
 import type { RichTextEditorV2Ref } from '../../../../components/editor/RichTextEditorV2';
 
@@ -54,6 +55,7 @@ interface SaveResult {
   success: boolean;
   entryId?: string;
   error?: string;
+  updatedEntry?: EntryWithRelations;
 }
 
 /**
@@ -105,7 +107,6 @@ export function useEntryManagement({
 
   // === Version Tracking ===
   const knownVersionRef = useRef<number | null>(null);
-  const lastSaveTimeRef = useRef<number>(0);
 
   // === Autosave Timers ===
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -123,9 +124,6 @@ export function useEntryManagement({
     }
   }, []);
 
-  const recordSaveTime = useCallback(() => {
-    lastSaveTimeRef.current = Date.now();
-  }, []);
 
   // Initialize version when entry loads
   useEffect(() => {
@@ -245,10 +243,11 @@ export function useEntryManagement({
           }
         }
 
-        // Update entry state
+        // Update entry state (user_id must be set explicitly — buildNewEntry leaves it empty)
         const updatedEntry: EntryWithRelations = {
           ...currentEntry,
           entry_id: newEntry.entry_id,
+          user_id: user.id,
           title: titleToSave?.trim() || null,
           content: contentToSave,
           tags,
@@ -266,7 +265,6 @@ export function useEntryManagement({
 
         // Update version tracking
         knownVersionRef.current = 1;
-        recordSaveTime();
 
         // Invalidate React Query caches
         queryClient.invalidateQueries({ queryKey: ['entries'] });
@@ -283,7 +281,7 @@ export function useEntryManagement({
           showSnackbar('Entry saved');
         }
 
-        return { success: true, entryId: newEntry.entry_id };
+        return { success: true, entryId: newEntry.entry_id, updatedEntry };
 
       } else {
         // === UPDATE existing entry ===
@@ -324,7 +322,6 @@ export function useEntryManagement({
         if (knownVersionRef.current !== null) {
           knownVersionRef.current = knownVersionRef.current + 1;
         }
-        recordSaveTime();
 
         // Patch React Query caches
         queryClient.setQueryData(['entry', currentEntry.entry_id], updatedEntry);
@@ -355,7 +352,7 @@ export function useEntryManagement({
           showSnackbar('Changes saved');
         }
 
-        return { success: true, entryId: currentEntry.entry_id };
+        return { success: true, entryId: currentEntry.entry_id, updatedEntry };
       }
 
     } catch (error) {
@@ -375,7 +372,7 @@ export function useEntryManagement({
         setIsSubmitting(false);
       }
     }
-  }, [user?.id, isNewEntry, setIsNewEntry, editorRef, setEntry, setOriginalEntry, showSnackbar, recordSaveTime, queryClient]);
+  }, [user?.id, isNewEntry, setIsNewEntry, editorRef, setEntry, setOriginalEntry, showSnackbar, queryClient]);
 
   const handleSave = useCallback(async (): Promise<SaveResult> => {
     return performSave(false);
@@ -522,11 +519,14 @@ export function useEntryManagement({
     }
 
     // External update!
-    log.info('Sync: external update detected', { deviceId: externalCheck?.deviceId });
+    const hadBackup = consumeBackupCreated(entryId);
+    log.info('Sync: external update detected', { deviceId: externalCheck?.deviceId, hadBackup });
 
     // If dirty, warn but don't overwrite
     if (isDirty) {
-      showSnackbar(`Entry updated by ${editingDevice} - you have unsaved changes`);
+      showSnackbar(hadBackup
+        ? `Entry updated by ${editingDevice} — backup version saved`
+        : `Entry updated by ${editingDevice} — you have unsaved changes`);
       return;
     }
 
@@ -570,20 +570,9 @@ export function useEntryManagement({
     // Exit edit mode
     exitEditMode();
 
-    // Check if recently saved
-    const timeSinceLastSave = Date.now() - lastSaveTimeRef.current;
-    const recentlySaved = lastSaveTimeRef.current > 0 && timeSinceLastSave < 30000;
-
-    if (recentlySaved) {
-      lastSaveTimeRef.current = 0; // Prevent spam
-      Alert.alert(
-        'Sync Conflict',
-        `Your recent changes may have been overwritten by ${editingDevice}.\n\nTip: You may be able to use Undo to restore your last change.`,
-        [{ text: 'OK' }]
-      );
-    } else {
-      showSnackbar(`Entry updated by ${editingDevice}`);
-    }
+    showSnackbar(hadBackup
+      ? `Entry updated by ${editingDevice} — backup version saved`
+      : `Entry updated by ${editingDevice}`);
   }, [
     entryId,
     isNewEntry,

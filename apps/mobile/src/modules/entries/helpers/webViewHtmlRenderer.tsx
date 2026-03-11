@@ -14,7 +14,7 @@ import type { ViewStyle, StyleProp } from 'react-native';
 import { RenderHTMLSource } from 'react-native-render-html';
 import { extractAttachmentIds } from '@trace/core';
 import { getAttachmentUri } from '../../attachments/mobileAttachmentApi';
-import { sanitizeHtmlColors } from '../../../shared/utils/htmlUtils';
+import { sanitizeHtmlColors, fixMalformedClosingTags } from '../../../shared/utils/htmlUtils';
 import { HTML_CONTENT_HORIZONTAL_PADDING } from './htmlRenderConfig';
 
 interface WebViewHtmlRendererProps {
@@ -65,6 +65,10 @@ export function WebViewHtmlRenderer({ html, style, strikethrough }: WebViewHtmlR
     // TipTap's JSON→HTML roundtrip can double-encode (&amp;nbsp; → &nbsp; after
     // first decode), causing RNRH to show literal "&nbsp;" text.
     result = result.replace(/&amp;nbsp;/g, '\u00A0').replace(/&nbsp;/g, '\u00A0');
+
+    // Fix malformed closing tags (e.g., </spann> → </span>).
+    // TipTap task list serialization can produce corrupted tags that crash RNRH.
+    result = fixMalformedClosingTags(result);
 
     // Replace photo placeholders with actual image URIs
     for (const [photoId, uri] of Object.entries(photoUris)) {

@@ -9,18 +9,21 @@ export interface SyncResult {
     streams: number;
     locations: number;
     attachments: number;
+    entry_versions: number;
   };
   pulled: {
     entries: number;
     streams: number;
     locations: number;
     attachments: number;
+    entry_versions: number;
   };
   errors: {
     entries: number;
     streams: number;
     locations: number;
     attachments: number;
+    entry_versions: number;
   };
   duration: number;
 }
@@ -59,9 +62,9 @@ export interface SyncContext {
 export function createEmptySyncResult(): SyncResult {
   return {
     success: false,
-    pushed: { entries: 0, streams: 0, locations: 0, attachments: 0 },
-    pulled: { entries: 0, streams: 0, locations: 0, attachments: 0 },
-    errors: { entries: 0, streams: 0, locations: 0, attachments: 0 },
+    pushed: { entries: 0, streams: 0, locations: 0, attachments: 0, entry_versions: 0 },
+    pulled: { entries: 0, streams: 0, locations: 0, attachments: 0, entry_versions: 0 },
+    errors: { entries: 0, streams: 0, locations: 0, attachments: 0, entry_versions: 0 },
     duration: 0,
   };
 }

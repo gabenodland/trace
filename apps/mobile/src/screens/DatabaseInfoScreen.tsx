@@ -725,6 +725,28 @@ export function DatabaseInfoScreen() {
     }
   };
 
+  const handleClearVersionHistory = () => {
+    Alert.alert(
+      'Clear Version History',
+      'Delete all version snapshots from the local database? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Versions',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await localDB.runCustomQuery('DELETE FROM entry_versions', []);
+              Alert.alert('Success', 'All version history cleared.');
+            } catch (error) {
+              Alert.alert('Error', `Failed to clear versions: ${error}`);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const refreshButton = (
     <TouchableOpacity onPress={() => setRefreshKey(prev => prev + 1)} style={styles.refreshButton}>
       <Icon name="RefreshCw" size={20} color="#3b82f6" />
@@ -981,6 +1003,12 @@ export function DatabaseInfoScreen() {
               </TouchableOpacity>
               <Text style={styles.helperText}>
                 Remove error messages from successfully synced records. These can occur after bug fixes when old failed syncs left error flags behind.
+              </Text>
+              <TouchableOpacity onPress={handleClearVersionHistory} style={[styles.cleanupButton, { marginTop: 8 }]}>
+                <Text style={styles.cleanupButtonText}>🗑️ Clear Version History</Text>
+              </TouchableOpacity>
+              <Text style={styles.helperText}>
+                Delete all entry version snapshots from the local database.
               </Text>
             </View>
           </>

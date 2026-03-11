@@ -360,36 +360,54 @@ export async function getEntryAttachmentCounts(): Promise<Record<string, number>
 }
 
 /**
- * Delete attachment completely (database entry + local file)
+ * Soft-delete attachment (marks deleted_at, keeps local file for version history)
  */
 export async function deleteAttachment(attachmentId: string): Promise<void> {
-  log.info('📎 deleteAttachment called', { attachmentId });
+  log.info('deleteAttachment called (soft-delete)', { attachmentId });
 
   try {
     const attachment = await localDB.getAttachment(attachmentId);
     if (!attachment) {
-      log.warn('📎 Attachment not found in database', { attachmentId });
+      log.warn('Attachment not found in database', { attachmentId });
       return;
     }
 
-    log.info('📎 Attachment found, marking for deletion', { attachmentId, entryId: attachment.entry_id, synced: attachment.synced });
+    log.info('Attachment found, soft-deleting', { attachmentId, entryId: attachment.entry_id, synced: attachment.synced });
+
+    // Soft-delete: set deleted_at + sync_action, keep local file for version history (C5)
+    await localDB.deleteAttachment(attachmentId);
+    log.info('Attachment soft-deleted in localDB', { attachmentId });
+
+    // Trigger sync in background
+    triggerPushSync();
+
+    log.success('Attachment soft-delete initiated', { attachmentId });
+  } catch (error) {
+    log.error('Failed to soft-delete attachment', error, { attachmentId });
+    throw error;
+  }
+}
+
+/**
+ * Permanently delete attachment (SQLite row + local file)
+ * Called only by cleanup jobs — not for normal user-facing deletion.
+ */
+export async function permanentlyDeleteAttachment(attachmentId: string): Promise<void> {
+  log.info('permanentlyDeleteAttachment called', { attachmentId });
+
+  try {
+    const attachment = await localDB.getAttachment(attachmentId);
 
     // Delete local file if exists
-    if (attachment.local_path) {
+    if (attachment?.local_path) {
       await deleteAttachmentFromLocalStorage(attachment.local_path);
     }
 
-    // Delete database record (marks for sync deletion)
-    await localDB.deleteAttachment(attachmentId);
-    log.info('📎 Attachment marked for sync deletion in localDB', { attachmentId });
-
-    // Trigger sync in background
-    log.info('📎 Triggering push sync for attachment deletion');
-    triggerPushSync();
-
-    log.success('📎 Attachment delete initiated', { attachmentId });
+    // Hard-delete from SQLite
+    await localDB.permanentlyDeleteAttachment(attachmentId);
+    log.success('Attachment permanently deleted', { attachmentId });
   } catch (error) {
-    log.error('📎 Failed to delete attachment', error, { attachmentId });
+    log.error('Failed to permanently delete attachment', error, { attachmentId });
     throw error;
   }
 }
