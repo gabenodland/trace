@@ -9,7 +9,7 @@
 
 import { View, Text, SectionList, ScrollView, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { TouchableOpacity } from 'react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon } from '../../../shared/components';
 import { StatusIcon } from '../../../shared/components/StatusIcon';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
@@ -156,6 +156,13 @@ export function VersionHistorySheet({ visible, onClose, entryId }: VersionHistor
     return map;
   }, [devices]);
 
+  /** Resolve device_id to display name. MCP device IDs use "MCP:{keyName}" format. */
+  const resolveDeviceName = useCallback((deviceId: string | null): string => {
+    if (!deviceId) return 'Unknown device';
+    if (deviceId.startsWith('MCP:')) return deviceId.slice(4);
+    return deviceMap.get(deviceId) || 'Unknown device';
+  }, [deviceMap]);
+
   // Build a stable color mapping: current device → accent, others → palette
   const deviceColorMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -182,7 +189,7 @@ export function VersionHistorySheet({ visible, onClose, entryId }: VersionHistor
     });
     return {
       sections: groupByDate(sorted),
-      latestVersionId: sorted.length > 0 ? sorted[0].version_id : null,
+      latestVersionId: (sorted.find(v => v.trigger !== 'sync_overwrite') || sorted[0])?.version_id ?? null,
       sortedVersions: sorted,
     };
   }, [versions]);
@@ -302,7 +309,8 @@ export function VersionHistorySheet({ visible, onClose, entryId }: VersionHistor
   const renderVersion = ({ item }: { item: EntryVersion }) => {
     const dateStr = item.device_created_at || item.created_at;
     const time = formatTime(dateStr);
-    const deviceName = item.device_id ? (deviceMap.get(item.device_id) || 'Unknown device') : 'Unknown device';
+    const isMcp = item.trigger === 'mcp_write';
+    const deviceName = resolveDeviceName(item.device_id);
     const triggeredByName = item.triggered_by_device ? (deviceMap.get(item.triggered_by_device) || null) : null;
     const isConflict = item.trigger === 'conflict';
     const isRestore = item.trigger === 'restore';
@@ -311,6 +319,7 @@ export function VersionHistorySheet({ visible, onClose, entryId }: VersionHistor
     const triggerLabel = isConflict ? 'Conflict backup'
       : isRestore ? 'Restore'
       : isSyncOverwrite ? 'Before sync'
+      : isMcp ? 'MCP'
       : 'Session end';
     const dotColor = isConflict
       ? '#f59e0b'
@@ -427,9 +436,8 @@ export function VersionHistorySheet({ visible, onClose, entryId }: VersionHistor
     const isConflict = selectedVersion.trigger === 'conflict';
     const isRestore = selectedVersion.trigger === 'restore';
     const isSyncOverwrite = selectedVersion.trigger === 'sync_overwrite';
-    const deviceName = selectedVersion.device_id
-      ? (deviceMap.get(selectedVersion.device_id) || 'Unknown device')
-      : 'Unknown device';
+    const isMcp = selectedVersion.trigger === 'mcp_write';
+    const deviceName = resolveDeviceName(selectedVersion.device_id);
     const triggeredByName = selectedVersion.triggered_by_device
       ? (deviceMap.get(selectedVersion.triggered_by_device) || null)
       : null;
@@ -450,7 +458,7 @@ export function VersionHistorySheet({ visible, onClose, entryId }: VersionHistor
                     color: isConflict ? '#f59e0b' : theme.colors.text.tertiary,
                     fontFamily: theme.typography.fontFamily.medium,
                   }]}>
-                    {isConflict ? 'Conflict backup' : isRestore ? 'Restore' : isSyncOverwrite ? 'Before sync' : 'Session end'}
+                    {isConflict ? 'Conflict backup' : isRestore ? 'Restore' : isSyncOverwrite ? 'Before sync' : isMcp ? 'MCP edit' : 'Session end'}
                   </Text>
                 </View>
                 {isLatest && (

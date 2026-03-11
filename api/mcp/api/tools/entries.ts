@@ -777,13 +777,21 @@ interface EntryRow {
   entry_latitude: number | null;
   entry_longitude: number | null;
   place_name: string | null;
+  address: string | null;
+  neighborhood: string | null;
+  postal_code: string | null;
   city: string | null;
+  subdivision: string | null;
+  region: string | null;
   country: string | null;
   priority: number;
   rating: number;
   is_pinned: boolean;
   is_archived: boolean;
   due_date: string | null;
+  completed_at: string | null;
+  location_id: string | null;
+  geocode_status: string | null;
   created_at: string;
   updated_at: string;
   last_edited_device: string | null;
@@ -1051,6 +1059,206 @@ export async function getEntry(
   return transformEntry(typedEntry, attachments as AttachmentRow[] || [], streamContext);
 }
 
+// ============================================================================
+// Entry Version Snapshots
+// ============================================================================
+
+/** Mirrors mobile EntrySnapshot — all substantive entry fields at a point in time. */
+interface EntrySnapshot {
+  title: string | null;
+  content: string | null;
+  status: string | null;
+  type: string | null;
+  priority: number | null;
+  rating: number | null;
+  tags: string[] | null;
+  mentions: string[] | null;
+  stream_id: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  is_pinned: boolean;
+  entry_date: string | null;
+  entry_latitude: number | null;
+  entry_longitude: number | null;
+  location_id: string | null;
+  geocode_status: string | null;
+  place_name: string | null;
+  address: string | null;
+  neighborhood: string | null;
+  postal_code: string | null;
+  city: string | null;
+  subdivision: string | null;
+  region: string | null;
+  country: string | null;
+}
+
+/**
+ * Build an EntrySnapshot from a Supabase entry row.
+ * Mirrors the mobile buildSnapshot() in versionHelpers.ts.
+ */
+function buildSnapshotFromRow(row: EntryRow): EntrySnapshot {
+  return {
+    title: row.title,
+    content: row.content ?? null,
+    status: row.status ?? null,
+    type: row.type ?? null,
+    priority: row.priority ?? null,
+    rating: row.rating ?? null,
+    tags: row.tags ?? null,
+    mentions: row.mentions ?? null,
+    stream_id: row.stream_id ?? null,
+    due_date: row.due_date ?? null,
+    completed_at: row.completed_at ?? null,
+    is_pinned: row.is_pinned ?? false,
+    entry_date: row.entry_date ?? null,
+    entry_latitude: row.entry_latitude ?? null,
+    entry_longitude: row.entry_longitude ?? null,
+    location_id: row.location_id ?? null,
+    geocode_status: row.geocode_status ?? null,
+    place_name: row.place_name ?? null,
+    address: row.address ?? null,
+    neighborhood: row.neighborhood ?? null,
+    postal_code: row.postal_code ?? null,
+    city: row.city ?? null,
+    subdivision: row.subdivision ?? null,
+    region: row.region ?? null,
+    country: row.country ?? null,
+  };
+}
+
+/**
+ * Generate a human-readable change summary by diffing two snapshots.
+ * Mirrors mobile generateChangeSummary() in versionHelpers.ts.
+ */
+function generateChangeSummary(
+  current: EntrySnapshot,
+  previous: EntrySnapshot | null,
+): string | null {
+  if (!previous) return "initial version";
+
+  const changes: string[] = [];
+
+  // Content — just note it was edited, don't show diff
+  if (current.content !== previous.content) {
+    changes.push("content changed");
+  }
+
+  // Title
+  if (current.title !== previous.title) {
+    if (!previous.title && current.title) changes.push("title added");
+    else if (previous.title && !current.title) changes.push("title removed");
+    else changes.push("title changed");
+  }
+
+  // Scalar fields with value display
+  const scalarFields: (keyof EntrySnapshot)[] = [
+    "status", "type", "priority", "rating", "stream_id",
+    "due_date", "completed_at", "entry_date",
+    "location_id", "place_name", "city", "region", "country",
+  ];
+
+  for (const field of scalarFields) {
+    const prev = previous[field];
+    const curr = current[field];
+    if (prev !== curr) {
+      if (typeof curr === "number" && typeof prev === "number") {
+        changes.push(`${field} ${prev}\u2192${curr}`);
+      } else if (prev && curr) {
+        changes.push(`${field} changed`);
+      } else if (!prev && curr) {
+        changes.push(`${field} set`);
+      } else {
+        changes.push(`${field} cleared`);
+      }
+    }
+  }
+
+  // Boolean fields
+  if (current.is_pinned !== previous.is_pinned) {
+    changes.push(current.is_pinned ? "pinned" : "unpinned");
+  }
+
+  // Array fields
+  if (!arraysEqual(current.tags, previous.tags)) {
+    changes.push("tags updated");
+  }
+  if (!arraysEqual(current.mentions, previous.mentions)) {
+    changes.push("mentions updated");
+  }
+
+  return changes.length > 0 ? changes.join(", ") : null;
+}
+
+/** Compare two nullable string arrays for equality */
+function arraysEqual(a: string[] | null, b: string[] | null): boolean {
+  if (a === b) return true;
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((val, i) => val === sortedB[i]);
+}
+
+/**
+ * Create an entry_versions snapshot after MCP writes.
+ * Diffs against the previous state to generate a proper change summary.
+ * Awaited (serverless runtimes kill dangling promises). Failures are logged
+ * but never break the entry operation (try/catch).
+ *
+ * @param baseVersion - The entry version BEFORE this write (for fork tracking).
+ *   For createEntry: pass the new entry's version (1).
+ *   For updateEntry: pass currentVersion (pre-increment), not the post-update version.
+ */
+async function createMcpSnapshot(
+  entry: EntryRow,
+  ctx: ToolContext,
+  baseVersion: number,
+  previousSnapshot: EntrySnapshot | null,
+): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    const baseVersionStr = String(baseVersion);
+    const deviceId = `MCP:${ctx.keyName}`;
+    const snapshot = buildSnapshotFromRow(entry);
+
+    // Generate change summary by diffing against previous state
+    const changeSummary = generateChangeSummary(snapshot, previousSnapshot);
+
+    // Compute version_number scoped to (entry_id, base_entry_version)
+    const { data: maxRow } = await ctx.supabase
+      .from("entry_versions")
+      .select("version_number")
+      .eq("entry_id", entry.entry_id)
+      .eq("base_entry_version", baseVersionStr)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const versionNumber = (maxRow as { version_number: number } | null)?.version_number != null
+      ? (maxRow as { version_number: number }).version_number + 1
+      : 0;
+
+    await ctx.supabase.from("entry_versions").insert({
+      version_id: crypto.randomUUID(),
+      entry_id: entry.entry_id,
+      user_id: entry.user_id,
+      version_number: versionNumber,
+      trigger: "mcp_write",
+      snapshot,
+      attachment_ids: null,
+      change_summary: changeSummary,
+      device_id: deviceId,
+      triggered_by_device: null,
+      device_created_at: null,
+      base_entry_version: baseVersionStr,
+      created_at: now,
+    });
+  } catch (err) {
+    console.error("Failed to create MCP snapshot:", err);
+  }
+}
+
 /**
  * Create a new entry
  */
@@ -1139,13 +1347,17 @@ export async function createEntry(
     throw new Error(`Failed to create entry: ${sanitizeDbError(error)}`);
   }
 
+  // Snapshot what MCP just created
+  const createdEntry = data as EntryRow;
+  await createMcpSnapshot(createdEntry, ctx, createdEntry.version, null);
+
   // Fetch stream context for response
   let streamContext: StreamContext | null = null;
   if (p.stream_id && streamSettings) {
     streamContext = buildStreamContext(streamSettings);
   }
 
-  return transformEntry(data as EntryRow, undefined, streamContext);
+  return transformEntry(createdEntry, undefined, streamContext);
 }
 
 /**
@@ -1161,10 +1373,10 @@ export async function updateEntry(
     throw new Error("entry_id is required");
   }
 
-  // First, fetch current entry to get version and stream_id for validation
+  // Fetch current entry for version check, stream validation, and pre-update snapshot
   const { data: currentEntry, error: fetchError } = await ctx.supabase
     .from("entries")
-    .select("version, stream_id")
+    .select("*")
     .eq("entry_id", p.entry_id)
     .eq("user_id", ctx.userId)
     .is("deleted_at", null)
@@ -1305,14 +1517,20 @@ export async function updateEntry(
     );
   }
 
+  // Snapshot what MCP just wrote
+  // Diff against the entry state before this update for a proper change summary
+  const updatedEntry = data as EntryRow;
+  const beforeSnapshot = buildSnapshotFromRow(currentEntry as EntryRow);
+  await createMcpSnapshot(updatedEntry, ctx, currentVersion, beforeSnapshot);
+
   // Fetch stream context for response
   let streamContext: StreamContext | null = null;
-  if ((data as EntryRow).stream_id) {
-    const contexts = await fetchStreamContexts([(data as EntryRow).stream_id], ctx);
-    streamContext = contexts.get((data as EntryRow).stream_id) || null;
+  if (updatedEntry.stream_id) {
+    const contexts = await fetchStreamContexts([updatedEntry.stream_id], ctx);
+    streamContext = contexts.get(updatedEntry.stream_id) || null;
   }
 
-  return transformEntry(data as EntryRow, undefined, streamContext);
+  return transformEntry(updatedEntry, undefined, streamContext);
 }
 
 /**

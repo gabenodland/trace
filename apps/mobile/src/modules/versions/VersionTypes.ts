@@ -3,7 +3,7 @@ export interface EntryVersion {
   entry_id: string;
   user_id: string;
   version_number: number;
-  trigger: 'session_end' | 'conflict' | 'restore' | 'sync_overwrite';
+  trigger: 'session_end' | 'conflict' | 'restore' | 'sync_overwrite' | 'mcp_write';
   snapshot: EntrySnapshot;
   attachment_ids: string[] | null;
   change_summary: string | null;
