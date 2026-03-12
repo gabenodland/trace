@@ -349,7 +349,9 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         if (!isEditMode && isVisible && !activePicker) {
           log.debug('Keyboard shown, entering edit mode');
           setIsEditMode(true);
-          setIsFullScreen(true);
+          if (settings.autoFullScreenEditor) {
+            setIsFullScreen(true);
+          }
         }
       },
     });

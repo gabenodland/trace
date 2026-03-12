@@ -322,6 +322,9 @@ export interface UserSettings {
   // Photo preferences
   imageQuality: ImageQuality;
 
+  // Editor preferences
+  autoFullScreenEditor: boolean;
+
   // Per-stream sort preferences (streamId -> preferences)
   streamSortPreferences: Record<string, StreamSortPreference>;
 }
@@ -335,6 +338,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   font: DEFAULT_FONT,
   captureGpsLocation: true,
   imageQuality: 'standard',
+  autoFullScreenEditor: true,
   streamSortPreferences: {},
 };
 

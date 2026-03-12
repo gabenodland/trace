@@ -117,7 +117,7 @@ export function SettingsScreen() {
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
           <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Entry</Text>
 
-          <View style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}>
+          <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
             <View style={styles.settingContent}>
               <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Capture GPS Location</Text>
               <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
@@ -127,6 +127,21 @@ export function SettingsScreen() {
             <Switch
               value={settings.captureGpsLocation}
               onValueChange={(value) => updateSettings({ captureGpsLocation: value })}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          <View style={[styles.settingRow, { borderBottomWidth: 0, borderBottomColor: theme.colors.border.light }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Auto Full Screen When Editing</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                Automatically enter full screen mode when you start editing an entry
+              </Text>
+            </View>
+            <Switch
+              value={settings.autoFullScreenEditor}
+              onValueChange={(value) => updateSettings({ autoFullScreenEditor: value })}
               trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
               thumbColor="#ffffff"
             />
