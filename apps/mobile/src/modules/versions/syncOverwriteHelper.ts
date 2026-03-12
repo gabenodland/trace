@@ -9,6 +9,7 @@ import { buildSnapshot, generateChangeSummary } from './versionHelpers';
 import { createVersion } from './versionApi';
 import { wasEditedRecently, clearLocalEdit, markBackupCreated } from './localEditTracker';
 import { createScopedLogger } from '../../shared/utils/logger';
+import { localDB } from '../../shared/db/localDB';
 import type { BaseEntry } from '@trace/core';
 
 const log = createScopedLogger('SyncOverwrite');
@@ -44,13 +45,24 @@ export async function createSyncOverwriteIfNeeded(params: SyncOverwriteParams): 
       return false;
     }
 
+    // Fetch current attachment IDs so the snapshot includes images
+    let attachmentIds: string[] | null = null;
+    try {
+      const attachments = await localDB.getAttachmentsForEntry(entryId);
+      if (attachments.length > 0) {
+        attachmentIds = attachments.map(a => a.attachment_id);
+      }
+    } catch (e) {
+      log.debug('Failed to fetch attachment IDs for snapshot', { entryId, error: e });
+    }
+
     const now = new Date().toISOString();
     await createVersion({
       entry_id: entryId,
       user_id: userId,
       trigger: 'sync_overwrite',
       snapshot: localSnapshot,
-      attachment_ids: null,
+      attachment_ids: attachmentIds,
       change_summary: `before sync: ${changeSummary}`,
       device_id: localDeviceId,
       triggered_by_device: triggeredByDevice,

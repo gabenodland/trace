@@ -64,6 +64,25 @@ cd packages/core && npm run build
 
 ---
 
+## ⚠️ RLS & Realtime Gotchas
+
+**Supabase Realtime applies RLS before broadcasting `postgres_changes` events.** If a row's new state doesn't match the SELECT policy, the event is silently dropped — clients never receive it.
+
+**Soft-delete example:** If a SELECT policy has `deleted_at IS NULL`, then setting `deleted_at` on a row causes the realtime event to be swallowed. The entries table SELECT policy was fixed in `20260312000001_fix_entries_rls_for_realtime.sql` to remove this filter — application-layer queries add `.is('deleted_at', null)` explicitly instead.
+
+**Rule:** RLS should enforce **authorization** (`auth.uid() = user_id`), not **application logic** (`deleted_at IS NULL`). Move application filters to the query layer so realtime events flow correctly.
+
+**Soft-delete queries must filter explicitly:**
+```typescript
+// Correct — application-layer filter
+supabase.from('entries').select('*').eq('user_id', user.id).is('deleted_at', null)
+
+// Wrong — relying on RLS to filter (breaks realtime)
+supabase.from('entries').select('*').eq('user_id', user.id)
+```
+
+---
+
 ## Common Issues
 
 **"Property X does not exist on type Entry"**

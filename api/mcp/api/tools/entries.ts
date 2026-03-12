@@ -1133,6 +1133,8 @@ function buildSnapshotFromRow(row: EntryRow): EntrySnapshot {
 function generateChangeSummary(
   current: EntrySnapshot,
   previous: EntrySnapshot | null,
+  currentAttachmentIds?: string[] | null,
+  previousAttachmentIds?: string[] | null,
 ): string | null {
   if (!previous) return "initial version";
 
@@ -1186,6 +1188,18 @@ function generateChangeSummary(
     changes.push("mentions updated");
   }
 
+  // Attachment changes
+  if (currentAttachmentIds !== undefined && previousAttachmentIds !== undefined) {
+    const currIds = currentAttachmentIds ?? [];
+    const prevIds = previousAttachmentIds ?? [];
+    const currSet = new Set(currIds);
+    const prevSet = new Set(prevIds);
+    const added = currIds.filter(id => !prevSet.has(id)).length;
+    const removed = prevIds.filter(id => !currSet.has(id)).length;
+    if (added > 0) changes.push(`added ${added} photo${added > 1 ? "s" : ""}`);
+    if (removed > 0) changes.push(`removed ${removed} photo${removed > 1 ? "s" : ""}`);
+  }
+
   return changes.length > 0 ? changes.join(", ") : null;
 }
 
@@ -1222,8 +1236,34 @@ async function createMcpSnapshot(
     const deviceId = `MCP:${ctx.keyName}`;
     const snapshot = buildSnapshotFromRow(entry);
 
+    // Fetch current attachment IDs so the snapshot includes images
+    const { data: attachmentRows } = await ctx.supabase
+      .from("attachments")
+      .select("attachment_id")
+      .eq("entry_id", entry.entry_id)
+      .eq("user_id", entry.user_id)
+      .is("deleted_at", null)
+      .order("position", { ascending: true });
+    const attachmentIds = attachmentRows?.length
+      ? attachmentRows.map((a: { attachment_id: string }) => a.attachment_id)
+      : null;
+
+    // Fetch previous version's attachment_ids for diff
+    let previousAttachmentIds: string[] | null = null;
+    if (previousSnapshot) {
+      const { data: prevVersion } = await ctx.supabase
+        .from("entry_versions")
+        .select("attachment_ids")
+        .eq("entry_id", entry.entry_id)
+        .eq("user_id", entry.user_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      previousAttachmentIds = (prevVersion as { attachment_ids: string[] | null } | null)?.attachment_ids ?? null;
+    }
+
     // Generate change summary by diffing against previous state
-    const changeSummary = generateChangeSummary(snapshot, previousSnapshot);
+    const changeSummary = generateChangeSummary(snapshot, previousSnapshot, attachmentIds, previousAttachmentIds);
 
     // Compute version_number scoped to (entry_id, base_entry_version)
     const { data: maxRow } = await ctx.supabase
@@ -1246,7 +1286,7 @@ async function createMcpSnapshot(
       version_number: versionNumber,
       trigger: "mcp_write",
       snapshot,
-      attachment_ids: null,
+      attachment_ids: attachmentIds,
       change_summary: changeSummary,
       device_id: deviceId,
       triggered_by_device: null,

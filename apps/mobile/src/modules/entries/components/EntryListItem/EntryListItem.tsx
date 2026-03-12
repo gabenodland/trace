@@ -40,6 +40,15 @@ export function EntryListItem({
 }: EntryListItemProps) {
   const theme = useTheme();
   const [photoCount, setPhotoCount] = React.useState(entry.attachments?.length ?? 0);
+
+  // Sync photo count when entry prop changes (e.g., after delete + refetch).
+  // photoCount is also set by child onPhotoCountChange for optimistic updates,
+  // so we can't replace this state with a simple derived const.
+  const prevAttachmentLength = React.useRef(entry.attachments?.length ?? 0);
+  if ((entry.attachments?.length ?? 0) !== prevAttachmentLength.current) {
+    prevAttachmentLength.current = entry.attachments?.length ?? 0;
+    setPhotoCount(entry.attachments?.length ?? 0);
+  }
   const [photosCollapsed, setPhotosCollapsed] = React.useState(false); // Start expanded
   const [viewerVisible, setViewerVisible] = React.useState(false);
   const [viewerPhotos, setViewerPhotos] = React.useState<{ photoId: string; uri: string | null; width?: number | null; height?: number | null; fileSize?: number | null }[]>([]);

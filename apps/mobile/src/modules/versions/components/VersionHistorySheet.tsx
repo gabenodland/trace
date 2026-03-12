@@ -123,10 +123,11 @@ function groupByDate(versions: EntryVersion[]): VersionSection[] {
 interface VersionHistorySheetProps {
   visible: boolean;
   onClose: () => void;
+  onRestore?: () => void;
   entryId: string;
 }
 
-export function VersionHistorySheet({ visible, onClose, entryId }: VersionHistorySheetProps) {
+export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: VersionHistorySheetProps) {
   const theme = useTheme();
   const navigate = useNavigate();
 
@@ -241,16 +242,22 @@ export function VersionHistorySheet({ visible, onClose, entryId }: VersionHistor
           style: 'destructive',
           onPress: async () => {
             setIsRestoring(true);
+            log.debug('Restore initiated', {
+              entryId: entryId.substring(0, 8),
+              versionId: selectedVersion.version_id.substring(0, 8),
+              attachmentCount: selectedVersion.attachment_ids?.length ?? 0,
+            });
             try {
               await restoreMutation.mutateAsync({
                 entryId,
                 snapshot: selectedVersion.snapshot!,
                 userId: selectedVersion.user_id,
+                attachmentIds: selectedVersion.attachment_ids,
               });
               Alert.alert('Restored', 'Entry has been restored to this version.');
               setSelectedVersionId(null);
+              onRestore?.();
               onClose();
-              navigate('entryManagement', { entryId });
             } catch (err) {
               Alert.alert('Error', 'Failed to restore version. Please try again.');
             } finally {

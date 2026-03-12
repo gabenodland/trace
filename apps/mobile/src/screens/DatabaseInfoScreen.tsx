@@ -109,7 +109,8 @@ export function DatabaseInfoScreen() {
           supabase
             .from('entries')
             .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id),
+            .eq('user_id', user.id)
+            .is('deleted_at', null),
           supabase
             .from('streams')
             .select('*', { count: 'exact', head: true })

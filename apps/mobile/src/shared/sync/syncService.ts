@@ -619,6 +619,20 @@ class SyncService {
       return;
     }
 
+    // Soft-delete via UPDATE: remote set deleted_at — remove locally
+    // Must check BEFORE version check — MCP deletes don't increment version
+    const remoteDeletedAt = (payload.new as any)?.deleted_at;
+    if (remoteDeletedAt != null) {
+      log.info('📡 Entry soft-deleted remotely — removing from local', { entryId: entryId.substring(0, 8) });
+      try {
+        await localDB.deleteEntry(entryId);
+      } catch (err) {
+        log.warn('Failed to delete soft-deleted entry from LocalDB', { entryId, error: err });
+      }
+      this.removeEntryFromCache(entryId);
+      return;
+    }
+
     // For INSERT/UPDATE, check version against LocalDB
     const remoteVersion = (payload.new as any)?.version || 1;
     const localEntry = await localDB.getEntry(entryId);

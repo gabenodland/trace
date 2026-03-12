@@ -458,7 +458,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     });
 
     // Load entry by ID - shared between imperative handle and duplicate action
-    const loadEntryById = useCallback(async (id: string) => {
+    const loadEntryById = useCallback(async (id: string, options?: { keepDirty?: boolean }) => {
       log.debug('loadEntryById: loading entry', { entryId: id.substring(0, 8) });
 
       // Reset UI state for loading
@@ -486,7 +486,9 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         }
 
         setEntry(data);
-        setOriginalEntry(data);
+        if (!options?.keepDirty) {
+          setOriginalEntry(data);
+        }
         captureOpenSnapshot(data, data.attachments?.map(a => a.attachment_id) ?? []);
         setLastFetchMs(fetchTime);
 
@@ -1373,6 +1375,10 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           <VersionHistorySheet
             visible={showVersionHistory}
             onClose={() => setShowVersionHistory(false)}
+            onRestore={() => {
+              log.debug('Version restored — reloading entry from DB', { entryId: entryId?.substring(0, 8) });
+              if (entryId) loadEntryById(entryId, { keepDirty: true });
+            }}
             entryId={entryId}
           />
         )}

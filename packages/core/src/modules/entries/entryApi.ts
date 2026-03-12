@@ -49,6 +49,7 @@ export async function getEntries(filter?: EntryFilter): Promise<Entry[]> {
     .from("entries")
     .select("*")
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .order("updated_at", { ascending: false });
 
   // Apply filters
@@ -118,6 +119,7 @@ export async function getEntry(id: string): Promise<Entry> {
     .select("*")
     .eq("entry_id", id)
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .single();
 
   if (error) throw error;

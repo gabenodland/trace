@@ -57,11 +57,12 @@ export function useRestoreVersion() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ entryId, snapshot, userId }: {
+    mutationFn: ({ entryId, snapshot, userId, attachmentIds }: {
       entryId: string;
       snapshot: EntrySnapshot;
       userId: string;
-    }) => versionApi.restoreFromVersion(entryId, snapshot, userId),
+      attachmentIds?: string[] | null;
+    }) => versionApi.restoreFromVersion(entryId, snapshot, userId, attachmentIds),
     onSuccess: (_data, variables) => {
       // Invalidate versions cache (new pre-restore version was created)
       queryClient.invalidateQueries({ queryKey: versionKeys.forEntry(variables.entryId) });
@@ -69,6 +70,9 @@ export function useRestoreVersion() {
       queryClient.invalidateQueries({ queryKey: ['entry', variables.entryId] });
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['entryCounts'] });
+      // Invalidate attachment caches (attachments may have been reconciled)
+      queryClient.invalidateQueries({ queryKey: ['attachments', 'entry', variables.entryId] });
+      queryClient.invalidateQueries({ queryKey: ['attachmentCounts'] });
     },
   });
 }

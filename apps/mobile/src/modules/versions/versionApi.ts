@@ -184,6 +184,7 @@ export async function restoreFromVersion(
   entryId: string,
   targetSnapshot: EntrySnapshot,
   userId: string,
+  targetAttachmentIds?: string[] | null,
 ): Promise<string> {
   log.info('restoreFromVersion called', { entryId: entryId.substring(0, 8) });
 
@@ -201,12 +202,23 @@ export async function restoreFromVersion(
   const deviceId = await getDeviceId();
   const now = new Date().toISOString();
 
+  // Fetch current attachment IDs so the snapshot includes images
+  let attachmentIds: string[] | null = null;
+  try {
+    const attachments = await localDB.getAttachmentsForEntry(entryId);
+    if (attachments.length > 0) {
+      attachmentIds = attachments.map(a => a.attachment_id);
+    }
+  } catch (e) {
+    log.debug('Failed to fetch attachment IDs for snapshot', { entryId, error: e });
+  }
+
   const preRestoreVersionId = await createVersion({
     entry_id: entryId,
     user_id: userId,
     trigger: 'restore',
     snapshot: currentSnapshot,
-    attachment_ids: null,
+    attachment_ids: attachmentIds,
     change_summary: `restored to earlier version${changeSummary ? ` (${changeSummary})` : ''}`,
     device_id: deviceId,
     triggered_by_device: null,
@@ -244,6 +256,65 @@ export async function restoreFromVersion(
     country: targetSnapshot.country ?? null,
   };
   await updateEntry(entryId, restoreData);
+
+  // 4. Reconcile attachments to match the target version
+  log.debug('Attachment reconciliation starting', {
+    entryId: entryId.substring(0, 8),
+    targetCount: targetAttachmentIds?.length ?? 0,
+  });
+
+  if (targetAttachmentIds) {
+    try {
+      const targetSet = new Set(targetAttachmentIds);
+      const currentAttachments = await localDB.getAttachmentsForEntry(entryId);
+      const currentIds = new Set(currentAttachments.map(a => a.attachment_id));
+
+      // Soft-delete attachments that exist now but weren't in the target version
+      for (const att of currentAttachments) {
+        if (!targetSet.has(att.attachment_id)) {
+          log.debug('Soft-deleting attachment not in target', { attachmentId: att.attachment_id.substring(0, 8) });
+          await localDB.deleteAttachment(att.attachment_id);
+        }
+      }
+
+      // Un-delete attachments that were in the target version but are currently soft-deleted
+      const missingIds = targetAttachmentIds.filter(id => !currentIds.has(id));
+
+      if (missingIds.length > 0) {
+        for (const id of missingIds) {
+          // Check if row exists before attempting un-delete
+          const rows = await localDB.runCustomQuery(
+            'SELECT attachment_id FROM attachments WHERE attachment_id = ? AND entry_id = ?',
+            [id, entryId]
+          );
+
+          if (rows.length === 0) {
+            log.warn('Cannot un-delete attachment — row not found (may have been hard-deleted)', {
+              attachmentId: id.substring(0, 8),
+            });
+            continue;
+          }
+
+          await localDB.runCustomQuery(
+            'UPDATE attachments SET deleted_at = NULL, sync_action = NULL, synced = 0 WHERE attachment_id = ? AND entry_id = ?',
+            [id, entryId]
+          );
+        }
+      }
+
+      log.info('Attachment reconciliation complete', {
+        entryId: entryId.substring(0, 8),
+        targetCount: targetAttachmentIds.length,
+        currentCount: currentAttachments.length,
+        missingCount: missingIds.length,
+      });
+    } catch (error) {
+      // Non-fatal — entry fields are already restored
+      log.warn('Failed to reconcile attachments during restore', { entryId, error });
+    }
+  } else {
+    log.debug('Skipping attachment reconciliation — no targetAttachmentIds');
+  }
 
   log.info('Entry restored from version', {
     entryId: entryId.substring(0, 8),
