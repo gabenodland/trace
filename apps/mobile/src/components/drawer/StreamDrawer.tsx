@@ -17,6 +17,7 @@ import {
   View,
   StyleSheet,
   Animated,
+  BackHandler,
   PanResponder,
   TouchableWithoutFeedback,
   Platform,
@@ -134,6 +135,21 @@ export function StreamDrawer() {
     registerDrawerControl(control);
     return () => registerDrawerControl(null);
   }, [setPosition, animateOpen, animateClose, getDrawerWidth, registerDrawerControl]);
+
+  // Handle Android back button — close drawer if open
+  // Uses ref to avoid re-subscribing the listener on every open/close toggle
+  const isOpenRef = useRef(isOpen);
+  isOpenRef.current = isOpen;
+  useEffect(() => {
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (isOpenRef.current) {
+        animateClose();
+        return true;
+      }
+      return false;
+    });
+    return () => handler.remove();
+  }, [animateClose]);
 
   // Animate open/close based on state (for non-gesture triggers like button press, stream selection)
   // Gesture-driven animations are handled by animateClose/animateOpen directly.

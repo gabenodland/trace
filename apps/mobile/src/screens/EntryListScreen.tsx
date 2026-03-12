@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
-import { View, StyleSheet, BackHandler } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES, getActiveFilterInfo } from "@trace/core";
 import { Icon, Snackbar, useSnackbar } from "../shared/components";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
@@ -8,7 +8,7 @@ import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigate } from "../shared/navigation";
-import { useDrawer, useDrawerOpen, type ViewMode } from "../shared/contexts/DrawerContext";
+import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
@@ -48,16 +48,10 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
     setSelectedStreamId,
     setSelectedStreamName,
     openDrawer,
-    closeDrawer,
     drawerControl,
     viewMode,
     setViewMode,
   } = useDrawer();
-
-  // Track drawer open state via ref so BackHandler doesn't cause visual re-renders
-  const isDrawerOpen = useDrawerOpen();
-  const isDrawerOpenRef = useRef(isDrawerOpen);
-  isDrawerOpenRef.current = isDrawerOpen;
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -132,19 +126,6 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
     registerStreamLongPressHandler(handleStreamLongPress);
     return () => registerStreamLongPressHandler(null);
   }, [registerStreamLongPressHandler, handleStreamLongPress]);
-
-  // Handle Android back button - close drawer if open, otherwise let app exit normally
-  // Uses ref to avoid re-subscribing (and re-rendering) on every drawer toggle
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (isDrawerOpenRef.current) {
-        closeDrawer();
-        return true;
-      }
-      return false;
-    });
-    return () => backHandler.remove();
-  }, [closeDrawer]);
 
   // Compute title and icon for TopBar based on current selection
   const { title, titleIcon } = useMemo(() => {
