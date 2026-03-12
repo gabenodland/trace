@@ -93,6 +93,8 @@ interface EditorWebBridgeProps {
   onChange?: () => void;
   /** Called when cursor context changes (e.g. entering/leaving a table cell) */
   onCursorContext?: (ctx: CursorContext) => void;
+  /** Called when WebView confirms content was set via setContentAndClearHistory */
+  onContentConfirmed?: (docLength: number) => void;
   /** Custom CSS to inject (theme styles) */
   customCSS?: string;
   /** Background color for WebView (prevents white flash in dark mode) */
@@ -100,7 +102,7 @@ interface EditorWebBridgeProps {
 }
 
 export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgeProps>(
-  ({ initialContent = "", onChange, onCursorContext, customCSS, backgroundColor }, ref) => {
+  ({ initialContent = "", onChange, onCursorContext, onContentConfirmed, customCSS, backgroundColor }, ref) => {
     // Debug: log what content we receive on mount
     useEffect(() => {
       log.debug(`[EditorWebBridge] Mounted with initialContent: ${initialContent.length} chars`);
@@ -268,9 +270,11 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
       return () => setTableTouched(false);
     }, []);
 
-    // Stable ref for onCursorContext to avoid recreating handleMessage
+    // Stable refs for callbacks to avoid recreating handleMessage
     const cursorContextRef = useRef(onCursorContext);
     cursorContextRef.current = onCursorContext;
+    const contentConfirmedRef = useRef(onContentConfirmed);
+    contentConfirmedRef.current = onContentConfirmed;
 
     // Handle messages from WebView (table touch events, cursor context, console forwarding)
     const handleMessage = useCallback((event: WebViewMessageEvent) => {
@@ -282,6 +286,9 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
           setTableTouched(false);
         } else if (data.type === 'cursorContext') {
           cursorContextRef.current?.({ isInTableCell: !!data.isInTableCell });
+        } else if (data.type === 'contentSetWithClearedHistory') {
+          log.info('[EditorWebBridge] 📬 contentSetWithClearedHistory confirmed', { docLength: data.docLength });
+          contentConfirmedRef.current?.(data.docLength);
         } else if (data.type === 'console') {
           // Forward WebView console logs to RN console
           const prefix = '[WebView]';

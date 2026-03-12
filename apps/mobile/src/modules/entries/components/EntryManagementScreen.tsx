@@ -38,7 +38,7 @@ type EntryPickerType = 'entryDate' | 'time' | 'stream' | 'status' | 'rating' | '
 import { buildLocationFromEntry } from './helpers/entryLocationHelpers';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { createScopedLogger } from '../../../shared/utils/logger';
-import { navigate } from '../../../shared/navigation';
+import { navigate, getNavParams } from '../../../shared/navigation';
 import type { EntryWithRelations } from '../EntryWithRelationsTypes';
 import { splitTitleAndBody, combineTitleAndBody } from '@trace/core';
 import type { EntryStatus, Location, LocationEntity, RatingType } from '@trace/core';
@@ -64,13 +64,8 @@ function getHTMLWithTimeout(
   ]);
 }
 
-/**
- * Strip HTML tags and normalize whitespace to get plain text for comparison.
- * Used to verify content was applied despite Tiptap's HTML normalization.
- */
-function stripHtmlToText(html: string): string {
-  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-}
+/** Timeout for fast path confirmation — if WebView doesn't confirm within this window, it's dead */
+const FAST_PATH_TIMEOUT_MS = 3000;
 
 /**
  * Options for creating a new entry
@@ -206,6 +201,46 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     const editorRef = useRef<RichTextEditorV2Ref>(null);
     // Tracks current entryId for staleness guard (survives async boundaries unlike state)
     const entryIdRef = useRef<string | null>(null);
+    // Guards async callbacks (recovery polling) from firing after unmount
+    const isMountedRef = useRef(true);
+
+    // Fast path — WebView confirms content via postMessage, with safety timeout
+    const contentSetTimestamp = useRef<number | null>(null);
+    const fastPathTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const fastPathOnVerified = useRef<(() => void) | null>(null);
+
+    /** Wrapper: calls setContentAndClearHistory with fast path verification.
+     *  - onVerified: called when WebView confirms content landed (used by no-cache path to gate visibility)
+     *  - onTimeout: called if WebView doesn't confirm within FAST_PATH_TIMEOUT_MS (dead WebView)
+     *  - Pass neither for fire-and-forget (cache hits, recovery) */
+    const setContentWithTiming = useCallback((html: string, context: string, options?: {
+      onVerified?: () => void;
+      onTimeout?: () => void;
+    }) => {
+      // Clear any previous timeout
+      if (fastPathTimeoutId.current) {
+        clearTimeout(fastPathTimeoutId.current);
+        fastPathTimeoutId.current = null;
+      }
+
+      contentSetTimestamp.current = performance.now();
+      fastPathOnVerified.current = options?.onVerified || null;
+
+      log.info(`🏁 setContentAndClearHistory (${context})`, { length: html.length });
+      editorRef.current?.setContentAndClearHistory(html);
+
+      // Safety timeout — if fast path never fires, WebView is dead
+      // Skip for recovery context (recovery has its own polling/retry)
+      if (context !== 'recovery') {
+        fastPathTimeoutId.current = setTimeout(() => {
+          fastPathTimeoutId.current = null;
+          log.error(`⏰ Fast path TIMEOUT after ${FAST_PATH_TIMEOUT_MS}ms — WebView may be dead`, { context });
+          if (options?.onTimeout) {
+            options.onTimeout();
+          }
+        }, FAST_PATH_TIMEOUT_MS);
+      }
+    }, []);
 
     // Compute isDirty by comparing current entry to original
     const isDirty = useMemo(() => {
@@ -383,6 +418,26 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       log.debug('🔄 handleEditorReady: no pending restore (normal startup)');
     }, []);
 
+    // Fast path callback — WebView confirms content was set via postMessage
+    const handleContentConfirmed = useCallback((docLength: number) => {
+      // Clear safety timeout — WebView is alive
+      if (fastPathTimeoutId.current) {
+        clearTimeout(fastPathTimeoutId.current);
+        fastPathTimeoutId.current = null;
+      }
+
+      const t0 = contentSetTimestamp.current;
+      const fastPathMs = t0 ? Math.round(performance.now() - t0) : null;
+
+      log.info('🏎️ Fast path confirmed', { docLength, fastPathMs });
+
+      // Call onVerified callback (used by no-cache path to gate content visibility)
+      if (fastPathOnVerified.current) {
+        fastPathOnVerified.current();
+        fastPathOnVerified.current = null;
+      }
+    }, []);
+
     const handleCursorContext = useCallback((ctx: CursorContext) => {
       setIsInTableCell(ctx.isInTableCell);
     }, []);
@@ -442,7 +497,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
 
         // Set editor content without adding to undo history
         const editorContent = combineTitleAndBody(data.title || '', data.content || '');
-        editorRef.current?.setContentAndClearHistory(editorContent);
+        setContentWithTiming(editorContent, 'loadEntryById');
 
         log.debug('loadEntryById: complete', {
           entryId: id.substring(0, 8),
@@ -455,7 +510,20 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       } finally {
         setIsLoading(false);
       }
-    }, [initializeVersion]);
+    }, [initializeVersion, setContentWithTiming]);
+
+    // Activity recreation safety net — if Android kills and recreates the activity,
+    // the singleton nav state says "entryManagement" with an entryId, but our component
+    // state is fresh (null). The parent's useEffect may fire before our ref is attached,
+    // so we self-load here as a fallback.
+    useEffect(() => {
+      const params = getNavParams();
+      const navEntryId = params?.entryId;
+      if (navEntryId && !entryId && !entry) {
+        log.info('🔄 Activity recreation detected — self-loading entry from nav params', { entryId: navEntryId.substring(0, 8) });
+        loadEntryById(navEntryId);
+      }
+    }, []); // Mount only
 
     // === Entry Actions (inline) ===
     const handlePinToggle = useCallback(() => {
@@ -538,14 +606,16 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
      * - If no entry loaded: just reload WebView (ready for next use)
      */
     const handleEditorReload = useCallback(async () => {
+      // Use entry.entry_id as fallback — for new entries, route param (entryId) is never set
+      const resolvedId = entryId || entry?.entry_id;
       log.info('🔄 handleEditorReload (recovery)', {
         hasEntry: !!entry,
         isNew: isNewEntry,
-        entryId: entryId?.substring(0, 8),
+        entryId: resolvedId?.substring(0, 8),
         hasEditorRef: !!editorRef.current,
       });
 
-      if (!entryId) {
+      if (!resolvedId) {
         log.info('🔄 No entryId, just reloading WebView');
         editorRef.current?.reloadWebView();
         return;
@@ -555,21 +625,42 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       let title = entry?.title || '';
       let content = entry?.content || '';
       try {
-        const freshEntry = await getEntryWithRelations(entryId);
+        const freshEntry = await getEntryWithRelations(resolvedId);
         if (freshEntry) {
           title = freshEntry.title || '';
           content = freshEntry.content || '';
-          log.info('🔄 Restored content from SQLite', { entryId: entryId.substring(0, 8), titleLen: title.length, contentLen: content.length });
+          log.info('🔄 Restored content from SQLite', { entryId: resolvedId.substring(0, 8), titleLen: title.length, contentLen: content.length });
         }
       } catch (err) {
         log.warn('🔄 SQLite read failed, falling back to React state', { error: err });
       }
 
-      // Store content to restore after reload completes
+      // Direct injection — don't rely on onReady (it often never fires after webview.reload())
       const html = combineTitleAndBody(title, content);
-      log.info('🔄 Setting pendingResumeRestore before reload', { length: html.length });
-      pendingResumeRestore.current = html;
+      log.info('🔄 Reloading WebView, will poll and inject directly', { length: html.length });
       editorRef.current?.reloadWebView();
+
+      // Poll until WebView responds, then inject content directly
+      // Uses isMountedRef to bail out if component unmounts during polling
+      const MAX_POLLS = 30;
+      const pollForAlive = async (attempt: number) => {
+        if (!isMountedRef.current) return; // Component unmounted during poll
+        const probe = await getHTMLWithTimeout(editorRef, 200);
+        if (!isMountedRef.current) return; // Unmounted while awaiting probe
+        if (probe !== null) {
+          log.info('🔄 WebView alive after reload, injecting content', { attempt, length: html.length });
+          setContentWithTiming(html, 'recovery');
+          return;
+        }
+        if (attempt < MAX_POLLS) {
+          setTimeout(() => pollForAlive(attempt + 1), 200);
+        } else {
+          log.error('🔄 WebView never recovered after reload — giving up', { attempts: MAX_POLLS });
+          emitToast('Editor crashed — returning to list');
+          navigate('back');
+        }
+      };
+      setTimeout(() => pollForAlive(1), 300);
     }, [entry, entryId, isNewEntry]);
 
     /**
@@ -580,30 +671,42 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       log.info('🏥 Health check: starting', { hasEditorRef: !!editorRef.current });
       if (!editorRef.current) return true; // No editor, nothing to check
 
-      try {
-        const timeoutPromise = new Promise<null>((_, reject) => {
-          setTimeout(() => reject(new Error('timeout')), 500);
-        });
+      // Retry up to 3 times — WebView may be slow to wake after brief background (camera/gallery)
+      const MAX_RETRIES = 3;
+      const TIMEOUT_MS = 1000;
 
-        const startMs = performance.now();
-        const htmlPromise = editorRef.current.getHTML();
-        const result = await Promise.race([htmlPromise, timeoutPromise]);
-        const elapsedMs = Math.round(performance.now() - startMs);
-
-        // Check if result is valid (not null/empty from a dead WebView)
-        if (result === null || result === undefined) {
-          log.warn('🏥 Health check: WebView returned null/undefined - DEAD', { elapsedMs });
-          return false;
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        // Brief delay between retries — give WebView time to wake after background
+        if (attempt > 1) {
+          await new Promise(r => setTimeout(r, 300));
         }
+        try {
+          const timeoutPromise = new Promise<null>((_, reject) => {
+            setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS);
+          });
 
-        log.info('🏥 Health check: WebView ALIVE', { elapsedMs, resultLength: String(result).length });
-        return true;
-      } catch (error) {
-        log.warn('🏥 Health check: FAILED (timeout or error)', {
-          error: error instanceof Error ? error.message : 'unknown'
-        });
-        return false;
+          const startMs = performance.now();
+          const htmlPromise = editorRef.current.getHTML();
+          const result = await Promise.race([htmlPromise, timeoutPromise]);
+          const elapsedMs = Math.round(performance.now() - startMs);
+
+          // Check if result is valid (not null/empty from a dead WebView)
+          if (result === null || result === undefined) {
+            log.warn(`🏥 Health check: WebView returned null/undefined (attempt ${attempt}/${MAX_RETRIES})`, { elapsedMs });
+            continue;
+          }
+
+          log.info('🏥 Health check: WebView ALIVE', { attempt, elapsedMs, resultLength: String(result).length });
+          return true;
+        } catch (error) {
+          log.warn(`🏥 Health check: timeout (attempt ${attempt}/${MAX_RETRIES})`, {
+            error: error instanceof Error ? error.message : 'unknown'
+          });
+        }
       }
+
+      log.error('🏥 Health check: WebView DEAD after all retries');
+      return false;
     }, []);
 
     // AppState listener - check WebView health when app resumes, snapshot on background
@@ -648,6 +751,16 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       return () => sub.remove();
     }, []);
 
+    // Cleanup on unmount
+    useEffect(() => {
+      return () => {
+        isMountedRef.current = false;
+        if (fastPathTimeoutId.current) {
+          clearTimeout(fastPathTimeoutId.current);
+        }
+      };
+    }, []);
+
     // Handle editor content changes - split title from body
     const handleContentChange = useCallback((html: string) => {
       const { title, body } = splitTitleAndBody(html);
@@ -661,87 +774,6 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         return { ...prev, title: newTitle, content: newContent };
       });
     }, []);
-
-    /**
-     * Verify editor content was applied. Checks:
-     * 1. getHTML returns null → WebView dead → reload once, poll until alive, re-set.
-     * 2. No visible text expected (empty/image-only entry) → skip verification, done.
-     * 3. Editor text length is within tolerance of expected → content loaded, done.
-     * 4. Editor empty or wrong content (stale from previous entry) → re-set.
-     *
-     * Uses length-proximity instead of exact string comparison — Tiptap normalizes
-     * HTML (entities, whitespace, Unicode) so roundtripped text may differ by a few
-     * chars. Tolerance catches normalization while still detecting stale/missing content.
-     */
-    const verifyEditorContent = (content: string, onVerified: () => void) => {
-      const expectedText = stripHtmlToText(content);
-
-      // No visible text content — nothing to verify
-      if (expectedText.length === 0) {
-        onVerified();
-        return;
-      }
-
-      let reloaded = false;
-      let resets = 0;
-      const MAX_RESETS = 3;
-      const MAX_RELOAD_POLLS = 30;
-      const tolerance = Math.max(20, Math.round(expectedText.length * 0.1));
-
-      const poll = async (attempt: number) => {
-        const html = await getHTMLWithTimeout(editorRef, 80);
-
-        if (html === null) {
-          // WebView dead — reload once, then poll until alive
-          if (!reloaded) {
-            log.warn(`⚡ verify: WebView dead (attempt ${attempt}) — reloading`);
-            editorRef.current?.reloadWebView();
-            reloaded = true;
-          }
-          if (attempt < MAX_RELOAD_POLLS) {
-            setTimeout(() => poll(attempt + 1), 100);
-          } else {
-            log.error(`⚡ verify: GAVE UP waiting for WebView after ${attempt} attempts`);
-            onVerified();
-          }
-          return;
-        }
-
-        // WebView alive — check text length is within tolerance of expected
-        const actualText = stripHtmlToText(html);
-        const lenDiff = Math.abs(actualText.length - expectedText.length);
-
-        if (actualText.length > 0 && lenDiff <= tolerance) {
-          // Content loaded — length is close enough (Tiptap normalization tolerance)
-          if (reloaded || resets > 0) {
-            log.info(`⚡ verify: content confirmed (attempt ${attempt}, reloaded=${reloaded}, resets=${resets})`);
-          }
-          onVerified();
-          return;
-        }
-
-        // Editor empty or content length too different (stale/wrong content) — re-set
-        if (resets < MAX_RESETS) {
-          resets++;
-          log.warn(`⚡ verify: content mismatch (attempt ${attempt}, reset ${resets}/${MAX_RESETS}), re-setting`, {
-            expectedLen: expectedText.length,
-            actualLen: actualText.length,
-            lenDiff,
-            tolerance,
-          });
-          editorRef.current?.setContentAndClearHistory(content);
-          setTimeout(() => poll(attempt + 1), 200);
-        } else {
-          log.error(`⚡ verify: content still mismatched after ${resets} resets — giving up`, {
-            expectedLen: expectedText.length,
-            actualLen: actualText.length,
-          });
-          onVerified();
-        }
-      };
-
-      setTimeout(() => poll(1), 50);
-    };
 
     // Find entry in React Query list cache (synchronous — no DB call)
     const findEntryInListCache = (id: string): EntryWithRelations | undefined => {
@@ -802,17 +834,24 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         }
 
         if (!hadCacheHit) {
-          // No cache — set editor content and gate visibility on verification
+          // No cache — set editor content, gate visibility on fast path confirmation
           const editorContent = combineTitleAndBody(data.title || '', data.content || '');
-          log.debug('Setting editor content (no history)', { length: editorContent.length });
-          editorRef.current?.setContentAndClearHistory(editorContent);
-          verifyEditorContent(editorContent, () => {
-            setIsContentReady(true);
-            setIsLoading(false);
-            log.info('⏱️ DISPLAY READY (no cache)', {
-              entryId: id.substring(0, 8),
-              sinceClickMs: Math.round(performance.now() - clickTime),
-            });
+          setContentWithTiming(editorContent, 'loadEntryDirect', {
+            onVerified: () => {
+              setIsContentReady(true);
+              setIsLoading(false);
+              log.info('⏱️ DISPLAY READY (no cache, fast path)', {
+                entryId: id.substring(0, 8),
+                sinceClickMs: Math.round(performance.now() - clickTime),
+              });
+            },
+            onTimeout: () => {
+              // WebView dead — show content area anyway and trigger recovery
+              setIsContentReady(true);
+              setIsLoading(false);
+              log.error('⏰ Content load timed out on no-cache path, triggering recovery');
+              handleEditorReloadRef.current();
+            },
           });
         }
         // Cache hit: editor already set by the ref's setEntry — don't touch it.
@@ -872,7 +911,12 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
             initializeVersion(entry.version);
           }
           const editorContent = combineTitleAndBody(entry.title || '', entry.content || '');
-          editorRef.current?.setContentAndClearHistory(editorContent);
+          setContentWithTiming(editorContent, 'cache-hit', {
+            onTimeout: () => {
+              log.error('⏰ Cache-hit content never confirmed — triggering recovery');
+              handleEditorReloadRef.current();
+            },
+          });
           // Show immediately — all state updates batched into one render
           setIsContentReady(true);
           setIsLoading(false);
@@ -916,7 +960,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         // Set editor content without adding to undo history
         const editorContent = combineTitleAndBody(newEntry.title || '', newEntry.content || '');
         log.debug('Setting editor content for new entry (no history)', { length: editorContent.length });
-        editorRef.current?.setContentAndClearHistory(editorContent);
+        setContentWithTiming(editorContent, 'createNewEntry');
       },
       clearEntry: () => {
         setIsContentReady(false);
@@ -1184,6 +1228,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
               editable={isEditMode}
               onReady={handleEditorReady}
               onCursorContext={handleCursorContext}
+              onContentConfirmed={handleContentConfirmed}
             />
           </View>
         </View>

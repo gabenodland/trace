@@ -213,8 +213,6 @@ window.editorCommand = (command: string, payload?: any) => {
         if (window.ReactNativeWebView?.postMessage) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'historyCleared',
-            canUndo: editor.can().undo(),
-            canRedo: editor.can().redo(),
           }));
         }
         break;
@@ -244,8 +242,6 @@ window.editorCommand = (command: string, payload?: any) => {
         if (window.ReactNativeWebView?.postMessage) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'contentSetWithClearedHistory',
-            canUndo: editor.can().undo(),
-            canRedo: editor.can().redo(),
             docLength: doc.content.size,
           }));
         }

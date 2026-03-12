@@ -93,6 +93,8 @@ interface RichTextEditorV2Props {
   onReady?: () => void;
   /** Called when cursor context changes (e.g. entering/leaving a table cell) */
   onCursorContext?: (ctx: CursorContext) => void;
+  /** Called when WebView confirms content was set via setContentAndClearHistory */
+  onContentConfirmed?: (docLength: number) => void;
 }
 
 export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2Props>(({
@@ -100,6 +102,7 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
   editable = true,
   onReady,
   onCursorContext,
+  onContentConfirmed,
 }, ref) => {
   const theme = useTheme();
   const l2Ref = useRef<EditorWebBridgeRef>(null);
@@ -115,6 +118,11 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
       log.info('V2 unmounted');
     };
   }, []);
+
+  /** Fast path — WebView confirms content was set. Forwards to parent. */
+  const handleContentConfirmed = useCallback((docLength: number) => {
+    onContentConfirmed?.(docLength);
+  }, [onContentConfirmed]);
 
   // Generate theme-aware CSS for the editor
   const customCSS = useMemo(() => `
@@ -407,6 +415,7 @@ export const RichTextEditorV2 = forwardRef<RichTextEditorV2Ref, RichTextEditorV2
         ref={l2Ref}
         onChange={handleL2Change}
         onCursorContext={onCursorContext}
+        onContentConfirmed={handleContentConfirmed}
         customCSS={customCSS}
         backgroundColor={theme.colors.background.primary}
       />
