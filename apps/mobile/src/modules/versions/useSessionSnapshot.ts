@@ -2,8 +2,7 @@
  * useSessionSnapshot - Creates a version snapshot when an editing session ends
  *
  * Triggers:
- * - Editor closes (screen becomes invisible)
- * - App backgrounds while editing
+ * - Editor closes (screen becomes invisible / navigation away)
  *
  * Constraints:
  * - Only creates a snapshot if the entry was modified (dirty check via change_summary)

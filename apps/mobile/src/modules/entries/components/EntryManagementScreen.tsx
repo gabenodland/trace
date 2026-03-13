@@ -360,10 +360,6 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     const isVisibleRef = useRef(isVisible);
     isVisibleRef.current = isVisible;
 
-    // Track current entry in ref for AppState background snapshot (avoids stale closure)
-    const entrySnapshotRef = useRef(entry);
-    entrySnapshotRef.current = entry;
-
     // When screen becomes invisible, save if dirty, exit edit mode and dismiss keyboard
     // This prevents keyboard from appearing on the entry list during swipe-back
     // and ensures unsaved changes are persisted
@@ -718,11 +714,10 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       const handleAppStateChange = async (nextState: AppStateStatus) => {
         log.info('🔄 AppState changed', { nextState, isVisible: isVisibleRef.current, entryId: entryId?.substring(0, 8) || null });
 
-        // App going to background — create session snapshot if entry was modified
-        if (nextState === 'background' && isVisibleRef.current && entrySnapshotRef.current) {
-          const attIds = entrySnapshotRef.current.attachments?.map(a => a.attachment_id) ?? [];
-          createSessionSnapshot(entrySnapshotRef.current, attIds);
-        }
+        // NOTE: We intentionally do NOT create a session snapshot on app background.
+        // Android sends the app to background when opening system modals (image picker, camera),
+        // which would create a premature snapshot before photos are selected. The screen-hidden
+        // handler is the sole creator of session snapshots — it fires on navigation away or unmount.
 
         if (nextState === 'active' && isVisibleRef.current) {
           log.info('🔄 App resumed on visible entry screen, checking WebView health');
@@ -741,7 +736,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
 
       const subscription = AppState.addEventListener('change', handleAppStateChange);
       return () => subscription.remove();
-    }, [checkWebViewHealth, handleEditorReload, entryId, createSessionSnapshot]);
+    }, [checkWebViewHealth, handleEditorReload, entryId]);
 
     // Listen for manual editor reload from Settings → Developer
     // Stable ref avoids listener churn when handleEditorReload identity changes
