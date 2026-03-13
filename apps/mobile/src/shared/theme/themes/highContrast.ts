@@ -44,6 +44,8 @@ export const highContrastTheme: Theme = {
       accent: '#0000CC',       // Pure blue
       accentLight: '#E6E6FF',  // Light blue bg
       accentSecondary: '#EA580C', // Orange - secondary accent for previews
+      warning: '#D97706',        // Amber - offline, caution
+      warningText: '#FFFFFF',    // White on warning
     },
 
     interactive: {

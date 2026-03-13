@@ -130,7 +130,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
     setMapRegion: persistRegion,
   } = useMapState();
   const authState = useAuth();
-  const { user } = authState;
+  const { user, isOffline } = authState;
   const { profile } = useMobileProfile(user?.id);
   const { streams } = useStreams();
 
@@ -596,6 +596,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
           badge={0}
           onMenuPress={openDrawer}
           onTitlePress={openDrawer}
+          isOffline={isOffline}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.text.tertiary} />
@@ -621,6 +622,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
         badge={entries.length}
         onMenuPress={openDrawer}
         onTitlePress={openDrawer}
+        isOffline={isOffline}
       />
 
       {/* Map */}

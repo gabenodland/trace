@@ -290,6 +290,7 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
         onTitlePress={openDrawer}
         onSearchPress={() => setIsSearchOpen(!isSearchOpen)}
         isSearchActive={isSearchOpen}
+        isOffline={isOffline}
       />
 
       {/* Search Bar */}
@@ -313,7 +314,6 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
         onFilterPress={() => setShowFilterSheet(true)}
         isFiltering={hasActiveFilters}
         filterCount={activeFilterCount}
-        isOffline={isOffline}
       />
 
       <HtmlRenderProvider>

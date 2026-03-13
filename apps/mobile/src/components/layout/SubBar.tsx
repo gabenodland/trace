@@ -52,7 +52,6 @@ interface SubBarFiltersProps {
   onFilterPress: () => void;
   isFiltering?: boolean; // Show filter button as active
   filterCount?: number; // Number of active filters to show in badge
-  isOffline?: boolean;
 }
 
 export function SubBarFilters({
@@ -63,7 +62,6 @@ export function SubBarFilters({
   onFilterPress,
   isFiltering = false,
   filterCount = 0,
-  isOffline,
 }: SubBarFiltersProps) {
   const theme = useTheme();
 
@@ -71,14 +69,6 @@ export function SubBarFilters({
     <View style={[styles.filtersWrapper, { backgroundColor: theme.colors.background.primary }]}>
       {/* Row 1: View, Sort, Filter button */}
       <View style={styles.filtersRow}>
-        {/* Offline indicator */}
-        {isOffline && (
-          <View style={styles.offlineBadge}>
-            <Icon name="WifiOff" size={12} color="#ffffff" />
-            <Text style={styles.offlineBadgeText}>Offline</Text>
-          </View>
-        )}
-
         {/* View Dropdown */}
         <TouchableOpacity
           style={styles.selector}
@@ -159,21 +149,6 @@ const styles = StyleSheet.create({
   },
   icon: {
     marginLeft: 2,
-  },
-  offlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f59e0b', // Warning orange
-    paddingHorizontal: themeBase.spacing.sm,
-    paddingVertical: 3,
-    borderRadius: 12,
-    gap: 4,
-    marginRight: themeBase.spacing.sm,
-  },
-  offlineBadgeText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '600',
   },
   filterButton: {
     padding: 14,

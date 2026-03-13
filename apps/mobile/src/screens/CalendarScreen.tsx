@@ -55,7 +55,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
     calendarZoom,
     setCalendarZoom,
   } = useCalendarState();
-  const { user } = useAuth();
+  const { user, isOffline } = useAuth();
   const { profile } = useMobileProfile(user?.id);
 
   // Avatar data for TopBar
@@ -286,6 +286,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
         badge={entries.length}
         onMenuPress={openDrawer}
         onTitlePress={openDrawer}
+        isOffline={isOffline}
       />
 
       {/* SubBar with date field selector and archived toggle */}

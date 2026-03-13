@@ -45,6 +45,8 @@ export const synthwaveLightTheme: Theme = {
       accent: '#FF69B4',       // Hot pink
       accentLight: '#FFE4F0',  // Pale pink bg
       accentSecondary: '#06B6D4', // Tropical cyan - secondary accent for previews
+      warning: '#F59E0B',        // Amber - offline, caution
+      warningText: '#FFFFFF',    // White on warning
     },
 
     interactive: {

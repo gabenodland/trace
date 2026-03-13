@@ -42,6 +42,8 @@ export const sepiaTheme: Theme = {
       accent: '#C06C52',       // Terracotta/coral
       accentLight: '#FDF0EC',  // Light terracotta bg
       accentSecondary: '#D97706', // Amber - secondary accent for previews
+      warning: '#D97706',        // Amber - offline, caution
+      warningText: '#FFFFFF',    // White on warning
     },
 
     interactive: {

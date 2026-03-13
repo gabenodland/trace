@@ -43,6 +43,8 @@ export const lightTheme: Theme = {
       accent: '#3B82F6',       // Blue
       accentLight: '#EFF6FF',  // Light blue bg
       accentSecondary: '#F59E0B', // Orange - secondary accent for previews
+      warning: '#F59E0B',        // Amber - offline, caution
+      warningText: '#FFFFFF',    // White on warning
     },
 
     interactive: {

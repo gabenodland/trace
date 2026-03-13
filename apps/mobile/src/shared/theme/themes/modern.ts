@@ -44,6 +44,8 @@ export const modernTheme: Theme = {
       accent: '#6366F1',       // Indigo-500 (vibrant purple-blue)
       accentLight: '#EEF2FF',  // Indigo-50
       accentSecondary: '#F59E0B', // Orange - secondary accent for previews
+      warning: '#F59E0B',        // Amber - offline, caution
+      warningText: '#FFFFFF',    // White on warning
     },
 
     interactive: {

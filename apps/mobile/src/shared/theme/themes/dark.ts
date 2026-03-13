@@ -42,6 +42,8 @@ export const darkTheme: Theme = {
       accent: '#60A5FA',       // Lighter blue for dark bg
       accentLight: '#1E3A5F',  // Dark blue bg
       accentSecondary: '#FB923C', // Orange - secondary accent for previews
+      warning: '#F59E0B',        // Amber - offline, caution
+      warningText: '#FFFFFF',    // White on warning
     },
 
     interactive: {

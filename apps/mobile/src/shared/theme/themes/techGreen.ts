@@ -43,6 +43,8 @@ export const techGreenTheme: Theme = {
       accent: '#39D353',       // Bright green
       accentLight: '#0D2818',  // Dark green bg
       accentSecondary: '#F97316', // Techy orange - secondary accent for previews
+      warning: '#F59E0B',        // Amber - offline, caution
+      warningText: '#FFFFFF',    // White on warning
     },
 
     interactive: {

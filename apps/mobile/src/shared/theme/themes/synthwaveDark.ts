@@ -45,6 +45,8 @@ export const synthwaveDarkTheme: Theme = {
       accent: '#FF2E97',       // Hot pink
       accentLight: '#2D1A2E',  // Dark magenta
       accentSecondary: '#22D3EE', // Neon cyan - secondary accent for previews
+      warning: '#FBBF24',        // Neon amber - offline, caution
+      warningText: '#1A0A2E',    // Dark purple on warning
     },
 
     interactive: {

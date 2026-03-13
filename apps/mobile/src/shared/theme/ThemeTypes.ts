@@ -43,6 +43,8 @@ export interface ThemeColors {
     accent: string;       // Primary accent (buttons, links)
     accentLight: string;  // Light accent background
     accentSecondary: string; // Secondary accent (preview markers, alternative highlights)
+    warning: string;      // Warning background (offline badge, caution states)
+    warningText: string;  // Text on warning background
   };
 
   // Interactive elements
