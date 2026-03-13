@@ -507,7 +507,7 @@ const AppContent = memo(function AppContent() {
         break;
       case "stream-properties":
         boundaryName = "StreamPropertiesScreen";
-        content = <StreamPropertiesScreen streamId={navParams.streamId} />;
+        content = <StreamPropertiesScreen streamId={navParams.streamId} returnTo={navParams.returnTo} />;
         break;
       case "subscription":
         boundaryName = "SubscriptionScreen";

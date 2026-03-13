@@ -1069,7 +1069,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       updateEntryField('type', type);
     }, [updateEntryField]);
 
-    const handleStreamChange = useCallback((streamId: string | null, _streamName: string | null) => {
+    const handleStreamChange = useCallback((streamId: string | null) => {
       // Update both stream_id and the stream object for UI display
       const stream = streamId ? streams.find(s => s.stream_id === streamId) : undefined;
       setEntry(prev => prev ? { ...prev, stream_id: streamId, stream } : prev);

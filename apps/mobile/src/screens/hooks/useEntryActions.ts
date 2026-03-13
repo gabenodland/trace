@@ -3,7 +3,7 @@
  * Shared across EntryListScreen, MapScreen, and CalendarScreen
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Alert } from 'react-native';
 import type { Entry } from '@trace/core';
 import type { EntryWithRelations } from '../../modules/entries/EntryWithRelationsTypes';
@@ -30,7 +30,7 @@ export function useEntryActions({ entryMutations, navigate, entries, showSnackba
   const [showMoveStreamPicker, setShowMoveStreamPicker] = useState(false);
   const [entryToMove, setEntryToMove] = useState<string | null>(null);
 
-  const handleEntryPress = (entryId: string) => {
+  const handleEntryPress = useCallback((entryId: string) => {
     // Guard against double-tap during animation window
     if (isPushAnimating()) return;
 
@@ -43,14 +43,14 @@ export function useEntryActions({ entryMutations, navigate, entries, showSnackba
     setTimeout(() => {
       navigate("entryManagement", { entryId });
     }, 100);
-  };
+  }, [navigate]);
 
-  const handleMoveEntry = (entryId: string) => {
+  const handleMoveEntry = useCallback((entryId: string) => {
     setEntryToMove(entryId);
     setShowMoveStreamPicker(true);
-  };
+  }, []);
 
-  const handleMoveStreamSelect = async (streamId: string | null, _streamName: string | null) => {
+  const handleMoveStreamSelect = useCallback(async (streamId: string | null) => {
     if (!entryToMove) return;
 
     try {
@@ -65,14 +65,14 @@ export function useEntryActions({ entryMutations, navigate, entries, showSnackba
       log.error("Failed to move entry", error);
       Alert.alert("Error", "Failed to move entry");
     }
-  };
+  }, [entryToMove, entryMutations.updateEntry, showSnackbar]);
 
-  const handleCloseMoveStreamPicker = () => {
+  const handleCloseMoveStreamPicker = useCallback(() => {
     setShowMoveStreamPicker(false);
     setEntryToMove(null);
-  };
+  }, []);
 
-  const handleDeleteEntry = (entryId: string) => {
+  const handleDeleteEntry = useCallback((entryId: string) => {
     Alert.alert(
       "Delete Entry",
       "Are you sure you want to delete this entry?",
@@ -92,9 +92,9 @@ export function useEntryActions({ entryMutations, navigate, entries, showSnackba
         },
       ]
     );
-  };
+  }, [entryMutations.deleteEntry]);
 
-  const handlePinEntry = async (entryId: string, currentPinned: boolean) => {
+  const handlePinEntry = useCallback(async (entryId: string, currentPinned: boolean) => {
     try {
       await entryMutations.updateEntry(entryId, {
         is_pinned: !currentPinned,
@@ -104,9 +104,9 @@ export function useEntryActions({ entryMutations, navigate, entries, showSnackba
       log.error("Failed to pin/unpin entry", error);
       Alert.alert("Error", "Failed to pin/unpin entry");
     }
-  };
+  }, [entryMutations.updateEntry, showSnackbar]);
 
-  const handleArchiveEntry = async (entryId: string, currentArchived: boolean) => {
+  const handleArchiveEntry = useCallback(async (entryId: string, currentArchived: boolean) => {
     try {
       await entryMutations.archiveEntry(entryId, !currentArchived);
       showSnackbar?.(currentArchived ? "Entry unarchived" : "Entry archived");
@@ -114,9 +114,9 @@ export function useEntryActions({ entryMutations, navigate, entries, showSnackba
       log.error("Failed to archive/unarchive entry", error);
       Alert.alert("Error", "Failed to archive/unarchive entry");
     }
-  };
+  }, [entryMutations.archiveEntry, showSnackbar]);
 
-  const handleCopyEntry = async (entryId: string) => {
+  const handleCopyEntry = useCallback(async (entryId: string) => {
     try {
       const newEntryId = await entryMutations.copyEntry(entryId);
       navigate("entryManagement", { entryId: newEntryId });
@@ -124,7 +124,7 @@ export function useEntryActions({ entryMutations, navigate, entries, showSnackba
       log.error("Failed to copy entry", error);
       Alert.alert("Error", "Failed to copy entry");
     }
-  };
+  }, [entryMutations.copyEntry, navigate]);
 
   // Get current stream of entry being moved
   const entryToMoveData = entryToMove ? entries.find(e => e.entry_id === entryToMove) : null;

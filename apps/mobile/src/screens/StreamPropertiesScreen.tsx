@@ -24,7 +24,7 @@ import {
   type RatingType,
   getRatingTypeLabel,
 } from "@trace/core";
-import { useNavigate } from "../shared/navigation";
+import { useNavigate, useBeforeBack } from "../shared/navigation";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { BottomBar } from "../components/layout/BottomBar";
@@ -181,6 +181,35 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
   const markChanged = () => {
     setHasChanges(true);
   };
+
+  // Block hardware/swipe back when unsaved changes exist
+  const discardingRef = useRef(false);
+  useBeforeBack(
+    hasChanges
+      ? async () => {
+          if (discardingRef.current) {
+            discardingRef.current = false;
+            return true; // Discard confirmed — allow navigation
+          }
+          Alert.alert(
+            "Unsaved Changes",
+            "You have unsaved changes. Discard them?",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Discard",
+                style: "destructive",
+                onPress: () => {
+                  discardingRef.current = true;
+                  navigate("back");
+                },
+              },
+            ]
+          );
+          return false; // Block navigation until user confirms
+        }
+      : null
+  );
 
   const handleSave = async () => {
     if (!name.trim()) {

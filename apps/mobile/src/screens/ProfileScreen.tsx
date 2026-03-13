@@ -10,7 +10,7 @@
  * Settings and Sign Out live on AccountScreen — not here.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -68,9 +68,14 @@ export function ProfileScreen() {
     : false;
 
   // Block hardware/swipe back when unsaved changes exist
+  const discardingRef = useRef(false);
   useBeforeBack(
     hasChanges
       ? async () => {
+          if (discardingRef.current) {
+            discardingRef.current = false;
+            return true; // Discard confirmed — allow navigation
+          }
           Alert.alert(
             "Unsaved Changes",
             "You have unsaved changes. Discard them?",
@@ -79,11 +84,14 @@ export function ProfileScreen() {
               {
                 text: "Discard",
                 style: "destructive",
-                onPress: () => navigate("back"),
+                onPress: () => {
+                  discardingRef.current = true;
+                  navigate("back");
+                },
               },
             ]
           );
-          return true; // Block default navigation
+          return false; // Block navigation until user confirms
         }
       : null
   );

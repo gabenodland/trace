@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useCallback } from "react";
 import type { Stream, EntryDisplayMode } from "@trace/core";
 import { getStreamAttributeVisibility } from "@trace/core";
 import type { EntryWithRelations } from "../EntryWithRelationsTypes";
@@ -23,7 +23,7 @@ interface EntryListItemRowProps {
   currentStreamId?: string | null;
   displayMode?: EntryDisplayMode;
   showMenu: boolean;
-  onMenuToggle: () => void;
+  onMenuToggle: (entryId: string) => void;
 }
 
 /**
@@ -55,10 +55,13 @@ export const EntryListItemRow = memo(function EntryListItemRow({
   const stream = entry.stream_id && streamById ? streamById[entry.stream_id] : null;
   const attributeVisibility = getStreamAttributeVisibility(stream);
 
+  const handlePress = useCallback(() => onEntryPress(entry.entry_id), [onEntryPress, entry.entry_id]);
+  const handleMenuToggle = useCallback(() => onMenuToggle(entry.entry_id), [onMenuToggle, entry.entry_id]);
+
   return (
     <EntryListItem
       entry={entry}
-      onPress={() => onEntryPress(entry.entry_id)}
+      onPress={handlePress}
       onTagPress={onTagPress}
       onMentionPress={onMentionPress}
       onStreamPress={onStreamPress}
@@ -74,7 +77,7 @@ export const EntryListItemRow = memo(function EntryListItemRow({
       currentStreamId={currentStreamId}
       displayMode={displayMode}
       showMenu={showMenu}
-      onMenuToggle={onMenuToggle}
+      onMenuToggle={handleMenuToggle}
       attributeVisibility={attributeVisibility}
     />
   );

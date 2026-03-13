@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet } from "react-native";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { Stream, EntrySection, EntryDisplayMode } from "@trace/core";
 import type { EntryWithRelations } from "../EntryWithRelationsTypes";
 import { EntryListItemRow } from "./EntryListItemRow";
@@ -58,7 +58,12 @@ export function EntryListContent({
   const theme = useTheme();
   const [openMenuEntryId, setOpenMenuEntryId] = useState<string | null>(null);
 
-  const renderEntry = (entry: EntryWithRelations) => (
+  // Stable menu toggle handler — uses functional setState to avoid capturing stale openMenuEntryId
+  const handleMenuToggle = useCallback((entryId: string) => {
+    setOpenMenuEntryId(prev => prev === entryId ? null : entryId);
+  }, []);
+
+  const renderEntry = useCallback((entry: EntryWithRelations) => (
     <View key={entry.entry_id} style={styles.entryItemWrapper}>
       <EntryListItemRow
         entry={entry}
@@ -79,10 +84,10 @@ export function EntryListContent({
         currentStreamId={currentStreamId}
         displayMode={displayMode}
         showMenu={openMenuEntryId === entry.entry_id}
-        onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === entry.entry_id ? null : entry.entry_id)}
+        onMenuToggle={handleMenuToggle}
       />
     </View>
-  );
+  ), [onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onArchive, onSelectOnMap, selectedEntryId, streamMap, locationMap, streamById, currentStreamId, displayMode, openMenuEntryId, handleMenuToggle]);
 
   // Empty state
   if (entries.length === 0) {

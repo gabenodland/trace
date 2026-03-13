@@ -17,7 +17,7 @@ const ITEM_HEIGHT = 45; // Approximate height of each stream item (used for scro
 interface StreamPickerProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (streamId: string | null, streamName: string | null) => void;
+  onSelect: (streamId: string | null) => void;
   selectedStreamId: string | null;
   /** When true, shows "Set Stream for New Entry" as title */
   isNewEntry?: boolean;
@@ -76,8 +76,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
   );
 
   const handleSelect = (streamId: string | null) => {
-    const selectedStream = streams.find(s => s.stream_id === streamId);
-    onSelect(streamId, selectedStream?.name || null);
+    onSelect(streamId);
     setSearchQuery("");
     onClose();
   };

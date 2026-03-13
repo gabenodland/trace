@@ -77,6 +77,11 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
     scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
   }, []);
 
+  // Stable menu toggle handler — uses functional setState to avoid capturing stale openMenuEntryId
+  const handleMenuToggle = useCallback((entryId: string) => {
+    setOpenMenuEntryId(prev => prev === entryId ? null : entryId);
+  }, []);
+
   // Expose scroll methods via ref
   useImperativeHandle(ref, () => ({
     scrollToTop: () => {
@@ -167,8 +172,8 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
     return map;
   }, {} as Record<string, FullStream>), [fullStreams]);
 
-  // Render a single entry item
-  const renderEntryItem = (item: EntryWithRelations) => (
+  // Render a single entry item — accepts FlatList/SectionList renderItem signature directly
+  const renderEntryItem = useCallback(({ item }: { item: EntryWithRelations }) => (
     <EntryListItemRow
       entry={item}
       onEntryPress={onEntryPress}
@@ -188,9 +193,9 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
       currentStreamId={currentStreamId}
       displayMode={displayMode}
       showMenu={openMenuEntryId === item.entry_id}
-      onMenuToggle={() => setOpenMenuEntryId(openMenuEntryId === item.entry_id ? null : item.entry_id)}
+      onMenuToggle={handleMenuToggle}
     />
-  );
+  ), [onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, selectedEntryId, onArchive, streamMap, locationMap, fullStreamMap, currentStreamId, displayMode, openMenuEntryId, handleMenuToggle]);
 
   // Render section header (only if title is not empty)
   const renderSectionHeader = ({ section }: { section: EntrySection<EntryWithRelations> }) => {
@@ -224,7 +229,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         ref={sectionListRef}
         sections={sections}
         keyExtractor={(item) => item.entry_id}
-        renderItem={({ item }) => renderEntryItem(item)}
+        renderItem={renderEntryItem}
         renderSectionHeader={renderSectionHeader}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={CombinedHeader}
@@ -248,7 +253,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         ref={flatListRef}
         data={entries}
         keyExtractor={(item) => item.entry_id}
-        renderItem={({ item }) => renderEntryItem(item)}
+        renderItem={renderEntryItem}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={
@@ -276,7 +281,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
       ref={flatListRef}
       data={entries}
       keyExtractor={(item) => item.entry_id}
-      renderItem={({ item }) => renderEntryItem(item)}
+      renderItem={renderEntryItem}
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={CombinedHeader}
       removeClippedSubviews={false}
