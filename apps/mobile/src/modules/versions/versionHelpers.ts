@@ -43,8 +43,10 @@ export function buildSnapshot(entry: BaseEntry): EntrySnapshot {
     stream_id: entry.stream_id ?? null,
     due_date: entry.due_date ?? null,
     completed_at: entry.completed_at ?? null,
-    is_pinned: entry.is_pinned ?? false,
-    entry_date: entry.entry_date ?? null,
+    is_pinned: !!entry.is_pinned,
+    entry_date: typeof entry.entry_date === 'number'
+      ? new Date(entry.entry_date).toISOString()
+      : entry.entry_date ?? null,
     entry_latitude: entry.entry_latitude ?? null,
     entry_longitude: entry.entry_longitude ?? null,
     location_id: entry.location_id ?? null,

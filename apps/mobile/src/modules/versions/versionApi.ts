@@ -16,12 +16,40 @@ import { generateUUID } from '../../shared/utils/uuid';
 const log = createScopedLogger('VersionApi');
 
 /**
+ * Sanitize a parsed snapshot, coercing SQLite types to match EntrySnapshot.
+ * SQLite stores booleans as 0/1 and dates as Unix ms — the snapshot JSON
+ * inherits these raw types when buildSnapshot reads from a raw SQLite row.
+ */
+function sanitizeSnapshot(snapshot: any): EntrySnapshot {
+  if (!snapshot) return snapshot;
+
+  const coercedPinned = !!snapshot.is_pinned;
+  const coercedDate = typeof snapshot.entry_date === 'number'
+    ? new Date(snapshot.entry_date).toISOString()
+    : snapshot.entry_date;
+
+  if (snapshot.is_pinned !== coercedPinned || snapshot.entry_date !== coercedDate) {
+    log.debug('Snapshot sanitized', {
+      raw: { is_pinned: snapshot.is_pinned, entry_date: snapshot.entry_date },
+      coerced: { is_pinned: coercedPinned, entry_date: coercedDate },
+    });
+  }
+
+  return {
+    ...snapshot,
+    is_pinned: coercedPinned,
+    entry_date: coercedDate,
+  };
+}
+
+/**
  * Parse a raw SQLite row into an EntryVersion, deserializing JSON fields.
  */
 function parseVersionRow(row: any): EntryVersion {
+  const snapshot = row.snapshot ? JSON.parse(row.snapshot) : null;
   return {
     ...row,
-    snapshot: row.snapshot ? JSON.parse(row.snapshot) : null,
+    snapshot: sanitizeSnapshot(snapshot),
     attachment_ids: row.attachment_ids ? JSON.parse(row.attachment_ids) : null,
     // SQLite stores timestamps as Unix ms (number) — convert to ISO string for type consistency
     created_at: typeof row.created_at === 'number' ? new Date(row.created_at).toISOString() : row.created_at,

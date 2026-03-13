@@ -575,7 +575,7 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
               </View>
             )}
 
-            {snapshot.is_pinned && (
+            {!!snapshot.is_pinned && (
               <View style={styles.flagsRow}>
                 <View style={[styles.flagBadge, { backgroundColor: theme.colors.background.tertiary }]}>
                   <Icon name="Pin" size={10} color={theme.colors.text.tertiary} />
