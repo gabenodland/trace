@@ -44,6 +44,8 @@ packages/core/config.json
 # Expo
 .expo/
 dist/
+/android/
+/app.json
 *.jks
 *.p8
 *.p12
