@@ -9,6 +9,7 @@ import { useNavigate } from "../shared/navigation";
 import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useMapState } from "../shared/contexts/MapStateContext";
 import { useAuth } from "../shared/contexts/AuthContext";
+import { useSyncStatus } from "../shared/sync/syncHooks";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
@@ -131,6 +132,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   } = useMapState();
   const authState = useAuth();
   const { user, isOffline } = authState;
+  const { isSyncing } = useSyncStatus();
   const { profile } = useMobileProfile(user?.id);
   const { streams } = useStreams();
 
@@ -597,6 +599,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
           onMenuPress={openDrawer}
           onTitlePress={openDrawer}
           isOffline={isOffline}
+          isSyncing={isSyncing}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.text.tertiary} />
@@ -623,6 +626,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
         onMenuPress={openDrawer}
         onTitlePress={openDrawer}
         isOffline={isOffline}
+        isSyncing={isSyncing}
       />
 
       {/* Map */}

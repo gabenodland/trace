@@ -25,6 +25,7 @@ import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { HtmlRenderProvider } from "../modules/entries/components/HtmlRenderProvider";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { useDrawerGestures, useFilteredEntries, useEntryActions } from "./hooks";
+import { useSyncStatus } from "../shared/sync/syncHooks";
 
 interface EntryListScreenProps {
   scrollRestoreKey?: number;
@@ -34,6 +35,7 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
   const navigate = useNavigate();
   const theme = useTheme();
   const { user, isOffline } = useAuth();
+  const { isSyncing } = useSyncStatus();
   const { streams } = useStreams();
   const { profile } = useMobileProfile(user?.id);
 
@@ -291,6 +293,7 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
         onSearchPress={() => setIsSearchOpen(!isSearchOpen)}
         isSearchActive={isSearchOpen}
         isOffline={isOffline}
+        isSyncing={isSyncing}
       />
 
       {/* Search Bar */}

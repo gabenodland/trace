@@ -69,6 +69,9 @@ class SyncService {
   private isInitialized = false;
   private lastSyncTime: number | null = null;
 
+  // Status listeners — notified when isSyncing or lastSyncTime changes
+  private statusListeners = new Set<(status: SyncStatus) => void>();
+
   // React Query client for cache invalidation
   private queryClient: QueryClient | null = null;
 
@@ -184,6 +187,7 @@ class SyncService {
       log.debug('AppState listener removed');
     }
     this.realtimeReconnectAttempts = 0;
+    this.statusListeners.clear();
     this.isInitialized = false;
     log.debug('Sync service destroyed');
   }
@@ -294,6 +298,29 @@ class SyncService {
     };
   }
 
+  /** Synchronous snapshot — unsyncedCount may be stale but isSyncing/lastSyncTime are always current */
+  getStatusSync(): SyncStatus {
+    return {
+      isSyncing: this.isSyncing,
+      lastSyncTime: this.lastSyncTime,
+      unsyncedCount: 0, // Callers needing accurate count should use async getStatus()
+    };
+  }
+
+  /** Subscribe to sync status changes. Returns unsubscribe function. */
+  subscribe(listener: (status: SyncStatus) => void): () => void {
+    this.statusListeners.add(listener);
+    return () => { this.statusListeners.delete(listener); };
+  }
+
+  /** Notify all listeners of current status */
+  private notifyStatusListeners(): void {
+    const status = this.getStatusSync();
+    for (const listener of this.statusListeners) {
+      listener(status);
+    }
+  }
+
   // ==========================================================================
   // CORE SYNC EXECUTION
   // ==========================================================================
@@ -321,6 +348,7 @@ class SyncService {
     }
 
     this.isSyncing = true;
+    this.notifyStatusListeners();
     log.debug(`SYNC STARTED (${trigger})`);
 
     try {
@@ -439,6 +467,7 @@ class SyncService {
     } finally {
       this.isSyncing = false;
       this.lastSyncTime = Date.now();
+      this.notifyStatusListeners();
     }
 
     return result;

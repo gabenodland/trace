@@ -16,6 +16,7 @@ import { useNavigate } from "../shared/navigation";
 import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useCalendarState } from "../shared/contexts/CalendarStateContext";
 import { useAuth } from "../shared/contexts/AuthContext";
+import { useSyncStatus } from "../shared/sync/syncHooks";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { usePersistedState } from "../shared/hooks/usePersistedState";
 import { TopBar } from "../components/layout/TopBar";
@@ -56,6 +57,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
     setCalendarZoom,
   } = useCalendarState();
   const { user, isOffline } = useAuth();
+  const { isSyncing } = useSyncStatus();
   const { profile } = useMobileProfile(user?.id);
 
   // Avatar data for TopBar
@@ -287,6 +289,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
         onMenuPress={openDrawer}
         onTitlePress={openDrawer}
         isOffline={isOffline}
+        isSyncing={isSyncing}
       />
 
       {/* SubBar with date field selector and archived toggle */}

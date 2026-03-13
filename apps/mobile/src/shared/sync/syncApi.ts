@@ -107,10 +107,26 @@ export async function forcePull(): Promise<SyncResult> {
 }
 
 /**
- * Get current sync status
+ * Get current sync status (async — includes accurate unsyncedCount from DB)
  */
 export async function getSyncStatus(): Promise<SyncStatus> {
   return await syncService.getStatus();
+}
+
+/**
+ * Get current sync status synchronously (unsyncedCount may be stale)
+ */
+export function getSyncStatusSync(): SyncStatus {
+  return syncService.getStatusSync();
+}
+
+/**
+ * Subscribe to sync status changes (isSyncing, lastSyncTime).
+ * Listeners fire immediately when sync starts/stops — no polling needed.
+ * Returns an unsubscribe function.
+ */
+export function subscribeSyncStatus(listener: (status: SyncStatus) => void): () => void {
+  return syncService.subscribe(listener);
 }
 
 // ============================================================================

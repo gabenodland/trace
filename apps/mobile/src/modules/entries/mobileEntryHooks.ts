@@ -13,7 +13,6 @@ import {
   deleteEntry,
   archiveEntry,
   copyEntry,
-  getUnsyncedCount,
   getEntryCounts,
   getTags,
   getMentions,
@@ -338,17 +337,6 @@ export function useEntry(id: string | null, options?: { refreshFirst?: boolean }
     // Helpers (pure functions)
     entryHelpers,
   };
-}
-
-/**
- * Hook for sync status
- */
-export function useSyncStatus() {
-  return useQuery({
-    queryKey: ['unsyncedCount'],
-    queryFn: getUnsyncedCount,
-    refetchInterval: 5000, // Check every 5 seconds
-  });
 }
 
 /**

@@ -20,6 +20,8 @@ export {
   fullSync,
   forcePull,
   getSyncStatus,
+  getSyncStatusSync,
+  subscribeSyncStatus,
 } from './syncApi';
 
 // Types

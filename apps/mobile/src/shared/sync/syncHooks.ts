@@ -6,13 +6,18 @@
  *
  * Architecture:
  * Components → Hooks (this file) → API → syncService (internal)
+ *
+ * Status updates are EVENT-DRIVEN via syncService.subscribe() —
+ * no polling. Listeners fire immediately when sync starts/stops.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useCallback } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fullSync,
   forcePull,
-  getSyncStatus,
+  getSyncStatusSync,
+  subscribeSyncStatus,
   SyncResult,
   SyncStatus,
 } from './syncApi';
@@ -26,11 +31,10 @@ import {
  *
  * @example
  * function ProfileScreen() {
- *   const { unsyncedCount, isSyncing, sync, forcePull } = useSync();
+ *   const { isSyncing, sync, forcePull } = useSync();
  *
  *   return (
  *     <View>
- *       <Text>Unsynced: {unsyncedCount}</Text>
  *       <Button onPress={sync} disabled={isSyncing}>
  *         {isSyncing ? 'Syncing...' : 'Sync Now'}
  *       </Button>
@@ -40,21 +44,18 @@ import {
  */
 export function useSync() {
   const queryClient = useQueryClient();
+  const [status, setStatus] = useState<SyncStatus>(getSyncStatusSync);
 
-  // Query for sync status (polls every 5 seconds)
-  const statusQuery = useQuery<SyncStatus>({
-    queryKey: ['syncStatus'],
-    queryFn: getSyncStatus,
-    refetchInterval: 5000, // Poll every 5 seconds
-    staleTime: 2000, // Consider data fresh for 2 seconds
-  });
+  useEffect(() => {
+    // Get fresh status on mount
+    setStatus(getSyncStatusSync());
+    return subscribeSyncStatus(setStatus);
+  }, []);
 
   // Mutation for full sync
   const syncMutation = useMutation<SyncResult>({
     mutationFn: fullSync,
     onSuccess: () => {
-      // Refetch sync status after sync completes
-      queryClient.invalidateQueries({ queryKey: ['syncStatus'] });
       // Invalidate data queries to refresh UI
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['streams'] });
@@ -66,25 +67,23 @@ export function useSync() {
   const forcePullMutation = useMutation<SyncResult>({
     mutationFn: forcePull,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['syncStatus'] });
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['streams'] });
       queryClient.invalidateQueries({ queryKey: ['locations'] });
     },
   });
 
+  const syncAction = useCallback(() => syncMutation.mutateAsync(), [syncMutation.mutateAsync]);
+  const forcePullAction = useCallback(() => forcePullMutation.mutateAsync(), [forcePullMutation.mutateAsync]);
+
   return {
-    // Status data
-    unsyncedCount: statusQuery.data?.unsyncedCount ?? 0,
-    isSyncing: statusQuery.data?.isSyncing ?? syncMutation.isPending ?? forcePullMutation.isPending,
-    lastSyncTime: statusQuery.data?.lastSyncTime ?? null,
-    isLoading: statusQuery.isLoading,
-    error: statusQuery.error,
+    // Status data (event-driven, no polling)
+    isSyncing: status.isSyncing || syncMutation.isPending || forcePullMutation.isPending,
+    lastSyncTime: status.lastSyncTime,
 
     // Actions
-    sync: syncMutation.mutateAsync,
-    forcePull: forcePullMutation.mutateAsync,
-    refetchStatus: statusQuery.refetch,
+    sync: syncAction,
+    forcePull: forcePullAction,
 
     // Mutation states (for detailed UI feedback)
     syncState: {
@@ -109,28 +108,26 @@ export function useSync() {
 // ============================================================================
 
 /**
- * Lightweight hook for just displaying sync status
- * Use this when you only need to show unsynced count (e.g., in nav bar)
+ * Lightweight hook for just displaying sync status (e.g., TopBar indicator)
+ * Event-driven — re-renders only when sync starts/stops, not on a timer.
  *
  * @example
- * function NavBar() {
- *   const { unsyncedCount } = useSyncStatus();
- *   return unsyncedCount > 0 && <Badge>{unsyncedCount}</Badge>;
+ * function TopBar() {
+ *   const { isSyncing } = useSyncStatus();
+ *   return isSyncing && <SyncBadge />;
  * }
  */
 export function useSyncStatus() {
-  const statusQuery = useQuery<SyncStatus>({
-    queryKey: ['syncStatus'],
-    queryFn: getSyncStatus,
-    refetchInterval: 5000,
-    staleTime: 2000,
-  });
+  const [status, setStatus] = useState<SyncStatus>(getSyncStatusSync);
+
+  useEffect(() => {
+    setStatus(getSyncStatusSync());
+    return subscribeSyncStatus(setStatus);
+  }, []);
 
   return {
-    unsyncedCount: statusQuery.data?.unsyncedCount ?? 0,
-    isSyncing: statusQuery.data?.isSyncing ?? false,
-    lastSyncTime: statusQuery.data?.lastSyncTime ?? null,
-    isLoading: statusQuery.isLoading,
+    isSyncing: status.isSyncing,
+    lastSyncTime: status.lastSyncTime,
   };
 }
 

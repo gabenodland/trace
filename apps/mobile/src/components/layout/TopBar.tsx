@@ -1,5 +1,5 @@
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { ReactNode } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from "react-native";
+import { ReactNode, useEffect, useRef } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { Icon } from "../../shared/components";
@@ -20,8 +20,9 @@ interface TopBarProps {
   onSearchPress?: () => void;
   isSearchActive?: boolean;
 
-  // Offline indicator
+  // Status indicators
   isOffline?: boolean;
+  isSyncing?: boolean;
 }
 
 export function TopBar({
@@ -34,19 +35,57 @@ export function TopBar({
   onSearchPress,
   isSearchActive = false,
   isOffline = false,
+  isSyncing = false,
 }: TopBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
+  // Spinning animation for sync indicator
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (isSyncing && !isOffline) {
+      const loop = Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      spinAnim.setValue(0);
+    }
+  }, [isSyncing, isOffline, spinAnim]);
+
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const showOffline = isOffline;
+  const showSyncing = !isOffline && isSyncing;
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background.primary, paddingTop: insets.top + (isOffline ? 4 : 16) }]}>
-      {/* Offline indicator - centered above the header row */}
-      {isOffline && (
-        <View style={styles.offlineRow}>
-          <View style={[styles.offlineBadge, { backgroundColor: theme.colors.functional.warning }]}>
-            <Icon name="WifiOff" size={10} color={theme.colors.functional.warningText} />
-            <Text style={[styles.offlineBadgeText, { color: theme.colors.functional.warningText, fontFamily: theme.typography.fontFamily.semibold }]}>Offline</Text>
-          </View>
+    <View style={[styles.container, { backgroundColor: theme.colors.background.primary, paddingTop: insets.top + 16 }]}>
+      {/* Status badge — absolutely positioned above header, no layout impact */}
+      {(showOffline || showSyncing) && (
+        <View style={[styles.statusRow, { top: insets.top + 1 }]}>
+          {showOffline && (
+            <View style={[styles.statusBadge, { backgroundColor: theme.colors.functional.warning }]}>
+              <Icon name="WifiOff" size={10} color={theme.colors.functional.warningText} />
+              <Text style={[styles.statusBadgeText, { color: theme.colors.functional.warningText, fontFamily: theme.typography.fontFamily.semibold }]}>Offline</Text>
+            </View>
+          )}
+          {showSyncing && (
+            <View style={[styles.statusBadge, { backgroundColor: theme.colors.background.tertiary }]}>
+              <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                <Icon name="RefreshCw" size={10} color={theme.colors.text.secondary} />
+              </Animated.View>
+              <Text style={[styles.statusBadgeText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.semibold }]}>Syncing</Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -117,11 +156,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: themeBase.spacing.lg,
     paddingBottom: themeBase.spacing.xs,
   },
-  offlineRow: {
+  statusRow: {
+    position: "absolute",
+    left: 0,
+    right: 0,
     alignItems: "center",
-    paddingBottom: 2,
+    zIndex: 1,
   },
-  offlineBadge: {
+  statusBadge: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: themeBase.spacing.sm,
@@ -129,7 +171,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     gap: 3,
   },
-  offlineBadgeText: {
+  statusBadgeText: {
     fontSize: 10,
   },
   headerRow: {
