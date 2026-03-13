@@ -4,7 +4,16 @@ import "./src/config/initializeCore";
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated, Linking as RNLinking, Modal, TouchableOpacity, DeviceEventEmitter, LogBox } from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator, BackHandler, Alert, Animated, Linking as RNLinking, Modal, TouchableOpacity, DeviceEventEmitter, LogBox, Appearance } from "react-native";
+import * as SplashScreen from "expo-splash-screen";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { STARTUP_BG_COLOR_KEY } from "./src/shared/contexts/SettingsContext";
+import { getTheme } from "./src/shared/theme/themes";
+
+// Keep native splash visible until we load the startup background color
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // Already hidden or called too late — safe to ignore
+});
 
 // Suppress network error toasts — expected when offline, handled gracefully by sync/query layers
 LogBox.ignoreLogs(['TypeError: Network request failed']);
@@ -678,6 +687,16 @@ const appLog = createScopedLogger('App');
 /**
  * Root App Component
  */
+/**
+ * Startup background color fallback — uses system color scheme to pick
+ * the correct theme bg on first install (before SettingsContext has saved one).
+ */
+function getDefaultStartupBg(): string {
+  const scheme = Appearance.getColorScheme();
+  const theme = getTheme(scheme === 'dark' ? 'dark' : 'light');
+  return theme.colors.background.secondary;
+}
+
 export default function App() {
   // Track font loading time
   const fontStartTime = useRef(Date.now());
@@ -749,6 +768,25 @@ export default function App() {
     }
   }, [fontsLoaded]);
 
+  // Read saved startup background color before showing anything
+  const [startupBg, setStartupBg] = useState<string | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem(STARTUP_BG_COLOR_KEY)
+      .then(color => {
+        setStartupBg(color || getDefaultStartupBg());
+      })
+      .catch(() => {
+        setStartupBg(getDefaultStartupBg());
+      });
+  }, []);
+
+  // Hide native splash only after BOTH startup color and fonts are ready
+  useEffect(() => {
+    if (startupBg && fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [startupBg, fontsLoaded]);
+
   // Handle deep links for auth callbacks
   useEffect(() => {
     // Handle URL that launched the app
@@ -768,13 +806,11 @@ export default function App() {
     };
   }, []);
 
-  // Show loading while fonts are loading
-  if (!fontsLoaded) {
+  // Show themed loading screen while fonts or startup color are loading
+  if (!fontsLoaded || !startupBg) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading...</Text>
-        <ExpoStatusBar style="dark" />
+      <View style={[styles.container, { backgroundColor: startupBg || getDefaultStartupBg() }]}>
+        <ExpoStatusBar style="auto" />
       </View>
     );
   }

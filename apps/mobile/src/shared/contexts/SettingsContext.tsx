@@ -20,6 +20,10 @@ import {
   DEFAULT_DISPLAY_MODE,
   DEFAULT_STREAM_VIEW_FILTER,
 } from '@trace/core';
+import { getTheme } from '../theme/themes';
+
+/** AsyncStorage key for the startup background color — read before theme loads */
+export const STARTUP_BG_COLOR_KEY = 'startup_bg_color';
 
 const log = createScopedLogger(LogScopes.Settings);
 
@@ -115,6 +119,16 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       }
     };
   }, [settings, isLoaded]);
+
+  // Persist the theme's background color for instant startup theming
+  useEffect(() => {
+    if (!isLoaded) return;
+    const theme = getTheme(settings.theme);
+    const bgColor = theme.colors.background.secondary;
+    AsyncStorage.setItem(STARTUP_BG_COLOR_KEY, bgColor).catch(error => {
+      log.error('Error saving startup bg color', error);
+    });
+  }, [settings.theme, isLoaded]);
 
   // Update one or more settings
   const updateSettings = useCallback((updates: Partial<UserSettings>) => {

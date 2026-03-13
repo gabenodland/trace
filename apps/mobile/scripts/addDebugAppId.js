@@ -97,9 +97,135 @@ function addApplicationIdSuffix() {
   console.log("Added applicationIdSuffix '.dev' to debug build");
 }
 
+function patchSplashIconBackground() {
+  const stylesPath = path.join(androidPath, "app/src/main/res/values/styles.xml");
+  if (!fs.existsSync(stylesPath)) return;
+
+  let styles = fs.readFileSync(stylesPath, "utf-8");
+  if (!styles.includes("android:windowSplashScreenIconBackgroundColor")) {
+    const ANCHOR = '<item name="windowSplashScreenAnimatedIcon">@drawable/splashscreen_logo</item>';
+    if (!styles.includes(ANCHOR)) {
+      throw new Error(
+        "patchSplashIconBackground: could not find anchor string in styles.xml. " +
+        "expo-splash-screen may have changed its output format."
+      );
+    }
+    styles = styles.replace(
+      ANCHOR,
+      ANCHOR + '\n    <item name="android:windowSplashScreenIconBackgroundColor">@color/splashscreen_background</item>' +
+      '\n    <item name="android:windowSplashScreenBehavior">icon_preferred</item>'
+    );
+    fs.writeFileSync(stylesPath, styles, "utf-8");
+    console.log("Patched splash icon background + icon_preferred in values/styles.xml");
+  } else {
+    console.log("Splash icon background already patched in values/styles.xml");
+  }
+
+  // Also create values-night/styles.xml override so the icon circle is dark in dark mode
+  const nightDir = path.join(androidPath, "app/src/main/res/values-night");
+  const nightStylesPath = path.join(nightDir, "styles.xml");
+
+  if (!fs.existsSync(nightDir)) {
+    fs.mkdirSync(nightDir, { recursive: true });
+  }
+
+  const NIGHT_STYLES_XML = `<resources xmlns:tools="http://schemas.android.com/tools">
+  <style name="Theme.App.SplashScreen" parent="Theme.SplashScreen">
+    <item name="windowSplashScreenBackground">@color/splashscreen_background</item>
+    <item name="windowSplashScreenAnimatedIcon">@drawable/splashscreen_logo</item>
+    <item name="android:windowSplashScreenIconBackgroundColor">@color/splashscreen_background</item>
+    <item name="postSplashScreenTheme">@style/AppTheme</item>
+    <item name="android:windowSplashScreenBehavior">icon_preferred</item>
+  </style>
+</resources>
+`;
+  fs.writeFileSync(nightStylesPath, NIGHT_STYLES_XML, "utf-8");
+  console.log("Created values-night/styles.xml with dark splash icon background");
+}
+
+// Splash drawable folders expo generates
+const SPLASH_FOLDERS = [
+  "drawable-mdpi",
+  "drawable-hdpi",
+  "drawable-xhdpi",
+  "drawable-xxhdpi",
+  "drawable-xxxhdpi",
+];
+
+/**
+ * Strip white background from expo-generated splash logos so they render
+ * correctly on dark splash backgrounds.
+ *
+ * HACK: This is a pixel-level chroma-key — it cannot distinguish "background
+ * white" from "intentional white in the logo". The correct long-term fix is to
+ * source a splash-icon.png that already has a transparent background. This
+ * workaround exists because the current source PNG has a white bg and expo's
+ * splash plugin does not support transparent icon backgrounds natively.
+ *
+ * If the logo ever contains white interior elements (text, highlights), they
+ * will be incorrectly made transparent. Replace the source PNG at that point.
+ */
+async function makeSplashLogosTransparent() {
+  let sharp;
+  try {
+    sharp = require("sharp");
+  } catch {
+    throw new Error(
+      "sharp is required for splash transparency. Install it: npm install --save-dev sharp"
+    );
+  }
+
+  console.log("Making splash logos transparent (removing white background)...");
+  const resDir = path.join(androidPath, "app/src/main/res");
+  const THRESHOLD = 250; // pixels with R,G,B all >= this become transparent
+
+  for (const folder of SPLASH_FOLDERS) {
+    const filePath = path.join(resDir, folder, "splashscreen_logo.png");
+    if (!fs.existsSync(filePath)) continue;
+
+    // Read existing expo-generated PNG, get raw pixels
+    const image = sharp(filePath);
+
+    // Ensure RGBA
+    const { data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+
+    // Count opaque white pixels to decide if processing is needed.
+    // Skip if fewer than 10% are opaque white (already processed or transparent source).
+    const totalPixels = info.width * info.height;
+    let opaqueWhiteCount = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] >= THRESHOLD && data[i + 1] >= THRESHOLD && data[i + 2] >= THRESHOLD && data[i + 3] === 255) {
+        opaqueWhiteCount++;
+      }
+    }
+    if (opaqueWhiteCount < totalPixels * 0.1) {
+      console.log(`  Skipped ${folder}/splashscreen_logo.png (only ${opaqueWhiteCount} opaque white pixels — already processed)`);
+      continue;
+    }
+
+    // Replace white/near-white pixels with transparent
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] >= THRESHOLD && data[i + 1] >= THRESHOLD && data[i + 2] >= THRESHOLD) {
+        data[i + 3] = 0; // set alpha to 0
+      }
+    }
+
+    await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
+      .png()
+      .toFile(filePath + ".tmp");
+
+    // Replace original
+    fs.renameSync(filePath + ".tmp", filePath);
+
+    console.log(`  Made ${folder}/splashscreen_logo.png transparent (${info.width}x${info.height})`);
+  }
+}
+
 async function main() {
   addApplicationIdSuffix();
   await addDebugIcon();
+  patchSplashIconBackground();
+  await makeSplashLogosTransparent();
 }
 
 main().catch((err) => {
