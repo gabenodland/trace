@@ -285,39 +285,42 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]} {...panHandlers}>
-      <TopBar
-        title={title}
-        titleIcon={titleIcon}
-        onMenuPress={openDrawer}
-        onTitlePress={openDrawer}
-        onSearchPress={() => setIsSearchOpen(!isSearchOpen)}
-        isSearchActive={isSearchOpen}
-        isOffline={isOffline}
-        isSyncing={isSyncing}
-      />
-
-      {/* Search Bar */}
-      {isSearchOpen && (
-        <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onClose={() => {
-            setIsSearchOpen(false);
-            setSearchQuery("");
-          }}
-          placeholder="Search title or content..."
+      {/* Combined header area — TopBar + filters feel like one unit, shadow on bottom edge only */}
+      <View style={[styles.headerGroup, { backgroundColor: theme.colors.background.primary }]}>
+        <TopBar
+          title={title}
+          titleIcon={titleIcon}
+          onMenuPress={openDrawer}
+          onTitlePress={openDrawer}
+          onSearchPress={() => setIsSearchOpen(!isSearchOpen)}
+          isSearchActive={isSearchOpen}
+          isOffline={isOffline}
+          isSyncing={isSyncing}
         />
-      )}
 
-      <SubBarFilters
-        viewLabel={displayModeLabel}
-        sortLabel={sortModeLabel}
-        onViewPress={() => setShowDisplayModeSelector(true)}
-        onSortPress={() => setShowSortModeSelector(true)}
-        onFilterPress={() => setShowFilterSheet(true)}
-        isFiltering={hasActiveFilters}
-        filterCount={activeFilterCount}
-      />
+        {/* Search Bar */}
+        {isSearchOpen && (
+          <SearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onClose={() => {
+              setIsSearchOpen(false);
+              setSearchQuery("");
+            }}
+            placeholder="Search title or content..."
+          />
+        )}
+
+        <SubBarFilters
+          viewLabel={displayModeLabel}
+          sortLabel={sortModeLabel}
+          onViewPress={() => setShowDisplayModeSelector(true)}
+          onSortPress={() => setShowSortModeSelector(true)}
+          onFilterPress={() => setShowFilterSheet(true)}
+          isFiltering={hasActiveFilters}
+          filterCount={activeFilterCount}
+        />
+      </View>
 
       <HtmlRenderProvider>
         <EntryList
@@ -398,5 +401,13 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  headerGroup: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 1,
   },
 });

@@ -293,7 +293,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
       />
 
       {/* SubBar with date field selector and archived toggle */}
-      <View style={[styles.subBar, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
+      <View style={[styles.subBar, { backgroundColor: theme.colors.background.primary }]}>
         <TouchableOpacity
           style={styles.dateFieldSelector}
           onPress={() => setShowDateFieldSelector(true)}
@@ -479,7 +479,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderBottomWidth: 1,
   },
   dateFieldSelector: {
     flexDirection: "row",
@@ -505,7 +504,12 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: "row",
-    borderBottomWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 1,
   },
   tab: {
     flex: 1,

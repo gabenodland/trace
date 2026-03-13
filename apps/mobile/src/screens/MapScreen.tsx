@@ -690,33 +690,36 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
 
       {/* Lower portion with swipe gesture for drawer */}
       <View style={styles.lowerSection} {...drawerPanHandlers}>
-        {/* Entry count and map height toggle */}
-        <View style={[styles.countBar, { backgroundColor: theme.colors.background.primary, borderBottomColor: theme.colors.border.light }]}>
-          <Text style={[styles.countBarText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>
-            {visibleEntries.length} {visibleEntries.length === 1 ? "entry" : "entries"} in view
-          </Text>
-          <TouchableOpacity
-            style={styles.mapToggleButton}
-            onPress={() => setIsMapExpanded(!isMapExpanded)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Icon name={isMapExpanded ? "ChevronUp" : "ChevronDown"} size={16} color={theme.colors.text.tertiary} />
-          </TouchableOpacity>
-        </View>
+        {/* Header group above scrolling entries — shadow on bottom edge */}
+        <View style={[styles.listHeaderGroup, { backgroundColor: theme.colors.background.primary }]}>
+          {/* Entry count and map height toggle */}
+          <View style={styles.countBar}>
+            <Text style={[styles.countBarText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>
+              {visibleEntries.length} {visibleEntries.length === 1 ? "entry" : "entries"} in view
+            </Text>
+            <TouchableOpacity
+              style={styles.mapToggleButton}
+              onPress={() => setIsMapExpanded(!isMapExpanded)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Icon name={isMapExpanded ? "ChevronUp" : "ChevronDown"} size={16} color={theme.colors.text.tertiary} />
+            </TouchableOpacity>
+          </View>
 
-        {/* Display/Sort mode selectors */}
-        <SubBar>
-          <SubBarSelector
-            label="View"
-            value={displayModeLabel}
-            onPress={() => setShowDisplayModeSelector(true)}
-          />
-          <SubBarSelector
-            label="Sort"
-            value={sortModeLabel}
-            onPress={() => setShowSortModeSelector(true)}
-          />
-        </SubBar>
+          {/* Display/Sort mode selectors */}
+          <SubBar>
+            <SubBarSelector
+              label="View"
+              value={displayModeLabel}
+              onPress={() => setShowDisplayModeSelector(true)}
+            />
+            <SubBarSelector
+              label="Sort"
+              value={sortModeLabel}
+              onPress={() => setShowSortModeSelector(true)}
+            />
+          </SubBar>
+        </View>
 
         {/* Entry List */}
         {entries.length === 0 ? (
@@ -874,13 +877,20 @@ const styles = StyleSheet.create({
   singleMarker: {
     // Container for single marker pin
   },
+  listHeaderGroup: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 1,
+  },
   countBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
   },
   countBarText: {
     fontSize: 13,
