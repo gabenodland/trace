@@ -10,6 +10,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Icon } from "../../shared/components/Icon";
 import { BottomSheet, SheetHeight } from "./BottomSheet";
+import { BottomBar } from "../layout/BottomBar";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
 import { useKeyboardHeight } from "../../modules/entries/components/hooks/useKeyboardHeight";
@@ -124,9 +125,9 @@ export function PickerBottomSheet({
           {children}
         </View>
 
-        {/* Action Buttons */}
+        {/* Action Buttons — uses shared BottomBar (inline mode) for consistent keyboard avoidance */}
         {hasActions && (
-          <View style={[styles.actions, noPadding && styles.actionsPadded]}>
+          <BottomBar inline keyboardOffset={!dismissKeyboard ? keyboardHeight : 0}>
             {secondaryAction && (
               <TouchableOpacity
                 style={[
@@ -182,13 +183,7 @@ export function PickerBottomSheet({
                 </Text>
               </TouchableOpacity>
             )}
-          </View>
-        )}
-
-        {/* Keyboard spacer — only for sheets that keep the keyboard open (dismissKeyboard=false).
-            Pushes content above keyboard so actions stay visible. */}
-        {!dismissKeyboard && keyboardHeight > 0 && (
-          <View style={{ height: keyboardHeight }} />
+          </BottomBar>
         )}
       </View>
     </BottomSheet>
@@ -242,15 +237,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  actions: {
-    flexDirection: "row",
-    gap: themeBase.spacing.sm,
-    marginTop: themeBase.spacing.lg,
-    paddingTop: themeBase.spacing.md,
-  },
-  actionsPadded: {
-    paddingHorizontal: themeBase.spacing.lg,
   },
   actionButton: {
     flex: 1,

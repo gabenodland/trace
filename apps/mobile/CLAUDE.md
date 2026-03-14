@@ -12,7 +12,7 @@ We use **Expo dev builds** (not Expo Go). Two builds run side-by-side:
 
 | Build | Package ID | Icon | Purpose |
 |-------|------------|------|---------|
-| Debug | `com.trace.app.dev` | Orange debug icon | Dev with tunnel/local server |
+| Debug | `com.trace.app.dev` | Fuchsia debug icon | Dev with tunnel/local server |
 | Release | `com.trace.app` | Normal icon | Standalone production |
 
 ### Build Commands

@@ -162,7 +162,7 @@ export function StreamsScreen() {
         <EmptyState
           icon="Layers"
           title="No Streams Yet"
-          subtitle="Streams help you organize entries into categories"
+          subtitle="Streams are collections for the things you track — journals, projects, habits, anything."
           action={{ label: "Create Your First Stream", onPress: handleCreateStream }}
         />
       ) : (

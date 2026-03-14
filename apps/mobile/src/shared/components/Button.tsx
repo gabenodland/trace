@@ -30,8 +30,8 @@ interface ButtonProps {
 }
 
 const SIZE_CONFIG = {
-  sm: { minHeight: 48, paddingHorizontal: 12, fontSize: 14, iconSize: 16 },
-  md: { minHeight: 44, paddingHorizontal: 20, fontSize: 16, iconSize: 18 },
+  sm: { minHeight: 36, paddingHorizontal: 12, fontSize: 14, iconSize: 16 },
+  md: { minHeight: 48, paddingHorizontal: 20, fontSize: 16, iconSize: 18 },
   lg: { minHeight: 52, paddingHorizontal: 24, fontSize: 16, iconSize: 20 },
 } as const;
 
@@ -115,6 +115,7 @@ const styles = StyleSheet.create({
   },
   fullWidth: {
     alignSelf: "stretch",
+    width: "100%",
   },
   disabled: {
     opacity: 0.5,

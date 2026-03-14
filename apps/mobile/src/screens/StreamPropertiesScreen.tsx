@@ -16,6 +16,7 @@ import { createScopedLogger, LogScopes } from "../shared/utils/logger";
 import { Icon, LoadingState, EmptyState, Button } from "../shared/components";
 import { useStreams, useStream } from "../modules/streams/mobileStreamHooks";
 import {
+  type CreateStreamInput,
   type UpdateStreamInput,
   type EntryStatus,
   DEFAULT_STREAM_STATUSES,
@@ -232,8 +233,28 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
 
     try {
       if (isCreateMode) {
-        await createStreamMutation(name.trim());
-        showSnackbar("Stream created");
+        const input: CreateStreamInput = {
+          name: name.trim(),
+          color: streamColor,
+          icon: streamIcon,
+          entry_title_template: entryTitleTemplate || null,
+          entry_content_template: entryContentTemplate || null,
+          entry_content_type: entryContentType,
+          entry_use_rating: useRating,
+          entry_rating_type: ratingType,
+          entry_use_priority: usePriority,
+          entry_use_status: useStatus,
+          entry_use_duedates: useDueDates,
+          entry_use_location: useLocation,
+          entry_use_photos: usePhotos,
+          entry_use_type: useType,
+          entry_types: entryTypes,
+          entry_statuses: entryStatuses,
+          entry_default_status: entryDefaultStatus,
+          is_private: isPrivate,
+          is_localonly: isLocalOnly,
+        };
+        await createStreamMutation(input);
         navigate(backDestination);
       } else if (streamId) {
         const updates: UpdateStreamInput = {
@@ -392,334 +413,337 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
           />
         </View>
 
-        {/* Remaining sections only shown in edit mode */}
-        {!isCreateMode && (
-          <>
-            {/* Appearance */}
-            <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-              <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Appearance</Text>
+        {/* Appearance */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Appearance</Text>
 
-              {/* Icon */}
-              <TouchableOpacity
-                style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
-                onPress={() => setShowIconPicker(true)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Icon</Text>
-                </View>
-                <View style={styles.settingValue}>
-                  {streamIcon ? (
-                    <Icon name={streamIcon as any} size={20} color={streamColor ? theme.colors.stream[streamColor] : theme.colors.text.primary} />
-                  ) : (
-                    <Text style={[styles.settingDescription, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>None</Text>
-                  )}
-                  <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
-                </View>
-              </TouchableOpacity>
-
-              {/* Color */}
-              <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Color</Text>
-                </View>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorRow} contentContainerStyle={styles.colorRowContent}>
-                {/* None option */}
-                <TouchableOpacity
-                  style={[
-                    styles.colorCircle,
-                    { backgroundColor: theme.colors.background.tertiary, borderColor: "transparent" },
-                    !streamColor && { borderColor: theme.colors.functional.accent, borderWidth: 2 },
-                  ]}
-                  onPress={() => { setStreamColor(null); markChanged(); }}
-                  activeOpacity={0.6}
-                >
-                  {!streamColor && <Icon name="X" size={12} color={theme.colors.text.tertiary} />}
-                </TouchableOpacity>
-                {STREAM_COLORS.map((c) => (
-                  <TouchableOpacity
-                    key={c.key}
-                    style={[
-                      styles.colorCircle,
-                      { backgroundColor: theme.colors.stream[c.key], borderColor: "transparent" },
-                      streamColor === c.key && { borderColor: theme.colors.text.primary, borderWidth: 2.5 },
-                    ]}
-                    onPress={() => { setStreamColor(c.key); markChanged(); }}
-                    activeOpacity={0.6}
-                  />
-                ))}
-              </ScrollView>
+          {/* Icon */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+            onPress={() => setShowIconPicker(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Icon</Text>
             </View>
-
-            {/* Privacy & Sync */}
-            <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-              <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Privacy & Sync</Text>
-
-              <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Private</Text>
-                  <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Hide from shared views</Text>
-                </View>
-                <Switch
-                  value={isPrivate}
-                  onValueChange={(value) => {
-                    setIsPrivate(value);
-                    markChanged();
-                  }}
-                  trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
-                  thumbColor="#ffffff"
-                />
-              </View>
-
-              <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Local Only</Text>
-                  <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                    Don't sync to cloud (stays on this device)
-                  </Text>
-                </View>
-                <Switch
-                  value={isLocalOnly}
-                  onValueChange={handleLocalOnlyToggle}
-                  trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.overdue }}
-                  thumbColor="#ffffff"
-                />
-              </View>
+            <View style={styles.settingValue}>
+              {streamIcon ? (
+                <Icon name={streamIcon as any} size={20} color={streamColor ? theme.colors.stream[streamColor] : theme.colors.text.primary} />
+              ) : (
+                <Text style={[styles.settingDescription, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>None</Text>
+              )}
+              <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
             </View>
+          </TouchableOpacity>
 
-            {/* Features */}
-            <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-              <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Features</Text>
-
-              {/* Rating */}
-              <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Rating</Text>
-                  <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Rate entries with stars or numbers</Text>
-                  {useRating && (
-                    <Text style={[styles.featureDetail, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>{getRatingTypeLabel(ratingType)}</Text>
-                  )}
-                </View>
-                {useRating && (
-                  <TouchableOpacity
-                    style={styles.gearButton}
-                    onPress={() => setShowRatingConfig(true)}
-                  >
-                    <Icon name="Settings" size={18} color={theme.colors.text.tertiary} />
-                  </TouchableOpacity>
-                )}
-                <Switch
-                  value={useRating}
-                  onValueChange={(value) => {
-                    setUseRating(value);
-                    markChanged();
-                  }}
-                  trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
-                  thumbColor="#ffffff"
-                />
-              </View>
-
-              {/* Priority */}
-              <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Priority</Text>
-                  <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Assign importance levels to entries</Text>
-                  {usePriority && (
-                    <Text style={[styles.featureDetail, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>Low, Medium, High, Urgent</Text>
-                  )}
-                </View>
-                <Switch
-                  value={usePriority}
-                  onValueChange={(value) => {
-                    setUsePriority(value);
-                    markChanged();
-                  }}
-                  trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
-                  thumbColor="#ffffff"
-                />
-              </View>
-
-              {/* Status */}
-              <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Status</Text>
-                  <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Track completion status</Text>
-                  {useStatus && (
-                    <Text style={[styles.featureDetail, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>{formatStatusList()}</Text>
-                  )}
-                </View>
-                {useStatus && (
-                  <TouchableOpacity
-                    style={styles.gearButton}
-                    onPress={() => setShowStatusConfig(true)}
-                  >
-                    <Icon name="Settings" size={18} color={theme.colors.text.tertiary} />
-                  </TouchableOpacity>
-                )}
-                <Switch
-                  value={useStatus}
-                  onValueChange={(value) => {
-                    setUseStatus(value);
-                    if (!value) {
-                      setEntryDefaultStatus("none");
-                    }
-                    markChanged();
-                  }}
-                  trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
-                  thumbColor="#ffffff"
-                />
-              </View>
-
-              {/* Type */}
-              <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Type</Text>
-                  <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Categorize entries with custom types</Text>
-                  {useType && (
-                    <Text style={[styles.featureDetail, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>{formatTypeList()}</Text>
-                  )}
-                </View>
-                {useType && (
-                  <TouchableOpacity
-                    style={styles.gearButton}
-                    onPress={() => setShowTypeConfig(true)}
-                  >
-                    <Icon name="Settings" size={18} color={theme.colors.text.tertiary} />
-                  </TouchableOpacity>
-                )}
-                <Switch
-                  value={useType}
-                  onValueChange={(value) => {
-                    setUseType(value);
-                    if (value && entryTypes.length === 0) {
-                      setShowTypeConfig(true);
-                    }
-                    markChanged();
-                  }}
-                  trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
-                  thumbColor="#ffffff"
-                />
-              </View>
-
-              {/* Due Dates */}
-              <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Due Dates</Text>
-                  <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Assign due dates to entries</Text>
-                </View>
-                <Switch
-                  value={useDueDates}
-                  onValueChange={(value) => {
-                    setUseDueDates(value);
-                    markChanged();
-                  }}
-                  trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
-                  thumbColor="#ffffff"
-                />
-              </View>
-
-              {/* Location */}
-              <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Location</Text>
-                  <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Attach location to entries</Text>
-                </View>
-                <Switch
-                  value={useLocation}
-                  onValueChange={(value) => {
-                    setUseLocation(value);
-                    markChanged();
-                  }}
-                  trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
-                  thumbColor="#ffffff"
-                />
-              </View>
-
-              {/* Photos */}
-              <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Photos</Text>
-                  <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Attach photos to entries</Text>
-                </View>
-                <Switch
-                  value={usePhotos}
-                  onValueChange={(value) => {
-                    setUsePhotos(value);
-                    markChanged();
-                  }}
-                  trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
-                  thumbColor="#ffffff"
-                />
-              </View>
+          {/* Color */}
+          <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Color</Text>
             </View>
-
-            {/* Templates */}
-            <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-              <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Templates</Text>
-              <Text style={[styles.cardDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                Auto-fill when creating new entries. Use variables like {"{date}"}.
-              </Text>
-
-              {/* Title Template */}
-              <TouchableOpacity
-                style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
-                onPress={() => setShowTitleHelp(true)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Title Template</Text>
-                </View>
-                <View style={styles.settingValue}>
-                  <Icon name="HelpCircle" size={16} color={theme.colors.text.tertiary} />
-                </View>
-              </TouchableOpacity>
-              <TextInput
-                style={[styles.textInput, { backgroundColor: theme.colors.background.tertiary, color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
-                value={entryTitleTemplate}
-                onChangeText={(text) => {
-                  setEntryTitleTemplate(text);
-                  markChanged();
-                }}
-                placeholder="e.g., Meeting Notes - {date}"
-                placeholderTextColor={theme.colors.text.tertiary}
-              />
-
-              {/* Content Template */}
-              <TouchableOpacity
-                style={[styles.settingRow, styles.contentTemplateHeader, { borderBottomColor: theme.colors.border.light }]}
-                onPress={() => setShowContentHelp(true)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Content Template</Text>
-                </View>
-                <View style={styles.settingValue}>
-                  <Icon name="HelpCircle" size={16} color={theme.colors.text.tertiary} />
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.contentTemplatePreview, { backgroundColor: theme.colors.background.tertiary }]}
-                onPress={() => setShowContentTemplateEditor(true)}
-                activeOpacity={0.7}
-              >
-                {entryContentTemplate ? (
-                  <Text style={[styles.contentTemplateText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={5}>
-                    {entryContentTemplate}
-                  </Text>
-                ) : (
-                  <Text style={[styles.contentTemplatePlaceholder, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
-                    Tap to add content template...
-                  </Text>
-                )}
-                <View style={[styles.editIndicator, { backgroundColor: theme.colors.background.secondary }]}>
-                  <Icon name="Edit" size={14} color={theme.colors.text.tertiary} />
-                </View>
-              </TouchableOpacity>
-            </View>
-            {/* Delete Stream */}
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorRow} contentContainerStyle={styles.colorRowContent}>
+            {/* None option */}
             <TouchableOpacity
-              style={styles.deleteButton}
+              style={[
+                styles.colorCircle,
+                { backgroundColor: theme.colors.background.tertiary, borderColor: "transparent" },
+                !streamColor && { borderColor: theme.colors.functional.accent, borderWidth: 2 },
+              ]}
+              onPress={() => { setStreamColor(null); markChanged(); }}
+              activeOpacity={0.6}
+            >
+              {!streamColor && <Icon name="X" size={12} color={theme.colors.text.tertiary} />}
+            </TouchableOpacity>
+            {STREAM_COLORS.map((c) => (
+              <TouchableOpacity
+                key={c.key}
+                style={[
+                  styles.colorCircle,
+                  { backgroundColor: theme.colors.stream[c.key], borderColor: "transparent" },
+                  streamColor === c.key && { borderColor: theme.colors.text.primary, borderWidth: 2.5 },
+                ]}
+                onPress={() => { setStreamColor(c.key); markChanged(); }}
+                activeOpacity={0.6}
+              />
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Privacy & Sync */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Privacy & Sync</Text>
+
+          <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Private</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Hide from shared views</Text>
+            </View>
+            <Switch
+              value={isPrivate}
+              onValueChange={(value) => {
+                setIsPrivate(value);
+                markChanged();
+              }}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Local Only</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                Don't sync to cloud (stays on this device)
+              </Text>
+            </View>
+            <Switch
+              value={isLocalOnly}
+              onValueChange={handleLocalOnlyToggle}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.overdue }}
+              thumbColor="#ffffff"
+            />
+          </View>
+        </View>
+
+        {/* Features */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Features</Text>
+
+          {/* Rating */}
+          <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Rating</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Rate entries with stars or numbers</Text>
+              {useRating && (
+                <Text style={[styles.featureDetail, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>{getRatingTypeLabel(ratingType)}</Text>
+              )}
+            </View>
+            {useRating && (
+              <TouchableOpacity
+                style={styles.gearButton}
+                onPress={() => setShowRatingConfig(true)}
+              >
+                <Icon name="Settings" size={18} color={theme.colors.text.tertiary} />
+              </TouchableOpacity>
+            )}
+            <Switch
+              value={useRating}
+              onValueChange={(value) => {
+                setUseRating(value);
+                markChanged();
+              }}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          {/* Priority */}
+          <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Priority</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Assign importance levels to entries</Text>
+              {usePriority && (
+                <Text style={[styles.featureDetail, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>Low, Medium, High, Urgent</Text>
+              )}
+            </View>
+            <Switch
+              value={usePriority}
+              onValueChange={(value) => {
+                setUsePriority(value);
+                markChanged();
+              }}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          {/* Status */}
+          <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Status</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Track completion status</Text>
+              {useStatus && (
+                <Text style={[styles.featureDetail, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>{formatStatusList()}</Text>
+              )}
+            </View>
+            {useStatus && (
+              <TouchableOpacity
+                style={styles.gearButton}
+                onPress={() => setShowStatusConfig(true)}
+              >
+                <Icon name="Settings" size={18} color={theme.colors.text.tertiary} />
+              </TouchableOpacity>
+            )}
+            <Switch
+              value={useStatus}
+              onValueChange={(value) => {
+                setUseStatus(value);
+                if (!value) {
+                  setEntryDefaultStatus("none");
+                }
+                markChanged();
+              }}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          {/* Type */}
+          <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Type</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Categorize entries with custom types</Text>
+              {useType && (
+                <Text style={[styles.featureDetail, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.regular }]}>{formatTypeList()}</Text>
+              )}
+            </View>
+            {useType && (
+              <TouchableOpacity
+                style={styles.gearButton}
+                onPress={() => setShowTypeConfig(true)}
+              >
+                <Icon name="Settings" size={18} color={theme.colors.text.tertiary} />
+              </TouchableOpacity>
+            )}
+            <Switch
+              value={useType}
+              onValueChange={(value) => {
+                setUseType(value);
+                if (value && entryTypes.length === 0) {
+                  setShowTypeConfig(true);
+                }
+                markChanged();
+              }}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          {/* Due Dates */}
+          <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Due Dates</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Assign due dates to entries</Text>
+            </View>
+            <Switch
+              value={useDueDates}
+              onValueChange={(value) => {
+                setUseDueDates(value);
+                markChanged();
+              }}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          {/* Location */}
+          <View style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Location</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Attach location to entries</Text>
+            </View>
+            <Switch
+              value={useLocation}
+              onValueChange={(value) => {
+                setUseLocation(value);
+                markChanged();
+              }}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          {/* Photos */}
+          <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Photos</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>Attach photos to entries</Text>
+            </View>
+            <Switch
+              value={usePhotos}
+              onValueChange={(value) => {
+                setUsePhotos(value);
+                markChanged();
+              }}
+              trackColor={{ false: theme.colors.border.dark, true: theme.colors.functional.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
+        </View>
+
+        {/* Templates */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Templates</Text>
+          <Text style={[styles.cardDescription, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+            Auto-fill when creating new entries. Use variables like {"{date}"}.
+          </Text>
+
+          {/* Title Template */}
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+            onPress={() => setShowTitleHelp(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Title Template</Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Icon name="HelpCircle" size={16} color={theme.colors.text.tertiary} />
+            </View>
+          </TouchableOpacity>
+          <TextInput
+            style={[styles.textInput, { backgroundColor: theme.colors.background.tertiary, color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
+            value={entryTitleTemplate}
+            onChangeText={(text) => {
+              setEntryTitleTemplate(text);
+              markChanged();
+            }}
+            placeholder="e.g., Meeting Notes - {date}"
+            placeholderTextColor={theme.colors.text.tertiary}
+          />
+
+          {/* Content Template */}
+          <TouchableOpacity
+            style={[styles.settingRow, styles.contentTemplateHeader, { borderBottomColor: theme.colors.border.light }]}
+            onPress={() => setShowContentHelp(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Content Template</Text>
+            </View>
+            <View style={styles.settingValue}>
+              <Icon name="HelpCircle" size={16} color={theme.colors.text.tertiary} />
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.contentTemplatePreview, { backgroundColor: theme.colors.background.tertiary }]}
+            onPress={() => setShowContentTemplateEditor(true)}
+            activeOpacity={0.7}
+          >
+            {entryContentTemplate ? (
+              <Text style={[styles.contentTemplateText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={5}>
+                {entryContentTemplate}
+              </Text>
+            ) : (
+              <Text style={[styles.contentTemplatePlaceholder, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+                Tap to add content template...
+              </Text>
+            )}
+            <View style={[styles.editIndicator, { backgroundColor: theme.colors.background.secondary }]}>
+              <Icon name="Edit" size={14} color={theme.colors.text.tertiary} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Delete Stream — edit mode only */}
+        {!isCreateMode && (
+          <View style={styles.deleteSection}>
+            <Button
+              label="Delete Stream"
+              variant="danger"
+              icon="Trash2"
+              fullWidth
               onPress={() => {
                 Alert.alert(
                   "Delete Stream",
@@ -744,11 +768,8 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
                   ]
                 );
               }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.deleteButtonText, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.medium }]}>Delete Stream</Text>
-            </TouchableOpacity>
-          </>
+            />
+          </View>
         )}
 
         <View style={{ height: 100 + (keyboardHeight > 0 ? keyboardHeight : 0) + ((isCreateMode || hasChanges) ? 60 : 0) }} />
@@ -758,7 +779,7 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
       {(isCreateMode || hasChanges) && (
         <BottomBar keyboardOffset={keyboardHeight}>
           <Button
-            label={isCreateMode ? "Create" : "Save Changes"}
+            label={isCreateMode ? "Create Stream" : "Save Changes"}
             onPress={handleSave}
             size="lg"
             fullWidth
@@ -948,14 +969,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  deleteButton: {
-    alignItems: "center",
-    paddingVertical: 14,
+  deleteSection: {
     marginTop: 8,
     marginBottom: 16,
-  },
-  deleteButtonText: {
-    fontSize: 16,
+    paddingHorizontal: 4,
   },
   snackbar: {
     position: "absolute",

@@ -12,7 +12,7 @@
 
 import * as Crypto from 'expo-crypto';
 import { localDB } from '../../shared/db/localDB';
-import type { Stream, UpdateStreamInput } from '@trace/core';
+import type { Stream, CreateStreamInput, UpdateStreamInput } from '@trace/core';
 import { supabase } from '@trace/core';
 // Import directly from syncApi to avoid circular dependency through sync/index.ts
 import { triggerPushSync } from '../../shared/sync/syncApi';
@@ -49,11 +49,7 @@ export async function getStream(streamId: string): Promise<Stream | null> {
 /**
  * Create a stream (offline-first)
  */
-export async function createStream(data: {
-  name: string;
-  color?: string | null;
-  icon?: string | null;
-}): Promise<Stream> {
+export async function createStream(data: CreateStreamInput): Promise<Stream> {
   // Get user ID from LocalDB (cached from login)
   const userId = localDB.getCurrentUserId();
   if (!userId) throw new Error('Not authenticated');
@@ -72,16 +68,24 @@ export async function createStream(data: {
     icon: data.icon || null,
     created_at: now,
     updated_at: now,
-    // Default feature toggles (must match StreamPropertiesScreen defaults)
-    entry_use_rating: true,
-    entry_use_priority: true,
-    entry_use_status: true,
-    entry_use_duedates: true,
-    entry_use_location: true,
-    entry_use_photos: true,
-    entry_content_type: 'text',
-    is_private: false,
-    is_localonly: false,
+    // Template fields
+    entry_title_template: data.entry_title_template ?? null,
+    entry_content_template: data.entry_content_template ?? null,
+    entry_content_type: data.entry_content_type ?? 'text',
+    // Feature toggles — use provided values or defaults
+    entry_use_rating: data.entry_use_rating ?? true,
+    entry_rating_type: data.entry_rating_type ?? 'stars',
+    entry_use_priority: data.entry_use_priority ?? true,
+    entry_use_status: data.entry_use_status ?? true,
+    entry_use_duedates: data.entry_use_duedates ?? true,
+    entry_use_location: data.entry_use_location ?? true,
+    entry_use_photos: data.entry_use_photos ?? true,
+    entry_use_type: data.entry_use_type ?? false,
+    entry_types: data.entry_types ?? [],
+    entry_statuses: data.entry_statuses,
+    entry_default_status: data.entry_default_status,
+    is_private: data.is_private ?? false,
+    is_localonly: data.is_localonly ?? false,
   };
 
   log.info('Creating stream', { streamId: stream_id, name: data.name });

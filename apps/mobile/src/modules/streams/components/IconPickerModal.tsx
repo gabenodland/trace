@@ -4,9 +4,12 @@
  * Displays curated Lucide icons grouped by category.
  * Tapping an icon selects it immediately and closes the picker.
  * Supports search filtering and pro/free tiers.
+ *
+ * Performance: Categories render progressively (2 per frame) to avoid
+ * blocking the JS thread with 91+ SVG components at once.
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import {
   type StreamIconCategory,
@@ -30,7 +33,55 @@ interface IconPickerModalProps {
 }
 
 const ICON_SIZE = 22;
+/** Number of categories to render per frame during progressive load */
+const CATEGORIES_PER_FRAME = 2;
 
+// ── Memoized icon cell ─────────────────────────────────────────────────
+interface IconCellProps {
+  iconName: string;
+  isSelected: boolean;
+  isLocked: boolean;
+  tintColor: string;
+  bgColor: string;
+  textColor: string;
+  onSelect: (name: string) => void;
+}
+
+const IconCell = memo(function IconCell({
+  iconName,
+  isSelected,
+  isLocked,
+  tintColor,
+  bgColor,
+  textColor,
+  onSelect,
+}: IconCellProps) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.iconCell,
+        { backgroundColor: bgColor },
+        isSelected && { backgroundColor: tintColor + '20', borderColor: tintColor, borderWidth: 2 },
+        isLocked && { opacity: 0.4 },
+      ]}
+      onPress={() => { if (!isLocked) onSelect(iconName); }}
+      activeOpacity={isLocked ? 1 : 0.6}
+    >
+      <Icon
+        name={iconName as IconName}
+        size={ICON_SIZE}
+        color={isSelected ? tintColor : textColor}
+      />
+      {isLocked && (
+        <View style={styles.lockBadge}>
+          <Icon name="Lock" size={8} color={textColor} />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+});
+
+// ── Main component ──────────────────────────────────────────────────────
 export function IconPickerModal({
   visible,
   onClose,
@@ -42,11 +93,40 @@ export function IconPickerModal({
   const { hasFeature } = useSubscription();
   const showProIcons = hasFeature('proStreamIcons');
   const [search, setSearch] = useState("");
+  // Progressive rendering: how many categories are visible so far
+  const [visibleCount, setVisibleCount] = useState(0);
 
+  // Progressive category reveal — render CATEGORIES_PER_FRAME per animation frame
   useEffect(() => {
-    if (visible) {
+    if (!visible) {
+      setVisibleCount(0);
       setSearch("");
+      return;
     }
+    // Start with first batch immediately
+    setVisibleCount(CATEGORIES_PER_FRAME);
+
+    let cancelled = false;
+    let frame: number;
+    let current = CATEGORIES_PER_FRAME;
+    const total = STREAM_ICON_CATEGORIES.length;
+
+    const renderNext = () => {
+      if (cancelled) return;
+      current += CATEGORIES_PER_FRAME;
+      if (current >= total) {
+        setVisibleCount(total);
+        return;
+      }
+      setVisibleCount(current);
+      frame = requestAnimationFrame(renderNext);
+    };
+
+    frame = requestAnimationFrame(renderNext);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
   }, [visible]);
 
   const handleRemove = () => {
@@ -54,9 +134,17 @@ export function IconPickerModal({
     onClose();
   };
 
+  const handleSelect = useCallback((iconName: string) => {
+    onSave(iconName);
+    onClose();
+  }, [onSave, onClose]);
+
   const tintColor = selectedColor && isValidStreamColorKey(selectedColor)
     ? theme.colors.stream[selectedColor as StreamColorKey]
     : theme.colors.functional.accent;
+
+  const bgColor = theme.colors.background.tertiary;
+  const textColor = theme.colors.text.secondary;
 
   // Filtered icons for search mode
   const filteredIcons = useMemo(() => {
@@ -64,46 +152,14 @@ export function IconPickerModal({
     return filterStreamIcons(search, showProIcons);
   }, [search, showProIcons]);
 
-  const renderIconCell = (iconName: string, isPro = false) => {
-    const isSelected = selectedIcon === iconName;
-    const isLocked = isPro && !showProIcons;
-    return (
-      <TouchableOpacity
-        key={iconName}
-        style={[
-          styles.iconCell,
-          { backgroundColor: theme.colors.background.tertiary },
-          isSelected && { backgroundColor: tintColor + '20', borderColor: tintColor, borderWidth: 2 },
-          isLocked && { opacity: 0.4 },
-        ]}
-        onPress={() => {
-          if (!isLocked) {
-            onSave(iconName);
-            onClose();
-          }
-        }}
-        activeOpacity={isLocked ? 1 : 0.6}
-      >
-        <Icon
-          name={iconName as IconName}
-          size={ICON_SIZE}
-          color={isSelected ? tintColor : theme.colors.text.secondary}
-        />
-        {isLocked && (
-          <View style={styles.lockBadge}>
-            <Icon name="Lock" size={8} color={theme.colors.text.tertiary} />
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  };
+  const isReady = visibleCount > 0;
 
   return (
     <PickerBottomSheet
       visible={visible}
       onClose={onClose}
       title="Choose Icon"
-      height="large"
+      height="full"
       swipeArea="grabber"
       secondaryAction={
         selectedIcon
@@ -126,19 +182,30 @@ export function IconPickerModal({
 
       <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
         {filteredIcons ? (
-          // Search results — flat grid
+          // Search results — flat grid (all at once, already filtered to a small set)
           filteredIcons.length === 0 ? (
             <Text style={[styles.emptyText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
               No icons match "{search}"
             </Text>
           ) : (
             <View style={styles.iconGrid}>
-              {filteredIcons.map((name) => renderIconCell(name, isProStreamIcon(name)))}
+              {filteredIcons.map((name) => (
+                <IconCell
+                  key={name}
+                  iconName={name}
+                  isSelected={selectedIcon === name}
+                  isLocked={isProStreamIcon(name) && !showProIcons}
+                  tintColor={tintColor}
+                  bgColor={bgColor}
+                  textColor={textColor}
+                  onSelect={handleSelect}
+                />
+              ))}
             </View>
           )
         ) : (
-          // Category sections
-          STREAM_ICON_CATEGORIES.map((category: StreamIconCategory) => {
+          // Category sections — rendered progressively
+          STREAM_ICON_CATEGORIES.slice(0, visibleCount).map((category: StreamIconCategory) => {
             const hasProIcons = showProIcons && category.proIcons && category.proIcons.length > 0;
             return (
               <View key={category.label} style={styles.categorySection}>
@@ -146,8 +213,30 @@ export function IconPickerModal({
                   {category.label}
                 </Text>
                 <View style={styles.iconGrid}>
-                  {category.icons.map((name) => renderIconCell(name))}
-                  {hasProIcons && category.proIcons!.map((name) => renderIconCell(name))}
+                  {category.icons.map((name) => (
+                    <IconCell
+                      key={name}
+                      iconName={name}
+                      isSelected={selectedIcon === name}
+                      isLocked={false}
+                      tintColor={tintColor}
+                      bgColor={bgColor}
+                      textColor={textColor}
+                      onSelect={handleSelect}
+                    />
+                  ))}
+                  {hasProIcons && category.proIcons!.map((name) => (
+                    <IconCell
+                      key={name}
+                      iconName={name}
+                      isSelected={selectedIcon === name}
+                      isLocked={!showProIcons}
+                      tintColor={tintColor}
+                      bgColor={bgColor}
+                      textColor={textColor}
+                      onSelect={handleSelect}
+                    />
+                  ))}
                 </View>
               </View>
             );

@@ -12,7 +12,7 @@ import {
   deleteStream,
   makeStreamLocalOnly,
 } from './mobileStreamApi';
-import type { UpdateStreamInput } from '@trace/core';
+import type { CreateStreamInput, UpdateStreamInput } from '@trace/core';
 
 /**
  * Internal: Query hook for fetching streams from local SQLite
@@ -42,11 +42,7 @@ function useCreateStreamMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ name, color, icon }: {
-      name: string;
-      color?: string | null;
-      icon?: string | null;
-    }) => createStream({ name, color, icon }),
+    mutationFn: (input: CreateStreamInput) => createStream(input),
     onSuccess: () => {
       // Invalidate queries to trigger refresh
       queryClient.invalidateQueries({ queryKey: ['streams'] });
@@ -124,12 +120,8 @@ export function useStreams() {
 
     // Mutations (offline-capable)
     streamMutations: {
-      createStream: async (
-        name: string,
-        color?: string | null,
-        icon?: string | null
-      ) => {
-        return createMutation.mutateAsync({ name, color, icon });
+      createStream: async (input: CreateStreamInput) => {
+        return createMutation.mutateAsync(input);
       },
 
       updateStream: async (id: string, data: UpdateStreamInput) => {

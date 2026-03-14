@@ -93,6 +93,7 @@ supabase/supabase/
 
 # Claude settings
 .claude/settings.local.json
+.claude/skills/
 
 # Secrets and sensitive files
 secrets.txt

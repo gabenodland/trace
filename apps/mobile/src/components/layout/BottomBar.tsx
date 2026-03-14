@@ -5,14 +5,35 @@ import { themeBase } from "../../shared/theme/themeBase";
 interface BottomBarProps {
   children: React.ReactNode;
   keyboardOffset?: number;
+  /** Use inline (flex flow) positioning instead of absolute. For use inside sheets/modals. */
+  inline?: boolean;
 }
 
-export function BottomBar({ children, keyboardOffset = 0 }: BottomBarProps) {
+export function BottomBar({ children, keyboardOffset = 0, inline = false }: BottomBarProps) {
   const theme = useTheme();
+  const isKeyboardVisible = keyboardOffset > 0;
+
+  if (inline) {
+    return (
+      <>
+        <View style={[
+          styles.toolbar,
+          { backgroundColor: theme.colors.background.secondary, borderTopColor: theme.colors.border.light },
+        ]}>
+          {children}
+        </View>
+        {isKeyboardVisible && <View style={{ height: keyboardOffset }} />}
+      </>
+    );
+  }
 
   return (
-    <View style={[styles.container, keyboardOffset > 0 && { bottom: keyboardOffset + 25 }]}>
-      <View style={[styles.toolbar, { backgroundColor: theme.colors.background.secondary, borderTopColor: theme.colors.border.light }]}>
+    <View style={[styles.container, isKeyboardVisible && { bottom: keyboardOffset }]}>
+      <View style={[
+        styles.toolbar,
+        { backgroundColor: theme.colors.background.secondary, borderTopColor: theme.colors.border.light },
+        isKeyboardVisible && { paddingBottom: themeBase.spacing.md + 25 },
+      ]}>
         {children}
       </View>
     </View>
@@ -35,5 +56,6 @@ const styles = StyleSheet.create({
     paddingVertical: themeBase.spacing.md,
     paddingHorizontal: themeBase.spacing.lg,
     borderTopWidth: 1,
+    gap: themeBase.spacing.sm,
   },
 });

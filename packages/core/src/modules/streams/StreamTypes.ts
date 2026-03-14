@@ -46,6 +46,26 @@ export interface CreateStreamInput {
   name: string;
   color?: string | null;
   icon?: string | null;
+
+  // Template fields (optional)
+  entry_title_template?: string | null;
+  entry_content_template?: string | null;
+  entry_content_type?: string;
+
+  // Feature toggles (optional — defaults applied in API layer)
+  entry_use_rating?: boolean;
+  entry_rating_type?: 'stars' | 'decimal_whole' | 'decimal';
+  entry_use_priority?: boolean;
+  entry_use_status?: boolean;
+  entry_use_duedates?: boolean;
+  entry_use_location?: boolean;
+  entry_use_photos?: boolean;
+  entry_use_type?: boolean;
+  entry_types?: string[];
+  entry_statuses?: EntryStatus[];
+  entry_default_status?: EntryStatus;
+  is_private?: boolean;
+  is_localonly?: boolean;
 }
 
 export interface UpdateStreamInput {
