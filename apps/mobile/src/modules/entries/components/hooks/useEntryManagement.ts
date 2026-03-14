@@ -95,7 +95,7 @@ export function useEntryManagement({
   // === Device ID for external update detection ===
   const localDeviceIdRef = useRef<string | null>(null);
   useEffect(() => {
-    getDeviceId().then(id => { localDeviceIdRef.current = id; });
+    getDeviceId().then(id => { localDeviceIdRef.current = id; }).catch(err => log.warn('Failed to get device ID', { error: err }));
   }, []);
 
   // === Save State ===

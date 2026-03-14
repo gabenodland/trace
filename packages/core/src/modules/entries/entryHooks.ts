@@ -117,21 +117,10 @@ export function useEntries(filter?: EntryFilter) {
 
     // Mutations
     entryMutations: {
-      createEntry: async (data: CreateEntryInput) => {
-        return createMutation.mutateAsync(data);
-      },
-
-      updateEntry: async (id: string, data: Partial<CreateEntryInput>) => {
-        return updateMutation.mutateAsync({ id, data });
-      },
-
-      deleteEntry: async (id: string) => {
-        return deleteMutation.mutateAsync(id);
-      },
-
-      archiveEntry: async (id: string, archived: boolean) => {
-        return archiveMutation.mutateAsync({ id, archived });
-      },
+      createEntry: (data: CreateEntryInput) => createMutation.mutateAsync(data),
+      updateEntry: (id: string, data: Partial<CreateEntryInput>) => updateMutation.mutateAsync({ id, data }),
+      deleteEntry: (id: string) => deleteMutation.mutateAsync(id),
+      archiveEntry: (id: string, archived: boolean) => archiveMutation.mutateAsync({ id, archived }),
     },
 
     // Helpers (pure functions)

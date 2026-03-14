@@ -198,6 +198,10 @@ export const DayView = memo(function DayView({
     );
   };
 
+  const handleMenuToggle = useCallback((entryId: string) => {
+    setOpenMenuEntryId(prev => prev === entryId ? null : entryId);
+  }, []);
+
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     if (item.type === 'sectionHeader') {
       return (
@@ -223,11 +227,11 @@ export const DayView = memo(function DayView({
           streamById={streamById}
           displayMode={displayMode}
           showMenu={openMenuEntryId === item.entry.entry_id}
-          onMenuToggle={() => setOpenMenuEntryId(prev => prev === item.entry.entry_id ? null : item.entry.entry_id)}
+          onMenuToggle={handleMenuToggle}
         />
       </View>
     );
-  }, [theme, onEntryPress, onTagPress, onMentionPress, onMoveEntry, onCopyEntry, onDeleteEntry, onPinEntry, onArchiveEntry, streamMap, streamById, displayMode, openMenuEntryId]);
+  }, [theme, onEntryPress, onTagPress, onMentionPress, onMoveEntry, onCopyEntry, onDeleteEntry, onPinEntry, onArchiveEntry, streamMap, streamById, displayMode, openMenuEntryId, handleMenuToggle]);
 
   const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
     setScrollY(e.nativeEvent.contentOffset.y);

@@ -57,7 +57,8 @@ export async function saveLastPullTimestamp(timestamp: Date): Promise<void> {
 // ============================================================================
 
 export async function pullStreams(forceFullPull: boolean): Promise<{ new: number; updated: number; deleted: number }> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getUser();
+  const user = data?.user;
   if (!user) return { new: 0, updated: 0, deleted: 0 };
 
   const { data: remoteStreams, error } = await supabase
@@ -197,7 +198,8 @@ export async function pullStreams(forceFullPull: boolean): Promise<{ new: number
 }
 
 export async function pullLocations(forceFullPull: boolean): Promise<{ new: number; updated: number }> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getUser();
+  const user = data?.user;
   if (!user) return { new: 0, updated: 0 };
 
   const { data: remoteLocations, error } = await supabase
@@ -278,7 +280,8 @@ export async function pullEntries(
   pullStartTime: Date,
   getLastTimestamp: () => Promise<Date | null>
 ): Promise<{ new: number; updated: number; deleted: number }> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getUser();
+  const user = data?.user;
   if (!user) return { new: 0, updated: 0, deleted: 0 };
 
   // Check if database is empty - force full pull
@@ -418,7 +421,8 @@ export async function pullEntries(
 }
 
 export async function pullAttachments(forceFullPull: boolean): Promise<{ new: number; updated: number; deleted: number }> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getUser();
+  const user = data?.user;
   if (!user) return { new: 0, updated: 0, deleted: 0 };
 
   const { data: remoteAttachments, error } = await supabase
@@ -534,7 +538,8 @@ export async function pullAttachments(forceFullPull: boolean): Promise<{ new: nu
 }
 
 export async function pullEntryVersions(forceFullPull: boolean): Promise<{ new: number; updated: number }> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getUser();
+  const user = data?.user;
   if (!user) return { new: 0, updated: 0 };
 
   // Incremental pull: only fetch versions newer than our last pull.

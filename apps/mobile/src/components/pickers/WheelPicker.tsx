@@ -29,12 +29,13 @@ export function WheelPicker({ items, selectedValue, onValueChange, width = 80 }:
   // Scroll to selected item on mount and when selection changes externally
   useEffect(() => {
     if (scrollViewRef.current && selectedIndex >= 0 && !isScrolling.current) {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         scrollViewRef.current?.scrollTo({
           y: selectedIndex * ITEM_HEIGHT,
           animated: false,
         });
       }, 50);
+      return () => clearTimeout(timer);
     }
   }, [selectedIndex]);
 

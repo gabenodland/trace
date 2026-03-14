@@ -39,9 +39,10 @@ export function WholeNumberRatingPicker({
       const value = Math.round(rating);
       setSelectedValue(value);
       // Scroll to position after a short delay
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         scrollRef.current?.scrollTo({ y: value * ITEM_HEIGHT, animated: false });
       }, 100);
+      return () => clearTimeout(timer);
     }
   }, [visible, rating]);
 

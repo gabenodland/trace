@@ -15,6 +15,17 @@ import { generateUUID } from '../../shared/utils/uuid';
 
 const log = createScopedLogger('VersionApi');
 
+/** Safely parse a JSON string, returning a fallback on failure. */
+function safeJsonParse<T>(value: string | null | undefined, fallback: T, field: string, id?: string): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    log.warn(`Failed to parse ${field} JSON`, { version_id: id });
+    return fallback;
+  }
+}
+
 /**
  * Sanitize a parsed snapshot, coercing SQLite types to match EntrySnapshot.
  * SQLite stores booleans as 0/1 and dates as Unix ms — the snapshot JSON
@@ -46,11 +57,12 @@ function sanitizeSnapshot(snapshot: any): EntrySnapshot {
  * Parse a raw SQLite row into an EntryVersion, deserializing JSON fields.
  */
 function parseVersionRow(row: any): EntryVersion {
-  const snapshot = row.snapshot ? JSON.parse(row.snapshot) : null;
+  const snapshot = safeJsonParse(row.snapshot, null, 'snapshot', row.version_id);
+  const attachmentIds = safeJsonParse(row.attachment_ids, null, 'attachment_ids', row.version_id);
   return {
     ...row,
     snapshot: sanitizeSnapshot(snapshot),
-    attachment_ids: row.attachment_ids ? JSON.parse(row.attachment_ids) : null,
+    attachment_ids: attachmentIds,
     // SQLite stores timestamps as Unix ms (number) — convert to ISO string for type consistency
     created_at: typeof row.created_at === 'number' ? new Date(row.created_at).toISOString() : row.created_at,
     device_created_at: typeof row.device_created_at === 'number' ? new Date(row.device_created_at).toISOString() : row.device_created_at,

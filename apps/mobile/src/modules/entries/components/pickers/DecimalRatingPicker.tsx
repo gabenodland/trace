@@ -53,10 +53,11 @@ export function DecimalRatingPicker({
       setDecimalValue(decimal);
 
       // Scroll to positions after a short delay
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         wholeScrollRef.current?.scrollTo({ y: whole * ITEM_HEIGHT, animated: false });
         decimalScrollRef.current?.scrollTo({ y: decimal * ITEM_HEIGHT, animated: false });
       }, 100);
+      return () => clearTimeout(timer);
     }
   }, [visible, rating]);
 

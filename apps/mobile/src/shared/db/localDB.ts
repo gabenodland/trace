@@ -12,6 +12,17 @@ import { createScopedLogger, LogScopes } from '../utils/logger';
 
 const log = createScopedLogger(LogScopes.Database);
 
+/** Safely parse a JSON string, returning a fallback on failure. */
+function safeJsonParse<T>(value: string | null | undefined, fallback: T, field: string, entryId?: string): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    log.warn('Failed to parse JSON field', { field, entry_id: entryId });
+    return fallback;
+  }
+}
+
 class LocalDatabase {
   private db: SQLite.SQLiteDatabase | null = null;
   private initPromise: Promise<void> | null = null;
@@ -1699,8 +1710,8 @@ class LocalDatabase {
       user_id: row.user_id,
       title: row.title,
       content: row.content,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      mentions: row.mentions ? JSON.parse(row.mentions) : [],
+      tags: safeJsonParse(row.tags, [], 'tags', row.entry_id),
+      mentions: safeJsonParse(row.mentions, [], 'mentions', row.entry_id),
       stream_id: row.stream_id,
       entry_date: row.entry_date ? new Date(row.entry_date).toISOString() : null,
       entry_latitude: row.entry_latitude,

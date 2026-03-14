@@ -59,7 +59,7 @@ export function DevicesScreen() {
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    getDeviceId().then(setLocalDeviceId);
+    getDeviceId().then(setLocalDeviceId).catch(() => {});
   }, []);
 
   const handleRefresh = async () => {

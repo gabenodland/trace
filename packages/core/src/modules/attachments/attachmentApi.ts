@@ -8,6 +8,8 @@
 import { supabase } from '../../shared/supabase';
 import type { Attachment, CreateAttachmentInput, UpdateAttachmentInput } from './AttachmentTypes';
 
+const ATTACHMENTS_BUCKET = 'attachments' as const;
+
 /**
  * Get attachments for a specific entry
  */
@@ -98,7 +100,7 @@ export async function uploadAttachmentFile(
   contentType: string
 ): Promise<{ path: string; url: string }> {
   const { data, error } = await supabase.storage
-    .from('attachments' as any)
+    .from(ATTACHMENTS_BUCKET as any)
     .upload(filePath, fileData, {
       contentType,
       cacheControl: '3600',
@@ -109,7 +111,7 @@ export async function uploadAttachmentFile(
 
   // Get public URL
   const { data: urlData } = supabase.storage
-    .from('attachments' as any)
+    .from(ATTACHMENTS_BUCKET as any)
     .getPublicUrl(filePath);
 
   return {
@@ -123,7 +125,7 @@ export async function uploadAttachmentFile(
  */
 export async function downloadAttachmentFile(filePath: string): Promise<Blob> {
   const { data, error } = await supabase.storage
-    .from('attachments' as any)
+    .from(ATTACHMENTS_BUCKET as any)
     .download(filePath);
 
   if (error) throw error;
@@ -135,7 +137,7 @@ export async function downloadAttachmentFile(filePath: string): Promise<Blob> {
  */
 export async function deleteAttachmentFile(filePath: string): Promise<void> {
   const { error } = await supabase.storage
-    .from('attachments' as any)
+    .from(ATTACHMENTS_BUCKET as any)
     .remove([filePath]);
 
   if (error) throw error;
@@ -146,7 +148,7 @@ export async function deleteAttachmentFile(filePath: string): Promise<void> {
  */
 export function getAttachmentUrl(filePath: string): string {
   const { data } = supabase.storage
-    .from('attachments' as any)
+    .from(ATTACHMENTS_BUCKET as any)
     .getPublicUrl(filePath);
 
   return data.publicUrl;
@@ -157,7 +159,7 @@ export function getAttachmentUrl(filePath: string): string {
  */
 export async function getSignedAttachmentUrl(filePath: string, expiresIn: number = 3600): Promise<string> {
   const { data, error } = await supabase.storage
-    .from('attachments' as any)
+    .from(ATTACHMENTS_BUCKET as any)
     .createSignedUrl(filePath, expiresIn);
 
   if (error) throw error;
@@ -175,7 +177,7 @@ export async function deleteAttachmentsForEntry(entryId: string): Promise<void> 
   const filePaths = attachments.map(attachment => attachment.file_path);
 
   if (filePaths.length > 0) {
-    await supabase.storage.from('attachments' as any).remove(filePaths);
+    await supabase.storage.from(ATTACHMENTS_BUCKET as any).remove(filePaths);
   }
 
   // Delete database records (cascade will handle this via foreign key)

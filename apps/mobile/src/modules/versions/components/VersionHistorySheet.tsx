@@ -144,7 +144,7 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
 
   // Load current device ID once
   useEffect(() => {
-    getDeviceId().then(setCurrentDeviceId);
+    getDeviceId().then(setCurrentDeviceId).catch(err => log.warn('Failed to get device ID', { error: err }));
   }, []);
 
   const deviceMap = useMemo(() => {

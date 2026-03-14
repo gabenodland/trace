@@ -429,16 +429,20 @@ export const StreamDrawerContent = memo(function StreamDrawerContent() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { status } = await ExpoLocation.getForegroundPermissionsAsync();
-      if (cancelled || status !== "granted") return;
-      let pos = await ExpoLocation.getLastKnownPositionAsync();
-      if (!pos) {
-        pos = await ExpoLocation.getCurrentPositionAsync({
-          accuracy: ExpoLocation.Accuracy.Low,
-        });
-      }
-      if (!cancelled && pos) {
-        setUserPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      try {
+        const { status } = await ExpoLocation.getForegroundPermissionsAsync();
+        if (cancelled || status !== "granted") return;
+        let pos = await ExpoLocation.getLastKnownPositionAsync();
+        if (!pos) {
+          pos = await ExpoLocation.getCurrentPositionAsync({
+            accuracy: ExpoLocation.Accuracy.Low,
+          });
+        }
+        if (!cancelled && pos) {
+          setUserPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        }
+      } catch (err) {
+        // GPS failure is non-critical — distance sorting just won't be available
       }
     })();
     return () => { cancelled = true; };

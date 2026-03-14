@@ -47,3 +47,16 @@ configureCore({
 if (__DEV__) {
   log.info('Core configured successfully');
 }
+
+// Global unhandled promise rejection handler — catches any .then() without .catch()
+// that slips through. Prevents silent crashes in production.
+if (typeof globalThis !== 'undefined' && !(globalThis as any).__traceRejectionHandlerInstalled) {
+  (globalThis as any).__traceRejectionHandlerInstalled = true;
+  // Hermes exposes enablePromiseRejectionTracker directly
+  (globalThis as any).HermesInternal?.enablePromiseRejectionTracker?.({
+    allRejections: true,
+    onUnhandled: (_id: number, error: any) => {
+      log.error('Unhandled promise rejection', error instanceof Error ? error : new Error(String(error)));
+    },
+  });
+}

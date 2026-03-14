@@ -131,30 +131,20 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
     </>
   ) : null;
 
-  // Determine the appropriate empty message based on filter state
-  const getEmptyMessage = (): { title: string; subtitle?: string } => {
-    // If we have both counts, determine if it's empty stream or filtered out
+  // Memoize empty state component to prevent FlatList/SectionList remounts
+  const emptyComponent = useMemo(() => {
+    let title = "No entries yet";
+    let subtitle = "Capture your first thought, idea, or task!";
     if (totalCount !== undefined && entryCount !== undefined) {
       if (totalCount === 0) {
-        return {
-          title: "No entries in this stream yet",
-          subtitle: "Capture your first thought, idea, or task!",
-        };
-      }
-      if (entryCount === 0 && totalCount > 0) {
-        return {
-          title: "No entries match your filters",
-          subtitle: "Try adjusting your filter settings",
-        };
+        title = "No entries in this stream yet";
+      } else if (entryCount === 0 && totalCount > 0) {
+        title = "No entries match your filters";
+        subtitle = "Try adjusting your filter settings";
       }
     }
-
-    // Default fallback
-    return {
-      title: "No entries yet",
-      subtitle: "Capture your first thought, idea, or task!",
-    };
-  };
+    return <EmptyState title={title} subtitle={subtitle} />;
+  }, [totalCount, entryCount]);
 
   // Memoize lookup maps to preserve referential identity across renders
   const streamMap = useMemo(() => streams?.reduce((map, s) => {
@@ -198,7 +188,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
   ), [onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, selectedEntryId, onArchive, streamMap, locationMap, fullStreamMap, currentStreamId, displayMode, openMenuEntryId, handleMenuToggle]);
 
   // Render section header (only if title is not empty)
-  const renderSectionHeader = ({ section }: { section: EntrySection<EntryWithRelations> }) => {
+  const renderSectionHeader = useCallback(({ section }: { section: EntrySection<EntryWithRelations> }) => {
     // Don't render header for empty titles (e.g., priority entries without label)
     if (section.title === '') {
       return null;
@@ -211,7 +201,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         </View>
       </View>
     );
-  };
+  }, [theme]);
 
   if (isLoading) {
     return (
@@ -223,7 +213,6 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
 
   // If sections are provided, use SectionList
   if (sections && sections.length > 0) {
-    const emptyMessage = getEmptyMessage();
     return (
       <SectionList<EntryWithRelations, EntrySection<EntryWithRelations>>
         ref={sectionListRef}
@@ -233,9 +222,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         renderSectionHeader={renderSectionHeader}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={CombinedHeader}
-        ListEmptyComponent={
-          <EmptyState title={emptyMessage.title} subtitle={emptyMessage.subtitle} />
-        }
+        ListEmptyComponent={emptyComponent}
         stickySectionHeadersEnabled={false}
         removeClippedSubviews={false}
         onScroll={handleScroll}
@@ -247,7 +234,6 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
 
   // If we have a header component, always render FlatList (even with no entries)
   if (CombinedHeader) {
-    const emptyMessage = getEmptyMessage();
     return (
       <FlatList<EntryWithRelations>
         ref={flatListRef}
@@ -256,9 +242,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         renderItem={renderEntryItem}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={CombinedHeader}
-        ListEmptyComponent={
-          <EmptyState title={emptyMessage.title} subtitle={emptyMessage.subtitle} />
-        }
+        ListEmptyComponent={emptyComponent}
         removeClippedSubviews={false}
         onScroll={handleScroll}
         scrollEventThrottle={100}
@@ -268,10 +252,9 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
   }
 
   if (entries.length === 0) {
-    const emptyMessage = getEmptyMessage();
     return (
       <View style={styles.centerContainer}>
-        <EmptyState title={emptyMessage.title} subtitle={emptyMessage.subtitle} />
+        {emptyComponent}
       </View>
     );
   }

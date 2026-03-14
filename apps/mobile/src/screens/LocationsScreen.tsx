@@ -178,10 +178,14 @@ export function LocationsScreen() {
   // Fetch user position for distance sorting
   useEffect(() => {
     (async () => {
-      const { status } = await ExpoLocation.getForegroundPermissionsAsync();
-      if (status === "granted") {
-        const loc = await ExpoLocation.getLastKnownPositionAsync();
-        if (loc) setUserPosition({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      try {
+        const { status } = await ExpoLocation.getForegroundPermissionsAsync();
+        if (status === "granted") {
+          const loc = await ExpoLocation.getLastKnownPositionAsync();
+          if (loc) setUserPosition({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+        }
+      } catch (err) {
+        log.warn('Failed to get user position for distance sorting');
       }
     })();
   }, []);

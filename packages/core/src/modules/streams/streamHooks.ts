@@ -101,21 +101,10 @@ export function useStreams() {
 
     // Mutations
     streamMutations: {
-      createStream: async (name: string) => {
-        return createMutation.mutateAsync(name);
-      },
-
-      findOrCreateByName: async (name: string) => {
-        return findOrCreateMutation.mutateAsync(name);
-      },
-
-      updateStream: async (id: string, data: UpdateStreamInput) => {
-        return updateMutation.mutateAsync({ id, data });
-      },
-
-      deleteStream: async (id: string, reassignToId?: string) => {
-        return deleteMutation.mutateAsync({ id, reassignToId });
-      },
+      createStream: (name: string) => createMutation.mutateAsync(name),
+      findOrCreateByName: (name: string) => findOrCreateMutation.mutateAsync(name),
+      updateStream: (id: string, data: UpdateStreamInput) => updateMutation.mutateAsync({ id, data }),
+      deleteStream: (id: string, reassignToId?: string) => deleteMutation.mutateAsync({ id, reassignToId }),
     },
 
     // Helpers (pure functions)

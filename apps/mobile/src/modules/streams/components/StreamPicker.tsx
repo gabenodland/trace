@@ -62,10 +62,11 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
       const selectedIndex = streams.findIndex(s => s.stream_id === selectedStreamId);
       if (selectedIndex >= 0) {
         // Wait a bit for the ScrollView to be fully rendered
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           const scrollOffset = (selectedIndex + 1) * ITEM_HEIGHT; // +1 for Inbox
           scrollViewRef.current?.scrollTo({ y: scrollOffset, animated: true });
         }, 100);
+        return () => clearTimeout(timer);
       }
     }
   }, [visible, selectedStreamId, streams]);
