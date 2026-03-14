@@ -55,6 +55,9 @@ export function useCreateAttachment() {
       queryClient.invalidateQueries({ queryKey: attachmentKeys.entry(newAttachment.entry_id) });
       queryClient.invalidateQueries({ queryKey: attachmentKeys.lists() });
     },
+    onError: (error) => {
+      console.error("[Attachments] createAttachment mutation failed:", error);
+    },
   });
 }
 
@@ -71,6 +74,9 @@ export function useUpdateAttachment() {
       // Update cache
       queryClient.setQueryData(attachmentKeys.detail(updatedAttachment.attachment_id), updatedAttachment);
       queryClient.invalidateQueries({ queryKey: attachmentKeys.entry(updatedAttachment.entry_id) });
+    },
+    onError: (error, variables) => {
+      console.error("[Attachments] updateAttachment mutation failed:", error, { attachmentId: variables.attachmentId });
     },
   });
 }
@@ -89,6 +95,9 @@ export function useDeleteAttachment() {
       queryClient.invalidateQueries({ queryKey: attachmentKeys.entry(variables.entryId) });
       queryClient.invalidateQueries({ queryKey: attachmentKeys.lists() });
     },
+    onError: (error, variables) => {
+      console.error("[Attachments] deleteAttachment mutation failed:", error, { attachmentId: variables.attachmentId });
+    },
   });
 }
 
@@ -106,6 +115,9 @@ export function useUploadAttachmentFile() {
       fileData: Blob | File;
       contentType: string;
     }) => attachmentApi.uploadAttachmentFile(filePath, fileData, contentType),
+    onError: (error) => {
+      console.error("[Attachments] uploadFile mutation failed:", error);
+    },
   });
 }
 
@@ -115,5 +127,8 @@ export function useUploadAttachmentFile() {
 export function useDeleteAttachmentFile() {
   return useMutation({
     mutationFn: (filePath: string) => attachmentApi.deleteAttachmentFile(filePath),
+    onError: (error) => {
+      console.error("[Attachments] deleteFile mutation failed:", error);
+    },
   });
 }

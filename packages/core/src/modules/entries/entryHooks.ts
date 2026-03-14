@@ -45,6 +45,9 @@ function useCreateEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ["entries"] });
       queryClient.invalidateQueries({ queryKey: ["streams"] }); // Entry counts may change
     },
+    onError: (error) => {
+      console.error("[Entries] createEntry mutation failed:", error);
+    },
   });
 }
 
@@ -62,6 +65,9 @@ function useUpdateEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ["entry", data.entry_id] });
       queryClient.invalidateQueries({ queryKey: ["streams"] }); // Entry counts may change
     },
+    onError: (error, variables) => {
+      console.error("[Entries] updateEntry mutation failed:", error, { id: variables.id });
+    },
   });
 }
 
@@ -76,6 +82,9 @@ function useDeleteEntryMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entries"] });
       queryClient.invalidateQueries({ queryKey: ["streams"] }); // Entry counts may change
+    },
+    onError: (error) => {
+      console.error("[Entries] deleteEntry mutation failed:", error);
     },
   });
 }
@@ -92,6 +101,9 @@ function useArchiveEntryMutation() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["entries"] });
       queryClient.invalidateQueries({ queryKey: ["entry", data.entry_id] });
+    },
+    onError: (error, variables) => {
+      console.error("[Entries] archiveEntry mutation failed:", error, { id: variables.id });
     },
   });
 }

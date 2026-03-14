@@ -32,6 +32,9 @@ function useCreateStreamMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["streams"] });
     },
+    onError: (error) => {
+      console.error("[Streams] createStream mutation failed:", error);
+    },
   });
 }
 
@@ -45,6 +48,9 @@ function useFindOrCreateByNameMutation() {
     mutationFn: findOrCreateStreamByName,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["streams"] });
+    },
+    onError: (error) => {
+      console.error("[Streams] findOrCreateByName mutation failed:", error);
     },
   });
 }
@@ -61,6 +67,9 @@ function useUpdateStreamMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["streams"] });
     },
+    onError: (error, variables) => {
+      console.error("[Streams] updateStream mutation failed:", error, { id: variables.id });
+    },
   });
 }
 
@@ -76,6 +85,9 @@ function useDeleteStreamMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["streams"] });
       queryClient.invalidateQueries({ queryKey: ["entries"] }); // Entries may be affected
+    },
+    onError: (error, variables) => {
+      console.error("[Streams] deleteStream mutation failed:", error, { id: variables.id });
     },
   });
 }
