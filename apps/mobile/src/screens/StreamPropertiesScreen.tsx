@@ -23,6 +23,9 @@ import {
   getStatusLabel,
   type RatingType,
   getRatingTypeLabel,
+  STREAM_COLORS,
+  resolveStreamColorKey,
+  type StreamColorKey,
 } from "@trace/core";
 import { useNavigate, useBeforeBack } from "../shared/navigation";
 import { useTheme } from "../shared/contexts/ThemeContext";
@@ -34,6 +37,7 @@ import { TypeConfigModal } from "../modules/streams/components/TypeConfigModal";
 import { RatingConfigModal } from "../modules/streams/components/RatingConfigModal";
 import { TemplateHelpModal } from "../modules/streams/components/TemplateHelpModal";
 import { TemplateEditorModal } from "../modules/streams/components/TemplateEditorModal";
+import { IconPickerModal } from "../modules/streams/components/IconPickerModal";
 
 const log = createScopedLogger(LogScopes.Streams);
 
@@ -70,6 +74,9 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
   const [usePhotos, setUsePhotos] = useState(true);
   const [isPrivate, setIsPrivate] = useState(false);
   const [isLocalOnly, setIsLocalOnly] = useState(false);
+  const [streamColor, setStreamColor] = useState<StreamColorKey | null>(null);
+  const [streamIcon, setStreamIcon] = useState<string | null>(null);
+  const [showIconPicker, setShowIconPicker] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
   // Status configuration
@@ -151,6 +158,8 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
       setUsePhotos(true);
       setIsPrivate(false);
       setIsLocalOnly(false);
+      setStreamColor(null);
+      setStreamIcon(null);
       setEntryStatuses([...DEFAULT_STREAM_STATUSES]);
       setEntryDefaultStatus(DEFAULT_INITIAL_STATUS);
       setUseType(false);
@@ -170,6 +179,8 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
       setUsePhotos(stream.entry_use_photos ?? true);
       setIsPrivate(stream.is_private ?? false);
       setIsLocalOnly(stream.is_localonly ?? false);
+      setStreamColor(resolveStreamColorKey(stream.color) ?? null);
+      setStreamIcon(stream.icon ?? null);
       setEntryStatuses(stream.entry_statuses ?? [...DEFAULT_STREAM_STATUSES]);
       setEntryDefaultStatus((stream.entry_default_status as EntryStatus) ?? DEFAULT_INITIAL_STATUS);
       setUseType(stream.entry_use_type ?? false);
@@ -241,6 +252,8 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
           entry_default_status: entryDefaultStatus,
           entry_use_type: useType,
           entry_types: entryTypes,
+          color: streamColor,
+          icon: streamIcon,
         };
 
         await streamMutations.updateStream(updates);
@@ -380,6 +393,63 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
         {/* Remaining sections only shown in edit mode */}
         {!isCreateMode && (
           <>
+            {/* Appearance */}
+            <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+              <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Appearance</Text>
+
+              {/* Icon */}
+              <TouchableOpacity
+                style={[styles.settingRow, { borderBottomColor: theme.colors.border.light }]}
+                onPress={() => setShowIconPicker(true)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.settingContent}>
+                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Icon</Text>
+                </View>
+                <View style={styles.settingValue}>
+                  {streamIcon ? (
+                    <Icon name={streamIcon as any} size={20} color={streamColor ? theme.colors.stream[streamColor] : theme.colors.text.primary} />
+                  ) : (
+                    <Text style={[styles.settingDescription, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>None</Text>
+                  )}
+                  <Icon name="ChevronRight" size={16} color={theme.colors.text.tertiary} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Color */}
+              <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+                <View style={styles.settingContent}>
+                  <Text style={[styles.settingLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>Color</Text>
+                </View>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorRow} contentContainerStyle={styles.colorRowContent}>
+                {/* None option */}
+                <TouchableOpacity
+                  style={[
+                    styles.colorCircle,
+                    { backgroundColor: theme.colors.background.tertiary, borderColor: "transparent" },
+                    !streamColor && { borderColor: theme.colors.functional.accent, borderWidth: 2 },
+                  ]}
+                  onPress={() => { setStreamColor(null); markChanged(); }}
+                  activeOpacity={0.6}
+                >
+                  {!streamColor && <Icon name="X" size={12} color={theme.colors.text.tertiary} />}
+                </TouchableOpacity>
+                {STREAM_COLORS.map((c) => (
+                  <TouchableOpacity
+                    key={c.key}
+                    style={[
+                      styles.colorCircle,
+                      { backgroundColor: theme.colors.stream[c.key], borderColor: "transparent" },
+                      streamColor === c.key && { borderColor: theme.colors.text.primary, borderWidth: 2.5 },
+                    ]}
+                    onPress={() => { setStreamColor(c.key); markChanged(); }}
+                    activeOpacity={0.6}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+
             {/* Privacy & Sync */}
             <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
               <Text style={[styles.cardTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>Privacy & Sync</Text>
@@ -730,6 +800,17 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
         mode="content"
       />
 
+      <IconPickerModal
+        visible={showIconPicker}
+        onClose={() => setShowIconPicker(false)}
+        selectedIcon={streamIcon}
+        selectedColor={streamColor}
+        onSave={(icon) => {
+          setStreamIcon(icon);
+          markChanged();
+        }}
+      />
+
       <TemplateEditorModal
         visible={showContentTemplateEditor}
         onClose={() => setShowContentTemplateEditor(false)}
@@ -848,6 +929,20 @@ const styles = StyleSheet.create({
     bottom: 10,
     borderRadius: 4,
     padding: 4,
+  },
+  colorRow: {
+    marginBottom: 4,
+  },
+  colorRowContent: {
+    gap: 10,
+    paddingVertical: 4,
+  },
+  colorCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
   deleteButton: {
     alignItems: "center",

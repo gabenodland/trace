@@ -71,6 +71,21 @@ export const synthwaveLightTheme: Theme = {
       none: '#9B6B8A',         // Mauve - no priority
     },
 
+
+    stream: {
+      red: '#FF6B8A',
+      orange: '#FF9E6B',
+      amber: '#FFB347',
+      green: '#6BCB77',
+      emerald: '#4ECDC4',
+      teal: '#45B7AA',
+      blue: '#7B68EE',
+      indigo: '#9B59B6',
+      purple: '#BB6BD9',
+      pink: '#FF69B4',
+      gray: '#9B6B8A',
+      brown: '#C68642',
+    },
     surface: {
       overlay: '#E8D4F0',      // Pastel purple for drawers
       elevated: '#FFF5F8',     // Blush pink for menus

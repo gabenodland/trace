@@ -72,6 +72,22 @@ export interface ThemeColors {
     none: string;         // No priority set (typically gray)
   };
 
+  // Stream colors (user-selectable, theme-adaptive)
+  stream: {
+    red: string;
+    orange: string;
+    amber: string;
+    green: string;
+    emerald: string;
+    teal: string;
+    blue: string;
+    indigo: string;
+    purple: string;
+    pink: string;
+    gray: string;
+    brown: string;
+  };
+
   // Surface colors (overlays, drawers, menus)
   surface: {
     overlay: string;      // Drawers, side panels, menus

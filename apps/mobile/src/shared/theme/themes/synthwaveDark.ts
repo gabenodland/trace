@@ -71,6 +71,21 @@ export const synthwaveDarkTheme: Theme = {
       none: '#B8A8C8',         // Lavender - no priority
     },
 
+
+    stream: {
+      red: '#FF6B6B',
+      orange: '#FF8C42',
+      amber: '#FFBE0B',
+      green: '#06D6A0',
+      emerald: '#00F5D4',
+      teal: '#00BBF9',
+      blue: '#00D4FF',
+      indigo: '#7B2FFF',
+      purple: '#B537F2',
+      pink: '#FF2E97',
+      gray: '#B8A8C8',
+      brown: '#E6A756',
+    },
     surface: {
       overlay: '#1E1A2E',      // Deep purple for drawers
       elevated: '#262036',     // Elevated purple for menus

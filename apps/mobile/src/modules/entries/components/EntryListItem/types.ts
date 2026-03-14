@@ -18,6 +18,8 @@ export interface EntryListItemProps {
   onSelectOnMap?: (entryId: string) => void; // Select entry on map (MapScreen only)
   selectedEntryId?: string | null; // Currently selected entry on map (for highlight)
   streamName?: string | null; // Stream name to display
+  streamIcon?: string | null; // Stream icon name (Lucide)
+  streamColor?: string | null; // Stream color hex
   locationName?: string | null; // Location name to display
   currentStreamId?: string | null; // ID of the stream being viewed (to hide redundant stream badge)
   displayMode?: EntryDisplayMode; // Display mode for content rendering
@@ -30,6 +32,8 @@ export interface EntryListItemProps {
 export interface EntryListItemCommonProps {
   entry: EntryWithRelations;
   streamName?: string | null;
+  streamIcon?: string | null;
+  streamColor?: string | null;
   locationName?: string | null;
   currentStreamId?: string | null; // ID of the stream being viewed (to hide redundant stream badge)
   showMenu: boolean;

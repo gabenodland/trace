@@ -9,7 +9,7 @@
 
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import { PickerBottomSheet } from "../../../../components/sheets";
-import { Icon } from "../../../../shared/components";
+import { Icon, type IconName } from "../../../../shared/components";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import {
@@ -19,7 +19,8 @@ import {
   getPriorityInfo,
   type EntryStatus,
   type RatingType,
-  type Location as LocationType
+  type Location as LocationType,
+  resolveStreamColorHex,
 } from "@trace/core";
 
 interface AttributesPickerProps {
@@ -28,6 +29,8 @@ interface AttributesPickerProps {
   isEditing: boolean;
   // Stream
   streamName: string | null;
+  streamIcon?: string | null;
+  streamColor?: string | null;
   onShowStreamPicker: () => void;
   // Visibility flags
   showLocation: boolean;
@@ -68,6 +71,8 @@ export function AttributesPicker({
   onClose,
   isEditing,
   streamName,
+  streamIcon,
+  streamColor,
   onShowStreamPicker,
   showLocation,
   showStatus,
@@ -135,7 +140,7 @@ export function AttributesPicker({
             onPress={onShowStreamPicker}
           >
             <View style={styles.optionIcon}>
-              <Icon name="Layers" size={16} color={streamName ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
+              <Icon name={streamIcon ? streamIcon as IconName : "Layers"} size={16} color={resolveStreamColorHex(streamColor, dynamicTheme.colors.stream) || (streamName ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary)} />
             </View>
             <Text
               style={[

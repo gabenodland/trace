@@ -69,6 +69,21 @@ export const techGreenTheme: Theme = {
       none: '#8B949E',         // Gray - no priority
     },
 
+
+    stream: {
+      red: '#F85149',
+      orange: '#F0883E',
+      amber: '#D29922',
+      green: '#3FB950',
+      emerald: '#2EA043',
+      teal: '#39D2C0',
+      blue: '#58A6FF',
+      indigo: '#8B8CF8',
+      purple: '#BC8CF8',
+      pink: '#F778BA',
+      gray: '#8B949E',
+      brown: '#C69026',
+    },
     surface: {
       overlay: '#161B22',      // Slightly lighter for drawers
       elevated: '#21262D',     // Card bg for menus

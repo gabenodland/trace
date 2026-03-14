@@ -70,6 +70,21 @@ export const modernTheme: Theme = {
       none: '#94A3B8',         // Slate-400 - no priority
     },
 
+
+    stream: {
+      red: '#E57373',
+      orange: '#FFB074',
+      amber: '#FFD54F',
+      green: '#81C784',
+      emerald: '#66BB9A',
+      teal: '#4DB6AC',
+      blue: '#64B5F6',
+      indigo: '#7986CB',
+      purple: '#9575CD',
+      pink: '#F06292',
+      gray: '#90A4AE',
+      brown: '#A1887F',
+    },
     surface: {
       overlay: '#F1F5F9',      // Cool slate for drawers
       elevated: '#FFFFFF',     // White for menus

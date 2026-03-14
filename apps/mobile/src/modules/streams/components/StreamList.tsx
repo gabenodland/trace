@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import type { Stream } from "@trace/core";
+import { type Stream, resolveStreamColorHex } from "@trace/core";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
-import { Icon } from "../../../shared/components";
+import { Icon, type IconName } from "../../../shared/components";
 
 interface StreamListProps {
   streams: Stream[];
@@ -58,7 +58,11 @@ function StreamItem({ stream, onPress, isSelected }: StreamItemProps) {
       onPress={handlePress}
     >
       <View style={styles.itemContent}>
-        <Icon name="Layers" size={20} color={isSelected ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} />
+        <Icon
+          name={stream.icon ? stream.icon as IconName : "Layers"}
+          size={20}
+          color={isSelected ? dynamicTheme.colors.functional.accent : (resolveStreamColorHex(stream.color, dynamicTheme.colors.stream) || dynamicTheme.colors.text.secondary)}
+        />
         <Text style={[
           styles.itemName,
           { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },

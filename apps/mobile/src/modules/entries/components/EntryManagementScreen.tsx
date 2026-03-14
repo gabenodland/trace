@@ -1327,6 +1327,8 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           onClose={() => setActivePicker(null)}
           isEditing={!isNewEntry && !!entryId}
           streamName={entry?.stream?.name ?? null}
+          streamIcon={entry?.stream?.icon ?? null}
+          streamColor={entry?.stream?.color ?? null}
           onShowStreamPicker={() => setActivePicker('stream')}
           // Visibility flags - default to true when no stream (except type which needs defined types)
           showLocation={entry?.stream?.entry_use_location ?? true}

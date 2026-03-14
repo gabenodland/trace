@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import { View, StyleSheet } from "react-native";
-import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES, getActiveFilterInfo } from "@trace/core";
-import { Icon, Snackbar, useSnackbar } from "../shared/components";
+import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, ALL_STATUSES, getActiveFilterInfo, resolveStreamColorHex } from "@trace/core";
+import { Icon, type IconName, Snackbar, useSnackbar } from "../shared/components";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { subscribeToToast } from "../shared/services/toastService";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
@@ -142,12 +142,26 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
       };
     }
 
-    // For streams, tags, mentions, all entries, unassigned - just use the name
+    // Stream selected - show stream icon if set
+    if (typeof selectedStreamId === 'string' && !selectedStreamId.includes(':')) {
+      const stream = streams?.find(s => s.stream_id === selectedStreamId);
+      if (stream?.icon) {
+        const iconColor = resolveStreamColorHex(stream.color, theme.colors.stream) || theme.colors.text.primary;
+        return {
+          title: selectedStreamName,
+          titleIcon: (
+            <Icon name={stream.icon as IconName} size={20} color={iconColor} />
+          ),
+        };
+      }
+    }
+
+    // For tags, mentions, all entries, unassigned, or streams without icons
     return {
       title: selectedStreamName,
       titleIcon: null,
     };
-  }, [selectedStreamId, selectedStreamName, theme.colors.text.primary]);
+  }, [selectedStreamId, selectedStreamName, streams, theme.colors.text.primary, theme.colors.stream]);
 
   // Parse selection into filter using shared helper (for API query)
   const apiFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);

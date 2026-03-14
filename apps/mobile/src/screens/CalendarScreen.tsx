@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Switch } from "react-native";
-import { Icon } from "../shared/components/Icon";
+import { Icon, type IconName } from "../shared/components/Icon";
 import type { EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
 import {
   ENTRY_DISPLAY_MODES,
@@ -8,6 +8,7 @@ import {
   ENTRY_SORT_MODES,
   DEFAULT_SORT_MODE,
   DEFAULT_SORT_ORDER,
+  resolveStreamColorHex,
 } from "@trace/core";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
@@ -112,21 +113,28 @@ export const CalendarScreen = memo(function CalendarScreen() {
     });
   }, [registerStreamHandler, setSelectedStreamId, setSelectedStreamName]);
 
-  // Title icon for TopBar
-  const titleIcon = useMemo(() => {
-    if (typeof selectedStreamId === 'string' &&
-        (selectedStreamId.startsWith("location:") || selectedStreamId.startsWith("geo:"))) {
-      return <Icon name="MapPin" size={20} color={theme.colors.text.primary} />;
-    }
-    return null;
-  }, [selectedStreamId, theme.colors.text.primary]);
-
   // Parse selection into filter
   const entryFilter = useMemo(() => parseStreamIdToFilter(selectedStreamId), [selectedStreamId]);
 
   // Data hooks
   const { entries: allEntries, entryMutations } = useEntries(entryFilter);
   const { streams } = useStreams();
+
+  // Title icon for TopBar
+  const titleIcon = useMemo(() => {
+    if (typeof selectedStreamId === 'string' &&
+        (selectedStreamId.startsWith("location:") || selectedStreamId.startsWith("geo:"))) {
+      return <Icon name="MapPin" size={20} color={theme.colors.text.primary} />;
+    }
+    if (typeof selectedStreamId === 'string' && !selectedStreamId.includes(':')) {
+      const stream = streams?.find(s => s.stream_id === selectedStreamId);
+      if (stream?.icon) {
+        const iconColor = resolveStreamColorHex(stream.color, theme.colors.stream) || theme.colors.text.primary;
+        return <Icon name={stream.icon as IconName} size={20} color={iconColor} />;
+      }
+    }
+    return null;
+  }, [selectedStreamId, streams, theme.colors.text.primary, theme.colors.stream]);
 
   // Show archived toggle
   const [showArchived, setShowArchived] = usePersistedState<boolean>('calendar-show-archived', false);

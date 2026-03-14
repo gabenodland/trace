@@ -9,7 +9,7 @@
 
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
-import { Icon } from '../../../shared/components';
+import { Icon, type IconName } from '../../../shared/components';
 import { StatusIcon } from '../../../shared/components/StatusIcon';
 import { themeBase } from '../../../shared/theme/themeBase';
 import {
@@ -21,6 +21,7 @@ import {
   type EntryStatus,
   type RatingType,
   type PriorityCategory,
+  resolveStreamColorHex,
 } from '@trace/core';
 import { getEntryFieldVisibility, getUnsupportedFieldFlags } from './helpers/entryVisibility';
 import { buildLocationFromEntry } from './helpers/entryLocationHelpers';
@@ -133,7 +134,7 @@ export function AttributeBar({
         {/* Stream - always shown */}
         <TouchableOpacity style={styles.attribute} onPress={onStreamPress}>
           <View style={styles.attributeContent}>
-            <Icon name="Layers" size={12} color={stream ? theme.colors.text.primary : theme.colors.text.secondary} />
+            <Icon name={stream?.icon ? stream.icon as IconName : "Layers"} size={12} color={resolveStreamColorHex(stream?.color, theme.colors.stream) || (stream ? theme.colors.text.primary : theme.colors.text.secondary)} />
             <Text
               style={[
                 styles.attributeText,

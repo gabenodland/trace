@@ -24,12 +24,12 @@ import { SortModeSelector } from "../modules/entries/components/SortModeSelector
 import { StreamPicker } from "../modules/streams/components/StreamPicker";
 import { BottomNavBar } from "../components/layout/BottomNavBar";
 import { useTheme } from "../shared/contexts/ThemeContext";
-import { Icon } from "../shared/components/Icon";
+import { Icon, type IconName } from "../shared/components/Icon";
 import { SELECTED_COLOR } from "../modules/entries/components/EntryListItem";
 import { Snackbar, useSnackbar } from "../shared/components";
 import type { EntryDisplayMode, EntrySortMode, EntrySortOrder } from "@trace/core";
 import type { EntryWithRelations } from "../modules/entries/EntryWithRelationsTypes";
-import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, sortEntries } from "@trace/core";
+import { ENTRY_DISPLAY_MODES, ENTRY_SORT_MODES, sortEntries, resolveStreamColorHex } from "@trace/core";
 import { useEntryActions } from "./hooks/useEntryActions";
 import { useDrawerGestures } from "./hooks/useDrawerGestures";
 import { HtmlRenderProvider } from "../modules/entries/components/HtmlRenderProvider";
@@ -178,8 +178,15 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
         (selectedStreamId.startsWith("location:") || selectedStreamId.startsWith("geo:"))) {
       return <Icon name="MapPin" size={20} color={theme.colors.text.primary} />;
     }
+    if (typeof selectedStreamId === 'string' && !selectedStreamId.includes(':')) {
+      const stream = streams?.find(s => s.stream_id === selectedStreamId);
+      if (stream?.icon) {
+        const iconColor = resolveStreamColorHex(stream.color, theme.colors.stream) || theme.colors.text.primary;
+        return <Icon name={stream.icon as IconName} size={20} color={iconColor} />;
+      }
+    }
     return null;
-  }, [selectedStreamId, theme.colors.text.primary]);
+  }, [selectedStreamId, streams, theme.colors.text.primary, theme.colors.stream]);
   const { data: locationsData } = useLocations();
 
   // Filter entries to only those with GPS coordinates, exclude archived

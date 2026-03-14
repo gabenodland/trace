@@ -33,6 +33,8 @@ const SHORT_RICH_MAX_HEIGHT = 180;
 export function EntryListItemDefault({
   entry,
   streamName,
+  streamIcon,
+  streamColor,
   locationName,
   currentStreamId,
   displayMode,
@@ -143,6 +145,8 @@ export function EntryListItemDefault({
                   <EntryListItemMetadata
                     entry={entry}
                     streamName={streamName}
+                    streamIcon={streamIcon}
+                    streamColor={streamColor}
                     locationName={locationName}
                     currentStreamId={currentStreamId}
                     displayMode={displayMode}
@@ -216,6 +220,8 @@ export function EntryListItemDefault({
                 <EntryListItemMetadata
                   entry={entry}
                   streamName={streamName}
+                  streamIcon={streamIcon}
+                  streamColor={streamColor}
                   locationName={locationName}
                   currentStreamId={currentStreamId}
                   displayMode={displayMode}
@@ -282,6 +288,8 @@ export function EntryListItemDefault({
           <EntryListItemMetadata
             entry={entry}
             streamName={streamName}
+            streamIcon={streamIcon}
+            streamColor={streamColor}
             locationName={locationName}
             currentStreamId={currentStreamId}
             displayMode={displayMode}

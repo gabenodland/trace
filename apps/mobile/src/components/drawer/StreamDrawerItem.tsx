@@ -2,12 +2,12 @@
  * StreamDrawerItem
  *
  * Memoized row component for stream list in drawer.
- * Clean, minimal design without icons.
+ * Clean, minimal design with optional stream icon/color.
  */
 
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import type { Stream } from "@trace/core";
+import { Text, StyleSheet, TouchableOpacity } from "react-native";
+import { type Stream, resolveStreamColorHex } from "@trace/core";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { Icon, type IconName } from "../../shared/components";
 
@@ -44,6 +44,12 @@ export const StreamDrawerItem = React.memo(function StreamDrawerItem({
       activeOpacity={0.6}
       delayPressIn={0}
     >
+      <Icon
+        name={stream.icon ? stream.icon as IconName : "Layers"}
+        size={15}
+        color={resolveStreamColorHex(stream.color, theme.colors.stream) || secondaryColor}
+        style={styles.streamIcon}
+      />
       <Text
         style={[
           styles.name,
@@ -144,6 +150,9 @@ const styles = StyleSheet.create({
   },
   icon: {
     marginRight: 10,
+  },
+  streamIcon: {
+    marginRight: 8,
   },
   count: {
     fontSize: 14,

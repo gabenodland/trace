@@ -69,6 +69,21 @@ export const lightTheme: Theme = {
       none: '#9CA3AF',         // Gray - no priority
     },
 
+    stream: {
+      red: '#EF4444',
+      orange: '#F97316',
+      amber: '#F59E0B',
+      green: '#22C55E',
+      emerald: '#10B981',
+      teal: '#14B8A6',
+      blue: '#3B82F6',
+      indigo: '#6366F1',
+      purple: '#8B5CF6',
+      pink: '#EC4899',
+      gray: '#6B7280',
+      brown: '#92400E',
+    },
+
     surface: {
       overlay: '#F9FAFB',      // Light gray for drawers
       elevated: '#FFFFFF',     // White for menus/dropdowns

@@ -9,9 +9,9 @@ import {
   Alert,
 } from "react-native";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
-import { Icon, EmptyState, LoadingState, SortBar, type SortOption } from "../shared/components";
+import { Icon, type IconName, EmptyState, LoadingState, SortBar, type SortOption } from "../shared/components";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
-import type { Stream } from "@trace/core";
+import { type Stream, resolveStreamColorHex } from "@trace/core";
 import { useNavigate } from "../shared/navigation";
 import { useDrawer } from "../shared/contexts/DrawerContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
@@ -210,11 +210,11 @@ export function StreamsScreen() {
                     onPress={() => handleOpenSettings(stream)}
                     activeOpacity={0.7}
                   >
-                    {/* Color dot or emoji */}
+                    {/* Stream icon or color dot */}
                     {stream.icon ? (
-                      <Text style={styles.streamEmoji}>{stream.icon}</Text>
-                    ) : stream.color ? (
-                      <View style={[styles.colorDot, { backgroundColor: stream.color }]} />
+                      <Icon name={stream.icon as IconName} size={16} color={resolveStreamColorHex(stream.color, theme.colors.stream) || theme.colors.text.primary} />
+                    ) : resolveStreamColorHex(stream.color, theme.colors.stream) ? (
+                      <View style={[styles.colorDot, { backgroundColor: resolveStreamColorHex(stream.color, theme.colors.stream)! }]} />
                     ) : null}
 
                     {/* Stream name */}
@@ -311,9 +311,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  streamEmoji: {
-    fontSize: 16,
   },
   streamRowContent: {
     flex: 1,

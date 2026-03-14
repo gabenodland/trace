@@ -70,6 +70,21 @@ export const highContrastTheme: Theme = {
       none: '#525252',         // Dark gray - no priority
     },
 
+
+    stream: {
+      red: '#DC2626',
+      orange: '#EA580C',
+      amber: '#D97706',
+      green: '#16A34A',
+      emerald: '#059669',
+      teal: '#0D9488',
+      blue: '#2563EB',
+      indigo: '#4F46E5',
+      purple: '#7C3AED',
+      pink: '#DB2777',
+      gray: '#4B5563',
+      brown: '#78350F',
+    },
     surface: {
       overlay: '#F5F5F5',      // Light gray for drawers
       elevated: '#FFFFFF',     // White for menus

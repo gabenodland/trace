@@ -31,6 +31,8 @@ export function EntryListItem({
   onSelectOnMap,
   selectedEntryId,
   streamName,
+  streamIcon,
+  streamColor,
   locationName,
   currentStreamId,
   displayMode = 'smashed',
@@ -173,6 +175,8 @@ export function EntryListItem({
   const commonProps = {
     entry,
     streamName,
+    streamIcon,
+    streamColor,
     locationName,
     currentStreamId,
     showMenu,

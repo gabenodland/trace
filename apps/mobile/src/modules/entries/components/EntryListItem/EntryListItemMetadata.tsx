@@ -6,9 +6,9 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import type { Entry, PriorityCategory, RatingType, EntryDisplayMode } from "@trace/core";
-import { formatRatingDisplay, getLocationLabel, getPriorityInfo, getStatusLabel, getStatusColor } from "@trace/core";
+import { formatRatingDisplay, getLocationLabel, getPriorityInfo, getStatusLabel, getStatusColor, resolveStreamColorHex } from "@trace/core";
 import type { EntryWithRelations } from "../../EntryWithRelationsTypes";
-import { Icon } from "../../../../shared/components/Icon";
+import { Icon, type IconName } from "../../../../shared/components/Icon";
 import { StatusIcon } from "../../../../shared/components/StatusIcon";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
@@ -16,6 +16,8 @@ import { themeBase } from "../../../../shared/theme/themeBase";
 interface MetadataProps {
   entry: EntryWithRelations;
   streamName?: string | null;
+  streamIcon?: string | null;
+  streamColor?: string | null;
   locationName?: string | null;
   currentStreamId?: string | null;
   displayMode: EntryDisplayMode;
@@ -42,6 +44,8 @@ interface MetadataProps {
 export function EntryListItemMetadata({
   entry,
   streamName,
+  streamIcon,
+  streamColor,
   locationName,
   currentStreamId,
   displayMode,
@@ -83,7 +87,7 @@ export function EntryListItemMetadata({
           }}
           activeOpacity={0.7}
         >
-          <Icon name="Layers" size={10} color={theme.colors.text.secondary} />
+          <Icon name={streamIcon ? streamIcon as IconName : "Layers"} size={10} color={resolveStreamColorHex(streamColor, theme.colors.stream) || theme.colors.text.secondary} />
           <Text style={[styles.streamText, { color: theme.colors.text.tertiary }]}>{streamName || "Unassigned"}</Text>
         </TouchableOpacity>
       )}

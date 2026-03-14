@@ -68,6 +68,21 @@ export const darkTheme: Theme = {
       none: '#9CA3AF',         // Gray - no priority
     },
 
+
+    stream: {
+      red: '#F87171',
+      orange: '#FB923C',
+      amber: '#FBBF24',
+      green: '#4ADE80',
+      emerald: '#34D399',
+      teal: '#2DD4BF',
+      blue: '#60A5FA',
+      indigo: '#818CF8',
+      purple: '#A78BFA',
+      pink: '#F472B6',
+      gray: '#9CA3AF',
+      brown: '#A16207',
+    },
     surface: {
       overlay: '#1F2937',      // Slightly lighter than bg
       elevated: '#374151',     // Even lighter for menus

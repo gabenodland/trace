@@ -68,6 +68,21 @@ export const sepiaTheme: Theme = {
       none: '#8B7D6B',         // Brown-gray - no priority
     },
 
+
+    stream: {
+      red: '#B85450',
+      orange: '#C4784A',
+      amber: '#C9A227',
+      green: '#6B8E6B',
+      emerald: '#5F9E8F',
+      teal: '#5A9E94',
+      blue: '#7B9EBF',
+      indigo: '#8B7DB8',
+      purple: '#9B7DB8',
+      pink: '#B8728A',
+      gray: '#8B7D6B',
+      brown: '#8B6914',
+    },
     surface: {
       overlay: '#EDE4D9',      // Warm tan for drawers
       elevated: '#F7F0E8',     // Light tan for menus

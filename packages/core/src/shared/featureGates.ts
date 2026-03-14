@@ -35,6 +35,7 @@ export type BooleanFeature =
   | 'wordCountAnalytics'
   // Streams
   | 'streamTemplates'
+  | 'proStreamIcons'
   // Integrations
   | 'apiAccess'
   // Advanced
@@ -91,6 +92,7 @@ const BOOLEAN_FEATURES: Record<BooleanFeature, SubscriptionTier[]> = {
 
   // Streams
   streamTemplates: ['pro'],
+  proStreamIcons: ['pro'],
 
   // Integrations
   apiAccess: ['pro'],
@@ -212,6 +214,7 @@ export const FEATURE_DISPLAY_NAMES: Record<BooleanFeature | LimitFeature, string
   activityHeatmap: 'Activity Heatmap',
   wordCountAnalytics: 'Word Count Analytics',
   streamTemplates: 'Stream Templates',
+  proStreamIcons: 'Pro Stream Icons',
   apiAccess: 'API Access',
   fullTextSearch: 'Full-Text Search',
   entryVersioning: 'Entry Version History',
