@@ -93,8 +93,7 @@ export async function pullStreams(forceFullPull: boolean): Promise<{ new: number
             name: remoteStream.name,
           });
           // Move local entries to Inbox and hard-delete the local stream row
-          await localDB.deleteStream(remoteStream.stream_id);
-          await localDB.hardDeleteStream(remoteStream.stream_id);
+          await localDB.removeStreamLocally(remoteStream.stream_id);
           deletedCount++;
         }
         continue;

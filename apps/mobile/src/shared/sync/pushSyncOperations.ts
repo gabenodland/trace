@@ -699,9 +699,10 @@ async function syncStream(stream: any): Promise<void> {
     }
   } else if (sync_action === 'delete') {
     // Nullify stream_id on server entries first to avoid FK constraint violation
+    // Include updated_at so other devices pick up the change on incremental pull
     const { error: detachError } = await supabase
       .from('entries')
-      .update({ stream_id: null })
+      .update({ stream_id: null, updated_at: new Date().toISOString() })
       .eq('stream_id', stream.stream_id);
 
     if (detachError) {

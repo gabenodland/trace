@@ -2658,12 +2658,21 @@ class LocalDatabase {
   }
 
   /**
-   * Hard-delete a stream row from local DB (used during pull sync when server soft-deleted)
+   * Remove a stream locally without touching sync state.
+   * Used during pull sync and realtime when the server has soft-deleted the stream.
+   * Moves entries to Inbox (stream_id = NULL) and hard-deletes the stream row.
    */
-  async hardDeleteStream(streamId: string): Promise<void> {
+  async removeStreamLocally(streamId: string): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
+    // Move entries to Inbox
+    await this.db.runAsync(
+      `UPDATE entries SET stream_id = NULL, synced = 0 WHERE stream_id = ?`,
+      [streamId]
+    );
+
+    // Hard-delete the stream row
     await this.db.runAsync('DELETE FROM streams WHERE stream_id = ?', [streamId]);
   }
 

@@ -881,13 +881,13 @@ class SyncService {
     }
 
     // Soft-delete via UPDATE: remote set deleted_at — remove locally
-    const remoteDeletedAt = (payload.new as any)?.deleted_at;
-    if (remoteDeletedAt != null) {
+    // Guard: only act when deleted_at transitions from null to non-null
+    const oldDeletedAt = (payload.old as Record<string, unknown> | undefined)?.deleted_at;
+    const newDeletedAt = (payload.new as Record<string, unknown> | undefined)?.deleted_at;
+    if (oldDeletedAt == null && newDeletedAt != null) {
       log.info('📡 Stream soft-deleted remotely — removing locally', { streamId: streamId.substring(0, 8) });
       try {
-        // Move local entries off this stream, then hard-delete the stream row
-        await localDB.deleteStream(streamId);
-        await localDB.hardDeleteStream(streamId);
+        await localDB.removeStreamLocally(streamId);
       } catch (err) {
         log.warn('Failed to remove soft-deleted stream locally', { streamId, err });
       }

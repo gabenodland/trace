@@ -6,10 +6,7 @@ CREATE OR REPLACE FUNCTION guard_entry_deleted_stream()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.stream_id IS NOT NULL THEN
-    PERFORM 1 FROM streams
-      WHERE stream_id = NEW.stream_id
-        AND deleted_at IS NOT NULL;
-    IF FOUND THEN
+    IF EXISTS (SELECT 1 FROM streams WHERE stream_id = NEW.stream_id AND deleted_at IS NOT NULL) THEN
       NEW.stream_id = NULL;
     END IF;
   END IF;

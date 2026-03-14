@@ -6,7 +6,7 @@
 ALTER TABLE streams ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 -- Step 2: Index for efficient filtering
-CREATE INDEX IF NOT EXISTS idx_streams_deleted_at ON streams(deleted_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_streams_deleted_at ON streams(deleted_at) WHERE deleted_at IS NOT NULL;
 
 -- Step 3: Update updated_at trigger to fire on deleted_at changes
 -- (so incremental pull picks up soft-deleted streams)
@@ -14,6 +14,9 @@ CREATE OR REPLACE FUNCTION update_categories_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
   IF (OLD.name IS DISTINCT FROM NEW.name OR
+      OLD.full_path IS DISTINCT FROM NEW.full_path OR
+      OLD.parent_category_id IS DISTINCT FROM NEW.parent_category_id OR
+      OLD.depth IS DISTINCT FROM NEW.depth OR
       OLD.color IS DISTINCT FROM NEW.color OR
       OLD.icon IS DISTINCT FROM NEW.icon OR
       OLD.deleted_at IS DISTINCT FROM NEW.deleted_at) THEN
