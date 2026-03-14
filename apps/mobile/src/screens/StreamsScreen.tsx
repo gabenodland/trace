@@ -55,7 +55,7 @@ function sortStreams(streams: Stream[], sortKey: StreamSortKey, ascending: boole
 export function StreamsScreen() {
   const navigate = useNavigate();
   const theme = useTheme();
-  const { setSelectedStreamId, setSelectedStreamName } = useDrawer();
+  const { selectedStreamId, setSelectedStreamId, setSelectedStreamName } = useDrawer();
   const { streams, isLoading, streamMutations } = useStreams();
 
   const [searchText, setSearchText] = useState("");
@@ -97,6 +97,10 @@ export function StreamsScreen() {
           onPress: async () => {
             try {
               await streamMutations.deleteStream(stream.stream_id);
+              if (selectedStreamId === stream.stream_id) {
+                setSelectedStreamId("all");
+                setSelectedStreamName("All Entries");
+              }
             } catch (error) {
               log.error("Failed to delete stream", error);
               Alert.alert("Error", "Failed to delete stream");

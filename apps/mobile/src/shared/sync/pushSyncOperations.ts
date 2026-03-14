@@ -698,6 +698,16 @@ async function syncStream(stream: any): Promise<void> {
       throw new Error(`Supabase upsert failed: ${error.message}`);
     }
   } else if (sync_action === 'delete') {
+    // Nullify stream_id on server entries first to avoid FK constraint violation
+    const { error: detachError } = await supabase
+      .from('entries')
+      .update({ stream_id: null })
+      .eq('stream_id', stream.stream_id);
+
+    if (detachError) {
+      throw new Error(`Failed to detach entries before stream delete: ${detachError.message}`);
+    }
+
     const { error } = await supabase
       .from('streams')
       .delete()
