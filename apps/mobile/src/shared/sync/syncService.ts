@@ -880,6 +880,24 @@ class SyncService {
       return;
     }
 
+    // Soft-delete via UPDATE: remote set deleted_at — remove locally
+    const remoteDeletedAt = (payload.new as any)?.deleted_at;
+    if (remoteDeletedAt != null) {
+      log.info('📡 Stream soft-deleted remotely — removing locally', { streamId: streamId.substring(0, 8) });
+      try {
+        // Move local entries off this stream, then hard-delete the stream row
+        await localDB.deleteStream(streamId);
+        await localDB.hardDeleteStream(streamId);
+      } catch (err) {
+        log.warn('Failed to remove soft-deleted stream locally', { streamId, err });
+      }
+      if (this.queryClient) {
+        this.queryClient.invalidateQueries({ queryKey: ['streams'] });
+        this.queryClient.invalidateQueries({ queryKey: ['entries'] });
+      }
+      return;
+    }
+
     // For INSERT/UPDATE, update from payload
     const payloadData = payload.new as any;
     if (payloadData) {
