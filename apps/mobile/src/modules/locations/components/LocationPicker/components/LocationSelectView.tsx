@@ -6,9 +6,9 @@
  */
 
 import { useRef, useImperativeHandle, forwardRef, useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Keyboard } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Keyboard } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { Icon } from '../../../../../shared/components';
+import { Icon, SearchInput } from '../../../../../shared/components';
 import {
   type POIItem,
   type LocationEntity,
@@ -433,31 +433,12 @@ export const LocationSelectView = forwardRef<LocationSelectViewRef, LocationSele
       {/* Search Row: Search Input + Saved Only Toggle */}
       <View style={styles.searchRow}>
         {/* Search Input */}
-        <View style={[styles.searchContainer, { backgroundColor: dynamicTheme.colors.background.secondary, flex: 1 }]}>
-          <View style={styles.searchIcon}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
-              <Circle cx={11} cy={11} r={8} />
-              <Path d="M21 21l-4.35-4.35" strokeLinecap="round" />
-            </Svg>
-          </View>
-          <TextInput
-            style={[styles.searchInput, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}
-            placeholder={isOffline ? "Search saved places..." : "Search places..."}
-            placeholderTextColor={dynamicTheme.colors.text.tertiary}
-            value={ui.searchQuery}
-            onChangeText={(text) => setUI(prev => ({ ...prev, searchQuery: text }))}
-          />
-          {ui.searchQuery.length > 0 && (
-            <TouchableOpacity
-              style={styles.searchClearButton}
-              onPress={() => setUI(prev => ({ ...prev, searchQuery: '' }))}
-            >
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={dynamicTheme.colors.text.tertiary} strokeWidth={2}>
-                <Path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-            </TouchableOpacity>
-          )}
-        </View>
+        <SearchInput
+          value={ui.searchQuery}
+          onChangeText={(text) => setUI(prev => ({ ...prev, searchQuery: text }))}
+          placeholder={isOffline ? "Search saved places..." : "Search places..."}
+          containerStyle={styles.searchFlex}
+        />
 
         {/* Saved Only Toggle */}
         <TouchableOpacity

@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import {
   type StreamIconCategory,
   STREAM_ICON_CATEGORIES,
@@ -16,7 +16,7 @@ import {
   type StreamColorKey,
   isValidStreamColorKey,
 } from "@trace/core";
-import { Icon, type IconName } from "../../../shared/components";
+import { Icon, type IconName, SearchInput } from "../../../shared/components";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { useSubscription } from "../../../shared/hooks/useSubscription";
 import { PickerBottomSheet, RemoveIcon } from "../../../components/sheets/PickerBottomSheet";
@@ -117,22 +117,12 @@ export function IconPickerModal({
       }
     >
       {/* Search */}
-      <View style={[styles.searchWrapper, { backgroundColor: theme.colors.background.tertiary }]}>
-        <Icon name="Search" size={16} color={theme.colors.text.tertiary} />
-        <TextInput
-          style={[styles.searchInput, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
-          placeholder="Search icons..."
-          placeholderTextColor={theme.colors.text.tertiary}
-          value={search}
-          onChangeText={setSearch}
-          autoCorrect={false}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Icon name="X" size={16} color={theme.colors.text.tertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search icons..."
+        containerStyle={styles.searchWrapper}
+      />
 
       <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
         {filteredIcons ? (
@@ -171,20 +161,7 @@ export function IconPickerModal({
 
 const styles = StyleSheet.create({
   searchWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    gap: 8,
     marginBottom: 16,
-    height: 40,
-  },
-  searchInput: {
-    flex: 1,
-    height: 40,
-    fontSize: 15,
-    paddingVertical: 0,
-    textAlignVertical: "center",
   },
   scrollArea: {
     flex: 1,

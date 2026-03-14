@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
   streamRowSeparator: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-streamRowContent: {
+  streamRowContent: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",

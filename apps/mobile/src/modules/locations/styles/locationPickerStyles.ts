@@ -108,23 +108,8 @@ export const locationPickerStyles = StyleSheet.create({
     marginBottom: 8,
     gap: 8,
   },
-  // Search Input
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
+  searchFlex: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  searchClearButton: {
-    padding: 6,
   },
   // Saved Only Toggle
   savedOnlyToggle: {

@@ -12,12 +12,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
 } from "react-native";
 import * as ExpoLocation from "expo-location";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
-import { Icon, EmptyState, LoadingState, SortBar, Snackbar, useSnackbar, type SortOption } from "../shared/components";
+import { Icon, EmptyState, LoadingState, SortBar, Snackbar, useSnackbar, SearchInput, type SortOption } from "../shared/components";
 import type { IconName } from "../shared/components";
 import {
   useEntryDerivedPlaces,
@@ -597,21 +596,12 @@ export function LocationsScreen() {
       ) : (
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
           {/* Search */}
-          <View style={[styles.searchWrapper, { backgroundColor: theme.colors.background.tertiary }]}>
-            <Icon name="Search" size={16} color={theme.colors.text.tertiary} />
-            <TextInput
-              style={[styles.searchInput, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
-              placeholder="Search places..."
-              placeholderTextColor={theme.colors.text.tertiary}
-              value={searchText}
-              onChangeText={setSearchText}
-            />
-            {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchText("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Icon name="X" size={16} color={theme.colors.text.tertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
+          <SearchInput
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Search places..."
+            containerStyle={styles.searchWrapper}
+          />
 
           {/* Sort bar */}
           <SortBar
@@ -787,17 +777,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   searchWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    gap: 8,
     marginBottom: 16,
-  },
-  searchInput: {
-    flex: 1,
-    height: 36,
-    fontSize: 15,
   },
   card: {
     borderRadius: 12,

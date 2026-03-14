@@ -4,13 +4,13 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Keyboard, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Keyboard, Platform } from "react-native";
 import { useStreams } from "../mobileStreamHooks";
 import { StreamList } from "./StreamList";
 import { PickerBottomSheet } from "../../../components/sheets";
 import { themeBase } from "../../../shared/theme/themeBase";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
-import { Icon, EmptyState } from "../../../shared/components";
+import { Icon, EmptyState, SearchInput } from "../../../shared/components";
 
 const ITEM_HEIGHT = 45; // Approximate height of each stream item (used for scroll positioning)
 
@@ -94,23 +94,12 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
       height={0.85}
     >
       {/* Search Input */}
-      <View style={[styles.searchContainer, { backgroundColor: dynamicTheme.colors.background.secondary, borderColor: dynamicTheme.colors.border.light }]}>
-        <Icon name="Search" size={18} color={dynamicTheme.colors.text.tertiary} style={styles.searchIcon} />
-        <TextInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search streams..."
-          placeholderTextColor={dynamicTheme.colors.text.tertiary}
-          style={[styles.searchInput, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearSearch}>
-            <Icon name="X" size={18} color={dynamicTheme.colors.text.tertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchInput
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholder="Search streams..."
+        containerStyle={styles.searchContainer}
+      />
 
       {/* Content */}
       <ScrollView
@@ -190,24 +179,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
 
 const styles = StyleSheet.create({
   searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: themeBase.spacing.md,
-    paddingVertical: themeBase.spacing.sm,
-    borderRadius: themeBase.borderRadius.md,
-    borderWidth: 1,
     marginBottom: themeBase.spacing.md,
-  },
-  searchIcon: {
-    marginRight: themeBase.spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    padding: 0,
-  },
-  clearSearch: {
-    padding: 4,
   },
   content: {
     flex: 1,

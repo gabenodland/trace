@@ -24,18 +24,15 @@ export function SearchBar({
 
   useEffect(() => {
     if (autoFocus) {
-      // Small delay to ensure component is mounted
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [autoFocus]);
 
   const handleClearOrClose = () => {
     if (value.length > 0) {
-      // Clear the search text
       onChangeText('');
       inputRef.current?.focus();
     } else {
-      // Close the search bar
       onClose();
     }
   };
@@ -43,10 +40,7 @@ export function SearchBar({
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
       <View style={[styles.searchBox, { backgroundColor: theme.colors.background.tertiary }]}>
-        {/* Search Icon */}
         <Icon name="Search" size={16} color={theme.colors.text.tertiary} />
-
-        {/* Input */}
         <TextInput
           ref={inputRef}
           style={[styles.input, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
@@ -58,8 +52,6 @@ export function SearchBar({
           autoCapitalize="none"
           autoCorrect={false}
         />
-
-        {/* X button - clears text if present, otherwise closes search */}
         <TouchableOpacity style={styles.closeButton} onPress={handleClearOrClose}>
           <Icon name="X" size={16} color={theme.colors.text.tertiary} />
         </TouchableOpacity>
@@ -78,13 +70,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: themeBase.borderRadius.lg,
     paddingHorizontal: themeBase.spacing.md,
-    paddingVertical: themeBase.spacing.sm,
+    height: 36,
     gap: themeBase.spacing.sm,
   },
   input: {
     flex: 1,
     fontSize: themeBase.typography.fontSize.base,
-    padding: 0,
+    paddingVertical: 0,
+    textAlignVertical: 'center',
   },
   closeButton: {
     padding: 14,
