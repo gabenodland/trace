@@ -2658,6 +2658,16 @@ class LocalDatabase {
   }
 
   /**
+   * Hard-delete a stream row from local DB (used during pull sync when server soft-deleted)
+   */
+  async hardDeleteStream(streamId: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.runAsync('DELETE FROM streams WHERE stream_id = ?', [streamId]);
+  }
+
+  /**
    * Record stream sync error
    */
   async recordStreamSyncError(streamId: string, error: string): Promise<void> {

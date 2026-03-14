@@ -73,16 +73,32 @@ export async function pullStreams(forceFullPull: boolean): Promise<{ new: number
 
   let newCount = 0;
   let updatedCount = 0;
+  let deletedCount = 0;
 
-  // Build set of server stream IDs for missing stream detection
+  // Build set of server stream IDs (non-deleted) for missing stream detection
   const serverStreamIds = new Set<string>(
-    (remoteStreams || []).map(s => s.stream_id)
+    (remoteStreams || []).filter(s => !s.deleted_at).map(s => s.stream_id)
   );
 
   // Process streams from server
   for (const remoteStream of (remoteStreams || [])) {
     try {
       const localStream = await localDB.getStream(remoteStream.stream_id);
+
+      // Handle soft-deleted streams: remove locally
+      if (remoteStream.deleted_at) {
+        if (localStream && localStream.sync_action !== 'delete') {
+          log.info('Stream soft-deleted on server, removing locally', {
+            streamId: remoteStream.stream_id,
+            name: remoteStream.name,
+          });
+          // Move local entries to Inbox and hard-delete the local stream row
+          await localDB.deleteStream(remoteStream.stream_id);
+          await localDB.hardDeleteStream(remoteStream.stream_id);
+          deletedCount++;
+        }
+        continue;
+      }
 
       const stream = {
         ...remoteStream,
@@ -178,7 +194,7 @@ export async function pullStreams(forceFullPull: boolean): Promise<{ new: number
     log.warn('Failed to check for missing streams', { error });
   }
 
-  return { new: newCount, updated: updatedCount, deleted: 0 };
+  return { new: newCount, updated: updatedCount, deleted: deletedCount };
 }
 
 export async function pullLocations(forceFullPull: boolean): Promise<{ new: number; updated: number }> {

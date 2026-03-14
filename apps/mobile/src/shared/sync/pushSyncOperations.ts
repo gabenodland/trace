@@ -708,13 +708,14 @@ async function syncStream(stream: any): Promise<void> {
       throw new Error(`Failed to detach entries before stream delete: ${detachError.message}`);
     }
 
+    // Soft-delete: set deleted_at so other devices can detect the deletion on pull
     const { error } = await supabase
       .from('streams')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('stream_id', stream.stream_id);
 
     if (error) {
-      throw new Error(`Supabase delete failed: ${error.message}`);
+      throw new Error(`Supabase soft-delete failed: ${error.message}`);
     }
   }
 

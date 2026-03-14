@@ -5,11 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
 } from "react-native";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
-import { Icon, type IconName, EmptyState, LoadingState, SortBar, type SortOption } from "../shared/components";
+import { Icon, type IconName, EmptyState, LoadingState, SortBar, type SortOption, SearchInput } from "../shared/components";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { type Stream, resolveStreamColorHex } from "@trace/core";
 import { useNavigate } from "../shared/navigation";
@@ -55,7 +54,7 @@ function sortStreams(streams: Stream[], sortKey: StreamSortKey, ascending: boole
 export function StreamsScreen() {
   const navigate = useNavigate();
   const theme = useTheme();
-  const { selectedStreamId, setSelectedStreamId, setSelectedStreamName } = useDrawer();
+  const { setSelectedStreamId, setSelectedStreamName } = useDrawer();
   const { streams, isLoading, streamMutations } = useStreams();
 
   const [searchText, setSearchText] = useState("");
@@ -97,10 +96,8 @@ export function StreamsScreen() {
           onPress: async () => {
             try {
               await streamMutations.deleteStream(stream.stream_id);
-              if (selectedStreamId === stream.stream_id) {
-                setSelectedStreamId("all");
-                setSelectedStreamName("All Entries");
-              }
+              setSelectedStreamId("all");
+              setSelectedStreamName("All Entries");
             } catch (error) {
               log.error("Failed to delete stream", error);
               Alert.alert("Error", "Failed to delete stream");
@@ -169,21 +166,12 @@ export function StreamsScreen() {
       ) : (
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
           {/* Search bar */}
-          <View style={[styles.searchWrapper, { backgroundColor: theme.colors.background.tertiary }]}>
-            <Icon name="Search" size={16} color={theme.colors.text.tertiary} />
-            <TextInput
-              style={[styles.searchInput, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.regular }]}
-              placeholder="Search streams..."
-              placeholderTextColor={theme.colors.text.tertiary}
-              value={searchText}
-              onChangeText={setSearchText}
-            />
-            {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchText("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Icon name="X" size={16} color={theme.colors.text.tertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
+          <SearchInput
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Search streams..."
+            containerStyle={styles.searchWrapper}
+          />
 
           {/* Sort bar */}
           <SortBar
@@ -214,12 +202,8 @@ export function StreamsScreen() {
                     onPress={() => handleOpenSettings(stream)}
                     activeOpacity={0.7}
                   >
-                    {/* Stream icon or color dot */}
-                    {stream.icon ? (
-                      <Icon name={stream.icon as IconName} size={16} color={resolveStreamColorHex(stream.color, theme.colors.stream) || theme.colors.text.primary} />
-                    ) : resolveStreamColorHex(stream.color, theme.colors.stream) ? (
-                      <View style={[styles.colorDot, { backgroundColor: resolveStreamColorHex(stream.color, theme.colors.stream)! }]} />
-                    ) : null}
+                    {/* Stream icon */}
+                    <Icon name={stream.icon ? stream.icon as IconName : "Layers"} size={16} color={resolveStreamColorHex(stream.color, theme.colors.stream) || theme.colors.text.primary} />
 
                     {/* Stream name */}
                     <Text
@@ -285,17 +269,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   searchWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    gap: 8,
     marginBottom: 16,
-  },
-  searchInput: {
-    flex: 1,
-    height: 36,
-    fontSize: 15,
   },
   card: {
     borderRadius: 12,
@@ -311,12 +285,7 @@ const styles = StyleSheet.create({
   streamRowSeparator: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  colorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  streamRowContent: {
+streamRowContent: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",

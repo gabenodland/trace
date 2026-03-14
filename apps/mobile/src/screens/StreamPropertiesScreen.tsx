@@ -50,7 +50,7 @@ interface StreamPropertiesScreenProps {
 export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: StreamPropertiesScreenProps) {
   const navigate = useNavigate();
   const theme = useTheme();
-  const { selectedStreamId, setSelectedStreamId, setSelectedStreamName } = useDrawer();
+  const { setSelectedStreamId, setSelectedStreamName } = useDrawer();
   const { streamMutations: { createStream: createStreamMutation } } = useStreams();
   const { stream, isLoading, streamMutations } = useStream(streamId);
 
@@ -732,10 +732,8 @@ export function StreamPropertiesScreen({ streamId, returnTo = "streams" }: Strea
                       onPress: async () => {
                         try {
                           await streamMutations.deleteStream();
-                          if (selectedStreamId === streamId) {
-                            setSelectedStreamId("all");
-                            setSelectedStreamName("All Entries");
-                          }
+                          setSelectedStreamId("all");
+                          setSelectedStreamName("All Entries");
                           navigate(backDestination);
                         } catch (error) {
                           log.error("Failed to delete stream", error);

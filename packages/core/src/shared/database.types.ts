@@ -462,6 +462,7 @@ export type Database = {
           conflict_backup: Json | null
           conflict_status: string | null
           created_at: string
+          deleted_at: string | null
           entry_content_template: string | null
           entry_content_type: string
           entry_count: number
@@ -494,6 +495,7 @@ export type Database = {
           conflict_backup?: Json | null
           conflict_status?: string | null
           created_at?: string
+          deleted_at?: string | null
           entry_content_template?: string | null
           entry_content_type?: string
           entry_count?: number
@@ -526,6 +528,7 @@ export type Database = {
           conflict_backup?: Json | null
           conflict_status?: string | null
           created_at?: string
+          deleted_at?: string | null
           entry_content_template?: string | null
           entry_content_type?: string
           entry_count?: number
