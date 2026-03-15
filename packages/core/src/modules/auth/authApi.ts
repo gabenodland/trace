@@ -68,10 +68,9 @@ export async function getCurrentUser(): Promise<User | null> {
  * Get current session
  */
 export async function getSession(): Promise<Session | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) return null;
+  return data?.session ?? null;
 }
 
 /**

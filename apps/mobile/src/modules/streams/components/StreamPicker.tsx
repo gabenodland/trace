@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Keyboard, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Keyboard, Platform, InteractionManager } from "react-native";
 import { useStreams } from "../mobileStreamHooks";
 import { StreamList } from "./StreamList";
 import { PickerBottomSheet } from "../../../components/sheets";
@@ -61,12 +61,12 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
       // Find the index of the selected stream (+1 for the "Inbox" option at the top)
       const selectedIndex = streams.findIndex(s => s.stream_id === selectedStreamId);
       if (selectedIndex >= 0) {
-        // Wait a bit for the ScrollView to be fully rendered
-        const timer = setTimeout(() => {
+        // Scroll after layout completes
+        const handle = InteractionManager.runAfterInteractions(() => {
           const scrollOffset = (selectedIndex + 1) * ITEM_HEIGHT; // +1 for Inbox
           scrollViewRef.current?.scrollTo({ y: scrollOffset, animated: true });
-        }, 100);
-        return () => clearTimeout(timer);
+        });
+        return () => handle.cancel();
       }
     }
   }, [visible, selectedStreamId, streams]);

@@ -1,17 +1,20 @@
 /**
- * RatingPicker - Star rating picker component
- * Uses PickerBottomSheet for consistent bottom sheet presentation
+ * RatingPicker - Dispatches to the correct rating picker based on ratingType
  *
- * Note: Ratings are stored internally as 0-10 scale
- * Stars map to: 1★=2, 2★=4, 3★=6, 4★=8, 5★=10
+ * - 'stars' → Star picker (1-5 stars, stored as 0-10 scale)
+ * - 'decimal_whole' → WholeNumberRatingPicker (0-10)
+ * - 'decimal' → DecimalRatingPicker (0.0-10.0)
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { starsToDecimal, decimalToStars } from "@trace/core";
+import type { RatingType } from "@trace/core";
 import { PickerBottomSheet, RemoveIcon } from "../../../../components/sheets";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
 import { themeBase } from "../../../../shared/theme/themeBase";
 import { Icon } from "../../../../shared/components";
+import { WholeNumberRatingPicker } from "./WholeNumberRatingPicker";
+import { DecimalRatingPicker } from "./DecimalRatingPicker";
 
 interface RatingPickerProps {
   visible: boolean;
@@ -19,6 +22,7 @@ interface RatingPickerProps {
   rating: number; // Stored as 0-10 scale
   onRatingChange: (rating: number) => void; // Returns 0-10 scale
   onSnackbar: (message: string) => void;
+  ratingType?: RatingType;
 }
 
 export function RatingPicker({
@@ -27,7 +31,54 @@ export function RatingPicker({
   rating,
   onRatingChange,
   onSnackbar,
+  ratingType = 'stars',
 }: RatingPickerProps) {
+  // Delegate to the appropriate picker
+  if (ratingType === 'decimal_whole') {
+    return (
+      <WholeNumberRatingPicker
+        visible={visible}
+        onClose={onClose}
+        rating={rating}
+        onRatingChange={onRatingChange}
+        onSnackbar={onSnackbar}
+      />
+    );
+  }
+
+  if (ratingType === 'decimal') {
+    return (
+      <DecimalRatingPicker
+        visible={visible}
+        onClose={onClose}
+        rating={rating}
+        onRatingChange={onRatingChange}
+        onSnackbar={onSnackbar}
+      />
+    );
+  }
+
+  // Default: star picker
+  return <StarRatingPicker
+    visible={visible}
+    onClose={onClose}
+    rating={rating}
+    onRatingChange={onRatingChange}
+    onSnackbar={onSnackbar}
+  />;
+}
+
+/**
+ * Star rating picker (1-5 stars)
+ * Stars map to: 1★=2, 2★=4, 3★=6, 4★=8, 5★=10
+ */
+function StarRatingPicker({
+  visible,
+  onClose,
+  rating,
+  onRatingChange,
+  onSnackbar,
+}: Omit<RatingPickerProps, 'ratingType'>) {
   const dynamicTheme = useTheme();
 
   // Convert stored rating (0-10) to stars (1-5) for display

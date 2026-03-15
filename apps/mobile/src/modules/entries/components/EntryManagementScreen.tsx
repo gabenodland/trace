@@ -1285,6 +1285,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           rating={entry?.rating ?? 0}
           onRatingChange={handleRatingChange}
           onSnackbar={showSnackbar}
+          ratingType={(entry?.stream?.entry_rating_type as RatingType) ?? 'stars'}
         />
 
         <PriorityPicker

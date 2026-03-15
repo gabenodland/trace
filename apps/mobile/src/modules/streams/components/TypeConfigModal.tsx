@@ -88,7 +88,7 @@ export function TypeConfigModal({
       visible={visible}
       onClose={onClose}
       title="Entry Types"
-      height="auto"
+      height="full"
       dismissKeyboard={false}
       primaryAction={{ label: "Save", onPress: handleSave }}
       secondaryAction={localTypes.length > 0 ? { label: "Clear All", onPress: handleClearAll, variant: "danger" } : undefined}

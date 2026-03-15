@@ -185,7 +185,7 @@ export function LocationsScreen() {
           if (loc) setUserPosition({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         }
       } catch (err) {
-        log.warn('Failed to get user position for distance sorting');
+        log.warn('Failed to get user position for distance sorting', { error: err });
       }
     })();
   }, []);

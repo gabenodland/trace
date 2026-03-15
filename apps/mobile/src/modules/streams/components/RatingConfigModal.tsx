@@ -3,7 +3,6 @@
  * Allows selecting between stars, 10-base, and 10-base with decimals
  */
 
-import { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { type RatingType } from "@trace/core";
 import { Icon } from "../../../shared/components";
@@ -45,17 +44,8 @@ export function RatingConfigModal({
   onSave,
 }: RatingConfigModalProps) {
   const theme = useTheme();
-  const [selectedType, setSelectedType] = useState<RatingType>(ratingType);
-
-  // Reset when modal opens
-  useEffect(() => {
-    if (visible) {
-      setSelectedType(ratingType);
-    }
-  }, [visible, ratingType]);
-
-  const handleSave = () => {
-    onSave(selectedType);
+  const handleSelect = (type: RatingType) => {
+    onSave(type);
     onClose();
   };
 
@@ -88,7 +78,6 @@ export function RatingConfigModal({
       onClose={onClose}
       title="Rating Type"
       height="auto"
-      primaryAction={{ label: "Save", onPress: handleSave }}
     >
       <Text style={[styles.subtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
         Choose how ratings are displayed and entered for entries in this stream.
@@ -96,7 +85,7 @@ export function RatingConfigModal({
 
       <View style={styles.optionsList}>
         {RATING_OPTIONS.map((option) => {
-          const isSelected = selectedType === option.value;
+          const isSelected = ratingType === option.value;
 
           return (
             <TouchableOpacity
@@ -106,7 +95,7 @@ export function RatingConfigModal({
                 { backgroundColor: theme.colors.background.tertiary, borderColor: "transparent" },
                 isSelected && { borderColor: theme.colors.functional.accent },
               ]}
-              onPress={() => setSelectedType(option.value)}
+              onPress={() => handleSelect(option.value)}
               activeOpacity={0.7}
             >
               <View

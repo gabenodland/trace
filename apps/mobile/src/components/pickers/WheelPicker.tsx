@@ -4,7 +4,7 @@
  */
 
 import { useRef, useEffect, useCallback } from "react";
-import { View, Text, ScrollView, StyleSheet, NativeSyntheticEvent, NativeScrollEvent } from "react-native";
+import { View, Text, ScrollView, StyleSheet, NativeSyntheticEvent, NativeScrollEvent, InteractionManager } from "react-native";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
 
@@ -29,13 +29,13 @@ export function WheelPicker({ items, selectedValue, onValueChange, width = 80 }:
   // Scroll to selected item on mount and when selection changes externally
   useEffect(() => {
     if (scrollViewRef.current && selectedIndex >= 0 && !isScrolling.current) {
-      const timer = setTimeout(() => {
+      const handle = InteractionManager.runAfterInteractions(() => {
         scrollViewRef.current?.scrollTo({
           y: selectedIndex * ITEM_HEIGHT,
           animated: false,
         });
-      }, 50);
-      return () => clearTimeout(timer);
+      });
+      return () => handle.cancel();
     }
   }, [selectedIndex]);
 

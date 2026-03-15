@@ -50,7 +50,7 @@ if (__DEV__) {
 
 // Global unhandled promise rejection handler — catches any .then() without .catch()
 // that slips through. Prevents silent crashes in production.
-if (typeof globalThis !== 'undefined' && !(globalThis as any).__traceRejectionHandlerInstalled) {
+if (!(globalThis as any).__traceRejectionHandlerInstalled) {
   (globalThis as any).__traceRejectionHandlerInstalled = true;
   // Hermes exposes enablePromiseRejectionTracker directly
   (globalThis as any).HermesInternal?.enablePromiseRejectionTracker?.({

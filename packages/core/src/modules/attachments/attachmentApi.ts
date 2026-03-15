@@ -42,7 +42,8 @@ export async function getAttachment(attachmentId: string): Promise<Attachment> {
  * Create a new attachment record in database
  */
 export async function createAttachment(input: CreateAttachmentInput): Promise<Attachment> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: authData } = await supabase.auth.getUser();
+  const user = authData?.user;
   if (!user) throw new Error('Not authenticated');
 
   const attachmentData = {

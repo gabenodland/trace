@@ -211,7 +211,7 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
     let cancelled = false;
     localDB.getAttachmentsByIds(selectedVersion.attachment_ids).then(attachments => {
       if (!cancelled) setVersionAttachments(attachments);
-    });
+    }).catch(err => log.warn('Failed to load version attachments', { error: err }));
     return () => { cancelled = true; };
   }, [selectedVersion?.version_id, selectedVersion?.attachment_ids]);
 

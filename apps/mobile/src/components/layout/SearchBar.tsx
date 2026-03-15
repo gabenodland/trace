@@ -1,4 +1,4 @@
-import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TextInput, TouchableOpacity, StyleSheet, InteractionManager } from 'react-native';
 import { useRef, useEffect } from 'react';
 import { useTheme } from '../../shared/contexts/ThemeContext';
 import { Icon } from '../../shared/components';
@@ -24,8 +24,10 @@ export function SearchBar({
 
   useEffect(() => {
     if (autoFocus) {
-      const timer = setTimeout(() => inputRef.current?.focus(), 100);
-      return () => clearTimeout(timer);
+      const handle = InteractionManager.runAfterInteractions(() => {
+        inputRef.current?.focus();
+      });
+      return () => handle.cancel();
     }
   }, [autoFocus]);
 
