@@ -1047,6 +1047,14 @@ class LocalDatabase {
 
       -- Indexes for entry_versions are created in createIndexes() after migrations
 
+      -- Entry tombstones: markers for permanently deleted entries (sync propagation)
+      CREATE TABLE IF NOT EXISTS entry_tombstones (
+        entry_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        hard_deleted_at INTEGER NOT NULL,
+        synced INTEGER NOT NULL DEFAULT 0
+      );
+
       -- Sync metadata table
       CREATE TABLE IF NOT EXISTS sync_metadata (
         key TEXT PRIMARY KEY,
@@ -1531,7 +1539,7 @@ class LocalDatabase {
         updated.deleted_at ? Date.parse(updated.deleted_at) : null,
         updated.local_only !== undefined ? updated.local_only : 0,
         updated.synced !== undefined ? updated.synced : 0,
-        updated.sync_action !== undefined ? updated.sync_action : 'update',
+        updated.sync_action ?? 'update',
         updated.version !== undefined ? updated.version : 1,
         updated.base_version !== undefined ? updated.base_version : 1,
         updated.conflict_status || null,
@@ -1570,7 +1578,14 @@ class LocalDatabase {
     }
 
     if (entry.local_only) {
-      await this.db.runAsync('DELETE FROM entries WHERE entry_id = ?', [entryId]);
+      // Soft delete local-only entries too (for trash support)
+      await this.db.runAsync(
+        `UPDATE entries SET
+          deleted_at = ?,
+          location_id = NULL
+        WHERE entry_id = ?`,
+        [now, entryId]
+      );
     } else {
       // Soft delete: set deleted_at and release the location
       await this.db.runAsync(
@@ -1606,12 +1621,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Hard-delete entries that were marked for deletion and are now synced
-    await this.db.runAsync(
-      'DELETE FROM entries WHERE entry_id = ? AND sync_action = ?',
-      [entryId, 'delete']
-    );
-    // Clear sync fields for all other entries (no-op if row was just deleted)
+    // Clear sync fields — keep soft-deleted entries in SQLite for trash
     await this.db.runAsync(
       `UPDATE entries SET
         synced = 1,
@@ -1621,6 +1631,203 @@ class LocalDatabase {
       WHERE entry_id = ?`,
       [entryId]
     );
+  }
+
+  /**
+   * Get all soft-deleted entries (for trash screen)
+   */
+  async getDeletedEntries(): Promise<Entry[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const rows = await this.db.getAllAsync<any>(
+      `SELECT e.*,
+        (SELECT COUNT(*) FROM attachments a WHERE a.entry_id = e.entry_id AND a.deleted_at IS NULL AND (a.sync_action IS NULL OR a.sync_action != 'delete')) as photo_count
+      FROM entries e
+      WHERE e.deleted_at IS NOT NULL
+      ORDER BY e.deleted_at DESC`
+    );
+
+    return rows.map(row => this.rowToEntry(row));
+  }
+
+  /**
+   * Restore a soft-deleted entry (clear deleted_at, mark for sync)
+   * Only restores attachments that were cascade-deleted with the entry
+   * (preserves individually-deleted attachments)
+   */
+  async restoreEntry(entryId: string): Promise<{ restored_to_inbox: boolean }> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const entry = await this.getEntry(entryId);
+    if (!entry || !entry.deleted_at) return { restored_to_inbox: false };
+
+    const entryDeletedAt = typeof entry.deleted_at === 'string'
+      ? Date.parse(entry.deleted_at)
+      : entry.deleted_at;
+
+    // Check if original stream is deleted (matches server-side RPC behavior)
+    let restoredToInbox = false;
+    if (entry.stream_id) {
+      const stream = await this.db.getFirstAsync<{ deleted_at: number | null }>(
+        `SELECT deleted_at FROM streams WHERE stream_id = ?`,
+        [entry.stream_id]
+      );
+      if (!stream || stream.deleted_at !== null) {
+        restoredToInbox = true;
+      }
+    }
+
+    // Restore the entry — set updated_at so it surfaces in recent lists
+    const now = Date.now();
+    if (entry.local_only) {
+      await this.db.runAsync(
+        `UPDATE entries SET deleted_at = NULL, updated_at = ?${restoredToInbox ? ', stream_id = NULL' : ''} WHERE entry_id = ?`,
+        [now, entryId]
+      );
+    } else {
+      await this.db.runAsync(
+        `UPDATE entries SET
+          deleted_at = NULL,
+          updated_at = ?,
+          ${restoredToInbox ? 'stream_id = NULL,' : ''}
+          synced = 0,
+          sync_action = 'update'
+        WHERE entry_id = ?`,
+        [now, entryId]
+      );
+    }
+
+    // Restore attachments that were cascade-deleted with the entry
+    // (deleted_at >= entry.deleted_at means deleted at same time or after)
+    if (entry.local_only) {
+      await this.db.runAsync(
+        `UPDATE attachments SET deleted_at = NULL
+        WHERE entry_id = ? AND deleted_at IS NOT NULL AND deleted_at >= ?`,
+        [entryId, entryDeletedAt]
+      );
+    } else {
+      await this.db.runAsync(
+        `UPDATE attachments SET
+          deleted_at = NULL,
+          synced = 0,
+          sync_action = 'update'
+        WHERE entry_id = ? AND deleted_at IS NOT NULL AND deleted_at >= ?`,
+        [entryId, entryDeletedAt]
+      );
+    }
+
+    return { restored_to_inbox: restoredToInbox };
+  }
+
+  /**
+   * Hard-delete an entry permanently from local SQLite.
+   * Creates a tombstone so other devices know to remove it.
+   */
+  async hardDeleteEntry(entryId: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Get user_id and local_only before deleting
+    const entry = await this.getEntry(entryId);
+    const userId = entry?.user_id || this.currentUserId || '';
+    const isLocalOnly = entry?.local_only === 1;
+
+    // Delete attachments first
+    await this.db.runAsync(
+      'DELETE FROM attachments WHERE entry_id = ?',
+      [entryId]
+    );
+
+    // Delete versions
+    await this.db.runAsync(
+      'DELETE FROM entry_versions WHERE entry_id = ?',
+      [entryId]
+    );
+
+    // Delete the entry
+    await this.db.runAsync(
+      'DELETE FROM entries WHERE entry_id = ?',
+      [entryId]
+    );
+
+    // Create tombstone (only for synced entries — local-only don't need it)
+    if (!isLocalOnly) {
+      await this.db.runAsync(
+        `INSERT OR IGNORE INTO entry_tombstones (entry_id, user_id, hard_deleted_at, synced)
+         VALUES (?, ?, ?, 0)`,
+        [entryId, userId, Date.now()]
+      );
+    }
+  }
+
+  /**
+   * Get unsynced tombstones for push sync
+   */
+  async getUnsyncedTombstones(): Promise<{ entry_id: string; user_id: string; hard_deleted_at: number }[]> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    return this.db.getAllAsync<{ entry_id: string; user_id: string; hard_deleted_at: number }>(
+      'SELECT * FROM entry_tombstones WHERE synced = 0'
+    );
+  }
+
+  /**
+   * Mark a tombstone as synced
+   */
+  async markTombstoneSynced(entryId: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.runAsync(
+      'UPDATE entry_tombstones SET synced = 1 WHERE entry_id = ?',
+      [entryId]
+    );
+  }
+
+  /**
+   * Mark multiple tombstones as synced in one statement
+   */
+  async markTombstonesSynced(entryIds: string[]): Promise<void> {
+    if (entryIds.length === 0) return;
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const placeholders = entryIds.map(() => '?').join(',');
+    await this.db.runAsync(
+      `UPDATE entry_tombstones SET synced = 1 WHERE entry_id IN (${placeholders})`,
+      entryIds
+    );
+  }
+
+  /**
+   * Save a tombstone received from server (during pull sync)
+   */
+  async saveTombstone(entryId: string, userId: string, hardDeletedAt: number): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.runAsync(
+      `INSERT OR IGNORE INTO entry_tombstones (entry_id, user_id, hard_deleted_at, synced)
+       VALUES (?, ?, ?, 1)`,
+      [entryId, userId, hardDeletedAt]
+    );
+  }
+
+  /**
+   * Check if a tombstone exists for an entry
+   */
+  async hasTombstone(entryId: string): Promise<boolean> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const row = await this.db.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM entry_tombstones WHERE entry_id = ?',
+      [entryId]
+    );
+    return (row?.count ?? 0) > 0;
   }
 
   /**
@@ -2619,7 +2826,12 @@ class LocalDatabase {
     // Move entries to Uncategorized (null stream_id)
     await this.db.runAsync(
       `UPDATE entries
-       SET stream_id = NULL, synced = 0
+       SET stream_id = NULL, synced = 0,
+           sync_action = CASE
+             WHEN sync_action = 'create' THEN 'create'
+             WHEN sync_action = 'delete' THEN 'delete'
+             ELSE 'update'
+           END
        WHERE stream_id = ?`,
       [streamId]
     );
@@ -2679,7 +2891,14 @@ class LocalDatabase {
 
     // Move entries to Inbox
     await this.db.runAsync(
-      `UPDATE entries SET stream_id = NULL, synced = 0 WHERE stream_id = ?`,
+      `UPDATE entries
+       SET stream_id = NULL, synced = 0,
+           sync_action = CASE
+             WHEN sync_action = 'create' THEN 'create'
+             WHEN sync_action = 'delete' THEN 'delete'
+             ELSE 'update'
+           END
+       WHERE stream_id = ?`,
       [streamId]
     );
 
@@ -3204,6 +3423,66 @@ class LocalDatabase {
     }
 
     return orphanCount;
+  }
+
+  /**
+   * Purge expired trash — hard-delete entries in trash for longer than retention period.
+   * Handles both synced and local-only entries.
+   * Creates tombstones for synced entries so other devices know to remove them.
+   */
+  async purgeExpiredTrash(retentionDays: number = 30): Promise<number> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    const cutoffMs = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+    const nowMs = Date.now();
+
+    // Count expired entries first
+    const countResult = await this.db.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ?`,
+      [cutoffMs]
+    );
+    const count = countResult?.count ?? 0;
+    if (count === 0) return 0;
+
+    // Batch: create tombstones for synced entries, then delete everything
+    await this.db.execAsync('BEGIN TRANSACTION');
+    try {
+      // Insert tombstones for synced expired entries (skip local-only)
+      await this.db.runAsync(
+        `INSERT OR IGNORE INTO entry_tombstones (entry_id, user_id, hard_deleted_at, synced)
+         SELECT entry_id, user_id, ?, 0
+         FROM entries
+         WHERE deleted_at IS NOT NULL AND deleted_at < ? AND local_only = 0`,
+        [nowMs, cutoffMs]
+      );
+
+      // Batch delete attachments, versions, and entries
+      await this.db.runAsync(
+        `DELETE FROM attachments WHERE entry_id IN (
+           SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ?
+         )`,
+        [cutoffMs]
+      );
+      await this.db.runAsync(
+        `DELETE FROM entry_versions WHERE entry_id IN (
+           SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ?
+         )`,
+        [cutoffMs]
+      );
+      await this.db.runAsync(
+        `DELETE FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ?`,
+        [cutoffMs]
+      );
+
+      await this.db.execAsync('COMMIT');
+    } catch (error) {
+      await this.db.execAsync('ROLLBACK');
+      throw error;
+    }
+
+    log.info('Purged expired trash', { count, retentionDays });
+    return count;
   }
 
   /**

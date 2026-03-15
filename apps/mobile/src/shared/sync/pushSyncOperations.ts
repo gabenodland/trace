@@ -376,6 +376,65 @@ export async function pushEntryVersions(): Promise<{ success: number; errors: nu
   return { success, errors };
 }
 
+export async function pushTombstones(): Promise<{ success: number; errors: number }> {
+  const tombstones = await localDB.getUnsyncedTombstones();
+  if (tombstones.length === 0) {
+    return { success: 0, errors: 0 };
+  }
+
+  log.info('Pushing tombstones (batch)', { count: tombstones.length });
+
+  const entryIds = tombstones.map(t => t.entry_id);
+
+  try {
+    // 1. Bulk upsert tombstones to server
+    const tombstoneRows = tombstones.map(t => ({
+      entry_id: t.entry_id,
+      user_id: t.user_id,
+      hard_deleted_at: new Date(t.hard_deleted_at).toISOString(),
+    }));
+
+    const { error: upsertError } = await (supabase.from as any)('entry_tombstones')
+      .upsert(tombstoneRows, { onConflict: 'entry_id' });
+
+    if (upsertError) {
+      log.error('Tombstone batch upsert failed', upsertError);
+      return { success: 0, errors: tombstones.length };
+    }
+
+    // 2. Collect file paths from attachments that need storage cleanup
+    const { data: attachmentFiles } = await (supabase.from as any)('attachments')
+      .select('file_path')
+      .in('entry_id', entryIds) as { data: { file_path: string }[] | null };
+
+    // 3. Bulk delete from server tables (order matters for FK constraints)
+    await (supabase.from as any)('attachments').delete().in('entry_id', entryIds);
+    await (supabase.from as any)('entry_versions').delete().in('entry_id', entryIds);
+    await (supabase.from as any)('entries').delete().in('entry_id', entryIds);
+
+    // 4. Clean up storage files in one call
+    const filePaths = (attachmentFiles ?? []).map((a: any) => a.file_path).filter(Boolean);
+    if (filePaths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from('attachments')
+        .remove(filePaths);
+
+      if (storageError) {
+        log.warn('Tombstone: batch storage cleanup failed', { orphanedFiles: filePaths.length });
+      }
+    }
+
+    // 5. Mark all as synced locally in one statement
+    await localDB.markTombstonesSynced(entryIds);
+
+    log.info('Tombstones pushed (batch)', { count: tombstones.length, filesCleanedUp: filePaths.length });
+    return { success: tombstones.length, errors: 0 };
+  } catch (error) {
+    log.error('Tombstone batch push failed', error as Error);
+    return { success: 0, errors: tombstones.length };
+  }
+}
+
 // ============================================================================
 // INDIVIDUAL SYNC OPERATIONS
 // ============================================================================
@@ -632,6 +691,10 @@ async function syncEntry(
         }
       }
 
+      await localDB.markSynced(entry.entry_id);
+    } else {
+      // No sync_action (null/undefined) — entry is in a broken state, just mark synced
+      log.warn('Entry has no sync_action, marking as synced', { entryId: entry.entry_id, sync_action });
       await localDB.markSynced(entry.entry_id);
     }
   } finally {
