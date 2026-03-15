@@ -13,13 +13,13 @@ import { Icon } from '../shared/components';
 import { useTheme } from '../shared/contexts/ThemeContext';
 import { themeBase } from '../shared/theme/themeBase';
 import { createScopedLogger, LogScopes } from '../shared/utils/logger';
-
-const log = createScopedLogger(LogScopes.Devices);
 import { SecondaryHeader } from '../components/layout/SecondaryHeader';
 import { useDevices, useDeactivateDevice, useReactivateDevice, useRemoveDevice, useUpdateDeviceName } from '../modules/devices';
 import { getDeviceId } from '../config/appVersionService';
 import type { Device } from '../modules/devices';
 import type { IconName } from '../shared/components/Icon';
+
+const log = createScopedLogger(LogScopes.Devices);
 
 function formatRelativeTime(isoDate: string): string {
   const diff = Date.now() - new Date(isoDate).getTime();

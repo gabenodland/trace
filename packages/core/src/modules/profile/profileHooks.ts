@@ -75,7 +75,8 @@ function useUpdateProfileMutation() {
 
       return { previousProfile };
     },
-    onError: (_err, { userId }, context) => {
+    onError: (error, { userId }, context) => {
+      console.error("[Profile] updateProfile mutation failed:", error, { userId });
       // Rollback on error
       if (context?.previousProfile) {
         queryClient.setQueryData(PROFILE_KEYS.detail(userId), context.previousProfile);
@@ -112,6 +113,9 @@ function useUploadAvatarMutation() {
 
       return avatarUrl;
     },
+    onError: (error, { userId }) => {
+      console.error("[Profile] uploadAvatar mutation failed:", error, { userId });
+    },
     onSettled: (_data, _error, { userId }) => {
       queryClient.invalidateQueries({ queryKey: PROFILE_KEYS.detail(userId) });
       queryClient.invalidateQueries({ queryKey: PROFILE_KEYS.current() });
@@ -133,6 +137,9 @@ function useDeleteAvatarMutation() {
       // Update profile to remove avatar URL
       await updateProfile(userId, { avatar_url: null });
     },
+    onError: (error, { userId }) => {
+      console.error("[Profile] deleteAvatar mutation failed:", error, { userId });
+    },
     onSettled: (_data, _error, { userId }) => {
       queryClient.invalidateQueries({ queryKey: PROFILE_KEYS.detail(userId) });
       queryClient.invalidateQueries({ queryKey: PROFILE_KEYS.current() });
@@ -148,6 +155,9 @@ function useCheckUsernameMutation() {
   return useMutation({
     mutationFn: async (username: string) => {
       return checkUsernameAvailable(username);
+    },
+    onError: (error, username) => {
+      console.error("[Profile] checkUsername mutation failed:", error, { username });
     },
   });
 }

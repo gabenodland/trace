@@ -273,6 +273,8 @@ return data;
 try { await updateUser(id, data); } catch (error) { /* handle */ }
 ```
 
+**Logging in core:** `console.error` is acceptable in `@trace/core` for mutation `onError` handlers. The scoped logger (`createScopedLogger`) lives in `apps/mobile/` and is not available here. Do NOT use `console.log` for debug traces — remove those before committing.
+
 ---
 
 ## 🔄 Creating a New Module

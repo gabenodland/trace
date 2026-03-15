@@ -62,9 +62,6 @@ export function useNearbyPOIs(
       ? locationKeys.nearby(request.latitude, request.longitude, request.radius || 500)
       : ['locations', 'nearby', 'disabled'],
     queryFn: async () => {
-      // This only logs when the query actually executes (cache miss), not on every render
-      console.log('📍 [NearbyPOIs] Fetching POIs for', request?.latitude.toFixed(4), request?.longitude.toFixed(4));
-
       const response = await locationApi.searchNearbyPOIs(request!);
 
       // Note: Quality filtering (stats, popularity, rating) requires premium API tier
@@ -72,7 +69,6 @@ export function useNearbyPOIs(
 
       // Convert Foursquare places to POI items
       const pois = response.results.map(place => locationHelpers.foursquareToPOI(place));
-      console.log('📍 [NearbyPOIs] Received', pois.length, 'POIs');
       return pois;
     },
     enabled,
@@ -148,6 +144,9 @@ function useCreateLocationMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: locationKeys.list() });
     },
+    onError: (error, input) => {
+      console.error("[Locations] createLocation mutation failed:", error, { input });
+    },
   });
 }
 
@@ -163,6 +162,9 @@ function useUpdateLocationMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: locationKeys.list() });
     },
+    onError: (error, { locationId }) => {
+      console.error("[Locations] updateLocation mutation failed:", error, { locationId });
+    },
   });
 }
 
@@ -176,6 +178,9 @@ function useDeleteLocationMutation() {
     mutationFn: locationDbApi.deleteLocation,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: locationKeys.list() });
+    },
+    onError: (error, locationId) => {
+      console.error("[Locations] deleteLocation mutation failed:", error, { locationId });
     },
   });
 }

@@ -92,6 +92,9 @@ function useRestoreEntryMutation() {
       queryClient.invalidateQueries({ queryKey: ["entries"] });
       queryClient.invalidateQueries({ queryKey: ["streams"] });
     },
+    onError: (error, entryId) => {
+      console.error("[DataManagement] restoreEntry mutation failed:", error, { entryId });
+    },
   });
 }
 
@@ -106,6 +109,9 @@ function useHardDeleteEntryMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.deletedEntries });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cloudStorage });
+    },
+    onError: (error, entryId) => {
+      console.error("[DataManagement] hardDeleteEntry mutation failed:", error, { entryId });
     },
   });
 }
@@ -122,6 +128,9 @@ function useHardDeleteStreamMutation() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.deletedStreams });
       queryClient.invalidateQueries({ queryKey: ["entries"] }); // entries may have moved to Inbox
     },
+    onError: (error, streamId) => {
+      console.error("[DataManagement] hardDeleteStream mutation failed:", error, { streamId });
+    },
   });
 }
 
@@ -135,6 +144,9 @@ function useHardDeleteLocationMutation() {
     mutationFn: hardDeleteLocation,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.deletedLocations });
+    },
+    onError: (error, locationId) => {
+      console.error("[DataManagement] hardDeleteLocation mutation failed:", error, { locationId });
     },
   });
 }

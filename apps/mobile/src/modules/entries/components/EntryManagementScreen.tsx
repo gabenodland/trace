@@ -41,7 +41,7 @@ import { createScopedLogger } from '../../../shared/utils/logger';
 import { navigate, getNavParams } from '../../../shared/navigation';
 import type { EntryWithRelations } from '../EntryWithRelationsTypes';
 import { splitTitleAndBody, combineTitleAndBody } from '@trace/core';
-import type { EntryStatus, Location, LocationEntity, RatingType } from '@trace/core';
+import type { EntryStatus, Location, LocationEntity } from '@trace/core';
 import { useSettings } from '../../../shared/contexts/SettingsContext';
 import { useStreams } from '../../streams/mobileStreamHooks';
 import { useLocations } from '../../locations/mobileLocationHooks';
@@ -1368,7 +1368,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           rating={entry?.rating ?? 0}
           onRatingChange={handleRatingChange}
           onSnackbar={showSnackbar}
-          ratingType={(entry?.stream?.entry_rating_type as RatingType) ?? 'stars'}
+          ratingType={entry?.stream?.entry_rating_type ?? 'stars'}
         />
 
         <PriorityPicker
@@ -1429,7 +1429,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           dueDate={entry?.due_date ?? null}
           rating={entry?.rating ?? 0}
           priority={entry?.priority ?? 0}
-          ratingType={(entry?.stream?.entry_rating_type as RatingType) ?? 'stars'}
+          ratingType={entry?.stream?.entry_rating_type ?? 'stars'}
           isPinned={entry?.is_pinned ?? false}
           isArchived={entry?.is_archived ?? false}
           // Picker callbacks - directly switch to the target picker
