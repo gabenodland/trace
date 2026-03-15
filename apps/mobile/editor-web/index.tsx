@@ -219,6 +219,8 @@ window.editorCommand = (command: string, payload?: any) => {
       }
 
       case 'setContentAndClearHistory': {
+        const t0 = performance.now();
+
         // Reset scroll lock state for new content
         _prevIsInTableCell = false;
         _tableScrollLock = null;
@@ -227,9 +229,12 @@ window.editorCommand = (command: string, payload?: any) => {
         const { view, schema } = editor;
 
         // Parse HTML into ProseMirror document
+        const t1 = performance.now();
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
+        const t2 = performance.now();
         const doc = DOMParser.fromSchema(schema).parse(tempDiv);
+        const t3 = performance.now();
 
         // Create fresh state with new doc and no history
         const newState = EditorState.create({
@@ -237,12 +242,23 @@ window.editorCommand = (command: string, payload?: any) => {
           schema,
           plugins: editor.state.plugins,
         });
+        const t4 = performance.now();
         view.updateState(newState);
+        const t5 = performance.now();
 
         if (window.ReactNativeWebView?.postMessage) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'contentSetWithClearedHistory',
             docLength: doc.content.size,
+            timing: {
+              setupMs: Math.round((t1 - t0) * 100) / 100,
+              innerHTMLMs: Math.round((t2 - t1) * 100) / 100,
+              domParserMs: Math.round((t3 - t2) * 100) / 100,
+              editorStateCreateMs: Math.round((t4 - t3) * 100) / 100,
+              viewUpdateStateMs: Math.round((t5 - t4) * 100) / 100,
+              totalMs: Math.round((t5 - t0) * 100) / 100,
+              htmlLength: html.length,
+            },
           }));
         }
         break;

@@ -8,6 +8,7 @@ import { Alert } from 'react-native';
 import type { Entry } from '@trace/core';
 import type { EntryWithRelations } from '../../modules/entries/EntryWithRelationsTypes';
 import { startPushAnimation, isPushAnimating } from '../../shared/hooks/useSwipeBackGesture';
+import { preloadEntryContent } from '../../shared/navigation';
 import { createScopedLogger, LogScopes } from '../../shared/utils/logger';
 
 const log = createScopedLogger(LogScopes.Entry);
@@ -33,6 +34,11 @@ export function useEntryActions({ entryMutations, navigate, entries, showSnackba
   const handleEntryPress = useCallback((entryId: string) => {
     // Guard against double-tap during animation window
     if (isPushAnimating()) return;
+
+    // Pre-inject content into WebView at t=0 BEFORE animation/navigation.
+    // The bridge is idle here (no animation, no React re-renders), so latency is ~30ms
+    // vs ~170ms when competing with the render storm that navigate() triggers.
+    preloadEntryContent(entryId);
 
     // Start slide animation immediately on press (native thread, no JS overhead).
     // Navigate fires 100ms in — the main view is already ~60% off-screen by then

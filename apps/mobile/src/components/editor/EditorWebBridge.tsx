@@ -205,6 +205,7 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
           const escapedHtml = JSON.stringify(html);
           const script = `window.editorCommand('setContentAndClearHistory', { html: ${escapedHtml} });true;`;
           log.debug('[EditorWebBridge] Injecting setContentAndClearHistory script');
+          injectTimestampRef.current = performance.now();
           webview.injectJavaScript(script);
         } else {
           log.warn('[EditorWebBridge] setContentAndClearHistory: webview ref not available, falling back to setContent');
@@ -275,6 +276,8 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
     cursorContextRef.current = onCursorContext;
     const contentConfirmedRef = useRef(onContentConfirmed);
     contentConfirmedRef.current = onContentConfirmed;
+    // Timestamp for bridge round-trip measurement
+    const injectTimestampRef = useRef<number | null>(null);
 
     // Handle messages from WebView (table touch events, cursor context, console forwarding)
     const handleMessage = useCallback((event: WebViewMessageEvent) => {
@@ -287,7 +290,13 @@ export const EditorWebBridge = forwardRef<EditorWebBridgeRef, EditorWebBridgePro
         } else if (data.type === 'cursorContext') {
           cursorContextRef.current?.({ isInTableCell: !!data.isInTableCell });
         } else if (data.type === 'contentSetWithClearedHistory') {
-          log.info('[EditorWebBridge] 📬 contentSetWithClearedHistory confirmed', { docLength: data.docLength });
+          const injectTs = injectTimestampRef.current;
+          const bridgeRoundTripMs = injectTs ? Math.round(performance.now() - injectTs) : null;
+          log.info('[EditorWebBridge] 📬 contentSetWithClearedHistory confirmed', {
+            docLength: data.docLength,
+            bridgeRoundTripMs,
+            webViewTiming: data.timing,
+          });
           contentConfirmedRef.current?.(data.docLength);
         } else if (data.type === 'console') {
           // Forward WebView console logs to RN console

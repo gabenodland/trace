@@ -39,7 +39,7 @@ import * as Linking from "expo-linking";
 import { setSession } from "@trace/core";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/shared/contexts/AuthContext";
-import { useNavigationState, getNavigationVersion, navigate } from "./src/shared/navigation";
+import { useNavigationState, getNavigationVersion, navigate, setPreloadContentRef } from "./src/shared/navigation";
 import { SettingsProvider } from "./src/shared/contexts/SettingsContext";
 import { ThemeProvider, useTheme } from "./src/shared/contexts/ThemeContext";
 import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/DrawerContext";
@@ -66,6 +66,9 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { SubscriptionScreen } from "./src/screens/SubscriptionScreen";
 import { DevicesScreen } from "./src/screens/DevicesScreen";
 import { DataManagementScreen } from "./src/screens/DataManagementScreen";
+import { EntriesScreen } from "./src/screens/EntriesScreen";
+import { DeletedEntriesScreen } from "./src/screens/DeletedEntriesScreen";
+import { DeletedEntryDetailScreen } from "./src/screens/DeletedEntryDetailScreen";
 import { localDB } from "./src/shared/db/localDB";
 import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
@@ -312,6 +315,15 @@ const AppContent = memo(function AppContent() {
   // Ref for persistent EntryManagementScreen (entry editor)
   const entryManagementRef = useRef<EntryManagementScreenRef>(null);
 
+  // Register preloadContent for t=0 injection from useEntryActions.
+  // Empty deps: entryManagementRef is a stable ref, registration only needed once.
+  // Re-registers on remount (e.g., restartApp) since AppContent remounts.
+  useEffect(() => {
+    setPreloadContentRef((entryId: string) => {
+      entryManagementRef.current?.preloadContent(entryId);
+    });
+  }, []);
+
   // Counter to trigger scroll restoration in EntryListScreen
   // Only increments when navigating BACK to allEntries (not away from it)
   const [scrollRestoreKey, setScrollRestoreKey] = useState(0);
@@ -510,7 +522,19 @@ const AppContent = memo(function AppContent() {
         boundaryName = "DataManagementScreen";
         content = <DataManagementScreen />;
         break;
-case "stream-properties":
+      case "entries-list":
+        boundaryName = "EntriesScreen";
+        content = <EntriesScreen />;
+        break;
+      case "deleted-entries":
+        boundaryName = "DeletedEntriesScreen";
+        content = <DeletedEntriesScreen />;
+        break;
+      case "deleted-entry-detail":
+        boundaryName = "DeletedEntryDetailScreen";
+        content = <DeletedEntryDetailScreen />;
+        break;
+      case "stream-properties":
         boundaryName = "StreamPropertiesScreen";
         content = <StreamPropertiesScreen streamId={navParams.streamId} returnTo={navParams.returnTo} />;
         break;

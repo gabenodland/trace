@@ -35,4 +35,6 @@ export {
   useCheckBeforeBack,
   useModalState,
   useNavigationState,
+  setPreloadContentRef,
+  preloadEntryContent,
 } from './hooks';

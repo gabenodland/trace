@@ -24,6 +24,20 @@ import {
   type MainScreen,
 } from './NavigationService';
 
+// Module-level ref for pre-loading entry content before navigation.
+// Set by App.tsx, called from useEntryActions at t=0 during press handler.
+let _preloadContentFn: ((entryId: string) => void) | null = null;
+
+/** Register the preloadContent function (called once from App.tsx) */
+export function setPreloadContentRef(fn: (entryId: string) => void) {
+  _preloadContentFn = fn;
+}
+
+/** Pre-inject entry content into WebView before navigation starts */
+export function preloadEntryContent(entryId: string) {
+  _preloadContentFn?.(entryId);
+}
+
 /**
  * Stable navigate function - NEVER causes re-renders
  * Use this in all screens that need to navigate

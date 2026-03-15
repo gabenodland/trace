@@ -82,6 +82,11 @@ export interface NewEntryOptions {
  * Navigation calls methods to control the screen
  */
 export interface EntryManagementScreenRef {
+  /** Pre-inject content into WebView before navigation (call at t=0 during animation).
+   *  Does cache lookup + WebView injection only — no React state changes.
+   *  This lets the bridge process content while idle, before React re-renders cause contention. */
+  preloadContent: (entryId: string) => void;
+
   /** Load and display an existing entry by ID */
   setEntry: (entryId: string) => void;
 
@@ -201,6 +206,16 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
     // Prevents blocky progressive loading (attributes → photos → editor popping in one by one)
     const [isContentReady, setIsContentReady] = useState(false);
 
+    // Editor content confirmed — WebView has rendered the ProseMirror doc.
+    // Separate from isContentReady so metadata (header, attributes) can show immediately
+    // while the WebView catches up (avoids blank editor flash on cold bridge).
+    const [isEditorConfirmed, _setIsEditorConfirmed] = useState(false);
+    const isEditorConfirmedRef = useRef(false);
+    const setIsEditorConfirmed = useCallback((value: boolean) => {
+      isEditorConfirmedRef.current = value;
+      _setIsEditorConfirmed(value);
+    }, []);
+
     // Photo gallery collapsed state - when collapsed, photos show in AttributeBar
     const [isGalleryCollapsed, setIsGalleryCollapsed] = useState(false);
     const [isInTableCell, setIsInTableCell] = useState(false);
@@ -214,6 +229,8 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
 
     // Fast path — WebView confirms content via postMessage, with safety timeout
     const contentSetTimestamp = useRef<number | null>(null);
+    // Tracks which entryId was preloaded — prevents stale preload for wrong entry
+    const preloadedEntryId = useRef<string | null>(null);
     const fastPathTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
     const fastPathOnVerified = useRef<(() => void) | null>(null);
 
@@ -436,6 +453,12 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       const fastPathMs = t0 ? Math.round(performance.now() - t0) : null;
 
       log.info('🏎️ Fast path confirmed', { docLength, fastPathMs });
+
+      // Reset timestamp so setEntry knows preload is already confirmed
+      contentSetTimestamp.current = null;
+
+      // Editor content has landed — show the WebView
+      setIsEditorConfirmed(true);
 
       // Call onVerified callback (used by no-cache path to gate content visibility)
       if (fastPathOnVerified.current) {
@@ -855,6 +878,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
             onTimeout: () => {
               // WebView dead — show content area anyway and trigger recovery
               setIsContentReady(true);
+              setIsEditorConfirmed(true);
               setIsLoading(false);
               log.error('⏰ Content load timed out on no-cache path, triggering recovery');
               handleEditorReloadRef.current();
@@ -877,6 +901,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           const message = err instanceof Error ? err.message : String(err);
           setError(message);
           setIsContentReady(true); // Show error state
+          setIsEditorConfirmed(true);
           setIsLoading(false);
         }
         log.error('Failed to load entry', err);
@@ -885,6 +910,25 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
 
     // Expose ref API for navigation
     useImperativeHandle(ref, () => ({
+      preloadContent: (id: string) => {
+        // Fire-and-forget: inject content into WebView BEFORE navigation state changes.
+        // At this point the bridge is idle (no animation/renders competing for UI thread),
+        // so bridge latency is ~30ms vs ~170ms during the render storm.
+        const cached = findEntryInListCache(id);
+        if (cached) {
+          const editorContent = combineTitleAndBody(cached.title || '', cached.content || '');
+          log.info('🚀 preloadContent: injecting before navigate', {
+            entryId: id.substring(0, 8),
+            length: editorContent.length,
+          });
+          preloadedEntryId.current = id;
+          contentSetTimestamp.current = performance.now();
+          editorRef.current?.setContentAndClearHistory(editorContent);
+        } else {
+          preloadedEntryId.current = null;
+          log.debug('preloadContent: no cache hit, skipping', { entryId: id.substring(0, 8) });
+        }
+      },
       setEntry: (id: string) => {
         const t0 = performance.now();
         log.info('⏱️ setEntry called', { entryId: id.substring(0, 8) });
@@ -918,12 +962,29 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
             initializeVersion(entry.version);
           }
           const editorContent = combineTitleAndBody(entry.title || '', entry.content || '');
-          setContentWithTiming(editorContent, 'cache-hit', {
-            onTimeout: () => {
-              log.error('⏰ Cache-hit content never confirmed — triggering recovery');
+          const preloadMatchesEntry = preloadedEntryId.current === id;
+          if (preloadMatchesEntry && contentSetTimestamp.current) {
+            // preloadContent injected for THIS entry, confirmation still pending — register safety timeout
+            log.info('⏱️ preloadContent pending, registering safety timeout only');
+            if (fastPathTimeoutId.current) clearTimeout(fastPathTimeoutId.current);
+            fastPathTimeoutId.current = setTimeout(() => {
+              fastPathTimeoutId.current = null;
+              log.error(`⏰ Fast path TIMEOUT after ${FAST_PATH_TIMEOUT_MS}ms — WebView may be dead`);
               handleEditorReloadRef.current();
-            },
-          });
+            }, FAST_PATH_TIMEOUT_MS);
+          } else if (preloadMatchesEntry && isEditorConfirmedRef.current) {
+            // preloadContent already confirmed for THIS entry — content is in WebView, nothing to do
+            log.info('⏱️ preloadContent already confirmed, skipping injection');
+          } else {
+            // No preload, preload was for a different entry, or no cache — inject normally
+            preloadedEntryId.current = null;
+            setContentWithTiming(editorContent, 'cache-hit', {
+              onTimeout: () => {
+                log.error('⏰ Cache-hit content never confirmed — triggering recovery');
+                handleEditorReloadRef.current();
+              },
+            });
+          }
           // Show immediately — all state updates batched into one render
           setIsContentReady(true);
           setIsLoading(false);
@@ -940,6 +1001,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
           setEntry(null);
           setIsLoading(true);
           setIsContentReady(false);
+          setIsEditorConfirmed(false);
           log.info('⏱️ CACHE MISS — loading from DB', { entryId: id.substring(0, 8) });
 
           // Fetch from SQLite
@@ -950,6 +1012,7 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
         log.info('createNewEntry: creating new entry', { streamId: options?.streamId });
         setIsNewEntry(true);
         setIsContentReady(true);
+        setIsEditorConfirmed(true);
         setEntryIdState(null);
         setError(null);
         const newEntry = buildNewEntry(options);
@@ -971,6 +1034,15 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
       },
       clearEntry: () => {
         setIsContentReady(false);
+        setIsEditorConfirmed(false);
+        // Reset fast-path state to prevent stale confirmations
+        if (fastPathTimeoutId.current) {
+          clearTimeout(fastPathTimeoutId.current);
+          fastPathTimeoutId.current = null;
+        }
+        contentSetTimestamp.current = null;
+        fastPathOnVerified.current = null;
+        preloadedEntryId.current = null;
         // Log stack trace to identify what's calling clearEntry
         log.info('clearEntry called');
         // Dismiss keyboard and blur editor first
@@ -1222,12 +1294,15 @@ export const EntryManagementScreen = forwardRef<EntryManagementScreenRef, EntryM
             </View>
           )}
 
-          {/* Rich Text Editor - ALWAYS MOUNTED for performance */}
+          {/* Rich Text Editor - ALWAYS MOUNTED for performance.
+              WebView gets its own opacity gate so metadata shows instantly
+              while ProseMirror finishes rendering (~60-500ms on cold bridge). */}
           <View style={[
             styles.editorContainer,
             { backgroundColor: theme.colors.background.primary },
             isEditMode ? { paddingBottom: 60 } : { paddingBottom: 0 },
-            keyboardHeight > 0 && { paddingBottom: keyboardHeight + 80 }
+            keyboardHeight > 0 && { paddingBottom: keyboardHeight + 80 },
+            { opacity: isEditorConfirmed ? 1 : 0 },
           ]}>
             <RichTextEditorV2
               ref={editorRef}
