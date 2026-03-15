@@ -124,7 +124,15 @@ function buildNewEntry(options?: NewEntryOptions, userId?: string): EntryWithRel
     attachments: [],
     status: 'none',
     type: null,
-    entry_date: options?.date || now, // Full ISO with time — new entries default to current date+time
+    entry_date: options?.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date)
+      ? (() => {
+          // Calendar passes bare "YYYY-MM-DD" — convert to local noon with ms=100 sentinel (hide time).
+          // Local noon survives any UTC offset (max ±14h) without crossing a day boundary.
+          const [y, m, d] = options.date.split('-').map(Number);
+          const local = new Date(y, m - 1, d, 12, 0, 0, 100); // ms=100 = "hide time" sentinel
+          return local.toISOString();
+        })()
+      : now, // Full ISO with time — new entries default to current date+time
     created_at: now,
     updated_at: now,
     entry_latitude: null,

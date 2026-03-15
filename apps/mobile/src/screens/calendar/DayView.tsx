@@ -95,7 +95,7 @@ export const DayView = memo(function DayView({
   const showStickyHeader = entriesReady && scrollY > headerStartY;
 
   // Calendar grid generation (memoized on viewing month/year)
-  const today = useMemo(() => new Date(), []);
+  const todayKey = useMemo(() => formatDateKey(new Date()), []);
   const { calendar, monthName } = useMemo(() => {
     const firstDay = new Date(viewingYear, viewingMonth, 1);
     const lastDay = new Date(viewingYear, viewingMonth + 1, 0);
@@ -166,7 +166,7 @@ export const DayView = memo(function DayView({
     const dateKey = formatDateKey(date);
     const count = entryCounts[dateKey] || 0;
     const isSelected = dateKey === selectedDate;
-    const isToday = dateKey === formatDateKey(today);
+    const isToday = dateKey === todayKey;
 
     return (
       <TouchableOpacity
@@ -196,7 +196,7 @@ export const DayView = memo(function DayView({
         )}
       </TouchableOpacity>
     );
-  }, [entryCounts, selectedDate, today, theme, onSelectDate]);
+  }, [entryCounts, selectedDate, todayKey, theme, onSelectDate]);
 
   const handleMenuToggle = useCallback((entryId: string) => {
     setOpenMenuEntryId(prev => prev === entryId ? null : entryId);

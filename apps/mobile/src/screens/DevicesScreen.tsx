@@ -12,6 +12,9 @@ import NetInfo from '@react-native-community/netinfo';
 import { Icon } from '../shared/components';
 import { useTheme } from '../shared/contexts/ThemeContext';
 import { themeBase } from '../shared/theme/themeBase';
+import { createScopedLogger, LogScopes } from '../shared/utils/logger';
+
+const log = createScopedLogger(LogScopes.Devices);
 import { SecondaryHeader } from '../components/layout/SecondaryHeader';
 import { useDevices, useDeactivateDevice, useReactivateDevice, useRemoveDevice, useUpdateDeviceName } from '../modules/devices';
 import { getDeviceId } from '../config/appVersionService';
@@ -59,7 +62,7 @@ export function DevicesScreen() {
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    getDeviceId().then(setLocalDeviceId).catch(err => console.warn('[Devices] Failed to get device ID', err));
+    getDeviceId().then(setLocalDeviceId).catch(err => log.warn('Failed to get device ID', { error: err }));
   }, []);
 
   const handleRefresh = async () => {

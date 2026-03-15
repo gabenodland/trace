@@ -84,6 +84,9 @@ export const LogScopes = {
 
   // === Version & Updates ===
   Version: { icon: '📦', name: 'Version' },
+
+  // === Devices ===
+  Devices: { icon: '📱', name: 'Devices' },
 } as const;
 
 /** Type for a log scope */

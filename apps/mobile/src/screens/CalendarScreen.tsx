@@ -99,9 +99,11 @@ export const CalendarScreen = memo(function CalendarScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentional: sync from persisted context only on mount
   useEffect(() => {
     if (selectedDate) {
-      const date = new Date(selectedDate);
-      setViewingMonth(date.getMonth());
-      setViewingYear(date.getFullYear());
+      // Parse YYYY-MM-DD directly to avoid UTC midnight timezone shift.
+      // Day is intentionally discarded — we only need month/year for the calendar view.
+      const [y, m] = selectedDate.split('-').map(Number);
+      setViewingMonth(m - 1);
+      setViewingYear(y);
     }
   }, []);
 
