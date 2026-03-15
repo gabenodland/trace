@@ -164,6 +164,79 @@ export const MonthView = memo(function MonthView({
     setScrollY(e.nativeEvent.contentOffset.y);
   }, []);
 
+  const handlePrevYear = useCallback(() => { setMonthViewYear(y => y - 1); setSelectedMonth(null); }, []);
+  const handleNextYear = useCallback(() => { setMonthViewYear(y => y + 1); setSelectedMonth(null); }, []);
+
+  const listHeader = useMemo(() => (
+    <>
+      {/* Month Grid */}
+      <View style={[sharedStyles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
+        <View style={styles.monthViewHeader}>
+          <TouchableOpacity onPress={handlePrevYear} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+            <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>‹</Text>
+          </TouchableOpacity>
+          <Text style={[styles.yearTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{monthViewYear}</Text>
+          <TouchableOpacity onPress={handleNextYear} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+            <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.monthsGrid}>
+          {MONTH_NAMES.map((name, monthIndex) => {
+            const monthKey = `${monthViewYear}-${String(monthIndex + 1).padStart(2, '0')}`;
+            const count = monthCounts[monthKey] || 0;
+            const isSelected = monthIndex === selectedMonth;
+
+            return (
+              <TouchableOpacity
+                key={monthIndex}
+                style={[styles.monthCell, isSelected && { backgroundColor: theme.colors.functional.accent }]}
+                onPress={() => {
+                  if (isSelected) {
+                    onDrillDown(monthIndex, monthViewYear);
+                  } else {
+                    setSelectedMonth(monthIndex);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.monthCellText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }, isSelected && { color: "#ffffff" }]}>
+                  {name.substring(0, 3)}
+                </Text>
+                {count > 0 && (
+                  <View style={[sharedStyles.countBadge, { backgroundColor: theme.colors.functional.accent }, isSelected && { backgroundColor: "#ffffff" }]}>
+                    <Text style={[sharedStyles.countText, isSelected && { color: theme.colors.functional.accent }]}>
+                      {count}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Entry List Header */}
+      {selectedMonth !== null && entriesReady && (
+        <EntryListHeader
+          title={`${selectedMonthName} ${monthViewYear}`}
+          entryCount={sortedEntries.length}
+          displayModeLabel={displayModeLabel}
+          sortModeLabel={sortModeLabel}
+          onDisplayModePress={onDisplayModePress}
+          onSortModePress={onSortModePress}
+          onLayout={(e) => setHeaderStartY(e.nativeEvent.layout.y)}
+        />
+      )}
+    </>
+  ), [theme, monthViewYear, monthCounts, selectedMonth, onDrillDown, handlePrevYear, handleNextYear, entriesReady, selectedMonthName, sortedEntries.length, displayModeLabel, sortModeLabel, onDisplayModePress, onSortModePress]);
+
+  const emptyComponent = useMemo(() => selectedMonth !== null && entriesReady ? (
+    <View style={[sharedStyles.emptyContainer, { backgroundColor: theme.colors.background.secondary }]}>
+      <Text style={[sharedStyles.emptyText, { color: theme.colors.text.secondary }]}>No entries for this month</Text>
+    </View>
+  ) : null, [selectedMonth, entriesReady, theme]);
+
   return (
     <View style={sharedStyles.content}>
       <FlatList<ListItem>
@@ -171,81 +244,14 @@ export const MonthView = memo(function MonthView({
         data={selectedMonth !== null && entriesReady ? listData : []}
         keyExtractor={(item) => item.key}
         renderItem={renderItem}
-        ListHeaderComponent={
-          <>
-            {/* Month Grid */}
-            <View style={[sharedStyles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
-              <View style={styles.monthViewHeader}>
-                <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear - 1); setSelectedMonth(null); }} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                  <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>‹</Text>
-                </TouchableOpacity>
-                <Text style={[styles.yearTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{monthViewYear}</Text>
-                <TouchableOpacity onPress={() => { setMonthViewYear(monthViewYear + 1); setSelectedMonth(null); }} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                  <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>›</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.monthsGrid}>
-                {MONTH_NAMES.map((name, monthIndex) => {
-                  const monthKey = `${monthViewYear}-${String(monthIndex + 1).padStart(2, '0')}`;
-                  const count = monthCounts[monthKey] || 0;
-                  const isSelected = monthIndex === selectedMonth;
-
-                  return (
-                    <TouchableOpacity
-                      key={monthIndex}
-                      style={[styles.monthCell, isSelected && { backgroundColor: theme.colors.functional.accent }]}
-                      onPress={() => {
-                        if (isSelected) {
-                          onDrillDown(monthIndex, monthViewYear);
-                        } else {
-                          setSelectedMonth(monthIndex);
-                        }
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.monthCellText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }, isSelected && { color: "#ffffff" }]}>
-                        {name.substring(0, 3)}
-                      </Text>
-                      {count > 0 && (
-                        <View style={[sharedStyles.countBadge, { backgroundColor: theme.colors.functional.accent }, isSelected && { backgroundColor: "#ffffff" }]}>
-                          <Text style={[sharedStyles.countText, isSelected && { color: theme.colors.functional.accent }]}>
-                            {count}
-                          </Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Entry List Header */}
-            {selectedMonth !== null && entriesReady && (
-              <EntryListHeader
-                title={`${selectedMonthName} ${monthViewYear}`}
-                entryCount={sortedEntries.length}
-                displayModeLabel={displayModeLabel}
-                sortModeLabel={sortModeLabel}
-                onDisplayModePress={onDisplayModePress}
-                onSortModePress={onSortModePress}
-                onLayout={(e) => setHeaderStartY(e.nativeEvent.layout.y)}
-              />
-            )}
-          </>
-        }
-        ListEmptyComponent={selectedMonth !== null && entriesReady ? (
-          <View style={[sharedStyles.emptyContainer, { backgroundColor: theme.colors.background.secondary }]}>
-            <Text style={[sharedStyles.emptyText, { color: theme.colors.text.secondary }]}>No entries for this month</Text>
-          </View>
-        ) : null}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={emptyComponent}
         contentContainerStyle={sharedStyles.scrollContent}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         initialNumToRender={5}
         maxToRenderPerBatch={5}
         windowSize={5}
-        removeClippedSubviews={false}
       />
 
       {/* Sticky Header */}

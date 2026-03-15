@@ -90,7 +90,7 @@ export const YearView = memo(function YearView({
 
   const decadeStart = viewingDecade;
   const decadeEnd = viewingDecade + 9;
-  const years = Array.from({ length: 10 }, (_, i) => decadeStart + i);
+  const years = useMemo(() => Array.from({ length: 10 }, (_, i) => decadeStart + i), [decadeStart]);
   const showStickyHeader = selectedYear !== null && entriesReady && scrollY > headerStartY;
 
   // Filtered entries for selected year
@@ -163,6 +163,78 @@ export const YearView = memo(function YearView({
     setScrollY(e.nativeEvent.contentOffset.y);
   }, []);
 
+  const handlePrevDecade = useCallback(() => { setViewingDecade(d => d - 10); setSelectedYear(null); }, []);
+  const handleNextDecade = useCallback(() => { setViewingDecade(d => d + 10); setSelectedYear(null); }, []);
+
+  const listHeader = useMemo(() => (
+    <>
+      {/* Year Grid */}
+      <View style={[sharedStyles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
+        <View style={styles.yearViewHeader}>
+          <TouchableOpacity onPress={handlePrevDecade} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+            <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>‹</Text>
+          </TouchableOpacity>
+          <Text style={[styles.decadeTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{decadeStart}-{decadeEnd}</Text>
+          <TouchableOpacity onPress={handleNextDecade} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+            <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.yearsGrid}>
+          {years.map(year => {
+            const count = yearCounts[year] || 0;
+            const isSelected = year === selectedYear;
+
+            return (
+              <TouchableOpacity
+                key={year}
+                style={[styles.yearCell, isSelected && { backgroundColor: theme.colors.functional.accent }]}
+                onPress={() => {
+                  if (isSelected) {
+                    onDrillDown(year);
+                  } else {
+                    setSelectedYear(year);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.yearCellText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }, isSelected && { color: "#ffffff" }]}>
+                  {year}
+                </Text>
+                {count > 0 && (
+                  <View style={[sharedStyles.countBadge, { backgroundColor: theme.colors.functional.accent }, isSelected && { backgroundColor: "#ffffff" }]}>
+                    <Text style={[sharedStyles.countText, isSelected && { color: theme.colors.functional.accent }]}>
+                      {count}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Entry List Header */}
+      {selectedYear !== null && entriesReady && (
+        <EntryListHeader
+          title={String(selectedYear)}
+          entryCount={sortedEntries.length}
+          displayModeLabel={displayModeLabel}
+          sortModeLabel={sortModeLabel}
+          onDisplayModePress={onDisplayModePress}
+          onSortModePress={onSortModePress}
+          onLayout={(e) => setHeaderStartY(e.nativeEvent.layout.y)}
+        />
+      )}
+    </>
+  ), [theme, years, yearCounts, selectedYear, onDrillDown, handlePrevDecade, handleNextDecade, decadeStart, decadeEnd, entriesReady, sortedEntries.length, displayModeLabel, sortModeLabel, onDisplayModePress, onSortModePress]);
+
+  const emptyComponent = useMemo(() => selectedYear !== null && entriesReady ? (
+    <View style={[sharedStyles.emptyContainer, { backgroundColor: theme.colors.background.secondary }]}>
+      <Text style={[sharedStyles.emptyText, { color: theme.colors.text.secondary }]}>No entries for this year</Text>
+    </View>
+  ) : null, [selectedYear, entriesReady, theme]);
+
   return (
     <View style={sharedStyles.content}>
       <FlatList<ListItem>
@@ -170,80 +242,14 @@ export const YearView = memo(function YearView({
         data={selectedYear !== null && entriesReady ? listData : []}
         keyExtractor={(item) => item.key}
         renderItem={renderItem}
-        ListHeaderComponent={
-          <>
-            {/* Year Grid */}
-            <View style={[sharedStyles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
-              <View style={styles.yearViewHeader}>
-                <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade - 10); setSelectedYear(null); }} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                  <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>‹</Text>
-                </TouchableOpacity>
-                <Text style={[styles.decadeTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{decadeStart}-{decadeEnd}</Text>
-                <TouchableOpacity onPress={() => { setViewingDecade(viewingDecade + 10); setSelectedYear(null); }} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                  <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>›</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.yearsGrid}>
-                {years.map(year => {
-                  const count = yearCounts[year] || 0;
-                  const isSelected = year === selectedYear;
-
-                  return (
-                    <TouchableOpacity
-                      key={year}
-                      style={[styles.yearCell, isSelected && { backgroundColor: theme.colors.functional.accent }]}
-                      onPress={() => {
-                        if (isSelected) {
-                          onDrillDown(year);
-                        } else {
-                          setSelectedYear(year);
-                        }
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.yearCellText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }, isSelected && { color: "#ffffff" }]}>
-                        {year}
-                      </Text>
-                      {count > 0 && (
-                        <View style={[sharedStyles.countBadge, { backgroundColor: theme.colors.functional.accent }, isSelected && { backgroundColor: "#ffffff" }]}>
-                          <Text style={[sharedStyles.countText, isSelected && { color: theme.colors.functional.accent }]}>
-                            {count}
-                          </Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Entry List Header */}
-            {selectedYear !== null && entriesReady && (
-              <EntryListHeader
-                title={String(selectedYear)}
-                entryCount={sortedEntries.length}
-                displayModeLabel={displayModeLabel}
-                sortModeLabel={sortModeLabel}
-                onDisplayModePress={onDisplayModePress}
-                onSortModePress={onSortModePress}
-                onLayout={(e) => setHeaderStartY(e.nativeEvent.layout.y)}
-              />
-            )}
-          </>
-        }
-        ListEmptyComponent={selectedYear !== null && entriesReady ? (
-          <View style={[sharedStyles.emptyContainer, { backgroundColor: theme.colors.background.secondary }]}>
-            <Text style={[sharedStyles.emptyText, { color: theme.colors.text.secondary }]}>No entries for this year</Text>
-          </View>
-        ) : null}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={emptyComponent}
         contentContainerStyle={sharedStyles.scrollContent}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         initialNumToRender={5}
         maxToRenderPerBatch={5}
         windowSize={5}
-        removeClippedSubviews={false}
       />
 
       {/* Sticky Header */}

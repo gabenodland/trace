@@ -111,7 +111,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         ? `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'}`
         : undefined;
 
-  const CountHeader = countLabel ? (
+  const CountHeader = useMemo(() => countLabel ? (
     <View style={styles.countHeader}>
       <Text style={[
         styles.countHeaderText,
@@ -121,15 +121,15 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         {countLabel}
       </Text>
     </View>
-  ) : null;
+  ) : null, [countLabel, selectionActive, isFiltering, theme]);
 
   // Combine external ListHeaderComponent with count header
-  const CombinedHeader = ListHeaderComponent || CountHeader ? (
+  const CombinedHeader = useMemo(() => ListHeaderComponent || CountHeader ? (
     <>
       {ListHeaderComponent}
       {CountHeader}
     </>
-  ) : null;
+  ) : null, [ListHeaderComponent, CountHeader]);
 
   // Memoize empty state component to prevent FlatList/SectionList remounts
   const emptyComponent = useMemo(() => {
@@ -224,7 +224,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={emptyComponent}
         stickySectionHeadersEnabled={false}
-        removeClippedSubviews={false}
+
         onScroll={handleScroll}
         scrollEventThrottle={100}
         indicatorStyle={theme.isDark ? 'white' : 'black'}
@@ -243,7 +243,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={emptyComponent}
-        removeClippedSubviews={false}
+
         onScroll={handleScroll}
         scrollEventThrottle={100}
         indicatorStyle={theme.isDark ? 'white' : 'black'}
@@ -267,7 +267,6 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
       renderItem={renderEntryItem}
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={CombinedHeader}
-      removeClippedSubviews={false}
       onScroll={handleScroll}
       scrollEventThrottle={100}
       indicatorStyle={theme.isDark ? 'white' : 'black'}

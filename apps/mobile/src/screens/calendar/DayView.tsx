@@ -161,7 +161,7 @@ export const DayView = memo(function DayView({
     weekday: 'long', month: 'long', day: 'numeric',
   });
 
-  const renderDay = (dayInfo: { day: number; isCurrentMonth: boolean; date: Date }) => {
+  const renderDay = useCallback((dayInfo: { day: number; isCurrentMonth: boolean; date: Date }) => {
     const { day, isCurrentMonth, date } = dayInfo;
     const dateKey = formatDateKey(date);
     const count = entryCounts[dateKey] || 0;
@@ -196,7 +196,7 @@ export const DayView = memo(function DayView({
         )}
       </TouchableOpacity>
     );
-  };
+  }, [entryCounts, selectedDate, today, theme, onSelectDate]);
 
   const handleMenuToggle = useCallback((entryId: string) => {
     setOpenMenuEntryId(prev => prev === entryId ? null : entryId);
@@ -237,6 +237,60 @@ export const DayView = memo(function DayView({
     setScrollY(e.nativeEvent.contentOffset.y);
   }, []);
 
+  const listHeader = useMemo(() => (
+    <>
+      {/* Calendar Grid */}
+      <View style={[sharedStyles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
+        <View style={styles.monthHeader}>
+          <TouchableOpacity onPress={onPrevMonth} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+            <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>‹</Text>
+          </TouchableOpacity>
+          <Text style={[styles.monthTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{monthName}</Text>
+          <TouchableOpacity onPress={onNextMonth} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
+            <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity onPress={onToday} style={[styles.todayButton, { backgroundColor: theme.colors.functional.accent }]}>
+          <Text style={[styles.todayButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>Today</Text>
+        </TouchableOpacity>
+
+        <View style={styles.weekRow}>
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+            <View key={index} style={styles.dayHeaderCell}>
+              <Text style={[styles.dayHeaderText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.semibold }]}>{day}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.calendarGrid}>
+          {Array.from({ length: Math.ceil(calendar.length / 7) }).map((_, weekIndex) => (
+            <View key={weekIndex} style={styles.weekRow}>
+              {calendar.slice(weekIndex * 7, weekIndex * 7 + 7).map(renderDay)}
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Entry List Header */}
+      {entriesReady && (
+        <EntryListHeader
+          title={formattedSelectedDate}
+          entryCount={sortedEntries.length}
+          displayModeLabel={displayModeLabel}
+          sortModeLabel={sortModeLabel}
+          onDisplayModePress={onDisplayModePress}
+          onSortModePress={onSortModePress}
+          onLayout={(e) => setHeaderStartY(e.nativeEvent.layout.y)}
+        />
+      )}
+    </>
+  ), [theme, calendar, monthName, onPrevMonth, onNextMonth, onToday, renderDay, entriesReady, formattedSelectedDate, sortedEntries.length, displayModeLabel, sortModeLabel, onDisplayModePress, onSortModePress]);
+
+  const emptyComponent = useMemo(() => entriesReady ? (
+    <EmptyState title="No entries for this date" />
+  ) : null, [entriesReady]);
+
   return (
     <View style={sharedStyles.content}>
       <FlatList<ListItem>
@@ -244,65 +298,14 @@ export const DayView = memo(function DayView({
         data={entriesReady ? listData : []}
         keyExtractor={(item) => item.key}
         renderItem={renderItem}
-        ListHeaderComponent={
-          <>
-            {/* Calendar Grid */}
-            <View style={[sharedStyles.calendarContainer, { backgroundColor: theme.colors.background.primary }]}>
-              <View style={styles.monthHeader}>
-                <TouchableOpacity onPress={onPrevMonth} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                  <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>‹</Text>
-                </TouchableOpacity>
-                <Text style={[styles.monthTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>{monthName}</Text>
-                <TouchableOpacity onPress={onNextMonth} style={[sharedStyles.navButton, { backgroundColor: theme.colors.background.tertiary }]}>
-                  <Text style={[sharedStyles.navButtonText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>›</Text>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity onPress={onToday} style={[styles.todayButton, { backgroundColor: theme.colors.functional.accent }]}>
-                <Text style={[styles.todayButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>Today</Text>
-              </TouchableOpacity>
-
-              <View style={styles.weekRow}>
-                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-                  <View key={index} style={styles.dayHeaderCell}>
-                    <Text style={[styles.dayHeaderText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.semibold }]}>{day}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <View style={styles.calendarGrid}>
-                {Array.from({ length: Math.ceil(calendar.length / 7) }).map((_, weekIndex) => (
-                  <View key={weekIndex} style={styles.weekRow}>
-                    {calendar.slice(weekIndex * 7, weekIndex * 7 + 7).map(renderDay)}
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            {/* Entry List Header */}
-            {entriesReady && (
-              <EntryListHeader
-                title={formattedSelectedDate}
-                entryCount={sortedEntries.length}
-                displayModeLabel={displayModeLabel}
-                sortModeLabel={sortModeLabel}
-                onDisplayModePress={onDisplayModePress}
-                onSortModePress={onSortModePress}
-                onLayout={(e) => setHeaderStartY(e.nativeEvent.layout.y)}
-              />
-            )}
-          </>
-        }
-        ListEmptyComponent={entriesReady ? (
-          <EmptyState title="No entries for this date" />
-        ) : null}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={emptyComponent}
         contentContainerStyle={sharedStyles.scrollContent}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         initialNumToRender={5}
         maxToRenderPerBatch={5}
         windowSize={5}
-        removeClippedSubviews={false}
       />
 
       {/* Sticky Header */}
