@@ -22,7 +22,8 @@ interface EntryListItemRowProps {
   streamById?: Record<string, Stream> | null;
   currentStreamId?: string | null;
   displayMode?: EntryDisplayMode;
-  showMenu: boolean;
+  /** Pass the ID instead of a derived boolean so renderItem doesn't depend on it */
+  openMenuEntryId?: string | null;
   onMenuToggle: (entryId: string) => void;
 }
 
@@ -49,9 +50,10 @@ export const EntryListItemRow = memo(function EntryListItemRow({
   streamById,
   currentStreamId,
   displayMode,
-  showMenu,
+  openMenuEntryId,
   onMenuToggle,
 }: EntryListItemRowProps) {
+  const showMenu = openMenuEntryId === entry.entry_id;
   const stream = entry.stream_id && streamById ? streamById[entry.stream_id] : null;
   const attributeVisibility = getStreamAttributeVisibility(stream);
 
@@ -83,4 +85,31 @@ export const EntryListItemRow = memo(function EntryListItemRow({
       attributeVisibility={attributeVisibility}
     />
   );
+}, (prev, next) => {
+  // Custom comparator: only re-render when showMenu actually changes for THIS row,
+  // not when openMenuEntryId changes for a different row
+  const prevShowMenu = prev.openMenuEntryId === prev.entry.entry_id;
+  const nextShowMenu = next.openMenuEntryId === next.entry.entry_id;
+  if (prevShowMenu !== nextShowMenu) return false;
+
+  // Shallow-compare the rest (skip openMenuEntryId since we handled it above)
+  if (prev.entry !== next.entry) return false;
+  if (prev.onEntryPress !== next.onEntryPress) return false;
+  if (prev.onTagPress !== next.onTagPress) return false;
+  if (prev.onMentionPress !== next.onMentionPress) return false;
+  if (prev.onStreamPress !== next.onStreamPress) return false;
+  if (prev.onMove !== next.onMove) return false;
+  if (prev.onCopy !== next.onCopy) return false;
+  if (prev.onDelete !== next.onDelete) return false;
+  if (prev.onPin !== next.onPin) return false;
+  if (prev.onArchive !== next.onArchive) return false;
+  if (prev.onSelectOnMap !== next.onSelectOnMap) return false;
+  if (prev.selectedEntryId !== next.selectedEntryId) return false;
+  if (prev.streamMap !== next.streamMap) return false;
+  if (prev.locationMap !== next.locationMap) return false;
+  if (prev.streamById !== next.streamById) return false;
+  if (prev.currentStreamId !== next.currentStreamId) return false;
+  if (prev.displayMode !== next.displayMode) return false;
+  if (prev.onMenuToggle !== next.onMenuToggle) return false;
+  return true;
 });

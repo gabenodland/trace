@@ -182,7 +182,7 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
       streamById={fullStreamMap}
       currentStreamId={currentStreamId}
       displayMode={displayMode}
-      showMenu={openMenuEntryId === item.entry_id}
+      openMenuEntryId={openMenuEntryId}
       onMenuToggle={handleMenuToggle}
     />
   ), [onEntryPress, onTagPress, onMentionPress, onStreamPress, onMove, onCopy, onDelete, onPin, onSelectOnMap, selectedEntryId, onArchive, streamMap, locationMap, fullStreamMap, currentStreamId, displayMode, openMenuEntryId, handleMenuToggle]);
@@ -224,7 +224,9 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={emptyComponent}
         stickySectionHeadersEnabled={false}
-
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        windowSize={7}
         onScroll={handleScroll}
         scrollEventThrottle={100}
         indicatorStyle={theme.isDark ? 'white' : 'black'}
@@ -243,7 +245,9 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={CombinedHeader}
         ListEmptyComponent={emptyComponent}
-
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        windowSize={7}
         onScroll={handleScroll}
         scrollEventThrottle={100}
         indicatorStyle={theme.isDark ? 'white' : 'black'}
@@ -267,6 +271,9 @@ export const EntryList = forwardRef<EntryListRef, EntryListProps>(function Entry
       renderItem={renderEntryItem}
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={CombinedHeader}
+      initialNumToRender={5}
+      maxToRenderPerBatch={5}
+      windowSize={7}
       onScroll={handleScroll}
       scrollEventThrottle={100}
       indicatorStyle={theme.isDark ? 'white' : 'black'}

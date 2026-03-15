@@ -83,7 +83,7 @@ export function EntryListContent({
         streamById={streamById}
         currentStreamId={currentStreamId}
         displayMode={displayMode}
-        showMenu={openMenuEntryId === entry.entry_id}
+        openMenuEntryId={openMenuEntryId}
         onMenuToggle={handleMenuToggle}
       />
     </View>

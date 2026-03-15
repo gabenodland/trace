@@ -153,7 +153,7 @@ export const MonthView = memo(function MonthView({
           streamMap={streamMap}
           streamById={streamById}
           displayMode={displayMode}
-          showMenu={openMenuEntryId === item.entry.entry_id}
+          openMenuEntryId={openMenuEntryId}
           onMenuToggle={handleMenuToggle}
         />
       </View>

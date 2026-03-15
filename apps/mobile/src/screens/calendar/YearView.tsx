@@ -152,7 +152,7 @@ export const YearView = memo(function YearView({
           streamMap={streamMap}
           streamById={streamById}
           displayMode={displayMode}
-          showMenu={openMenuEntryId === item.entry.entry_id}
+          openMenuEntryId={openMenuEntryId}
           onMenuToggle={handleMenuToggle}
         />
       </View>
