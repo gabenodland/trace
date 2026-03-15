@@ -33,10 +33,12 @@ export function useSubscription() {
   const { profile } = useMobileProfile();
 
   // Calculate effective tier once
+  // Dev mode defaults to 'pro' when no tier is explicitly set
   const tier: SubscriptionTier = useMemo(() => {
     if (!profile) return 'free';
+    const defaultTier = profile.is_dev_mode ? 'pro' : 'free';
     return getEffectiveTier(
-      (profile.subscription_tier as SubscriptionTier) || 'free',
+      (profile.subscription_tier as SubscriptionTier) || defaultTier,
       profile.subscription_expires_at,
       profile.is_dev_mode
     );
@@ -49,7 +51,7 @@ export function useSubscription() {
     /** Current effective tier ('free' or 'pro') */
     tier,
 
-    /** True if user has Pro subscription (or dev mode) */
+    /** True if effective tier is 'pro' (accounts for dev mode tier override) */
     isPro,
 
     /** True if user is in dev mode */

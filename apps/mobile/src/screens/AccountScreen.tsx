@@ -12,7 +12,7 @@
  */
 
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Icon } from "../shared/components";
 import { getDefaultAvatarUrl } from "@trace/core";
 import { useAuth } from "../shared/contexts/AuthContext";
@@ -83,18 +83,17 @@ export function AccountScreen() {
     ? getDefaultAvatarUrl(displayName)
     : profile.avatar_url;
 
-  // Format subscription status
-  const getSubscriptionLabel = () => {
-    if (isDevMode) return "Developer";
+  // Format subscription status — always show actual tier, not dev mode
+  const subscriptionLabel = useMemo(() => {
     if (isPro) {
       if (expiresAt) {
         const daysLeft = Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        if (daysLeft <= 30) return `Pro (${daysLeft} days)`;
+        if (daysLeft > 0 && daysLeft <= 30) return `Pro (${daysLeft} days)`;
       }
       return "Pro";
     }
     return "Free";
-  };
+  }, [isPro, expiresAt]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -131,6 +130,14 @@ export function AccountScreen() {
                 {user.email}
               </Text>
             )}
+            {isDevMode && (
+              <View style={styles.devBadge}>
+                <Icon name="BrainCog" size={12} color={theme.colors.functional.accent} />
+                <Text style={[styles.devBadgeText, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.medium }]}>
+                  Developer
+                </Text>
+              </View>
+            )}
           </View>
           <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
         </TouchableOpacity>
@@ -144,21 +151,21 @@ export function AccountScreen() {
           <View style={styles.subscriptionHeader}>
             <View style={[
               styles.subscriptionBadge,
-              { backgroundColor: isPro || isDevMode ? theme.colors.functional.accent : theme.colors.background.tertiary }
+              { backgroundColor: isPro ? theme.colors.functional.accent : theme.colors.background.tertiary }
             ]}>
-              <Icon name="Star" size={16} color={isPro || isDevMode ? "#fff" : theme.colors.text.tertiary} />
+              <Icon name="Star" size={16} color={isPro ? "#fff" : theme.colors.text.tertiary} />
             </View>
             <View style={styles.subscriptionInfo}>
               <Text style={[styles.subscriptionLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]}>
-                {getSubscriptionLabel()}
+                {subscriptionLabel}
               </Text>
               <Text style={[styles.subscriptionDesc, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                {isPro || isDevMode ? "Full access to all features" : "Upgrade for more features"}
+                {isPro ? "Full access to all features" : "Upgrade for more features"}
               </Text>
             </View>
             <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
           </View>
-          {!isPro && !isDevMode && (
+          {!isPro && (
             <View
               style={[styles.upgradeButton, { backgroundColor: theme.colors.functional.accent }]}
             >
@@ -272,6 +279,16 @@ const styles = StyleSheet.create({
   profileEmail: {
     fontSize: 14,
     marginTop: 2,
+  },
+  devBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 6,
+  },
+  devBadgeText: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   subscriptionCard: {
     padding: themeBase.spacing.lg,
