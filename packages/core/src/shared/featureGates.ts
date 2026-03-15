@@ -115,7 +115,7 @@ const BOOLEAN_FEATURES: Record<BooleanFeature, SubscriptionTier[]> = {
  * Use Infinity for unlimited
  */
 const FEATURE_LIMITS: Record<LimitFeature, Record<SubscriptionTier, number>> = {
-  maxStorageMB: { free: 100, pro: 5000 },
+  maxStorageMB: { free: 200, pro: 2048 },
   maxEntries: { free: 500, pro: Infinity },
   maxPhotosPerEntry: { free: 3, pro: 20 },
   maxDevices: { free: 2, pro: Infinity },

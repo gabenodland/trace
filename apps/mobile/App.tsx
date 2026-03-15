@@ -65,6 +65,7 @@ import { StreamPropertiesScreen } from "./src/screens/StreamPropertiesScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { SubscriptionScreen } from "./src/screens/SubscriptionScreen";
 import { DevicesScreen } from "./src/screens/DevicesScreen";
+import { DataManagementScreen } from "./src/screens/DataManagementScreen";
 import { localDB } from "./src/shared/db/localDB";
 import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
@@ -505,7 +506,11 @@ const AppContent = memo(function AppContent() {
         boundaryName = "DevicesScreen";
         content = <DevicesScreen />;
         break;
-      case "stream-properties":
+      case "data":
+        boundaryName = "DataManagementScreen";
+        content = <DataManagementScreen />;
+        break;
+case "stream-properties":
         boundaryName = "StreamPropertiesScreen";
         content = <StreamPropertiesScreen streamId={navParams.streamId} returnTo={navParams.returnTo} />;
         break;

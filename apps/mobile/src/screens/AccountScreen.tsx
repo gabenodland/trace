@@ -192,6 +192,12 @@ export function AccountScreen() {
             detail={devicesList ? `${devicesList.filter(d => d.is_active).length}` : undefined}
             onPress={() => navigate("devices")}
           />
+          <View style={[styles.rowDivider, { backgroundColor: theme.colors.border.light }]} />
+          <AccountRow
+            icon={<Icon name="Database" size={22} color={theme.colors.text.secondary} />}
+            label="Data"
+            onPress={() => navigate("data")}
+          />
         </View>
 
         {/* Settings Section */}

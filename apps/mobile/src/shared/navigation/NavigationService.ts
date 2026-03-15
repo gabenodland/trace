@@ -2,7 +2,7 @@
  * NavigationService - Refs-based navigation for instant screen switching
  *
  * Design goals:
- * - 4 main screens (allEntries, map, calendar, entryManagement) never re-render on navigation
+ * - 3 main screens (allEntries, map, calendar) never re-render on navigation
  * - Only the screen container (AppContent) re-renders to update visibility
  * - navigate() is stable and never causes re-renders in screens
  * - Settings screens mount/unmount as needed
@@ -16,7 +16,7 @@ const log = createScopedLogger('Navigation', '🧭');
 export type MainScreen = 'allEntries' | 'map' | 'calendar' | 'entryManagement';
 export type SettingsScreen = 'account' | 'profile' | 'settings' | 'debug' |
   'editorV2Test' | 'locations' | 'streams' | 'devices' |
-  'stream-properties' | 'subscription' | 'capture';  // capture = legacy entry screen
+  'stream-properties' | 'subscription' | 'capture' | 'data';  // capture = legacy entry screen
 
 // Use string for backward compatibility - screens use various string names
 export type ScreenName = string;

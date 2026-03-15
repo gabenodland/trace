@@ -10,6 +10,7 @@ export * from "./modules/attachments";
 export * from "./modules/locations";
 export * from "./modules/settings";
 export * from "./modules/subscriptions";
+export * from "./modules/dataManagement";
 
 // Editor helpers (pure utilities without Tiptap dependencies)
 // Tiptap extensions (Title, TitleDocument) are only exported for editor-web
