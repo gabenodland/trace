@@ -75,7 +75,7 @@ export async function getTopLevelCounts(): Promise<{
   places: number;
 }> {
   const [streams, places] = await Promise.all([
-    localDB.runCustomQuery('SELECT COUNT(*) as count FROM streams WHERE deleted_at IS NULL'),
+    localDB.runCustomQuery('SELECT COUNT(*) as count FROM streams'),
     localDB.runCustomQuery('SELECT COUNT(*) as count FROM locations WHERE deleted_at IS NULL'),
   ]);
 
