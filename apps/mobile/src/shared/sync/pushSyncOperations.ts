@@ -396,7 +396,7 @@ export async function pushTombstones(): Promise<{ success: number; errors: numbe
     }));
 
     const { error: upsertError } = await (supabase.from as any)('entry_tombstones')
-      .upsert(tombstoneRows, { onConflict: 'entry_id' });
+      .upsert(tombstoneRows, { onConflict: 'entry_id', ignoreDuplicates: true });
 
     if (upsertError) {
       log.error('Tombstone batch upsert failed', upsertError);
