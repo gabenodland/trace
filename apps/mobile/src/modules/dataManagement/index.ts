@@ -3,10 +3,12 @@
 // Export hooks
 export {
   useDeviceStorageUsage,
-  useDataInventory,
+  useTopLevelCounts,
+  useEntrySummary,
+  useDeletedEntrySummary,
+  useEntryList,
   usePrivacySummary,
-  useCloudStorageUsage,
-  useTrash,
+  useLocalTrash,
   dataManagementKeys,
 } from './mobileDataManagementHooks';
 

@@ -16,6 +16,17 @@ const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
  * @param decimals - Number of decimal places (default: 1)
  * @returns Formatted string like "142.3 MB" or "1.8 GB"
  */
+/**
+ * Format a byte count as megabytes. Always uses MB for consistent display.
+ */
+export function formatMB(bytes: number, decimals: number = 1): string {
+  if (bytes <= 0) return '0 MB';
+  const mb = bytes / (1024 * 1024);
+  if (mb < 0.1) return '<0.1 MB';
+  const formatted = mb % 1 === 0 ? mb.toFixed(0) : mb.toFixed(decimals);
+  return `${formatted} MB`;
+}
+
 export function formatBytes(bytes: number, decimals: number = 1): string {
   if (bytes < 0) return '0 B';
   if (bytes === 0) return '0 B';

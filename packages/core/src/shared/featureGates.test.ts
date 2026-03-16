@@ -27,8 +27,8 @@ describe("featureGates", () => {
   });
 
   describe("getFeatureLimit", () => {
-    it("returns 500 max entries for free tier", () => {
-      expect(getFeatureLimit("maxEntries", "free")).toBe(500);
+    it("returns 100 max entries for free tier", () => {
+      expect(getFeatureLimit("maxEntries", "free")).toBe(100);
     });
 
     it("returns Infinity max entries for pro tier", () => {
@@ -38,15 +38,15 @@ describe("featureGates", () => {
 
   describe("isLimitReached", () => {
     it("returns true when at limit", () => {
-      expect(isLimitReached("maxEntries", "free", 500)).toBe(true);
+      expect(isLimitReached("maxEntries", "free", 100)).toBe(true);
     });
 
     it("returns true when over limit", () => {
-      expect(isLimitReached("maxEntries", "free", 501)).toBe(true);
+      expect(isLimitReached("maxEntries", "free", 101)).toBe(true);
     });
 
     it("returns false when below limit", () => {
-      expect(isLimitReached("maxEntries", "free", 499)).toBe(false);
+      expect(isLimitReached("maxEntries", "free", 99)).toBe(false);
     });
 
     it("never reached for Infinity limits", () => {
@@ -55,8 +55,14 @@ describe("featureGates", () => {
   });
 
   describe("getEffectiveTier", () => {
-    it("returns pro for dev mode regardless of tier", () => {
-      expect(getEffectiveTier("free", null, true)).toBe("pro");
+    it("dev mode respects tier as-is", () => {
+      expect(getEffectiveTier("pro", null, true)).toBe("pro");
+      expect(getEffectiveTier("free", null, true)).toBe("free");
+    });
+
+    it("dev mode skips expiration check", () => {
+      expect(getEffectiveTier("pro", "2020-01-01T00:00:00Z", true)).toBe("pro");
+      expect(getEffectiveTier("free", "2020-01-01T00:00:00Z", true)).toBe("free");
     });
 
     it("returns free when subscription expired", () => {
@@ -70,10 +76,6 @@ describe("featureGates", () => {
     it("returns tier as-is when no expiration", () => {
       expect(getEffectiveTier("pro", null, false)).toBe("pro");
       expect(getEffectiveTier("free", null, false)).toBe("free");
-    });
-
-    it("dev mode overrides even expired subscription", () => {
-      expect(getEffectiveTier("pro", "2020-01-01T00:00:00Z", true)).toBe("pro");
     });
   });
 
@@ -95,10 +97,12 @@ describe("featureGates", () => {
     it("returns correct limits per tier", () => {
       const free = getFeaturesForTier("free");
       const pro = getFeaturesForTier("pro");
-      expect(free.limits.maxEntries).toBe(500);
+      expect(free.limits.maxEntries).toBe(100);
       expect(pro.limits.maxEntries).toBe(Infinity);
       expect(free.limits.maxStreams).toBe(5);
       expect(pro.limits.maxStreams).toBe(Infinity);
+      expect(free.limits.maxPlaces).toBe(10);
+      expect(pro.limits.maxPlaces).toBe(Infinity);
     });
   });
 });

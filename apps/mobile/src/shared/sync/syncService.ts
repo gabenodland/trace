@@ -94,6 +94,9 @@ class SyncService {
   // Track entries currently being pushed - prevents race condition with realtime
   private currentlyPushingEntryIds: Set<string> = new Set();
 
+  // Suppress realtime DELETE events during batch operations (tombstone push, purge)
+  private suppressRealtimeDeletes: boolean = false;
+
   // App foreground sync state
   private appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
   private lastForegroundSyncTime: number = 0;
@@ -136,6 +139,11 @@ class SyncService {
 
     // Clean up data from previous users
     await this.cleanupWrongUserData();
+
+    // Purge expired trash (entries deleted 30+ days ago)
+    localDB.purgeExpiredTrash(30).catch(err => {
+      log.warn('Failed to purge expired trash', err);
+    });
 
     // Set up realtime subscription for server changes
     await this.setupRealtimeSubscription();
@@ -401,6 +409,16 @@ class SyncService {
         result.pushed.entries += deleteResult.success;
         result.errors.entries += deleteResult.errors;
 
+        // Push tombstones (hard-deletes to server) — suppress realtime DELETE events
+        this.suppressRealtimeDeletes = true;
+        try {
+          const tombstoneResult = await pushOps.pushTombstones();
+          result.pushed.entries += tombstoneResult.success;
+          result.errors.entries += tombstoneResult.errors;
+        } finally {
+          this.suppressRealtimeDeletes = false;
+        }
+
         const totalPushed = result.pushed.entries + result.pushed.streams + result.pushed.locations + result.pushed.attachments + result.pushed.entry_versions;
         if (totalPushed > 0) {
           log.debug(`PUSHED ${totalPushed} items`, result.pushed);
@@ -422,6 +440,10 @@ class SyncService {
         // Pull entry versions (after entries exist locally)
         const entryVersionResult = await pullOps.pullEntryVersions(forceFullPull);
         result.pulled.entry_versions = entryVersionResult.new + entryVersionResult.updated;
+
+        // Pull tombstones (hard-deletes from other devices)
+        const tombstoneResult = await pullOps.pullTombstones();
+        result.pulled.entries += tombstoneResult.deleted;
 
         await pullOps.saveLastPullTimestamp(pullStartTime);
 
@@ -638,6 +660,10 @@ class SyncService {
 
     // For DELETE events, remove directly from LocalDB and cache
     if (eventType === 'DELETE') {
+      if (this.suppressRealtimeDeletes) {
+        log.info('📡 SKIPPED DELETE - batch operation in progress', { entryId: entryId.substring(0, 8) });
+        return;
+      }
       log.info('📡 Entry DELETE event received - removing from local', { entryId });
       try {
         await localDB.deleteEntry(entryId);
@@ -648,15 +674,24 @@ class SyncService {
       return;
     }
 
-    // Soft-delete via UPDATE: remote set deleted_at — remove locally
+    // Soft-delete via UPDATE: remote set deleted_at — mirror locally
     // Must check BEFORE version check — MCP deletes don't increment version
     const remoteDeletedAt = (payload.new as any)?.deleted_at;
     if (remoteDeletedAt != null) {
-      log.info('📡 Entry soft-deleted remotely — removing from local', { entryId: entryId.substring(0, 8) });
+      log.info('📡 Entry soft-deleted remotely — mirroring delete locally', { entryId: entryId.substring(0, 8) });
       try {
-        await localDB.deleteEntry(entryId);
+        const localEntry = await localDB.getEntry(entryId);
+        if (localEntry && !localEntry.deleted_at) {
+          await localDB.updateEntry(entryId, {
+            ...localEntry,
+            deleted_at: remoteDeletedAt,
+            location_id: null,
+            synced: 1,
+            sync_action: null,
+          } as any);
+        }
       } catch (err) {
-        log.warn('Failed to delete soft-deleted entry from LocalDB', { entryId, error: err });
+        log.warn('Failed to mirror soft-delete from realtime', { entryId, error: err });
       }
       this.removeEntryFromCache(entryId);
       return;

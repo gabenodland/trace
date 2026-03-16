@@ -1,14 +1,14 @@
 /**
  * Mobile Data Management Hooks
  *
- * Composes core (Supabase) hooks with local (SQLite) queries
- * to provide complete data management state for the UI.
+ * Composes local (SQLite) queries to provide complete
+ * data management state for the UI.
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { useCloudStorageUsage, useTrash } from '@trace/core';
-import type { DeviceStorageUsage, PrivateStreamSummary } from '@trace/core';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { DeviceStorageUsage } from '@trace/core';
 import * as api from './mobileDataManagementApi';
+import type { DataSummary, EntryListItem } from './mobileDataManagementApi';
 
 // ============================================================================
 // QUERY KEYS
@@ -17,8 +17,12 @@ import * as api from './mobileDataManagementApi';
 export const dataManagementKeys = {
   all: ['dataManagement'] as const,
   deviceStorage: () => [...dataManagementKeys.all, 'deviceStorage'] as const,
-  localCounts: () => [...dataManagementKeys.all, 'localCounts'] as const,
-  privateCounts: () => [...dataManagementKeys.all, 'privateCounts'] as const,
+  topLevelCounts: () => [...dataManagementKeys.all, 'topLevelCounts'] as const,
+  entrySummary: () => [...dataManagementKeys.all, 'entrySummary'] as const,
+  deletedSummary: () => [...dataManagementKeys.all, 'deletedSummary'] as const,
+  entryList: () => [...dataManagementKeys.all, 'entryList'] as const,
+  deletedEntries: () => [...dataManagementKeys.all, 'deletedEntries'] as const,
+  deletedEntryCount: () => [...dataManagementKeys.all, 'deletedEntryCount'] as const,
   privateStreams: () => [...dataManagementKeys.all, 'privateStreams'] as const,
 };
 
@@ -26,10 +30,6 @@ export const dataManagementKeys = {
 // DEVICE STORAGE
 // ============================================================================
 
-/**
- * Device-local storage usage (SQLite file + local attachment files).
- * Informational only — no tier limit.
- */
 export function useDeviceStorageUsage() {
   const query = useQuery<DeviceStorageUsage>({
     queryKey: dataManagementKeys.deviceStorage(),
@@ -45,51 +45,136 @@ export function useDeviceStorageUsage() {
 }
 
 // ============================================================================
-// DATA INVENTORY
+// TOP-LEVEL COUNTS (streams, places)
 // ============================================================================
 
-/**
- * Combined data inventory — local counts + cloud counts + private counts.
- * Cloud counts and trash counts come from core's useCloudStorageUsage and useTrash hooks.
- * This hook provides the local side.
- */
-export function useDataInventory() {
-  const localCountsQuery = useQuery({
-    queryKey: dataManagementKeys.localCounts(),
-    queryFn: api.getLocalEntityCounts,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const privateCountsQuery = useQuery({
-    queryKey: dataManagementKeys.privateCounts(),
-    queryFn: api.getPrivateCounts,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const versionCountQuery = useQuery({
-    queryKey: [...dataManagementKeys.all, 'versionCount'] as const,
-    queryFn: api.getVersionCount,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const trashedAttachmentsQuery = useQuery({
-    queryKey: [...dataManagementKeys.all, 'trashedAttachments'] as const,
-    queryFn: api.getTrashedAttachmentCount,
+export function useTopLevelCounts() {
+  const query = useQuery({
+    queryKey: dataManagementKeys.topLevelCounts(),
+    queryFn: api.getTopLevelCounts,
     staleTime: 5 * 60 * 1000,
   });
 
   return {
-    localCounts: localCountsQuery.data ?? null,
-    privateCounts: privateCountsQuery.data ?? null,
-    versionCount: versionCountQuery.data ?? 0,
-    trashedAttachmentCount: trashedAttachmentsQuery.data ?? 0,
-    isLoading: localCountsQuery.isLoading || privateCountsQuery.isLoading || versionCountQuery.isLoading || trashedAttachmentsQuery.isLoading,
-    refetch: () => {
-      localCountsQuery.refetch();
-      privateCountsQuery.refetch();
-      versionCountQuery.refetch();
-      trashedAttachmentsQuery.refetch();
+    counts: query.data ?? { streams: 0, places: 0 },
+    isLoading: query.isLoading,
+    refetch: query.refetch,
+  };
+}
+
+// ============================================================================
+// ENTRY SUMMARY (live entries card)
+// ============================================================================
+
+export function useEntrySummary() {
+  const query = useQuery<DataSummary>({
+    queryKey: dataManagementKeys.entrySummary(),
+    queryFn: api.getEntrySummary,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  return {
+    summary: query.data ?? { entryCount: 0, attachmentCount: 0, attachmentBytes: 0, versionCount: 0 },
+    isLoading: query.isLoading,
+    refetch: query.refetch,
+  };
+}
+
+// ============================================================================
+// DELETED ENTRY SUMMARY (trash card)
+// ============================================================================
+
+export function useDeletedEntrySummary() {
+  const query = useQuery<DataSummary>({
+    queryKey: dataManagementKeys.deletedSummary(),
+    queryFn: api.getDeletedEntrySummary,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  return {
+    summary: query.data ?? { entryCount: 0, attachmentCount: 0, attachmentBytes: 0, versionCount: 0 },
+    isLoading: query.isLoading,
+    refetch: query.refetch,
+  };
+}
+
+// ============================================================================
+// ENTRY LIST (entries screen)
+// ============================================================================
+
+export function useEntryList() {
+  const query = useQuery<EntryListItem[]>({
+    queryKey: dataManagementKeys.entryList(),
+    queryFn: api.getEntryListItems,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  return {
+    entries: query.data ?? [],
+    isLoading: query.isLoading,
+    refetch: query.refetch,
+  };
+}
+
+// ============================================================================
+// LOCAL TRASH
+// ============================================================================
+
+export function useLocalTrash() {
+  const queryClient = useQueryClient();
+
+  const deletedEntriesQuery = useQuery({
+    queryKey: dataManagementKeys.deletedEntries(),
+    queryFn: api.getLocalDeletedEntries,
+    refetchOnMount: 'always' as const,
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: api.restoreEntryLocally,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.deletedEntries() });
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.deletedSummary() });
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.entrySummary() });
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.entryList() });
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.topLevelCounts() });
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
     },
+  });
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: api.hardDeleteEntryLocally,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.deletedEntries() });
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.deletedSummary() });
+    },
+  });
+
+  const emptyTrashMutation = useMutation({
+    mutationFn: api.emptyTrash,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.deletedEntries() });
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.deletedSummary() });
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.entrySummary() });
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.entryList() });
+      queryClient.invalidateQueries({ queryKey: dataManagementKeys.topLevelCounts() });
+    },
+  });
+
+  return {
+    deletedEntries: deletedEntriesQuery.data ?? [],
+    deletedEntryCount: (deletedEntriesQuery.data ?? []).length,
+    isLoading: deletedEntriesQuery.isLoading,
+
+    restoreEntry: restoreMutation.mutateAsync,
+    isRestoring: restoreMutation.isPending,
+
+    hardDeleteEntry: hardDeleteMutation.mutateAsync,
+    isDeletingEntry: hardDeleteMutation.isPending,
+
+    emptyTrash: emptyTrashMutation.mutateAsync,
+    isEmptyingTrash: emptyTrashMutation.isPending,
+
+    refetch: deletedEntriesQuery.refetch,
   };
 }
 
@@ -97,11 +182,8 @@ export function useDataInventory() {
 // PRIVACY SUMMARY
 // ============================================================================
 
-/**
- * Local-only streams with entry/attachment counts for the privacy summary.
- */
 export function usePrivacySummary() {
-  const query = useQuery<PrivateStreamSummary[]>({
+  const query = useQuery({
     queryKey: dataManagementKeys.privateStreams(),
     queryFn: api.getPrivateStreams,
     staleTime: 5 * 60 * 1000,
@@ -114,10 +196,3 @@ export function usePrivacySummary() {
     refetch: query.refetch,
   };
 }
-
-// ============================================================================
-// RE-EXPORTS for convenience
-// ============================================================================
-
-// Re-export core hooks so screens only need one import
-export { useCloudStorageUsage, useTrash };

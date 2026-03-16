@@ -20,6 +20,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from "react-native";
 import { Icon, Button } from "../shared/components";
 import { useAuth } from "../shared/contexts/AuthContext";
@@ -35,6 +36,7 @@ import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { AvatarPicker, UsernameInput } from "../modules/profile/components";
 import type { AvatarImageData } from "../modules/profile/components/AvatarPicker";
 import { useTheme } from "../shared/contexts/ThemeContext";
+import { useSubscription } from "../shared/hooks/useSubscription";
 import { useNavigate, useBeforeBack } from "../shared/navigation";
 import { useKeyboardHeight } from "../modules/entries/components/hooks/useKeyboardHeight";
 import { themeBase } from "../shared/theme/themeBase";
@@ -49,6 +51,7 @@ export function ProfileScreen() {
 
   // Profile data with offline support
   const { profile, isLoading, error, profileMutations, isOffline } = useMobileProfile(user?.id);
+  const { tier, isDevMode } = useSubscription();
 
   // Local form state
   const [name, setName] = useState("");
@@ -219,6 +222,18 @@ export function ProfileScreen() {
     [profileMutations]
   );
 
+  // Dev mode: toggle subscription tier
+  const handleDevTierToggle = useCallback(async (isPro: boolean) => {
+    try {
+      await profileMutations.updateProfile({
+        subscription_tier: isPro ? 'pro' : 'free',
+      });
+      log.info("Dev tier toggled", { tier: isPro ? 'pro' : 'free' });
+    } catch (err: any) {
+      log.error("Dev tier toggle failed", err);
+    }
+  }, [profileMutations]);
+
   // Handle avatar removal
   const handleAvatarRemoved = useCallback(async () => {
     try {
@@ -357,6 +372,34 @@ export function ProfileScreen() {
             </View>
           </View>
 
+          {/* Dev Mode Section */}
+          {isDevMode && (
+            <View style={[styles.devSection, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+              <View style={styles.devHeader}>
+                <Icon name="Code" size={16} color={theme.colors.functional.accent} />
+                <Text style={[styles.devTitle, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>
+                  Developer
+                </Text>
+              </View>
+              <View style={styles.devRow}>
+                <View style={styles.devRowContent}>
+                  <Text style={[styles.devRowLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
+                    Pro Tier
+                  </Text>
+                  <Text style={[styles.devRowDetail, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+                    {tier === 'pro' ? 'Viewing as Pro' : 'Viewing as Free'}
+                  </Text>
+                </View>
+                <Switch
+                  value={tier === 'pro'}
+                  onValueChange={handleDevTierToggle}
+                  trackColor={{ false: theme.colors.border.light, true: theme.colors.functional.accent }}
+                  thumbColor="#fff"
+                />
+              </View>
+            </View>
+          )}
+
           {/* Bottom spacer — room for BottomBar save button when visible */}
           <View style={{ height: hasChanges ? 120 : themeBase.spacing.xl }} />
         </ScrollView>
@@ -463,5 +506,34 @@ const styles = StyleSheet.create({
   },
   readOnlyText: {
     fontSize: 16,
+  },
+  devSection: {
+    borderRadius: themeBase.borderRadius.md,
+    padding: themeBase.spacing.lg,
+    marginBottom: themeBase.spacing.lg,
+  },
+  devHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: themeBase.spacing.md,
+  },
+  devTitle: {
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  devRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  devRowContent: {
+    flex: 1,
+  },
+  devRowLabel: {
+    fontSize: 15,
+  },
+  devRowDetail: {
+    fontSize: 12,
+    marginTop: 2,
   },
 });

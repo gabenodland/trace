@@ -310,6 +310,14 @@ export async function pullEntries(
     return { new: 0, updated: 0, deleted: 0 };
   }
 
+  // Count how many of the fetched entries are deleted
+  const fetchedDeletedCount = remoteEntries?.filter(e => e.deleted_at != null).length ?? 0;
+  log.info('[pullEntries] Fetched entries', {
+    total: remoteEntries?.length ?? 0,
+    deleted: fetchedDeletedCount,
+    live: (remoteEntries?.length ?? 0) - fetchedDeletedCount,
+  });
+
   if (!remoteEntries || remoteEntries.length === 0) {
     return { new: 0, updated: 0, deleted: 0 };
   }
@@ -320,14 +328,78 @@ export async function pullEntries(
 
   for (const remoteEntry of remoteEntries) {
     try {
+      // Skip entries that have been hard-deleted (tombstoned)
+      const isTombstoned = await localDB.hasTombstone(remoteEntry.entry_id);
+      if (isTombstoned) continue;
+
       const localEntry = await localDB.getEntry(remoteEntry.entry_id);
 
-      // Handle deleted entries
+      // Handle deleted entries — mirror soft-delete locally
       if (remoteEntry.deleted_at) {
-        if (localEntry) {
-          await localDB.deleteEntry(remoteEntry.entry_id);
+        log.debug('[pullEntries] Processing deleted entry', {
+          entryId: remoteEntry.entry_id.substring(0, 8),
+          hasLocal: !!localEntry,
+        });
+        if (localEntry && !localEntry.deleted_at) {
+          // Mirror the soft-delete: set deleted_at directly, don't cascade
+          // (attachments are handled separately by pullAttachments)
+          await localDB.updateEntry(remoteEntry.entry_id, {
+            ...localEntry,
+            deleted_at: remoteEntry.deleted_at,
+            location_id: null,
+            synced: 1,
+            sync_action: null,
+          } as any);
+          deletedCount++;
+        } else if (!localEntry) {
+          // Entry deleted on server that we never had — save it as deleted
+          const entry: Entry = {
+            entry_id: remoteEntry.entry_id,
+            user_id: remoteEntry.user_id,
+            title: remoteEntry.title,
+            content: remoteEntry.content,
+            tags: remoteEntry.tags || [],
+            mentions: remoteEntry.mentions || [],
+            stream_id: remoteEntry.stream_id,
+            entry_latitude: remoteEntry.entry_latitude || null,
+            entry_longitude: remoteEntry.entry_longitude || null,
+            location_id: null,
+            place_name: remoteEntry.place_name || null,
+            address: remoteEntry.address || null,
+            neighborhood: remoteEntry.neighborhood || null,
+            postal_code: remoteEntry.postal_code || null,
+            city: remoteEntry.city || null,
+            subdivision: remoteEntry.subdivision || null,
+            region: remoteEntry.region || null,
+            country: remoteEntry.country || null,
+            geocode_status: ((remoteEntry as any).geocode_status as Entry['geocode_status']) || null,
+            status: (remoteEntry.status as Entry['status']) || 'none',
+            type: remoteEntry.type || null,
+            due_date: remoteEntry.due_date,
+            completed_at: remoteEntry.completed_at,
+            entry_date: remoteEntry.entry_date || remoteEntry.created_at,
+            created_at: remoteEntry.created_at,
+            updated_at: remoteEntry.updated_at,
+            deleted_at: remoteEntry.deleted_at,
+            attachments: remoteEntry.attachments,
+            priority: remoteEntry.priority || 0,
+            rating: remoteEntry.rating || 0.00,
+            is_pinned: remoteEntry.is_pinned || false,
+            is_archived: (remoteEntry as any).is_archived || false,
+            local_only: 0,
+            synced: 1,
+            sync_action: null,
+            version: remoteEntry.version || 1,
+            base_version: remoteEntry.version || 1,
+            conflict_status: (remoteEntry.conflict_status as Entry['conflict_status']) || null,
+            conflict_backup: typeof remoteEntry.conflict_backup === 'string' ? remoteEntry.conflict_backup : null,
+            last_edited_by: remoteEntry.last_edited_by || null,
+            last_edited_device: remoteEntry.last_edited_device || null,
+          };
+          await localDB.saveEntry(entry);
           deletedCount++;
         }
+        // If localEntry already has deleted_at, skip (already synced)
         continue;
       }
 
@@ -417,6 +489,7 @@ export async function pullEntries(
     }
   }
 
+  log.info('[pullEntries] Done', { new: newCount, updated: updatedCount, deleted: deletedCount });
   return { new: newCount, updated: updatedCount, deleted: deletedCount };
 }
 
@@ -655,4 +728,85 @@ export async function pullEntryVersions(forceFullPull: boolean): Promise<{ new: 
   log.info('[VersionSync] Pull: complete', { new: newCount, errors: errorCount });
 
   return { new: newCount, updated: 0 };
+}
+
+// ============================================================================
+// TOMBSTONES
+// ============================================================================
+
+export async function pullTombstones(): Promise<{ deleted: number }> {
+  const { data } = await supabase.auth.getUser();
+  const user = data?.user;
+  if (!user) return { deleted: 0 };
+
+  // Get last tombstone pull timestamp
+  let lastPullTimestamp: string | null = null;
+  try {
+    const rows = await localDB.runCustomQuery(
+      'SELECT value FROM sync_metadata WHERE key = ?',
+      ['last_tombstone_pull_timestamp']
+    );
+    if (rows.length > 0) {
+      lastPullTimestamp = new Date(parseInt(rows[0].value)).toISOString();
+    }
+  } catch {
+    // First pull
+  }
+
+  let query = (supabase.from as any)('entry_tombstones')
+    .select('entry_id, user_id, hard_deleted_at')
+    .eq('user_id', user.id);
+
+  if (lastPullTimestamp) {
+    query = query.gt('hard_deleted_at', lastPullTimestamp);
+  }
+
+  const { data: tombstones, error } = await query as { data: any[] | null; error: any };
+
+  if (error) {
+    log.error('Failed to pull tombstones', error);
+    return { deleted: 0 };
+  }
+
+  if (!tombstones || tombstones.length === 0) {
+    return { deleted: 0 };
+  }
+
+  let deletedCount = 0;
+
+  for (const tombstone of tombstones) {
+    try {
+      // Check if we have this entry locally — if so, hard-delete it
+      const localEntry = await localDB.getEntry(tombstone.entry_id);
+      if (localEntry) {
+        // Hard-delete locally without creating another tombstone
+        await localDB.runCustomQuery('DELETE FROM attachments WHERE entry_id = ?', [tombstone.entry_id]);
+        await localDB.runCustomQuery('DELETE FROM entry_versions WHERE entry_id = ?', [tombstone.entry_id]);
+        await localDB.runCustomQuery('DELETE FROM entries WHERE entry_id = ?', [tombstone.entry_id]);
+        deletedCount++;
+      }
+
+      // Save the tombstone locally (already synced)
+      const hardDeletedAtMs = new Date(tombstone.hard_deleted_at).getTime();
+      await localDB.saveTombstone(tombstone.entry_id, tombstone.user_id, hardDeletedAtMs);
+    } catch (err) {
+      log.warn('Failed to process tombstone', { entryId: tombstone.entry_id, error: err });
+    }
+  }
+
+  // Save pull timestamp
+  try {
+    await localDB.runCustomQuery(
+      'INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)',
+      ['last_tombstone_pull_timestamp', Date.now().toString(), Date.now()]
+    );
+  } catch {
+    log.warn('Failed to save tombstone pull timestamp');
+  }
+
+  if (deletedCount > 0) {
+    log.info('Pulled tombstones', { deleted: deletedCount, total: tombstones.length });
+  }
+
+  return { deleted: deletedCount };
 }

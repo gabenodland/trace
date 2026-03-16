@@ -6,8 +6,14 @@
 
 /** Cloud storage usage returned by get_user_storage_usage RPC */
 export interface CloudStorageUsage {
-  /** Total bytes used by attachments in cloud storage */
-  attachment_bytes: number;
+  /** Entry content + title + version snapshots for non-deleted entries */
+  active_content_bytes: number;
+  /** Attachment file sizes for non-deleted entries */
+  active_attachment_bytes: number;
+  /** Entry content + title + version snapshots for deleted entries */
+  trash_content_bytes: number;
+  /** Attachment file sizes for deleted entries */
+  trash_attachment_bytes: number;
 }
 
 /** Device-local storage usage (mobile only — calculated from SQLite + filesystem) */

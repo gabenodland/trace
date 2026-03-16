@@ -49,12 +49,18 @@ export type BooleanFeature =
   | 'collaboration';
 
 // Limit-based features (numbers)
+// NOTE: maxStreams, maxEntries, and maxPlaces count only synced items.
+// Local-only streams and their entries are excluded from quota checks.
+// Moving an entry from a local-only stream to a synced stream counts against the entry quota.
+// DOWNGRADE POLICY: If a user downgrades from Pro to Free and exceeds limits,
+// existing data is preserved (read, view, search, sync). Only new creation is blocked.
 export type LimitFeature =
   | 'maxStorageMB'
   | 'maxEntries'
   | 'maxPhotosPerEntry'
   | 'maxDevices'
   | 'maxStreams'
+  | 'maxPlaces'
   | 'maxTemplates'
   | 'maxTags'
   | 'maxReminders';
@@ -116,10 +122,11 @@ const BOOLEAN_FEATURES: Record<BooleanFeature, SubscriptionTier[]> = {
  */
 const FEATURE_LIMITS: Record<LimitFeature, Record<SubscriptionTier, number>> = {
   maxStorageMB: { free: 200, pro: 2048 },
-  maxEntries: { free: 500, pro: Infinity },
+  maxEntries: { free: 100, pro: Infinity },
   maxPhotosPerEntry: { free: 3, pro: 20 },
   maxDevices: { free: 2, pro: Infinity },
   maxStreams: { free: 5, pro: Infinity },
+  maxPlaces: { free: 10, pro: Infinity },
   maxTemplates: { free: 2, pro: Infinity },
   maxTags: { free: 10, pro: Infinity },
   maxReminders: { free: 1, pro: Infinity },
@@ -174,15 +181,19 @@ export function getFeaturesForTier(tier: SubscriptionTier): {
 }
 
 /**
- * Get the effective tier considering dev mode and expiration
+ * Get the effective tier considering dev mode and expiration.
+ *
+ * Dev mode: uses the tier as-is (no expiration check), allowing devs
+ * to toggle between 'free' and 'pro' for testing. If no tier is set,
+ * defaults to 'pro' for backwards compatibility.
  */
 export function getEffectiveTier(
   tier: SubscriptionTier,
   expiresAt: string | null,
   isDevMode: boolean
 ): SubscriptionTier {
-  // Dev mode = always pro
-  if (isDevMode) return 'pro';
+  // Dev mode = respect tier directly, skip expiration check
+  if (isDevMode) return tier;
 
   // Check if subscription expired
   if (expiresAt) {
@@ -229,6 +240,7 @@ export const FEATURE_DISPLAY_NAMES: Record<BooleanFeature | LimitFeature, string
   maxPhotosPerEntry: 'Photos per Entry',
   maxDevices: 'Devices',
   maxStreams: 'Streams',
+  maxPlaces: 'Places',
   maxTemplates: 'Templates',
   maxTags: 'Tags',
   maxReminders: 'Reminders',
