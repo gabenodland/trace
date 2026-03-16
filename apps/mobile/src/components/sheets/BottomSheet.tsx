@@ -49,6 +49,8 @@ interface BottomSheetProps {
   dismissKeyboard?: boolean;
   /** Use Modal wrapper (default: true). Set to false to render inline for z-order control (parent view can slide over sheet) */
   useModal?: boolean;
+  /** When true, uses secondary background so primary cards have visible contrast. Default false (primary background). */
+  usesCards?: boolean;
 }
 
 export function BottomSheet({
@@ -61,6 +63,7 @@ export function BottomSheet({
   swipeArea = "grabber",
   dismissKeyboard = true,
   useModal = true,
+  usesCards = false,
 }: BottomSheetProps) {
   const dynamicTheme = useTheme();
 
@@ -181,7 +184,9 @@ export function BottomSheet({
         style={[
           styles.sheet,
           {
-            backgroundColor: dynamicTheme.colors.background.primary,
+            backgroundColor: usesCards
+              ? dynamicTheme.colors.background.secondary
+              : dynamicTheme.colors.background.primary,
             height: sheetHeight,
             maxHeight: SCREEN_HEIGHT * 0.95,
             transform: [{ translateY }],

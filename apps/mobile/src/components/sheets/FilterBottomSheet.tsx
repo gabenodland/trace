@@ -542,7 +542,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
                     key={status.value}
                     style={[
                       styles.optionChip,
-                      { backgroundColor: theme.colors.background.secondary },
+                      { backgroundColor: theme.colors.background.tertiary },
                       isSelected && { backgroundColor: theme.colors.interactive.primary + '20', borderColor: theme.colors.interactive.primary, borderWidth: 1 },
                     ]}
                     onPress={() => handleStatusToggle(status.value)}
@@ -584,7 +584,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
                     key={priority.value}
                     style={[
                       styles.optionChip,
-                      { backgroundColor: theme.colors.background.secondary },
+                      { backgroundColor: theme.colors.background.tertiary },
                       isSelected && { backgroundColor: priorityColor + '20', borderColor: priorityColor, borderWidth: 1 },
                     ]}
                     onPress={() => handlePriorityToggle(priority.value)}
@@ -625,7 +625,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
                     key={type}
                     style={[
                       styles.optionChip,
-                      { backgroundColor: theme.colors.background.secondary },
+                      { backgroundColor: theme.colors.background.tertiary },
                       isSelected && { backgroundColor: theme.colors.interactive.primary + '20', borderColor: theme.colors.interactive.primary, borderWidth: 1 },
                     ]}
                     onPress={() => handleTypeToggle(type)}
@@ -667,7 +667,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
                     key={op.value}
                     style={[
                       styles.segmentButton,
-                      { backgroundColor: theme.colors.background.secondary },
+                      { backgroundColor: theme.colors.background.tertiary },
                       isSelected && { backgroundColor: theme.colors.interactive.primary },
                     ]}
                     onPress={() => handleRatingOperatorChange(op.value)}
@@ -710,7 +710,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
                           key={value}
                           style={[
                             styles.ratingValueButton,
-                            { backgroundColor: theme.colors.background.secondary },
+                            { backgroundColor: theme.colors.background.tertiary },
                             isSelected && { backgroundColor: theme.colors.interactive.primary + '20', borderColor: theme.colors.interactive.primary, borderWidth: 1.5 },
                           ]}
                           onPress={() => handleRatingValueChange(value)}
@@ -747,7 +747,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
               <TouchableOpacity
                 style={[
                   styles.segmentButton,
-                  { backgroundColor: theme.colors.background.secondary },
+                  { backgroundColor: theme.colors.background.tertiary },
                   currentFilter.hasPhotos === null && { backgroundColor: theme.colors.interactive.primary },
                 ]}
                 onPress={() => handlePhotosFilterChange(null)}
@@ -764,7 +764,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
               <TouchableOpacity
                 style={[
                   styles.segmentButton,
-                  { backgroundColor: theme.colors.background.secondary },
+                  { backgroundColor: theme.colors.background.tertiary },
                   currentFilter.hasPhotos === true && { backgroundColor: theme.colors.interactive.primary },
                 ]}
                 onPress={() => handlePhotosFilterChange(true)}
@@ -781,7 +781,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
               <TouchableOpacity
                 style={[
                   styles.segmentButton,
-                  { backgroundColor: theme.colors.background.secondary },
+                  { backgroundColor: theme.colors.background.tertiary },
                   currentFilter.hasPhotos === false && { backgroundColor: theme.colors.interactive.primary },
                 ]}
                 onPress={() => handlePhotosFilterChange(false)}
@@ -818,7 +818,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
                     key={preset.value}
                     style={[
                       styles.optionChip,
-                      { backgroundColor: theme.colors.background.secondary },
+                      { backgroundColor: theme.colors.background.tertiary },
                       isSelected && { backgroundColor: theme.colors.interactive.primary + '20', borderColor: theme.colors.interactive.primary, borderWidth: 1 },
                     ]}
                     onPress={() => handleDueDatePresetChange(preset.value)}
@@ -846,7 +846,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
               <TouchableOpacity
                 style={[
                   styles.dateToggleButton,
-                  { backgroundColor: theme.colors.background.secondary },
+                  { backgroundColor: theme.colors.background.tertiary },
                   dueDateMode === 'from' && { backgroundColor: theme.colors.interactive.primary },
                 ]}
                 onPress={() => setDueDateMode('from')}
@@ -863,7 +863,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
               <TouchableOpacity
                 style={[
                   styles.dateToggleButton,
-                  { backgroundColor: theme.colors.background.secondary },
+                  { backgroundColor: theme.colors.background.tertiary },
                   dueDateMode === 'to' && { backgroundColor: theme.colors.interactive.primary },
                 ]}
                 onPress={() => setDueDateMode('to')}
@@ -911,7 +911,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
             <TouchableOpacity
               style={[
                 styles.dateToggleButton,
-                { backgroundColor: theme.colors.background.secondary },
+                { backgroundColor: theme.colors.background.tertiary },
                 entryDateMode === 'from' && { backgroundColor: theme.colors.interactive.primary },
               ]}
               onPress={() => setEntryDateMode('from')}
@@ -928,7 +928,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
             <TouchableOpacity
               style={[
                 styles.dateToggleButton,
-                { backgroundColor: theme.colors.background.secondary },
+                { backgroundColor: theme.colors.background.tertiary },
                 entryDateMode === 'to' && { backgroundColor: theme.colors.interactive.primary },
               ]}
               onPress={() => setEntryDateMode('to')}
@@ -968,7 +968,7 @@ export function FilterBottomSheet({ visible, onClose, onApply, entries = [] }: F
       {/* Footer - Clear All + Apply buttons */}
       <View style={[styles.footerContainer, { backgroundColor: theme.colors.background.primary, borderTopColor: theme.colors.border.light }]}>
         <TouchableOpacity
-          style={[styles.clearAllButton, { backgroundColor: theme.colors.background.secondary }]}
+          style={[styles.clearAllButton, { backgroundColor: theme.colors.background.tertiary }]}
           onPress={handleClearAll}
           activeOpacity={0.7}
         >

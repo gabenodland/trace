@@ -128,7 +128,7 @@ export function EntriesScreen() {
         </TouchableOpacity>
       </CardRowWrapper>
     );
-  }, [theme, setSelectedEntryId]);
+  }, [theme]);
 
   const keyExtractor = useCallback((item: EntryListItem) => item.id, []);
 

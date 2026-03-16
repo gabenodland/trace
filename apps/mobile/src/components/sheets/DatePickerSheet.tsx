@@ -154,7 +154,7 @@ export function DatePickerSheet({
       {/* Quick Select Buttons */}
       <View style={styles.quickSelectRow}>
         <TouchableOpacity
-          style={[styles.quickSelectButton, { backgroundColor: theme.colors.background.secondary }]}
+          style={[styles.quickSelectButton, { backgroundColor: theme.colors.background.tertiary }]}
           onPress={handleToday}
           activeOpacity={0.7}
         >
@@ -163,7 +163,7 @@ export function DatePickerSheet({
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.quickSelectButton, { backgroundColor: theme.colors.background.secondary }]}
+          style={[styles.quickSelectButton, { backgroundColor: theme.colors.background.tertiary }]}
           onPress={handleTomorrow}
           activeOpacity={0.7}
         >
@@ -172,7 +172,7 @@ export function DatePickerSheet({
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.quickSelectButton, { backgroundColor: theme.colors.background.secondary }]}
+          style={[styles.quickSelectButton, { backgroundColor: theme.colors.background.tertiary }]}
           onPress={handleNextWeek}
           activeOpacity={0.7}
         >

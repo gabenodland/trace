@@ -66,7 +66,7 @@ export function SecondaryHeader({ title, rightAction, onBack, children, count }:
             >
               {title}
             </Text>
-            {count != null && (
+            {count != null && count.filtered !== 0 && (
               <Text style={[styles.countText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
                 {count.filtered != null && count.filtered !== count.total
                   ? `(${count.filtered} / ${count.total})`

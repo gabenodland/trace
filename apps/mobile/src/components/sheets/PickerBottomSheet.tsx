@@ -46,6 +46,8 @@ interface PickerBottomSheetProps {
   headerLeft?: React.ReactNode;
   /** Custom content for right side of header. When provided, replaces the default X close button. */
   headerRight?: React.ReactNode;
+  /** When true, uses secondary background so primary cards have visible contrast. Default false. */
+  usesCards?: boolean;
 }
 
 export function PickerBottomSheet({
@@ -62,6 +64,7 @@ export function PickerBottomSheet({
   noPadding = false,
   headerLeft,
   headerRight,
+  usesCards = false,
 }: PickerBottomSheetProps) {
   const dynamicTheme = useTheme();
   const keyboardHeight = useKeyboardHeight();
@@ -78,12 +81,13 @@ export function PickerBottomSheet({
       swipeToDismiss={true}
       dismissKeyboard={dismissKeyboard}
       useModal={true}
+      usesCards={usesCards}
     >
       <View style={[styles.container, noPadding && styles.containerNoPadding]}>
         {/* Header */}
         <View style={[styles.header, noPadding && styles.headerPadded]}>
           {headerLeft}
-          <View style={[styles.titleContainer, headerLeft != null && styles.titleCentered]}>
+          <View style={styles.titleContainer}>
             <Text
               style={[
                 styles.title,
@@ -137,7 +141,7 @@ export function PickerBottomSheet({
                     backgroundColor:
                       secondaryAction.variant === "danger"
                         ? `${dynamicTheme.colors.functional.overdue}15`
-                        : dynamicTheme.colors.background.secondary,
+                        : dynamicTheme.colors.background.tertiary,
                   },
                 ]}
                 onPress={secondaryAction.onPress}
@@ -219,9 +223,6 @@ const styles = StyleSheet.create({
   titleContainer: {
     flex: 1,
     flexDirection: "column",
-  },
-  titleCentered: {
-    alignItems: "center",
   },
   title: {
     fontSize: 18,

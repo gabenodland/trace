@@ -13,6 +13,7 @@ import { Icon } from '../../../shared/components';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
 import { PickerBottomSheet } from '../../../components/sheets/PickerBottomSheet';
+import { SheetActionBar } from '../../../components/sheets/SheetActionBar';
 import { HtmlRenderProvider } from '../../entries/components/HtmlRenderProvider';
 import { CollapsibleEntryCard } from '../../../components/layout/CollapsibleEntryCard';
 import { useVersions, useRestoreVersion, useCopyFromSnapshot } from '../versionHooks';
@@ -311,17 +312,15 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
 
     return (
       <TouchableOpacity
-        style={[styles.versionRow, { backgroundColor: theme.colors.background.secondary }]}
+        style={[styles.versionRowShadow, { backgroundColor: theme.colors.background.primary, borderColor: theme.colors.border.medium, borderWidth: 1 }, theme.shadows.sm]}
         onPress={() => handleVersionPress(item)}
         activeOpacity={0.7}
       >
+        <View style={styles.versionRow}>
         {/* Timeline dot — colored per device */}
         <View style={styles.timelineColumn}>
-          <View style={[
-            styles.timelineDot,
-            { backgroundColor: dotColor },
-          ]} />
           <View style={[styles.timelineLine, { backgroundColor: theme.colors.border.light }]} />
+          <View style={[styles.timelineDot, { backgroundColor: dotColor }]} />
         </View>
 
         {/* Content */}
@@ -350,7 +349,7 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
               {
                 backgroundColor: isConflict
                   ? '#f59e0b20'
-                  : theme.colors.background.tertiary,
+                  : theme.colors.background.secondary,
               },
             ]}>
               {isConflict && (
@@ -397,6 +396,7 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
             v{item.base_entry_version ?? '?'}.{item.version_number}
           </Text>
         </View>
+        </View>
       </TouchableOpacity>
     );
   }, [theme, latestVersionId, deviceColorMap, resolveDeviceName, deviceMap, handleVersionPress]);
@@ -430,12 +430,12 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
       <HtmlRenderProvider>
         <ScrollView style={styles.detailScroll} showsVerticalScrollIndicator={false}>
           {/* Version metadata card */}
-          <View style={[styles.metaCard, { backgroundColor: theme.colors.background.tertiary, borderColor: theme.colors.border.light, borderWidth: StyleSheet.hairlineWidth }, theme.shadows.sm]}>
+          <View style={[styles.metaCard, { backgroundColor: theme.colors.background.primary, borderColor: theme.colors.border.medium, borderWidth: 1 }, theme.shadows.sm]}>
             <View style={styles.metaRow}>
               <View style={styles.metaRowLeft}>
                 <View style={[
                   styles.detailTriggerBadge,
-                  { backgroundColor: isConflict ? '#f59e0b20' : theme.colors.background.tertiary },
+                  { backgroundColor: isConflict ? '#f59e0b20' : theme.colors.background.secondary },
                 ]}>
                   {isConflict && <Icon name="AlertTriangle" size={13} color="#f59e0b" />}
                   <Text style={[styles.detailTriggerText, {
@@ -513,7 +513,7 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
           </View>
 
           {/* Entry preview card — collapsible */}
-          <CollapsibleEntryCard entry={snapshot} theme={theme} cardBackground={theme.colors.background.tertiary}>
+          <CollapsibleEntryCard entry={snapshot} theme={theme} cardBackground={theme.colors.background.primary}>
             {versionAttachments.length > 0 && (
               <View style={styles.attachmentsContainer}>
                 <PhotoGallery
@@ -528,49 +528,25 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
           <View style={{ height: 20 }} />
         </ScrollView>
 
-        {/* Fixed footer — always visible */}
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[styles.actionButton, {
-              backgroundColor: theme.colors.functional.accent,
-              opacity: isRestoring ? 0.6 : 1,
-            }]}
-            onPress={handleRestore}
-            activeOpacity={0.8}
-            disabled={isRestoring || isCopying}
-          >
-            {isRestoring ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Icon name="RotateCcw" size={16} color="#fff" />
-            )}
-            <Text style={[styles.actionButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>
-              {isRestoring ? 'Restoring...' : 'Restore this version'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, {
-              backgroundColor: theme.colors.background.tertiary,
-              opacity: isCopying ? 0.6 : 1,
-            }]}
-            onPress={handleCopy}
-            activeOpacity={0.8}
-            disabled={isRestoring || isCopying}
-          >
-            {isCopying ? (
-              <ActivityIndicator size="small" color={theme.colors.text.primary} />
-            ) : (
-              <Icon name="Copy" size={16} color={theme.colors.text.primary} />
-            )}
-            <Text style={[styles.actionButtonText, {
-              fontFamily: theme.typography.fontFamily.semibold,
-              color: theme.colors.text.primary,
-            }]}>
-              {isCopying ? 'Creating copy...' : 'Create copy from version'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <SheetActionBar actions={[
+          {
+            label: isRestoring ? 'Restoring...' : 'Restore this version',
+            icon: 'RotateCcw',
+            onPress: handleRestore,
+            backgroundColor: theme.colors.functional.accent,
+            isLoading: isRestoring,
+            disabled: isCopying,
+          },
+          {
+            label: isCopying ? 'Creating copy...' : 'Create copy from version',
+            icon: 'Copy',
+            onPress: handleCopy,
+            backgroundColor: theme.colors.background.tertiary,
+            textColor: theme.colors.text.primary,
+            isLoading: isCopying,
+            disabled: isRestoring,
+          },
+        ]} />
       </HtmlRenderProvider>
     );
   };
@@ -584,6 +560,7 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
       swipeArea="grabber"
       dismissKeyboard
       headerLeft={headerLeft}
+      usesCards
     >
       {selectedVersionId ? (
         // Detail view
@@ -627,6 +604,7 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
             renderSectionHeader={renderSectionHeader}
             showsVerticalScrollIndicator={false}
             stickySectionHeadersEnabled={false}
+            contentContainerStyle={styles.listContent}
           />
         )
       )}
@@ -657,26 +635,34 @@ const styles = StyleSheet.create({
     marginTop: themeBase.spacing.md,
     marginLeft: themeBase.spacing.xs,
   },
-  versionRow: {
-    flexDirection: 'row',
+  listContent: {
+    paddingTop: themeBase.spacing.xs,
+    paddingBottom: themeBase.spacing.xl,
+  },
+  versionRowShadow: {
     borderRadius: 12,
     marginBottom: themeBase.spacing.sm,
-    overflow: 'hidden',
+  },
+  versionRow: {
+    flexDirection: 'row',
   },
   timelineColumn: {
     width: 32,
     alignItems: 'center',
-    paddingTop: themeBase.spacing.lg,
+    position: 'relative',
   },
   timelineDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
+    marginTop: themeBase.spacing.lg,
+    zIndex: 1,
   },
   timelineLine: {
+    position: 'absolute',
     width: 2,
-    flex: 1,
-    marginTop: 4,
+    top: 0,
+    bottom: 0,
   },
   versionContent: {
     flex: 1,
@@ -747,13 +733,13 @@ const styles = StyleSheet.create({
   // Detail view
   detailScroll: {
     flex: 1,
-    padding: themeBase.spacing.lg,
+    paddingTop: themeBase.spacing.xs,
+    paddingBottom: themeBase.spacing.xl,
   },
   metaCard: {
     borderRadius: 12,
     marginBottom: themeBase.spacing.lg,
     padding: themeBase.spacing.lg,
-    overflow: 'hidden',
   },
   metaRow: {
     flexDirection: 'row',
@@ -808,23 +794,4 @@ const styles = StyleSheet.create({
     marginTop: themeBase.spacing.sm,
   },
 
-  // Action buttons
-  actionButtons: {
-    gap: themeBase.spacing.sm,
-    paddingHorizontal: themeBase.spacing.lg,
-    paddingTop: themeBase.spacing.md,
-    paddingBottom: themeBase.spacing.lg,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-  },
 });

@@ -170,7 +170,7 @@ export function DeletedEntriesScreen() {
         </TouchableOpacity>
       </CardRowWrapper>
     );
-  }, [theme, setSelectedEntryId]);
+  }, [theme]);
 
   const keyExtractor = useCallback((item: DeletedEntryItem) => item.id, []);
 

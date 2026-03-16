@@ -1,8 +1,8 @@
 /**
- * CollapsibleEntryCard — Shared collapsible content card for entry detail screens.
+ * CollapsibleEntryCard — Shared collapsible content card for entry detail sheets.
  *
  * Shows title + chevron, badges, body content (collapsed by default), and pinned flag.
- * Tap to expand/collapse. Used by EntryDetailScreen and DeletedEntryDetailScreen.
+ * Tap to expand/collapse. Used by EntryDetailSheet, DeletedEntryDetailSheet, and VersionHistorySheet.
  */
 
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
@@ -86,7 +86,7 @@ export function CollapsibleEntryCard({ entry, theme, children, cardBackground }:
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: cardBackground || theme.colors.background.primary, borderColor: theme.colors.border.light, borderWidth: StyleSheet.hairlineWidth }, theme.shadows.sm]}
+      style={[styles.card, { backgroundColor: cardBackground || theme.colors.background.primary, borderColor: theme.colors.border.medium, borderWidth: 1 }, theme.shadows.sm]}
       onPress={() => setExpanded(prev => !prev)}
       activeOpacity={0.8}
     >
@@ -196,7 +196,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: themeBase.spacing.lg,
     padding: themeBase.spacing.lg,
-    overflow: "hidden",
   },
   header: {
     flexDirection: "row",

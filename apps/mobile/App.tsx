@@ -68,8 +68,7 @@ import { DevicesScreen } from "./src/screens/DevicesScreen";
 import { DataManagementScreen } from "./src/screens/DataManagementScreen";
 import { EntriesScreen } from "./src/screens/EntriesScreen";
 import { DeletedEntriesScreen } from "./src/screens/DeletedEntriesScreen";
-import { DeletedEntryDetailScreen } from "./src/screens/DeletedEntryDetailScreen";
-import { EntryDetailScreen } from "./src/screens/EntryDetailScreen";
+
 import { localDB } from "./src/shared/db/localDB";
 import { initializeSync, destroySync } from "./src/shared/sync";
 import "./src/shared/db/dbDebug"; // Global debug utilities
@@ -527,17 +526,9 @@ const AppContent = memo(function AppContent() {
         boundaryName = "EntriesScreen";
         content = <EntriesScreen />;
         break;
-      case "entry-detail":
-        boundaryName = "EntryDetailScreen";
-        content = <EntryDetailScreen />;
-        break;
       case "deleted-entries":
         boundaryName = "DeletedEntriesScreen";
         content = <DeletedEntriesScreen />;
-        break;
-      case "deleted-entry-detail":
-        boundaryName = "DeletedEntryDetailScreen";
-        content = <DeletedEntryDetailScreen />;
         break;
       case "stream-properties":
         boundaryName = "StreamPropertiesScreen";
