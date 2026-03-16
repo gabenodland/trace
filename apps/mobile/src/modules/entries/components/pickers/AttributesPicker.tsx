@@ -7,11 +7,11 @@
  * - ACTIONS: Delete Entry (only when editing)
  */
 
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import { ScrollView } from "react-native";
 import { PickerBottomSheet } from "../../../../components/sheets";
-import { Icon, type IconName } from "../../../../shared/components";
+import { MenuRow, MenuSection, type MenuRowProps } from "../../../../components/sheets";
+import { type IconName } from "../../../../shared/components";
 import { useTheme } from "../../../../shared/contexts/ThemeContext";
-import { themeBase } from "../../../../shared/theme/themeBase";
 import {
   getStatusLabel,
   formatRatingDisplay,
@@ -66,6 +66,8 @@ interface AttributesPickerProps {
   onDelete: () => void;
 }
 
+type RowConfig = Omit<MenuRowProps, 'showSeparator'>;
+
 export function AttributesPicker({
   visible,
   onClose,
@@ -104,9 +106,8 @@ export function AttributesPicker({
   onVersionHistory,
   onDelete,
 }: AttributesPickerProps) {
-  const dynamicTheme = useTheme();
+  const theme = useTheme();
 
-  // Check if location has any data
   const hasLocationData = !!(
     locationData?.name ||
     locationData?.city ||
@@ -116,10 +117,95 @@ export function AttributesPicker({
     (locationData?.latitude && locationData?.longitude)
   );
 
-  // Helper to format date
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  };
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const unset = theme.colors.text.secondary;
+  const set = theme.colors.text.primary;
+
+  const streamIconColor = resolveStreamColorHex(streamColor, theme.colors.stream)
+    || (streamName ? set : unset);
+
+  const locationIcon: IconName = hasLocationData
+    ? locationData?.location_id ? "MapPinFavoriteLine" : locationData?.name ? "MapPin" : "MapPinEmpty"
+    : "MapPin";
+
+  // Build attribute rows so separator logic can use index < length - 1
+  const attributeRows: RowConfig[] = [
+    {
+      icon: (streamIcon ?? "Layers") as IconName,
+      iconColor: streamIconColor,
+      label: streamName ? `Stream: ${streamName}` : "Set Stream",
+      labelColor: streamName ? set : unset,
+      onPress: onShowStreamPicker,
+    },
+    ...(showLocation ? [{
+      icon: locationIcon,
+      label: hasLocationData ? `Place: ${getLocationLabel(locationData)}` : "Set Place",
+      labelColor: hasLocationData ? set : unset,
+      onPress: onShowLocationPicker,
+    }] : []),
+    ...(showStatus ? [{
+      icon: "Circle" as IconName,
+      label: status !== "none" ? `Status: ${getStatusLabel(status)}` : "Set Status",
+      labelColor: status !== "none" ? set : unset,
+      onPress: onShowStatusPicker,
+    }] : []),
+    ...(showType ? [{
+      icon: "Bookmark" as IconName,
+      label: type ? `Type: ${type}` : "Set Type",
+      labelColor: type ? set : unset,
+      onPress: onShowTypePicker,
+    }] : []),
+    ...(showDueDate ? [{
+      icon: "CalendarClock" as IconName,
+      label: dueDate ? `Due Date: ${formatDate(dueDate)}` : "Set Due Date",
+      labelColor: dueDate ? set : unset,
+      onPress: onShowDatePicker,
+    }] : []),
+    ...(showRating ? [{
+      icon: "Star" as IconName,
+      label: rating > 0 ? `Rating: ${formatRatingDisplay(rating, ratingType)}` : "Set Rating",
+      labelColor: rating > 0 ? set : unset,
+      onPress: onShowRatingPicker,
+    }] : []),
+    ...(showPriority ? [{
+      icon: "Flag" as IconName,
+      label: priority > 0 ? `Priority: ${getPriorityInfo(priority)?.label || `P${priority}`}` : "Set Priority",
+      labelColor: priority > 0 ? set : unset,
+      onPress: onShowPriorityPicker,
+    }] : []),
+  ];
+
+  // Build action rows so separator logic can use index < length - 1
+  const actionRows: RowConfig[] = [
+    ...(onPinToggle ? [{
+      icon: (isPinned ? "PinOff" : "Pin") as IconName,
+      label: isPinned ? "Unpin Entry" : "Pin Entry",
+      onPress: () => { onPinToggle(); onClose(); },
+    }] : []),
+    ...(onArchiveToggle ? [{
+      icon: (isArchived ? "ArchiveRestore" : "Archive") as IconName,
+      label: isArchived ? "Unarchive Entry" : "Archive Entry",
+      onPress: () => { onArchiveToggle(); onClose(); },
+    }] : []),
+    ...(onVersionHistory && isEditing ? [{
+      icon: "Clock" as IconName,
+      label: "Version History",
+      onPress: () => { onClose(); onVersionHistory(); },
+    }] : []),
+    ...(onDuplicate && isEditing ? [{
+      icon: "Copy" as IconName,
+      label: "Duplicate Entry",
+      onPress: () => { onDuplicate(); onClose(); },
+    }] : []),
+    ...(isEditing ? [{
+      icon: "Trash2" as IconName,
+      label: "Delete Entry",
+      isDanger: true as const,
+      onPress: () => { onDelete(); onClose(); },
+    }] : []),
+  ];
 
   return (
     <PickerBottomSheet
@@ -128,360 +214,39 @@ export function AttributesPicker({
       title="Entry Options"
     >
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* ATTRIBUTES Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeader, { color: dynamicTheme.colors.text.tertiary, fontFamily: dynamicTheme.typography.fontFamily.semibold }]}>
-            ATTRIBUTES
-          </Text>
+        {/* ATTRIBUTES */}
+        <MenuSection title="Attributes">
+          {attributeRows.map((row, i) => (
+            <MenuRow key={row.label} {...row} showSeparator={i < attributeRows.length - 1} />
+          ))}
+        </MenuSection>
 
-          {/* Stream - always shown first */}
-          <TouchableOpacity
-            style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-            onPress={onShowStreamPicker}
-          >
-            <View style={styles.optionIcon}>
-              <Icon name={streamIcon ? streamIcon as IconName : "Layers"} size={16} color={resolveStreamColorHex(streamColor, dynamicTheme.colors.stream) || (streamName ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary)} />
-            </View>
-            <Text
-              style={[
-                styles.optionText,
-                {
-                  fontFamily: streamName ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                  color: dynamicTheme.colors.text.primary,
-                }
-              ]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {streamName ? `Stream: ${streamName}` : "Set Stream"}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Location */}
-          {showLocation && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={onShowLocationPicker}
-            >
-              <View style={styles.optionIcon}>
-                <Icon
-                  name={hasLocationData
-                    ? locationData?.location_id ? "MapPinFavoriteLine" : locationData?.name ? "MapPin" : "MapPinEmpty"
-                    : "MapPin"
-                  }
-                  size={16}
-                  color={hasLocationData ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary}
-                />
-              </View>
-              <Text
-                style={[
-                  styles.optionText,
-                  {
-                    fontFamily: hasLocationData ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                    color: dynamicTheme.colors.text.primary,
-                  }
-                ]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {hasLocationData ? `Place: ${getLocationLabel(locationData)}` : "Set Place"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Status */}
-          {showStatus && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={onShowStatusPicker}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="Circle" size={16} color={status !== "none" ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
-              </View>
-              <Text
-                style={[
-                  styles.optionText,
-                  {
-                    fontFamily: status !== "none" ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                    color: dynamicTheme.colors.text.primary,
-                  }
-                ]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {status !== "none" ? `Status: ${getStatusLabel(status)}` : "Set Status"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Type */}
-          {showType && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={onShowTypePicker}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="Bookmark" size={16} color={type ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
-              </View>
-              <Text
-                style={[
-                  styles.optionText,
-                  {
-                    fontFamily: type ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                    color: dynamicTheme.colors.text.primary,
-                  }
-                ]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {type ? `Type: ${type}` : "Set Type"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Due Date */}
-          {showDueDate && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={onShowDatePicker}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="CalendarClock" size={16} color={dueDate ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
-              </View>
-              <Text
-                style={[
-                  styles.optionText,
-                  {
-                    fontFamily: dueDate ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                    color: dynamicTheme.colors.text.primary,
-                  }
-                ]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {dueDate ? `Due Date: ${formatDate(dueDate)}` : "Set Due Date"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Rating */}
-          {showRating && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={onShowRatingPicker}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="Star" size={16} color={rating > 0 ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
-              </View>
-              <Text
-                style={[
-                  styles.optionText,
-                  {
-                    fontFamily: rating > 0 ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                    color: dynamicTheme.colors.text.primary,
-                  }
-                ]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {rating > 0 ? `Rating: ${formatRatingDisplay(rating, ratingType)}` : "Set Rating"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Priority */}
-          {showPriority && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={onShowPriorityPicker}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="Flag" size={16} color={priority > 0 ? dynamicTheme.colors.text.primary : dynamicTheme.colors.text.secondary} />
-              </View>
-              <Text
-                style={[
-                  styles.optionText,
-                  {
-                    fontFamily: priority > 0 ? dynamicTheme.typography.fontFamily.medium : dynamicTheme.typography.fontFamily.regular,
-                    color: dynamicTheme.colors.text.primary,
-                  }
-                ]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {priority > 0 ? `Priority: ${getPriorityInfo(priority)?.label || `P${priority}`}` : "Set Priority"}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* PHOTOS Section */}
+        {/* PHOTOS */}
         {showPhotos && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionHeader, { color: dynamicTheme.colors.text.tertiary, fontFamily: dynamicTheme.typography.fontFamily.semibold }]}>
-              PHOTOS
-            </Text>
-
-            {/* Take Photo */}
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={() => {
-                onClose();
-                setTimeout(() => onTakePhoto(), 100);
-              }}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="CustomCamera" size={16} color={dynamicTheme.colors.text.primary} />
-              </View>
-              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
-                Take Photo
-              </Text>
-            </TouchableOpacity>
-
-            {/* Add from Gallery */}
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={() => {
-                onClose();
-                setTimeout(() => onGallery(), 100);
-              }}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="CustomGallery" size={16} color={dynamicTheme.colors.text.primary} />
-              </View>
-              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
-                Add from Gallery
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <MenuSection title="Photos">
+            <MenuRow
+              icon="CustomCamera"
+              label="Take Photo"
+              onPress={() => { onClose(); requestAnimationFrame(() => onTakePhoto()); }}
+              showSeparator
+            />
+            <MenuRow
+              icon="CustomGallery"
+              label="Add from Gallery"
+              onPress={() => { onClose(); requestAnimationFrame(() => onGallery()); }}
+            />
+          </MenuSection>
         )}
 
-        {/* ACTIONS Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeader, { color: dynamicTheme.colors.text.tertiary, fontFamily: dynamicTheme.typography.fontFamily.semibold }]}>
-            ACTIONS
-          </Text>
-
-          {/* Pin/Unpin Entry */}
-          {onPinToggle && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={() => {
-                onPinToggle();
-                onClose();
-              }}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name={isPinned ? "PinOff" : "Pin"} size={16} color={dynamicTheme.colors.text.primary} />
-              </View>
-              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
-                {isPinned ? "Unpin Entry" : "Pin Entry"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Archive/Unarchive Entry */}
-          {onArchiveToggle && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={() => {
-                onArchiveToggle();
-                onClose();
-              }}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name={isArchived ? "ArchiveRestore" : "Archive"} size={16} color={dynamicTheme.colors.text.primary} />
-              </View>
-              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
-                {isArchived ? "Unarchive Entry" : "Archive Entry"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Version History */}
-          {onVersionHistory && isEditing && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={() => {
-                onClose();
-                onVersionHistory();
-              }}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="Clock" size={16} color={dynamicTheme.colors.text.primary} />
-              </View>
-              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
-                Version History
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Duplicate Entry */}
-          {onDuplicate && isEditing && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={() => {
-                onDuplicate();
-                onClose();
-              }}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="Copy" size={16} color={dynamicTheme.colors.text.primary} />
-              </View>
-              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.regular, color: dynamicTheme.colors.text.primary }]}>
-                Duplicate Entry
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Delete Entry */}
-          {isEditing && (
-            <TouchableOpacity
-              style={[styles.optionButton, { backgroundColor: dynamicTheme.colors.background.secondary }]}
-              onPress={() => {
-                onDelete();
-                onClose();
-              }}
-            >
-              <View style={styles.optionIcon}>
-                <Icon name="Trash2" size={16} color="#ef4444" />
-              </View>
-              <Text style={[styles.optionText, { fontFamily: dynamicTheme.typography.fontFamily.medium, color: "#ef4444" }]}>
-                Delete Entry
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* ACTIONS — only rendered when there is at least one action */}
+        {actionRows.length > 0 && (
+          <MenuSection title="Actions">
+            {actionRows.map((row, i) => (
+              <MenuRow key={row.label} {...row} showSeparator={i < actionRows.length - 1} />
+            ))}
+          </MenuSection>
+        )}
       </ScrollView>
     </PickerBottomSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  section: {
-    marginBottom: themeBase.spacing.md,
-  },
-  sectionHeader: {
-    fontSize: 11,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    marginBottom: themeBase.spacing.sm,
-    marginLeft: themeBase.spacing.xs,
-  },
-  optionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: themeBase.spacing.md,
-    paddingHorizontal: themeBase.spacing.md,
-    borderRadius: themeBase.borderRadius.md,
-    gap: themeBase.spacing.md,
-  },
-  optionIcon: {
-    width: 24,
-    alignItems: "center",
-  },
-  optionText: {
-    fontSize: 16,
-    flex: 1,
-  },
-});

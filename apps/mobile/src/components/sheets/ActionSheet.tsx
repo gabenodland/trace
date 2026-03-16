@@ -6,11 +6,12 @@
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { PickerBottomSheet } from "./PickerBottomSheet";
 import { Icon, type IconName } from "../../shared/components";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { themeBase } from "../../shared/theme/themeBase";
+import { MenuRow, MenuSection } from "./MenuRow";
 
 export interface ActionSheetItem {
   label: string;
@@ -37,7 +38,6 @@ export function ActionSheet({ visible, onClose, items, title, subtitle, notices 
 
   const handleItemPress = (item: ActionSheetItem) => {
     onClose();
-    // Defer action so close animation can start before state changes
     requestAnimationFrame(() => item.onPress());
   };
 
@@ -71,65 +71,29 @@ export function ActionSheet({ visible, onClose, items, title, subtitle, notices 
       )}
 
       {/* Normal items */}
-      {normalItems.map((item, index) => (
-        <TouchableOpacity
-          key={item.label}
-          style={[
-            styles.item,
-            index < normalItems.length - 1 && {
-              borderBottomWidth: 1,
-              borderBottomColor: theme.colors.border.light,
-            },
-          ]}
-          onPress={() => handleItemPress(item)}
-          activeOpacity={0.6}
-        >
-          {item.icon && (
-            <Icon
-              name={item.icon}
-              size={20}
-              color={theme.colors.text.secondary}
-            />
-          )}
-          <Text style={[
-            styles.itemLabel,
-            {
-              color: theme.colors.text.primary,
-              fontFamily: theme.typography.fontFamily.semibold,
-            },
-          ]}>
-            {item.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
+      <MenuSection>
+        {normalItems.map((item, index) => (
+          <MenuRow
+            key={item.label}
+            label={item.label}
+            icon={item.icon}
+            onPress={() => handleItemPress(item)}
+            showSeparator={index < normalItems.length - 1}
+          />
+        ))}
+      </MenuSection>
 
       {/* Danger items */}
       {dangerItems.length > 0 && (
         <View style={[styles.dangerSection, { borderTopColor: theme.colors.border.medium }]}>
           {dangerItems.map((item) => (
-            <TouchableOpacity
+            <MenuRow
               key={item.label}
-              style={styles.item}
+              label={item.label}
+              icon={item.icon}
               onPress={() => handleItemPress(item)}
-              activeOpacity={0.6}
-            >
-              {item.icon && (
-                <Icon
-                  name={item.icon}
-                  size={20}
-                  color={theme.colors.functional.overdue}
-                />
-              )}
-              <Text style={[
-                styles.itemLabel,
-                {
-                  color: theme.colors.functional.overdue,
-                  fontFamily: theme.typography.fontFamily.semibold,
-                },
-              ]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
+              isDanger
+            />
           ))}
         </View>
       )}
@@ -138,15 +102,6 @@ export function ActionSheet({ visible, onClose, items, title, subtitle, notices 
 }
 
 const styles = StyleSheet.create({
-  item: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: themeBase.spacing.lg,
-    gap: themeBase.spacing.md,
-  },
-  itemLabel: {
-    fontSize: themeBase.typography.fontSize.base,
-  },
   dangerSection: {
     marginTop: themeBase.spacing.sm,
     borderTopWidth: 1,

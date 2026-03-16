@@ -390,7 +390,7 @@ export function AttributeBar({
           style={[styles.menuButton, { backgroundColor: theme.colors.background.tertiary }]}
           onPress={onMorePress}
         >
-          <Icon name="MoreVertical" size={16} color={theme.colors.text.secondary} />
+          <Icon name="MoreVertical" size={20} color={theme.colors.text.secondary} />
         </TouchableOpacity>
       </View>
     </View>
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     marginLeft: themeBase.spacing.sm,
   },
   menuButton: {
-    padding: 6,
+    padding: 8,
     borderRadius: themeBase.borderRadius.sm,
   },
 });
