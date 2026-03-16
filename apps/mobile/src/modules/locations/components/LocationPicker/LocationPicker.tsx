@@ -257,6 +257,14 @@ export function LocationPicker({
             Cancel
           </Text>
         </TouchableOpacity>
+      ) : picker.cameFromViewMode ? (
+        <TouchableOpacity
+          onPress={picker.handleBackToView}
+          style={{ paddingVertical: 4, paddingRight: 12 }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Icon name="ChevronLeft" size={24} color={dynamicTheme.colors.text.primary} />
+        </TouchableOpacity>
       ) : undefined}
       headerRight={picker.isEditingPlace ? (
         picker.hasEditChanges ? (

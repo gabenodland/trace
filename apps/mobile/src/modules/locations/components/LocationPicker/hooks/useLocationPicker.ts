@@ -120,6 +120,15 @@ export function useLocationPicker({
   const [modeOverride, setModeOverride] = useState<LocationPickerMode | null>(null);
   const effectiveMode: LocationPickerMode = modeOverride ?? propMode;
 
+  // Track when user navigated from view→select via "Select a Different Place"
+  // so we can show a back arrow to return to the original location
+  const [cameFromViewMode, setCameFromViewMode] = useState(false);
+  const preSelectSelectionRef = useRef<LocationSelection | null>(null);
+
+  // Mirror of selection state kept in a ref so handlers can snapshot it
+  // synchronously without needing selection in their dependency arrays
+  const selectionRef = useRef<LocationSelection>(createEmptySelection());
+
   // Fetch all saved locations with entry counts via React Query hook (SQLite)
   const { data: allSavedLocations = [] } = useLocationsWithCounts();
 
@@ -132,6 +141,9 @@ export function useLocationPicker({
   // UNIFIED STATE ARCHITECTURE
   // 1. Selection state - SINGLE SOURCE OF TRUTH for what user has chosen
   const [selection, setSelection] = useState<LocationSelection>(createEmptySelection());
+
+  // Keep selectionRef in sync so handlers can snapshot without stale closures
+  selectionRef.current = selection;
 
   // 2. UI state - View mode and input fields
   const [ui, setUI] = useState<LocationPickerUI>({
@@ -197,6 +209,8 @@ export function useLocationPicker({
   useEffect(() => {
     if (visible) {
       setModeOverride(null);
+      setCameFromViewMode(false);
+      preSelectSelectionRef.current = null;
 
       // Clear stale state from previous picker usage
       setPreviewMarker(null);
@@ -920,14 +934,20 @@ export function useLocationPicker({
   // When switching from view to select, clear the location name so the card
   // shows "Current Point" instead of the old saved location name
   const handleSwitchToSelectMode = useCallback(() => {
+    // Only show back arrow when coming from view mode (entry location picker)
+    // Manage mode also calls this but shouldn't get a back arrow
+    if (propMode === 'view') {
+      setCameFromViewMode(true);
+    }
     setModeOverride('select');
     setUI(prev => ({ ...prev, showingDetails: false }));
     setPreviewMarker(null);
     // Clear list selection highlighting
     setSelectedListItemId(null);
     setIsSelectedLocationHighlighted(false);
-    // Clear the location name but keep coordinates and other geo data
-    // This makes the "Selected Point" card show "Current Point" instead of the old name
+    // Snapshot selection before mutating so back arrow can restore it
+    // Read from ref (not state) to avoid adding selection to dep array
+    preSelectSelectionRef.current = selectionRef.current;
     setSelection(prev => ({
       ...prev,
       location: prev.location ? {
@@ -936,6 +956,13 @@ export function useLocationPicker({
       } : null,
       locationId: undefined,  // No longer linked to saved location
     }));
+  }, [propMode]);
+
+  // Handler: Go back to view mode (from select mode reached via "Select a Different Place")
+  const handleBackToView = useCallback(() => {
+    setModeOverride(null);
+    setCameFromViewMode(false);
+    setSelection(preSelectSelectionRef.current ?? createEmptySelection());
   }, []);
 
   // Handler: Save dropped pin - switch to create mode to name and save the location
@@ -1264,6 +1291,8 @@ export function useLocationPicker({
     handleLookupAddress,
     handleCenterOnMyLocation,
     handleSwitchToSelectMode,
+    handleBackToView,
+    cameFromViewMode,
     handleRemoveLocation,
     handleRemovePin,
     handleEditLocation,
