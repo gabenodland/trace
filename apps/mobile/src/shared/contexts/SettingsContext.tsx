@@ -103,9 +103,15 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     }
 
     // Debounce the save - UI updates instantly, storage write is batched
+    // Also persists startup bg color alongside settings to avoid separate I/O
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        await AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+        const theme = getTheme(settings.theme);
+        const bgColor = theme.colors.background.secondary;
+        await Promise.all([
+          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)),
+          AsyncStorage.setItem(STARTUP_BG_COLOR_KEY, bgColor),
+        ]);
         log.debug('Saved settings (debounced)');
       } catch (error) {
         log.error('Error saving settings', error);
@@ -119,16 +125,6 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       }
     };
   }, [settings, isLoaded]);
-
-  // Persist the theme's background color for instant startup theming
-  useEffect(() => {
-    if (!isLoaded) return;
-    const theme = getTheme(settings.theme);
-    const bgColor = theme.colors.background.secondary;
-    AsyncStorage.setItem(STARTUP_BG_COLOR_KEY, bgColor).catch(error => {
-      log.error('Error saving startup bg color', error);
-    });
-  }, [settings.theme, isLoaded]);
 
   // Update one or more settings
   const updateSettings = useCallback((updates: Partial<UserSettings>) => {

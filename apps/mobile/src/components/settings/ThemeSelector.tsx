@@ -5,7 +5,8 @@
  * Pro themes are gated - free users see them but can't select.
  */
 
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { useState, useCallback, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { getThemeOptions } from '../../shared/theme/themes';
 import { useTheme } from '../../shared/contexts/ThemeContext';
 import { useNavigate } from '../../shared/navigation';
@@ -31,8 +32,14 @@ export function ThemeSelector({
   const navigate = useNavigate();
   const { isPro } = useSubscription();
   const themeOptions = getThemeOptions();
+  const [applyingThemeId, setApplyingThemeId] = useState<string | null>(null);
 
-  const handleSelect = (themeId: string, isProTheme: boolean) => {
+  // Reset spinner when sheet reopens
+  useEffect(() => {
+    if (visible) setApplyingThemeId(null);
+  }, [visible]);
+
+  const handleSelect = useCallback((themeId: string, isProTheme: boolean) => {
     if (isProTheme && !isPro) {
       Alert.alert(
         'Pro Theme',
@@ -48,9 +55,14 @@ export function ThemeSelector({
       return;
     }
 
-    onSelect(themeId);
-    onClose();
-  };
+    // Show spinner immediately, then defer the heavy theme switch
+    // so the indicator paints before the JS thread blocks
+    setApplyingThemeId(themeId);
+    requestAnimationFrame(() => {
+      onSelect(themeId);
+      onClose();
+    });
+  }, [isPro, onSelect, onClose, navigate]);
 
   return (
     <PickerBottomSheet
@@ -123,8 +135,10 @@ export function ThemeSelector({
                   )}
                 </View>
 
-                {/* Checkmark or Lock icon */}
-                {isSelected ? (
+                {/* Checkmark, spinner, or Lock icon */}
+                {applyingThemeId === option.id ? (
+                  <ActivityIndicator size="small" color={theme.colors.functional.accent} />
+                ) : isSelected ? (
                   <Icon name="Check" size={24} color={theme.colors.functional.accent} />
                 ) : isLocked ? (
                   <Icon name="Lock" size={20} color={theme.colors.text.tertiary} />
