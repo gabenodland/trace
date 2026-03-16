@@ -17,7 +17,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { getDeviceName } from '../utils/deviceUtils';
 import { createScopedLogger } from '../utils/logger';
 import { isNetworkError } from '../utils/networkUtils';
-import { createSyncOverwriteIfNeeded } from '../../modules/versions';
+import { createSyncOverwriteIfNeeded } from '../../modules/versions/syncOverwriteHelper';
 
 // Lazy imports to break circular dependencies
 // mobileAttachmentApi imports syncApi, which imports this file

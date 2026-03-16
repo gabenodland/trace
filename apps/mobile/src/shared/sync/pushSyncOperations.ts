@@ -10,7 +10,8 @@ import { supabase, Entry, LocationEntity, isCompletedStatus, ALL_STATUSES, Entry
 import { createScopedLogger } from '../utils/logger';
 import { getDeviceName } from '../utils/deviceUtils';
 import { getDeviceId } from '../../config/appVersionService';
-import { createVersion, buildSnapshot } from '../../modules/versions';
+import { createVersion } from '../../modules/versions/versionApi';
+import { buildSnapshot } from '../../modules/versions/versionHelpers';
 
 // Lazy import to break circular dependency
 let _uploadAttachmentToSupabase: ((localPath: string, remotePath: string) => Promise<{ url: string; size: number }>) | null = null;

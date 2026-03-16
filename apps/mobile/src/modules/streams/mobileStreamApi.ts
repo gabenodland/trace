@@ -14,8 +14,7 @@ import * as Crypto from 'expo-crypto';
 import { localDB } from '../../shared/db/localDB';
 import type { Stream, CreateStreamInput, UpdateStreamInput } from '@trace/core';
 import { supabase } from '@trace/core';
-// Import directly from syncApi to avoid circular dependency through sync/index.ts
-import { triggerPushSync } from '../../shared/sync/syncApi';
+import { triggerPushSync } from '../../shared/sync/syncTrigger';
 import { createScopedLogger } from '../../shared/utils/logger';
 
 const log = createScopedLogger('StreamApi');

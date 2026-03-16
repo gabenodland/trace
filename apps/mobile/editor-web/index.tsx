@@ -499,6 +499,20 @@ function TiptapEditor() {
   );
 }
 
+// Ensure bridge config map exists before editor mounts.
+// TenTap's injectedJavaScriptBeforeContentLoaded sets window.bridgeExtensionConfigMap,
+// but on first WebView mount it can race with the inline module script. If missing,
+// useTenTap silently drops ALL bridge extensions (no Text type → schema crash).
+// This default ensures bridges resolve with no-op config; TenTap overwrites it when ready.
+if (!window.bridgeExtensionConfigMap) {
+  console.warn('[WebEditor] bridgeExtensionConfigMap missing — injectedJS race detected, using fallback');
+  const defaultConfig: Record<string, object> = {};
+  MinimalBridgeKit.forEach((bridge: any) => {
+    if (bridge.name) defaultConfig[bridge.name] = {};
+  });
+  window.bridgeExtensionConfigMap = JSON.stringify(defaultConfig);
+}
+
 // Render immediately using Preact
 const container = document.getElementById('root');
 if (container) {

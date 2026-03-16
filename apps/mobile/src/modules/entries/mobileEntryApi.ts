@@ -14,8 +14,7 @@
 import { Entry, CreateEntryInput, EntryFilter, Attachment } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
 import * as FileSystem from 'expo-file-system/legacy';
-// Import directly from syncApi to avoid circular dependency through sync/index.ts
-import { triggerPushSync, refreshEntryFromServer } from '../../shared/sync/syncApi';
+import { triggerPushSync, refreshEntryFromServer } from '../../shared/sync/syncTrigger';
 import { createScopedLogger } from '../../shared/utils/logger';
 import { generateUUID } from '../../shared/utils/uuid';
 import { markLocalEdit } from '../versions/localEditTracker';

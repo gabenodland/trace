@@ -12,8 +12,7 @@
 
 import { LocationEntity, CreateLocationInput, reverseGeocode, parseMapboxHierarchy, findNearbyLocation, geocodeResponseToEntryFields } from '@trace/core';
 import { localDB } from '../../shared/db/localDB';
-// Import directly from syncApi to avoid circular dependency through sync/index.ts
-import { triggerPushSync } from '../../shared/sync/syncApi';
+import { triggerPushSync } from '../../shared/sync/syncTrigger';
 import { createScopedLogger } from '../../shared/utils/logger';
 import { generateUUID } from '../../shared/utils/uuid';
 

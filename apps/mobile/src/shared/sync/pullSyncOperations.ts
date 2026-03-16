@@ -11,7 +11,8 @@ import { createScopedLogger } from '../utils/logger';
 import { isNetworkError } from '../utils/networkUtils';
 import { getDeviceName } from '../utils/deviceUtils';
 import { getDeviceId } from '../../config/appVersionService';
-import { createVersion, createSyncOverwriteIfNeeded } from '../../modules/versions';
+import { createVersion } from '../../modules/versions/versionApi';
+import { createSyncOverwriteIfNeeded } from '../../modules/versions/syncOverwriteHelper';
 
 // Lazy import to break circular dependency
 let _deleteAttachmentFromLocalStorage: ((attachmentId: string) => Promise<void>) | null = null;

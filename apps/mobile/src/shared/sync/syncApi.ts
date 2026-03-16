@@ -9,9 +9,13 @@
  */
 
 import { syncService, SyncResult, SyncStatus } from './syncService';
+import { registerSyncTriggers } from './syncTrigger';
 import { createScopedLogger } from '../utils/logger';
 
 const log = createScopedLogger('SyncApi');
+
+// Register sync triggers so API modules can trigger sync without importing this file
+registerSyncTriggers({ triggerPushSync, refreshEntryFromServer });
 
 // ============================================================================
 // INITIALIZATION
