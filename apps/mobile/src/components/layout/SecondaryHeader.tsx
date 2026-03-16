@@ -22,9 +22,11 @@ interface SecondaryHeaderProps {
   onBack?: () => void;
   /** Children to render in the center (replaces title if provided) */
   children?: ReactNode;
+  /** Item count — shows (total) or (filtered / total) when filtered differs */
+  count?: { total: number; filtered?: number };
 }
 
-export function SecondaryHeader({ title, rightAction, onBack, children }: SecondaryHeaderProps) {
+export function SecondaryHeader({ title, rightAction, onBack, children, count }: SecondaryHeaderProps) {
   const navigate = useNavigate();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -51,18 +53,27 @@ export function SecondaryHeader({ title, rightAction, onBack, children }: Second
       {/* Center: Title (or children) */}
       <View style={styles.titleContainer}>
         {children || (
-          <Text
-            style={[
-              styles.title,
-              {
-                color: theme.colors.text.primary,
-                fontFamily: theme.typography.fontFamily.bold,
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text
+              style={[
+                styles.title,
+                {
+                  color: theme.colors.text.primary,
+                  fontFamily: theme.typography.fontFamily.bold,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+            {count != null && (
+              <Text style={[styles.countText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+                {count.filtered != null && count.filtered !== count.total
+                  ? `(${count.filtered} / ${count.total})`
+                  : `(${count.total})`}
+              </Text>
+            )}
+          </View>
         )}
       </View>
 
@@ -92,8 +103,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flex: 1,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 6,
+  },
   title: {
     fontSize: themeBase.typography.fontSize.xl,
+  },
+  countText: {
+    fontSize: 14,
   },
   rightSection: {
     flexDirection: "row",

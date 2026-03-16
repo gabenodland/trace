@@ -21,6 +21,9 @@ import { useTheme } from "../shared/contexts/ThemeContext";
 import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSubscription } from "../shared/hooks/useSubscription";
 import { useDevices } from "../modules/devices";
+import { useTopLevelCounts } from "../modules/dataManagement";
+import { useEntryDerivedPlaces } from "../modules/locations/mobileLocationHooks";
+import { useCloudStorageUsage, formatMB } from "@trace/core";
 import { themeBase } from "../shared/theme/themeBase";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 
@@ -69,6 +72,9 @@ export function AccountScreen() {
   const { user, signOut } = useAuth();
   const { profile, isOffline } = useMobileProfile(user?.id);
   const { isPro, isDevMode, expiresAt } = useSubscription();
+  const { counts, isLoading: streamsLoading } = useTopLevelCounts();
+  const { data: entryDerivedPlaces } = useEntryDerivedPlaces();
+  const { storageUsage: cloudStorage } = useCloudStorageUsage();
 
   const [avatarError, setAvatarError] = useState(false);
 
@@ -94,6 +100,15 @@ export function AccountScreen() {
     }
     return "Free";
   }, [isPro, expiresAt]);
+
+  const streamDetail = streamsLoading ? undefined : `${counts.streams}`;
+  const placeDetail = entryDerivedPlaces != null ? `${entryDerivedPlaces.length}` : undefined;
+  const storageDetail = cloudStorage != null
+    ? formatMB(
+        cloudStorage.active_content_bytes + cloudStorage.active_attachment_bytes +
+        cloudStorage.trash_content_bytes + cloudStorage.trash_attachment_bytes
+      )
+    : undefined;
 
   const handleSignOut = async () => {
     await signOut();
@@ -184,12 +199,14 @@ export function AccountScreen() {
           <AccountRow
             icon={<Icon name="Layers" size={22} color={theme.colors.text.secondary} />}
             label="Streams"
+            detail={streamDetail}
             onPress={() => navigate("streams")}
           />
           <View style={[styles.rowDivider, { backgroundColor: theme.colors.border.light }]} />
           <AccountRow
             icon={<Icon name="MapPin" size={22} color={theme.colors.text.secondary} />}
             label="Places"
+            detail={placeDetail}
             onPress={() => navigate("locations")}
           />
           <View style={[styles.rowDivider, { backgroundColor: theme.colors.border.light }]} />
@@ -203,6 +220,7 @@ export function AccountScreen() {
           <AccountRow
             icon={<Icon name="Database" size={22} color={theme.colors.text.secondary} />}
             label="Data"
+            detail={storageDetail}
             onPress={() => navigate("data")}
           />
         </View>

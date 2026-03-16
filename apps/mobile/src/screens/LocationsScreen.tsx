@@ -602,7 +602,8 @@ export function LocationsScreen() {
   return (
     <View style={[mcStyles.container, { backgroundColor: theme.colors.background.secondary }]}>
       <SecondaryHeader
-        title="Places"
+        title="Manage Places"
+        count={entryDerivedLoading ? undefined : { total: entryDerivedPlaces.length, filtered: searchText.trim() ? filteredEntryPlaces.length : undefined }}
         rightAction={
           <TouchableOpacity onPress={() => setIsSearchOpen(!isSearchOpen)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Icon name="Search" size={20} color={isSearchOpen ? theme.colors.functional.accent : theme.colors.text.primary} />

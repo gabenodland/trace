@@ -5,7 +5,7 @@
  * Used on management screens and the nav drawer.
  */
 
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, type ViewStyle } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
 
 export interface SortOption<K extends string> {
@@ -18,6 +18,7 @@ interface SortBarProps<K extends string> {
   activeKey: K;
   ascending: boolean;
   onPress: (key: K) => void;
+  style?: ViewStyle;
 }
 
 export function SortBar<K extends string>({
@@ -25,11 +26,12 @@ export function SortBar<K extends string>({
   activeKey,
   ascending,
   onPress,
+  style,
 }: SortBarProps<K>) {
   const theme = useTheme();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       {options.map((opt) => {
         const isActive = activeKey === opt.key;
         return (

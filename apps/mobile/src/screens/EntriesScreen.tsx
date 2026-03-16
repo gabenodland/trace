@@ -10,8 +10,8 @@
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Platform, KeyboardAvoidingView } from "react-native";
 import { useState, useCallback, useMemo } from "react";
 import { Icon } from "../shared/components";
-import { useNavigate } from "../shared/navigation";
 import { useTheme } from "../shared/contexts/ThemeContext";
+import { EntryDetailSheet } from "./EntryDetailSheet";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { SearchBar } from "../components/layout/SearchBar";
 import { SortBar, type SortOption } from "../shared/components/SortBar";
@@ -31,7 +31,6 @@ const SORT_OPTIONS: SortOption<SortKey>[] = [
 
 export function EntriesScreen() {
   const theme = useTheme();
-  const navigate = useNavigate();
   const { entries, isLoading } = useEntryList();
   const cardListProps = useCardListProps(theme);
 
@@ -39,6 +38,7 @@ export function EntriesScreen() {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("modified");
   const [ascending, setAscending] = useState(false);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const handleSortPress = useCallback((key: SortKey) => {
     setSortKey(prev => {
@@ -90,7 +90,7 @@ export function EntriesScreen() {
       <CardRowWrapper theme={theme}>
         <TouchableOpacity
           style={mcStyles.row}
-          onPress={() => navigate("entry-detail", { entryId: item.id })}
+          onPress={() => setSelectedEntryId(item.id)}
           activeOpacity={0.7}
         >
           <View style={styles.rowContent}>
@@ -128,7 +128,7 @@ export function EntriesScreen() {
         </TouchableOpacity>
       </CardRowWrapper>
     );
-  }, [theme, navigate]);
+  }, [theme, setSelectedEntryId]);
 
   const keyExtractor = useCallback((item: EntryListItem) => item.id, []);
 
@@ -140,7 +140,11 @@ export function EntriesScreen() {
 
   return (
     <KeyboardAvoidingView style={[mcStyles.container, { backgroundColor: theme.colors.background.secondary }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <SecondaryHeader title={`Entries (${entries.length})`} rightAction={searchButton} />
+      <SecondaryHeader
+        title="Entry Data"
+        rightAction={searchButton}
+        count={isLoading ? undefined : { total: entries.length, filtered: search.trim() ? filteredEntries.length : undefined }}
+      />
 
       {isSearchOpen && (
         <SearchBar
@@ -189,6 +193,11 @@ export function EntriesScreen() {
           )}
         </View>
       )}
+      <EntryDetailSheet
+        visible={selectedEntryId != null}
+        onClose={() => setSelectedEntryId(null)}
+        entryId={selectedEntryId}
+      />
     </KeyboardAvoidingView>
   );
 }

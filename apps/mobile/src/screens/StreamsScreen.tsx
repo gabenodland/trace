@@ -189,25 +189,19 @@ export function StreamsScreen() {
 
   const keyExtractor = useCallback((item: Stream) => item.stream_id, []);
 
-  const rightActions = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      <TouchableOpacity onPress={() => setIsSearchOpen(!isSearchOpen)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Icon name="Search" size={20} color={isSearchOpen ? theme.colors.functional.accent : theme.colors.text.primary} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.createButton, { backgroundColor: theme.colors.functional.accent }]}
-        onPress={handleCreateStream}
-        activeOpacity={0.8}
-      >
-        <Icon name="Plus" size={16} color="#ffffff" />
-        <Text style={[styles.createButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Create</Text>
-      </TouchableOpacity>
-    </View>
+  const searchButton = (
+    <TouchableOpacity onPress={() => setIsSearchOpen(!isSearchOpen)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+      <Icon name="Search" size={20} color={isSearchOpen ? theme.colors.functional.accent : theme.colors.text.primary} />
+    </TouchableOpacity>
   );
 
   return (
     <View style={[mcStyles.container, { backgroundColor: theme.colors.background.secondary }]}>
-      <SecondaryHeader title="Manage Streams" rightAction={rightActions} />
+      <SecondaryHeader
+        title="Manage Streams"
+        rightAction={searchButton}
+        count={isLoading ? undefined : { total: streams.length, filtered: searchText.trim() ? sortedStreams.length : undefined }}
+      />
 
       {isSearchOpen && (
         <SearchBar
@@ -229,13 +223,22 @@ export function StreamsScreen() {
         />
       ) : (
         <View style={mcStyles.content}>
-          <View style={[mcStyles.fixedControls, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <View style={[mcStyles.fixedControls, styles.controlsRow, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
             <SortBar
               options={STREAM_SORT_OPTIONS}
               activeKey={sortKey}
               ascending={sortAsc}
               onPress={handleSortPress}
+              style={{ marginBottom: 0 }}
             />
+            <TouchableOpacity
+              style={[styles.createButton, { backgroundColor: theme.colors.functional.accent }]}
+              onPress={handleCreateStream}
+              activeOpacity={0.8}
+            >
+              <Icon name="Plus" size={16} color="#ffffff" />
+              <Text style={[styles.createButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Create</Text>
+            </TouchableOpacity>
           </View>
 
           {sortedStreams.length === 0 ? (
@@ -271,6 +274,12 @@ export function StreamsScreen() {
 
 // Screen-specific styles only
 const styles = StyleSheet.create({
+  controlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 12,
+  },
   streamRowContent: {
     flex: 1,
     flexDirection: "row",

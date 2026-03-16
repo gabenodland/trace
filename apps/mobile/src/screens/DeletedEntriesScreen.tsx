@@ -8,11 +8,10 @@
  */
 
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform, KeyboardAvoidingView } from "react-native";
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Icon, Snackbar, useSnackbar, EmptyState, LoadingState } from "../shared/components";
-import { useNavigate } from "../shared/navigation";
 import { useTheme } from "../shared/contexts/ThemeContext";
-import { getNavParams } from "../shared/navigation/NavigationService";
+import { DeletedEntryDetailSheet } from "./DeletedEntryDetailSheet";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 import { SearchBar } from "../components/layout/SearchBar";
 import { SortBar, type SortOption } from "../shared/components/SortBar";
@@ -59,21 +58,10 @@ function formatDeletedDate(dateStr: string, remaining: number): string {
 
 export function DeletedEntriesScreen() {
   const theme = useTheme();
-  const navigate = useNavigate();
-  const params = getNavParams();
   const { deletedEntries, isLoading, emptyTrash, isEmptyingTrash } = useLocalTrash();
   const { message: snackbarMessage, opacity: snackbarOpacity, showSnackbar } = useSnackbar();
   const cardListProps = useCardListProps(theme, { bottomSpacerHeight: 20 });
-
-  // Show snackbar from nav params (e.g. after restore)
-  const shownMessageRef = useRef<string | null>(null);
-  useEffect(() => {
-    const msg = params.restoredMessage as string | undefined;
-    if (msg && msg !== shownMessageRef.current) {
-      shownMessageRef.current = msg;
-      showSnackbar(msg);
-    }
-  }, [params.restoredMessage, showSnackbar]);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -143,7 +131,7 @@ export function DeletedEntriesScreen() {
       <CardRowWrapper theme={theme}>
         <TouchableOpacity
           style={mcStyles.row}
-          onPress={() => navigate("deleted-entry-detail", { entryId: item.id })}
+          onPress={() => setSelectedEntryId(item.id)}
           activeOpacity={0.7}
         >
           <View style={styles.rowContent}>
@@ -182,14 +170,15 @@ export function DeletedEntriesScreen() {
         </TouchableOpacity>
       </CardRowWrapper>
     );
-  }, [theme, navigate]);
+  }, [theme, setSelectedEntryId]);
 
   const keyExtractor = useCallback((item: DeletedEntryItem) => item.id, []);
 
   return (
     <KeyboardAvoidingView style={[mcStyles.container, { backgroundColor: theme.colors.background.secondary }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <SecondaryHeader
-        title={`Deleted Entries (${deletedEntries.length})`}
+        title="Deleted Entries"
+        count={isLoading ? undefined : { total: deletedEntries.length, filtered: search.trim() ? filteredEntries.length : undefined }}
         rightAction={
           <TouchableOpacity onPress={() => setIsSearchOpen(!isSearchOpen)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Icon name="Search" size={20} color={isSearchOpen ? theme.colors.functional.accent : theme.colors.text.primary} />
@@ -263,6 +252,12 @@ export function DeletedEntriesScreen() {
           </TouchableOpacity>
         </View>
       )}
+      <DeletedEntryDetailSheet
+        visible={selectedEntryId != null}
+        onClose={() => setSelectedEntryId(null)}
+        entryId={selectedEntryId}
+        onRestored={showSnackbar}
+      />
     </KeyboardAvoidingView>
   );
 }
