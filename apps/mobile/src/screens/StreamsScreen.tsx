@@ -3,19 +3,21 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   Alert,
 } from "react-native";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
-import { Icon, type IconName, EmptyState, LoadingState, SortBar, type SortOption, SearchInput } from "../shared/components";
+import { Icon, type IconName, EmptyState, LoadingState, SortBar, type SortOption } from "../shared/components";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { type Stream, resolveStreamColorHex } from "@trace/core";
 import { useNavigate } from "../shared/navigation";
 import { useDrawer } from "../shared/contexts/DrawerContext";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
+import { SearchBar } from "../components/layout/SearchBar";
 import { useTheme } from "../shared/contexts/ThemeContext";
 import { ActionSheet, type ActionSheetItem } from "../components/sheets";
+import { CardRowWrapper, useCardListProps, managementCardStyles as mcStyles } from "../components/layout/ManagementCard";
 
 const log = createScopedLogger(LogScopes.Streams);
 
@@ -56,7 +58,9 @@ export function StreamsScreen() {
   const theme = useTheme();
   const { selectedStreamId, setSelectedStreamId, setSelectedStreamName } = useDrawer();
   const { streams, isLoading, streamMutations } = useStreams();
+  const cardListProps = useCardListProps(theme);
 
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [actionSheetStream, setActionSheetStream] = useState<Stream | null>(null);
 
@@ -80,11 +84,11 @@ export function StreamsScreen() {
     return sortStreams(filtered, sortKey, sortAsc);
   }, [streams, searchText, sortKey, sortAsc]);
 
-  const handleCreateStream = () => {
+  const handleCreateStream = useCallback(() => {
     navigate("stream-properties", { streamId: null });
-  };
+  }, [navigate]);
 
-  const handleDeleteStream = (stream: Stream) => {
+  const handleDeleteStream = useCallback((stream: Stream) => {
     Alert.alert(
       "Delete Stream",
       `Are you sure you want to delete "${stream.name}"? Entries will be moved to Inbox.`,
@@ -108,17 +112,17 @@ export function StreamsScreen() {
         },
       ]
     );
-  };
+  }, [streamMutations, selectedStreamId, setSelectedStreamId, setSelectedStreamName]);
 
-  const handleOpenSettings = (stream: Stream) => {
+  const handleOpenSettings = useCallback((stream: Stream) => {
     navigate("stream-properties", { streamId: stream.stream_id });
-  };
+  }, [navigate]);
 
-  const handleOpenEntries = (stream: Stream) => {
+  const handleOpenEntries = useCallback((stream: Stream) => {
     setSelectedStreamId(stream.stream_id);
     setSelectedStreamName(stream.name);
     navigate("allEntries");
-  };
+  }, [navigate, setSelectedStreamId, setSelectedStreamName]);
 
   const actionSheetItems: ActionSheetItem[] = actionSheetStream
     ? [
@@ -141,20 +145,78 @@ export function StreamsScreen() {
       ]
     : [];
 
-  const addButton = (
-    <TouchableOpacity
-      style={[styles.createButton, { backgroundColor: theme.colors.functional.accent }]}
-      onPress={handleCreateStream}
-      activeOpacity={0.8}
-    >
-      <Icon name="Plus" size={16} color="#ffffff" />
-      <Text style={[styles.createButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Create</Text>
-    </TouchableOpacity>
+  const renderItem = useCallback(({ item: stream }: { item: Stream }) => (
+    <CardRowWrapper theme={theme}>
+      <View style={mcStyles.row}>
+        <TouchableOpacity
+          style={styles.streamRowContent}
+          onPress={() => handleOpenSettings(stream)}
+          activeOpacity={0.7}
+        >
+          <Icon name={stream.icon ? stream.icon as IconName : "Layers"} size={16} color={resolveStreamColorHex(stream.color, theme.colors.stream) || theme.colors.text.primary} />
+
+          <Text
+            style={[styles.streamName, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}
+            numberOfLines={1}
+          >
+            {stream.name}
+          </Text>
+
+          {stream.is_localonly && (
+            <Icon name="Smartphone" size={14} color={theme.colors.text.tertiary} />
+          )}
+          {stream.is_private && (
+            <Icon name="Lock" size={14} color={theme.colors.text.tertiary} />
+          )}
+
+          {(stream.entry_count ?? 0) > 0 && (
+            <Text style={[styles.entryCount, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+              {stream.entry_count}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.moreButton}
+          onPress={() => setActionSheetStream(stream)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Icon name="MoreVertical" size={18} color={theme.colors.text.tertiary} />
+        </TouchableOpacity>
+      </View>
+    </CardRowWrapper>
+  ), [theme, handleOpenSettings]);
+
+  const keyExtractor = useCallback((item: Stream) => item.stream_id, []);
+
+  const rightActions = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <TouchableOpacity onPress={() => setIsSearchOpen(!isSearchOpen)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Icon name="Search" size={20} color={isSearchOpen ? theme.colors.functional.accent : theme.colors.text.primary} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.createButton, { backgroundColor: theme.colors.functional.accent }]}
+        onPress={handleCreateStream}
+        activeOpacity={0.8}
+      >
+        <Icon name="Plus" size={16} color="#ffffff" />
+        <Text style={[styles.createButtonText, { fontFamily: theme.typography.fontFamily.medium }]}>Create</Text>
+      </TouchableOpacity>
+    </View>
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
-      <SecondaryHeader title="Manage Streams" rightAction={addButton} />
+    <View style={[mcStyles.container, { backgroundColor: theme.colors.background.secondary }]}>
+      <SecondaryHeader title="Manage Streams" rightAction={rightActions} />
+
+      {isSearchOpen && (
+        <SearchBar
+          value={searchText}
+          onChangeText={setSearchText}
+          onClose={() => { setIsSearchOpen(false); setSearchText(""); }}
+          placeholder="Search streams..."
+        />
+      )}
 
       {isLoading ? (
         <LoadingState message="Loading streams..." />
@@ -166,86 +228,33 @@ export function StreamsScreen() {
           action={{ label: "Create Your First Stream", onPress: handleCreateStream }}
         />
       ) : (
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-          {/* Search bar */}
-          <SearchInput
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="Search streams..."
-            containerStyle={styles.searchWrapper}
-          />
-
-          {/* Sort bar */}
-          <SortBar
-            options={STREAM_SORT_OPTIONS}
-            activeKey={sortKey}
-            ascending={sortAsc}
-            onPress={handleSortPress}
-          />
+        <View style={mcStyles.content}>
+          <View style={[mcStyles.fixedControls, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+            <SortBar
+              options={STREAM_SORT_OPTIONS}
+              activeKey={sortKey}
+              ascending={sortAsc}
+              onPress={handleSortPress}
+            />
+          </View>
 
           {sortedStreams.length === 0 ? (
-            <View style={styles.noResultsContainer}>
-              <Text style={[styles.noResultsText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+            <View style={mcStyles.noResultsContainer}>
+              <Text style={[mcStyles.noResultsText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
                 No streams match "{searchText}"
               </Text>
             </View>
           ) : (
-            <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-              {sortedStreams.map((stream, index) => (
-                <View
-                  key={stream.stream_id}
-                  style={[
-                    styles.streamRow,
-                    index < sortedStreams.length - 1 && [styles.streamRowSeparator, { borderBottomColor: theme.colors.border.light }],
-                  ]}
-                >
-                  <TouchableOpacity
-                    style={styles.streamRowContent}
-                    onPress={() => handleOpenSettings(stream)}
-                    activeOpacity={0.7}
-                  >
-                    {/* Stream icon */}
-                    <Icon name={stream.icon ? stream.icon as IconName : "Layers"} size={16} color={resolveStreamColorHex(stream.color, theme.colors.stream) || theme.colors.text.primary} />
-
-                    {/* Stream name */}
-                    <Text
-                      style={[styles.streamName, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}
-                      numberOfLines={1}
-                    >
-                      {stream.name}
-                    </Text>
-
-                    {/* Status badges */}
-                    {stream.is_localonly && (
-                      <Icon name="Smartphone" size={14} color={theme.colors.text.tertiary} />
-                    )}
-                    {stream.is_private && (
-                      <Icon name="Lock" size={14} color={theme.colors.text.tertiary} />
-                    )}
-
-                    {/* Entry count */}
-                    {(stream.entry_count ?? 0) > 0 && (
-                      <Text style={[styles.entryCount, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
-                        {stream.entry_count}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-
-                  {/* More menu */}
-                  <TouchableOpacity
-                    style={styles.moreButton}
-                    onPress={() => setActionSheetStream(stream)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Icon name="MoreVertical" size={18} color={theme.colors.text.tertiary} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
+            <FlatList
+              // Intentional: remount on sort change — see EntriesScreen for rationale
+              key={`${sortKey}-${sortAsc}`}
+              {...cardListProps}
+              data={sortedStreams}
+              keyExtractor={keyExtractor}
+              renderItem={renderItem}
+            />
           )}
-
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
+        </View>
       )}
 
       {/* Action sheet */}
@@ -260,33 +269,8 @@ export function StreamsScreen() {
   );
 }
 
+// Screen-specific styles only
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  searchWrapper: {
-    marginBottom: 16,
-  },
-  card: {
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  streamRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  streamRowSeparator: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
   streamRowContent: {
     flex: 1,
     flexDirection: "row",
@@ -315,16 +299,5 @@ const styles = StyleSheet.create({
   createButtonText: {
     fontSize: 14,
     color: "#ffffff",
-  },
-  noResultsContainer: {
-    padding: 32,
-    alignItems: "center",
-  },
-  noResultsText: {
-    fontSize: 15,
-    textAlign: "center",
-  },
-  bottomSpacer: {
-    height: 20,
   },
 });

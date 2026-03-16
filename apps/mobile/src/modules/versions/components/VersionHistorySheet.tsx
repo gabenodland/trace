@@ -7,16 +7,14 @@
  * Back arrow returns to the list. No external screen navigation needed.
  */
 
-import { View, Text, SectionList, ScrollView, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { TouchableOpacity } from 'react-native';
+import { View, Text, SectionList, ScrollView, StyleSheet, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon } from '../../../shared/components';
-import { StatusIcon } from '../../../shared/components/StatusIcon';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
 import { PickerBottomSheet } from '../../../components/sheets/PickerBottomSheet';
 import { HtmlRenderProvider } from '../../entries/components/HtmlRenderProvider';
-import { WebViewHtmlRenderer } from '../../entries/helpers/webViewHtmlRenderer';
+import { CollapsibleEntryCard } from '../../../components/layout/CollapsibleEntryCard';
 import { useVersions, useRestoreVersion, useCopyFromSnapshot } from '../versionHooks';
 import { useDevices } from '../../devices';
 import { useNavigate } from '../../../shared/navigation';
@@ -24,7 +22,6 @@ import { localDB } from '../../../shared/db/localDB';
 import { PhotoGallery } from '../../photos/components/PhotoGallery';
 import { getDeviceId } from '../../../config/appVersionService';
 import { createScopedLogger } from '../../../shared/utils/logger';
-import { fixMalformedClosingTags } from '../../../shared/utils/htmlUtils';
 import type { Attachment } from '@trace/core';
 
 const log = createScopedLogger('VersionSheet');
@@ -42,28 +39,8 @@ const DEVICE_COLORS = [
   '#e11d48', // rose
   '#0ea5e9', // sky
 ];
-import {
-  getStatusLabel,
-  getStatusColor,
-  getPriorityInfo,
-  getLocationLabel,
-  formatRatingDisplay,
-} from '@trace/core';
-import type { PriorityCategory, RatingType } from '@trace/core';
-import type { EntryVersion } from '../VersionTypes';
-import type { EntrySnapshot } from '../VersionTypes';
+import type { EntryVersion, EntrySnapshot } from '../VersionTypes';
 
-/**
- * Sanitize snapshot HTML for RNRH rendering.
- * - Strip <label>...</label> blocks (TipTap task list checkbox wrappers)
- * - Fix malformed closing tags from TipTap serialization
- */
-function sanitizeSnapshotHtml(html: string): string {
-  // Strip <label>...</label> entirely — content is redundant with data-checked on <li>
-  let result = html.replace(/<label>[\s\S]*?<\/label>/g, '');
-  result = fixMalformedClosingTags(result);
-  return result;
-}
 
 // --- Date grouping helpers ---
 
@@ -217,9 +194,9 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
 
   // --- Handlers ---
 
-  const handleVersionPress = (item: EntryVersion) => {
+  const handleVersionPress = useCallback((item: EntryVersion) => {
     setSelectedVersionId(item.version_id);
-  };
+  }, []);
 
   const handleBack = () => {
     setSelectedVersionId(null);
@@ -313,7 +290,7 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
 
   // --- Render ---
 
-  const renderVersion = ({ item }: { item: EntryVersion }) => {
+  const renderVersion = useCallback(({ item }: { item: EntryVersion }) => {
     const dateStr = item.device_created_at || item.created_at;
     const time = formatTime(dateStr);
     const isMcp = item.trigger === 'mcp_write';
@@ -422,16 +399,16 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [theme, latestVersionId, deviceColorMap, resolveDeviceName, deviceMap, handleVersionPress]);
 
-  const renderSectionHeader = ({ section }: { section: VersionSection }) => (
+  const renderSectionHeader = useCallback(({ section }: { section: VersionSection }) => (
     <Text style={[styles.sectionTitle, {
       color: theme.colors.text.tertiary,
       fontFamily: theme.typography.fontFamily.semibold,
     }]}>
       {section.title}
     </Text>
-  );
+  ), [theme]);
 
   // --- Detail view content ---
   const renderDetail = () => {
@@ -453,7 +430,7 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
       <HtmlRenderProvider>
         <ScrollView style={styles.detailScroll} showsVerticalScrollIndicator={false}>
           {/* Version metadata card */}
-          <View style={[styles.metaCard, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          <View style={[styles.metaCard, { backgroundColor: theme.colors.background.tertiary, borderColor: theme.colors.border.light, borderWidth: StyleSheet.hairlineWidth }, theme.shadows.sm]}>
             <View style={styles.metaRow}>
               <View style={styles.metaRowLeft}>
                 <View style={[
@@ -535,36 +512,8 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
             ) : null}
           </View>
 
-          {/* Entry preview card */}
-          <View style={[styles.entryCard, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-            {snapshot.title ? (
-              <Text style={[styles.entryTitle, {
-                color: theme.colors.text.primary,
-                fontFamily: theme.typography.fontFamily.semibold,
-              }]}>
-                {snapshot.title}
-              </Text>
-            ) : null}
-
-            {snapshot.entry_date ? (
-              <Text style={[styles.entryDate, {
-                color: theme.colors.text.tertiary,
-                fontFamily: theme.typography.fontFamily.regular,
-              }]}>
-                {new Date(snapshot.entry_date).toLocaleDateString(undefined, {
-                  weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-                })}
-              </Text>
-            ) : null}
-
-            <SnapshotBadges snapshot={snapshot} theme={theme} />
-
-            {snapshot.content ? (
-              <View style={styles.contentContainer}>
-                <WebViewHtmlRenderer html={sanitizeSnapshotHtml(snapshot.content)} />
-              </View>
-            ) : null}
-
+          {/* Entry preview card — collapsible */}
+          <CollapsibleEntryCard entry={snapshot} theme={theme} cardBackground={theme.colors.background.tertiary}>
             {versionAttachments.length > 0 && (
               <View style={styles.attachmentsContainer}>
                 <PhotoGallery
@@ -574,63 +523,54 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
                 />
               </View>
             )}
+          </CollapsibleEntryCard>
 
-            {!!snapshot.is_pinned && (
-              <View style={styles.flagsRow}>
-                <View style={[styles.flagBadge, { backgroundColor: theme.colors.background.tertiary }]}>
-                  <Icon name="Pin" size={10} color={theme.colors.text.tertiary} />
-                  <Text style={[styles.flagText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>Pinned</Text>
-                </View>
-              </View>
-            )}
-          </View>
-
-          {/* Action buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.actionButton, {
-                backgroundColor: theme.colors.functional.accent,
-                opacity: isRestoring ? 0.6 : 1,
-              }]}
-              onPress={handleRestore}
-              activeOpacity={0.8}
-              disabled={isRestoring || isCopying}
-            >
-              {isRestoring ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Icon name="RotateCcw" size={16} color="#fff" />
-              )}
-              <Text style={[styles.actionButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>
-                {isRestoring ? 'Restoring...' : 'Restore this version'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, {
-                backgroundColor: theme.colors.background.tertiary,
-                opacity: isCopying ? 0.6 : 1,
-              }]}
-              onPress={handleCopy}
-              activeOpacity={0.8}
-              disabled={isRestoring || isCopying}
-            >
-              {isCopying ? (
-                <ActivityIndicator size="small" color={theme.colors.text.primary} />
-              ) : (
-                <Icon name="Copy" size={16} color={theme.colors.text.primary} />
-              )}
-              <Text style={[styles.actionButtonText, {
-                fontFamily: theme.typography.fontFamily.semibold,
-                color: theme.colors.text.primary,
-              }]}>
-                {isCopying ? 'Creating copy...' : 'Create copy from version'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ height: 40 }} />
+          <View style={{ height: 20 }} />
         </ScrollView>
+
+        {/* Fixed footer — always visible */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.actionButton, {
+              backgroundColor: theme.colors.functional.accent,
+              opacity: isRestoring ? 0.6 : 1,
+            }]}
+            onPress={handleRestore}
+            activeOpacity={0.8}
+            disabled={isRestoring || isCopying}
+          >
+            {isRestoring ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Icon name="RotateCcw" size={16} color="#fff" />
+            )}
+            <Text style={[styles.actionButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>
+              {isRestoring ? 'Restoring...' : 'Restore this version'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, {
+              backgroundColor: theme.colors.background.tertiary,
+              opacity: isCopying ? 0.6 : 1,
+            }]}
+            onPress={handleCopy}
+            activeOpacity={0.8}
+            disabled={isRestoring || isCopying}
+          >
+            {isCopying ? (
+              <ActivityIndicator size="small" color={theme.colors.text.primary} />
+            ) : (
+              <Icon name="Copy" size={16} color={theme.colors.text.primary} />
+            )}
+            <Text style={[styles.actionButtonText, {
+              fontFamily: theme.typography.fontFamily.semibold,
+              color: theme.colors.text.primary,
+            }]}>
+              {isCopying ? 'Creating copy...' : 'Create copy from version'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </HtmlRenderProvider>
     );
   };
@@ -691,100 +631,6 @@ export function VersionHistorySheet({ visible, onClose, onRestore, entryId }: Ve
         )
       )}
     </PickerBottomSheet>
-  );
-}
-
-// --- Snapshot Badges ---
-
-function SnapshotBadges({ snapshot, theme }: { snapshot: EntrySnapshot; theme: any }) {
-  const hasBadges =
-    (snapshot.status && snapshot.status !== 'none') ||
-    snapshot.type ||
-    (snapshot.priority && snapshot.priority > 0) ||
-    (snapshot.rating && snapshot.rating > 0) ||
-    snapshot.place_name || snapshot.city ||
-    snapshot.due_date ||
-    (snapshot.tags && snapshot.tags.length > 0) ||
-    (snapshot.mentions && snapshot.mentions.length > 0);
-
-  if (!hasBadges) return null;
-
-  const locationLabel = snapshot.place_name
-    ? getLocationLabel({
-        name: snapshot.place_name,
-        city: snapshot.city,
-        neighborhood: snapshot.neighborhood,
-        region: snapshot.region,
-        country: snapshot.country,
-      })
-    : snapshot.city || null;
-
-  return (
-    <View style={styles.badgesContainer}>
-      {locationLabel ? (
-        <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Icon name={snapshot.location_id ? 'MapPinFavoriteLine' : snapshot.place_name ? 'MapPin' : 'MapPinEmpty'} size={10} color={theme.colors.text.tertiary} />
-          <Text style={[styles.badgeText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>{locationLabel}</Text>
-        </View>
-      ) : null}
-
-      {snapshot.type ? (
-        <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Icon name="Bookmark" size={10} color={theme.colors.text.secondary} />
-          <Text style={[styles.badgeText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>{snapshot.type}</Text>
-        </View>
-      ) : null}
-
-      {snapshot.status && snapshot.status !== 'none' ? (
-        <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
-          <StatusIcon status={snapshot.status as any} size={10} />
-          <Text style={[styles.badgeText, { color: getStatusColor(snapshot.status as any), fontFamily: theme.typography.fontFamily.medium }]}>
-            {getStatusLabel(snapshot.status as any)}
-          </Text>
-        </View>
-      ) : null}
-
-      {snapshot.priority != null && snapshot.priority > 0 && (() => {
-        const info = getPriorityInfo(snapshot.priority);
-        const color = theme.colors.priority[info?.category as PriorityCategory || 'none'];
-        return (
-          <View style={[styles.badge, { backgroundColor: color + '20' }]}>
-            <Icon name="Flag" size={10} color={color} />
-            <Text style={[styles.badgeText, { color, fontFamily: theme.typography.fontFamily.medium }]}>{info?.label || `P${snapshot.priority}`}</Text>
-          </View>
-        );
-      })()}
-
-      {snapshot.rating != null && snapshot.rating > 0 && (
-        <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Icon name="Star" size={10} color={theme.colors.text.secondary} />
-          <Text style={[styles.badgeText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>
-            {formatRatingDisplay(snapshot.rating, 'numeric' as RatingType)}
-          </Text>
-        </View>
-      )}
-
-      {snapshot.due_date ? (
-        <View style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Icon name="CalendarClock" size={10} color={theme.colors.text.secondary} />
-          <Text style={[styles.badgeText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>
-            {new Date(snapshot.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-          </Text>
-        </View>
-      ) : null}
-
-      {snapshot.tags && snapshot.tags.length > 0 ? snapshot.tags.map(tag => (
-        <View key={tag} style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Text style={[styles.badgeText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>#{tag}</Text>
-        </View>
-      )) : null}
-
-      {snapshot.mentions && snapshot.mentions.length > 0 ? snapshot.mentions.map(mention => (
-        <View key={mention} style={[styles.badge, { backgroundColor: theme.colors.background.tertiary }]}>
-          <Text style={[styles.badgeText, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.medium }]}>@{mention}</Text>
-        </View>
-      )) : null}
-    </View>
   );
 }
 
@@ -901,6 +747,7 @@ const styles = StyleSheet.create({
   // Detail view
   detailScroll: {
     flex: 1,
+    padding: themeBase.spacing.lg,
   },
   metaCard: {
     borderRadius: 12,
@@ -957,72 +804,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Entry preview card
-  entryCard: {
-    borderRadius: 12,
-    marginBottom: themeBase.spacing.lg,
-    padding: themeBase.spacing.lg,
-    overflow: 'hidden',
-  },
-  entryTitle: {
-    fontSize: 20,
-    lineHeight: 26,
-    marginBottom: 4,
-  },
-  entryDate: {
-    fontSize: 12,
-    marginBottom: themeBase.spacing.sm,
-  },
-
-  // Badges
-  badgesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: themeBase.spacing.md,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: themeBase.spacing.sm,
-    paddingVertical: themeBase.spacing.xs - 2,
-    borderRadius: themeBase.borderRadius.full,
-  },
-  badgeText: {
-    fontSize: themeBase.typography.fontSize.xs,
-  },
-
-  // Content
-  contentContainer: {
-    marginTop: themeBase.spacing.xs,
-  },
-
   attachmentsContainer: {
     marginTop: themeBase.spacing.sm,
-  },
-
-  // Flags
-  flagsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: themeBase.spacing.md,
-  },
-  flagBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: themeBase.spacing.sm,
-    paddingVertical: themeBase.spacing.xs - 2,
-    borderRadius: themeBase.borderRadius.full,
-  },
-  flagText: {
-    fontSize: themeBase.typography.fontSize.xs,
   },
 
   // Action buttons
   actionButtons: {
     gap: themeBase.spacing.sm,
+    paddingHorizontal: themeBase.spacing.lg,
+    paddingTop: themeBase.spacing.md,
+    paddingBottom: themeBase.spacing.lg,
   },
   actionButton: {
     flexDirection: 'row',

@@ -10,13 +10,13 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   Alert,
 } from "react-native";
 import * as ExpoLocation from "expo-location";
 import { createScopedLogger, LogScopes } from "../shared/utils/logger";
-import { Icon, EmptyState, LoadingState, SortBar, Snackbar, useSnackbar, SearchInput, type SortOption } from "../shared/components";
+import { Icon, EmptyState, LoadingState, SortBar, Snackbar, useSnackbar, type SortOption } from "../shared/components";
 import type { IconName } from "../shared/components";
 import {
   useEntryDerivedPlaces,
@@ -32,10 +32,12 @@ import type { Location as LocationType, LocationIssue } from "@trace/core";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useNavigate } from "../shared/navigation";
 import { SecondaryHeader } from "../components/layout/SecondaryHeader";
+import { SearchBar } from "../components/layout/SearchBar";
 import { useTheme, type ThemeContextValue } from "../shared/contexts/ThemeContext";
 import { useDrawer } from "../shared/contexts/DrawerContext";
 import { ActionSheet, type ActionSheetItem } from "../components/sheets";
 import { LocationPicker } from "../modules/locations/components/LocationPicker/LocationPicker";
+import { CardRowWrapper, useCardListProps, managementCardStyles as mcStyles } from "../components/layout/ManagementCard";
 
 const log = createScopedLogger(LogScopes.Location);
 
@@ -153,6 +155,7 @@ export function LocationsScreen() {
   const theme = useTheme();
   const navigate = useNavigate();
   const { setSelectedStreamId, setSelectedStreamName } = useDrawer();
+  const cardListProps = useCardListProps(theme);
 
   // Data
   const { data: entryDerivedData, isLoading: entryDerivedLoading } = useEntryDerivedPlaces();
@@ -205,6 +208,7 @@ export function LocationsScreen() {
   }, [sortKey]);
 
   // UI state
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [entryPlaceSheet, setEntryPlaceSheet] = useState<EntryDerivedPlace | null>(null);
 
@@ -229,7 +233,6 @@ export function LocationsScreen() {
   // Issue analysis — per-row data quality indicators
   const issueMap = useMemo(() => {
     if (!entryDerivedPlaces.length) return new Map<string, never[]>();
-    // Build lookup for merge_ignore_ids from saved locations
     const ignoreMap = new Map<string, string | null>();
     for (const l of savedLocations || []) {
       ignoreMap.set(l.location_id, l.merge_ignore_ids ?? null);
@@ -263,7 +266,6 @@ export function LocationsScreen() {
 
   // ─── Manage Picker ─────────────────────────────────────────────────────────
 
-  // Build Location object from saved location data for the picker
   const managePlaceLocation = useMemo((): LocationType | null => {
     if (!managePlaceId || !savedLocations) return null;
     const entity = savedLocations.find(l => l.location_id === managePlaceId);
@@ -284,7 +286,6 @@ export function LocationsScreen() {
     };
   }, [managePlaceId, savedLocations]);
 
-  // Issues for the managed place
   const managePlaceIssues = useMemo((): LocationIssue[] => {
     if (!managePlaceId) return [];
     const place = entryDerivedPlaces.find(p => p.location_id === managePlaceId);
@@ -347,7 +348,6 @@ export function LocationsScreen() {
   }, [managePlaceId, entryDerivedPlaces, navigate, setSelectedStreamId, setSelectedStreamName]);
 
   const handleManageToggleMyPlace = useCallback(() => {
-    // In manage mode for a saved place, toggling removes from My Places
     handleManageDelete();
   }, [handleManageDelete]);
 
@@ -365,7 +365,7 @@ export function LocationsScreen() {
     const targetName = mergeIssue.mergeTargetName;
     const targetPlace = entryDerivedPlaces.find(p => p.location_id === targetId);
     const targetCount = targetPlace?.entry_count ?? 0;
-    setManagePlaceId(null); // Close manage picker
+    setManagePlaceId(null);
     requestAnimationFrame(() => {
       setMergePicker({ thisId, thisName, thisCount, targetId, targetName, targetCount });
     });
@@ -386,7 +386,7 @@ export function LocationsScreen() {
   }, [managePlaceId, entryDerivedPlaces, issueMap, dismissMergeMutation]);
 
   const openManagePicker = useCallback((locationId: string) => {
-    setEntryPlaceSheet(null); // Close action sheet if open
+    setEntryPlaceSheet(null);
     setManagePlaceId(locationId);
   }, []);
 
@@ -425,7 +425,6 @@ export function LocationsScreen() {
     const isFav = entryPlaceSheet.is_favorite && entryPlaceSheet.location_id;
     const placeName = entryPlaceSheet.place_name || entryPlaceSheet.city || "Place";
 
-    // Edit — favorites only (goes to location properties)
     if (isFav) {
       items.push({
         label: "Edit Place",
@@ -434,12 +433,10 @@ export function LocationsScreen() {
       });
     }
 
-    // View Entries — all items with entries > 0
     if (entryPlaceSheet.entry_count > 0) {
       const filterId = isFav && entryPlaceSheet.location_id
         ? `location:${entryPlaceSheet.location_id}`
         : `geo:place:${entryPlaceSheet.place_name || ""}||${entryPlaceSheet.address || ""}||${entryPlaceSheet.city || ""}||${entryPlaceSheet.region || ""}||${entryPlaceSheet.country || ""}`;
-      // For unnamed entries, show address or city as the display name
       const displayName = entryPlaceSheet.place_name || entryPlaceSheet.address || entryPlaceSheet.city || "Place";
       items.push({
         label: "View Entries",
@@ -452,7 +449,6 @@ export function LocationsScreen() {
       });
     }
 
-    // Merge with saved location — snap candidates (non-favorites near an existing My Place)
     if (!isFav) {
       const issues = issueMap.get(getPlaceIssueKey(entryPlaceSheet)) || [];
       const snapIssue = issues.find(i => i.type === 'snap_candidate');
@@ -497,7 +493,6 @@ export function LocationsScreen() {
       }
     }
 
-    // Add to My Places — non-favorites only
     if (!isFav) {
       items.push({
         label: "Add to My Places",
@@ -506,7 +501,6 @@ export function LocationsScreen() {
       });
     }
 
-    // Enrich — favorites with missing hierarchy data
     if (isFav && (!entryPlaceSheet.city || !entryPlaceSheet.region || !entryPlaceSheet.country)) {
       items.push({
         label: "Fill in Details",
@@ -527,7 +521,6 @@ export function LocationsScreen() {
       });
     }
 
-    // Remove from My Places — favorites only
     if (isFav) {
       items.push({
         label: "Remove from My Places",
@@ -563,7 +556,6 @@ export function LocationsScreen() {
     return items;
   }, [entryPlaceSheet, handlePromotePlace, navigate, enrichSingleMutation, deleteMutation, mergeMutation, issueMap, setSelectedStreamId, setSelectedStreamName]);
 
-  // Merge picker items — second action sheet for choosing which name wins
   const mergePickerItems: ActionSheetItem[] = useMemo(() => {
     if (!mergePicker) return [];
     const { thisId, thisName, thisCount, targetId, targetName, targetCount } = mergePicker;
@@ -583,11 +575,49 @@ export function LocationsScreen() {
     ];
   }, [mergePicker, mergeSavedMutation]);
 
+  // ─── FlatList renderItem ───────────────────────────────────────────────────
+
+  const renderItem = useCallback(({ item: place }: { item: EntryDerivedPlace }) => (
+    <EntryPlaceRow
+      place={place}
+      theme={theme}
+      issueCount={issueMap.get(getPlaceIssueKey(place))?.filter(isDisplayableIssue).length || 0}
+      onMenuPress={() => setEntryPlaceSheet(place)}
+      onPress={() => {
+        if (place.is_favorite && place.location_id) {
+          openManagePicker(place.location_id);
+        } else {
+          setEntryPlaceSheet(place);
+        }
+      }}
+    />
+  ), [theme, issueMap, openManagePicker]);
+
+  const keyExtractor = useCallback((item: EntryDerivedPlace) =>
+    `${getPlaceIssueKey(item)}-${item.location_id || ''}`,
+  []);
+
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
-      <SecondaryHeader title="Places" />
+    <View style={[mcStyles.container, { backgroundColor: theme.colors.background.secondary }]}>
+      <SecondaryHeader
+        title="Places"
+        rightAction={
+          <TouchableOpacity onPress={() => setIsSearchOpen(!isSearchOpen)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Icon name="Search" size={20} color={isSearchOpen ? theme.colors.functional.accent : theme.colors.text.primary} />
+          </TouchableOpacity>
+        }
+      />
+
+      {isSearchOpen && (
+        <SearchBar
+          value={searchText}
+          onChangeText={setSearchText}
+          onClose={() => { setIsSearchOpen(false); setSearchText(""); }}
+          placeholder="Search places..."
+        />
+      )}
 
       {entryDerivedLoading ? (
         <LoadingState message="Loading places..." />
@@ -598,53 +628,33 @@ export function LocationsScreen() {
           subtitle="Add places to your entries to see them here"
         />
       ) : (
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-          {/* Search */}
-          <SearchInput
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="Search places..."
-            containerStyle={styles.searchWrapper}
-          />
-
-          {/* Sort bar */}
-          <SortBar
-            options={sortOptions}
-            activeKey={sortKey}
-            ascending={sortAsc}
-            onPress={handleSortPress}
-          />
+        <View style={mcStyles.content}>
+          <View style={[mcStyles.fixedControls, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+            <SortBar
+              options={sortOptions}
+              activeKey={sortKey}
+              ascending={sortAsc}
+              onPress={handleSortPress}
+            />
+          </View>
 
           {filteredEntryPlaces.length === 0 ? (
-            <View style={styles.noResultsContainer}>
-              <Text style={[styles.noResultsText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+            <View style={mcStyles.noResultsContainer}>
+              <Text style={[mcStyles.noResultsText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
                 No places match "{searchText}"
               </Text>
             </View>
           ) : (
-            <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-              {filteredEntryPlaces.map((place, index) => (
-                <EntryPlaceRow
-                  key={`${getPlaceIssueKey(place)}-${place.location_id || ''}`}
-                  place={place}
-                  isLast={index === filteredEntryPlaces.length - 1}
-                  theme={theme}
-                  issueCount={issueMap.get(getPlaceIssueKey(place))?.filter(isDisplayableIssue).length || 0}
-                  onMenuPress={() => setEntryPlaceSheet(place)}
-                  onPress={() => {
-                    if (place.is_favorite && place.location_id) {
-                      openManagePicker(place.location_id);
-                    } else {
-                      setEntryPlaceSheet(place);
-                    }
-                  }}
-                />
-              ))}
-            </View>
+            <FlatList
+              // Intentional: remount on sort change — see EntriesScreen for rationale
+              key={`${sortKey}-${sortAsc}`}
+              {...cardListProps}
+              data={filteredEntryPlaces}
+              keyExtractor={keyExtractor}
+              renderItem={renderItem}
+            />
           )}
-
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
+        </View>
       )}
 
       {/* Action sheet */}
@@ -671,7 +681,7 @@ export function LocationsScreen() {
       <LocationPicker
         visible={managePlaceVisible}
         onClose={() => setManagePlaceId(null)}
-        onSelect={() => {}} // No-op in manage mode
+        onSelect={() => {}}
         initialLocation={managePlaceLocation}
         mode="manage"
         onDelete={handleManageDelete}
@@ -692,112 +702,79 @@ export function LocationsScreen() {
 
 interface EntryPlaceRowProps {
   place: EntryDerivedPlace;
-  isLast: boolean;
   theme: ThemeContextValue;
   issueCount: number;
   onMenuPress: () => void;
   onPress: () => void;
 }
 
-const EntryPlaceRow = memo(function EntryPlaceRow({ place, isLast, theme, issueCount, onMenuPress, onPress }: EntryPlaceRowProps) {
+const EntryPlaceRow = memo(function EntryPlaceRow({ place, theme, issueCount, onMenuPress, onPress }: EntryPlaceRowProps) {
   const cityLine = getEntryPlaceCityLine(place);
 
   return (
-    <View
-      style={[
-        styles.row,
-        !isLast && [styles.rowSeparator, { borderBottomColor: theme.colors.border.light }],
-      ]}
-    >
-      <TouchableOpacity style={styles.rowContent} onPress={onPress} activeOpacity={0.7}>
-        <Icon
-          name={place.is_favorite ? "MapPinFavoriteLine" : place.place_name ? "MapPin" : "MapPinEmpty"}
-          size={16}
-          color={place.is_favorite ? theme.colors.functional.accent : theme.colors.text.tertiary}
-        />
+    <CardRowWrapper theme={theme}>
+      <View style={mcStyles.row}>
+        <TouchableOpacity style={styles.rowContent} onPress={onPress} activeOpacity={0.7}>
+          <Icon
+            name={place.is_favorite ? "MapPinFavoriteLine" : place.place_name ? "MapPin" : "MapPinEmpty"}
+            size={16}
+            color={place.is_favorite ? theme.colors.functional.accent : theme.colors.text.tertiary}
+          />
 
-        <View style={styles.rowTextContainer}>
-          {/* Name — blank if no place_name */}
-          <Text
-            style={[styles.rowName, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}
-            numberOfLines={1}
-          >
-            {place.place_name || ""}
-          </Text>
-          {place.address && (
+          <View style={styles.rowTextContainer}>
             <Text
-              style={[styles.rowSubtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}
+              style={[styles.rowName, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}
               numberOfLines={1}
             >
-              {place.address}
+              {place.place_name || ""}
             </Text>
-          )}
-          {cityLine ? (
-            <Text
-              style={[styles.rowSubtitle, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}
-              numberOfLines={1}
-            >
-              {cityLine}
-            </Text>
-          ) : null}
-        </View>
-
-        {issueCount > 0 && (
-          <View style={styles.issueIndicator}>
-            <Icon name="AlertCircle" size={14} color={theme.colors.functional.overdue} />
-            {issueCount > 1 && (
-              <Text style={[styles.issueCountText, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.medium }]}>
-                {issueCount}
+            {place.address && (
+              <Text
+                style={[styles.rowSubtitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}
+                numberOfLines={1}
+              >
+                {place.address}
               </Text>
             )}
+            {cityLine ? (
+              <Text
+                style={[styles.rowSubtitle, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}
+                numberOfLines={1}
+              >
+                {cityLine}
+              </Text>
+            ) : null}
           </View>
-        )}
 
-        {place.entry_count > 0 && (
-          <Text style={[styles.entryCount, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
-            {place.entry_count}
-          </Text>
-        )}
-      </TouchableOpacity>
+          {issueCount > 0 && (
+            <View style={styles.issueIndicator}>
+              <Icon name="AlertCircle" size={14} color={theme.colors.functional.overdue} />
+              {issueCount > 1 && (
+                <Text style={[styles.issueCountText, { color: theme.colors.functional.overdue, fontFamily: theme.typography.fontFamily.medium }]}>
+                  {issueCount}
+                </Text>
+              )}
+            </View>
+          )}
 
-      <TouchableOpacity style={styles.moreButton} onPress={onMenuPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Icon name="MoreVertical" size={18} color={theme.colors.text.tertiary} />
-      </TouchableOpacity>
-    </View>
+          {place.entry_count > 0 && (
+            <Text style={[styles.entryCount, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+              {place.entry_count}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.moreButton} onPress={onMenuPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Icon name="MoreVertical" size={18} color={theme.colors.text.tertiary} />
+        </TouchableOpacity>
+      </View>
+    </CardRowWrapper>
   );
 });
 
-// ─── Styles ─────────────────────────────────────────────────────────────────────
+// ─── Screen-specific Styles ──────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  // List
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  searchWrapper: {
-    marginBottom: 16,
-  },
-  card: {
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  // Row
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  rowSeparator: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
   rowContent: {
     flex: 1,
     flexDirection: "row",
@@ -830,16 +807,5 @@ const styles = StyleSheet.create({
   moreButton: {
     padding: 4,
     marginLeft: 4,
-  },
-  noResultsContainer: {
-    padding: 32,
-    alignItems: "center",
-  },
-  noResultsText: {
-    fontSize: 15,
-    textAlign: "center",
-  },
-  bottomSpacer: {
-    height: 20,
   },
 });
