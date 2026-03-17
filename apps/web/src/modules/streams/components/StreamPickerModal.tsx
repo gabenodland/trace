@@ -97,7 +97,7 @@ export function StreamPickerModal({
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4">
-            {/* Unassigned Option (No Stream) - Only when not searching */}
+            {/* Inbox Option (No Stream) - Only when not searching */}
             {searchQuery === "" && (
               <>
                 <button
@@ -114,14 +114,12 @@ export function StreamPickerModal({
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      strokeDasharray="3 2"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 2L2 7l10 5 10-5-10-5z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2 17l10 5 10-5" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2 12l10 5 10-5" />
+                      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
+                      <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
                     </svg>
                     <span className={`font-medium ${currentStreamId === null ? "text-blue-900" : "text-gray-700"}`}>
-                      Unassigned
+                      Inbox
                     </span>
                   </div>
                   {currentStreamId === null && (

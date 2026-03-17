@@ -81,14 +81,14 @@ export function EntryListItemMetadata({
             e.stopPropagation();
             if (onStreamPress) {
               const streamId = entry.stream_id || null;
-              const displayName = streamName || "Unassigned";
+              const displayName = streamName || "Inbox";
               onStreamPress(streamId, displayName);
             }
           }}
           activeOpacity={0.7}
         >
-          <Icon name={streamIcon ? streamIcon as IconName : "Layers"} size={10} color={resolveStreamColorHex(streamColor, theme.colors.stream) || theme.colors.text.secondary} />
-          <Text style={[styles.streamText, { color: theme.colors.text.tertiary }]}>{streamName || "Unassigned"}</Text>
+          <Icon name={streamIcon ? streamIcon as IconName : "Inbox"} size={10} color={resolveStreamColorHex(streamColor, theme.colors.stream) || theme.colors.text.secondary} />
+          <Text style={[styles.streamText, { color: theme.colors.text.tertiary }]}>{streamName || "Inbox"}</Text>
         </TouchableOpacity>
       )}
 

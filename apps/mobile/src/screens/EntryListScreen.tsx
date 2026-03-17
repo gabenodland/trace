@@ -151,7 +151,7 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
       }
     }
 
-    // For tags, mentions, all entries, unassigned, or streams without icons
+    // For tags, mentions, all entries, inbox, or streams without icons
     return {
       title: selectedStreamName,
       titleIcon: null,

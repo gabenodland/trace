@@ -192,7 +192,7 @@ export function EntriesPage() {
   const handleStreamPress = useCallback((streamId: string | null, streamName: string) => {
     if (streamId === null) {
       setSelectedFilter(null);
-      setSelectedFilterName("Unassigned");
+      setSelectedFilterName("Inbox");
     } else {
       setSelectedFilter(streamId);
       setSelectedFilterName(streamName);

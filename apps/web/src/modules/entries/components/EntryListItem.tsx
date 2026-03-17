@@ -172,7 +172,7 @@ export function EntryListItem({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onStreamPress?.(entry.stream_id || null, streamName || "Unassigned");
+                onStreamPress?.(entry.stream_id || null, streamName || "Inbox");
               }}
               className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors"
             >
@@ -416,7 +416,7 @@ export function EntryListItem({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onStreamPress?.(entry.stream_id || null, streamName || "Unassigned");
+                  onStreamPress?.(entry.stream_id || null, streamName || "Inbox");
                 }}
                 className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors"
               >

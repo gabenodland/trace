@@ -29,6 +29,7 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
   const [searchQuery, setSearchQuery] = useState("");
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
+  const hasScrolledRef = useRef(false);
 
   // Track keyboard height for proper content positioning
   useEffect(() => {
@@ -48,16 +49,18 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
     };
   }, []);
 
-  // Clear search when picker closes
+  // Clear search and reset scroll flag when picker closes
   useEffect(() => {
     if (!visible) {
       setSearchQuery("");
+      hasScrolledRef.current = false;
     }
   }, [visible]);
 
-  // Scroll to selected item when picker becomes visible
+  // Scroll to selected item once when picker becomes visible
   useEffect(() => {
-    if (visible && selectedStreamId && streams.length > 0 && scrollViewRef.current) {
+    if (visible && !hasScrolledRef.current && selectedStreamId && streams.length > 0 && scrollViewRef.current) {
+      hasScrolledRef.current = true;
       // Find the index of the selected stream (+1 for the "Inbox" option at the top)
       const selectedIndex = streams.findIndex(s => s.stream_id === selectedStreamId);
       if (selectedIndex >= 0) {
