@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { type Stream, resolveStreamColorHex } from "@trace/core";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { Icon, type IconName } from "../../../shared/components";
+import { streamItemStyles } from "./streamItemStyles";
 
 interface StreamListProps {
   streams: Stream[];
@@ -51,28 +52,28 @@ function StreamItem({ stream, onPress, isSelected }: StreamItemProps) {
   return (
     <TouchableOpacity
       style={[
-        styles.itemContainer,
+        streamItemStyles.itemContainer,
         { borderBottomColor: dynamicTheme.colors.border.light },
-        isSelected && [styles.itemContainerSelected, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }],
+        isSelected && [streamItemStyles.itemContainerSelected, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }],
       ]}
       onPress={handlePress}
     >
-      <View style={styles.itemContent}>
+      <View style={streamItemStyles.itemContent}>
         <Icon
           name={stream.icon ? stream.icon as IconName : "Layers"}
           size={20}
           color={isSelected ? dynamicTheme.colors.functional.accent : (resolveStreamColorHex(stream.color, dynamicTheme.colors.stream) || dynamicTheme.colors.text.secondary)}
         />
         <Text style={[
-          styles.itemName,
+          streamItemStyles.itemName,
           { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },
           isSelected && { color: dynamicTheme.colors.functional.accent, fontFamily: dynamicTheme.typography.fontFamily.semibold }
         ]}>
           {stream.name}
         </Text>
         {stream.entry_count > 0 && (
-          <View style={[styles.badge, { backgroundColor: dynamicTheme.colors.background.tertiary }]}>
-            <Text style={[styles.badgeText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>{stream.entry_count}</Text>
+          <View style={[streamItemStyles.badge, { backgroundColor: dynamicTheme.colors.background.tertiary }]}>
+            <Text style={[streamItemStyles.badgeText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>{stream.entry_count}</Text>
           </View>
         )}
       </View>
@@ -97,32 +98,5 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     textAlign: "center",
-  },
-  itemContainer: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    // borderBottomColor applied inline
-  },
-  itemContainerSelected: {
-    // backgroundColor applied inline
-  },
-  itemContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  itemName: {
-    fontSize: 16,
-    flex: 1,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    // backgroundColor applied inline
-  },
-  badgeText: {
-    fontSize: 12,
   },
 });

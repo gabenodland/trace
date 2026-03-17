@@ -6,11 +6,13 @@
 import { useState, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Keyboard, Platform, InteractionManager } from "react-native";
 import { useStreams } from "../mobileStreamHooks";
+import { useEntryCounts } from "../../entries/mobileEntryHooks";
 import { StreamList } from "./StreamList";
 import { PickerBottomSheet } from "../../../components/sheets";
 import { themeBase } from "../../../shared/theme/themeBase";
 import { useTheme } from "../../../shared/contexts/ThemeContext";
 import { Icon, EmptyState, SearchInput } from "../../../shared/components";
+import { streamItemStyles } from "./streamItemStyles";
 
 const ITEM_HEIGHT = 45; // Approximate height of each stream item (used for scroll positioning)
 
@@ -26,6 +28,8 @@ interface StreamPickerProps {
 export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isNewEntry = false }: StreamPickerProps) {
   const dynamicTheme = useTheme();
   const { streams, isLoading } = useStreams();
+  const { data: entryCounts } = useEntryCounts();
+  const inboxCount = entryCounts?.noStream || 0;
   const [searchQuery, setSearchQuery] = useState("");
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -116,33 +120,35 @@ export function StreamPicker({ visible, onClose, onSelect, selectedStreamId, isN
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Inbox Option - First item */}
-        <TouchableOpacity
-          style={[
-            styles.streamItem,
-            { backgroundColor: dynamicTheme.colors.background.secondary },
-            selectedStreamId === null && { backgroundColor: dynamicTheme.colors.background.tertiary },
-          ]}
-          onPress={() => handleSelect(null)}
-        >
-          <View style={styles.streamContent}>
-            <Icon name="Inbox" size={20} color={selectedStreamId === null ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} />
-            <Text style={[
-              styles.streamName,
-              { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },
-              selectedStreamId === null && { color: dynamicTheme.colors.functional.accent, fontFamily: dynamicTheme.typography.fontFamily.semibold }
-            ]}>
-              Inbox
-            </Text>
-            {selectedStreamId === null && (
-              <Icon name="Check" size={18} color={dynamicTheme.colors.functional.accent} style={styles.checkIcon} />
-            )}
-          </View>
-        </TouchableOpacity>
-
         {/* Stream List */}
         {searchQuery === "" ? (
           <>
+            {/* Inbox - first item, only when not searching */}
+            <TouchableOpacity
+              style={[
+                streamItemStyles.itemContainer,
+                { borderBottomColor: dynamicTheme.colors.border.light },
+                selectedStreamId === null && [streamItemStyles.itemContainerSelected, { backgroundColor: `${dynamicTheme.colors.functional.accent}20` }],
+              ]}
+              onPress={() => handleSelect(null)}
+            >
+              <View style={streamItemStyles.itemContent}>
+                <Icon name="Inbox" size={20} color={selectedStreamId === null ? dynamicTheme.colors.functional.accent : dynamicTheme.colors.text.secondary} />
+                <Text style={[
+                  streamItemStyles.itemName,
+                  { fontFamily: dynamicTheme.typography.fontFamily.medium, color: dynamicTheme.colors.text.primary },
+                  selectedStreamId === null && { color: dynamicTheme.colors.functional.accent, fontFamily: dynamicTheme.typography.fontFamily.semibold }
+                ]}>
+                  Inbox
+                </Text>
+                {inboxCount > 0 && (
+                  <View style={[streamItemStyles.badge, { backgroundColor: dynamicTheme.colors.background.tertiary }]}>
+                    <Text style={[streamItemStyles.badgeText, { fontFamily: dynamicTheme.typography.fontFamily.semibold, color: dynamicTheme.colors.text.secondary }]}>{inboxCount}</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+
             {!isLoading && streams.length > 0 && (
               <StreamList
                 streams={streams}
@@ -192,28 +198,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: themeBase.spacing.md,
     paddingHorizontal: themeBase.spacing.lg,
-    gap: themeBase.spacing.sm,
-  },
-  streamItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: themeBase.spacing.md,
-    paddingHorizontal: themeBase.spacing.md,
-    borderRadius: themeBase.borderRadius.md,
-  },
-  streamContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: themeBase.spacing.sm,
-    flex: 1,
-  },
-  streamName: {
-    fontSize: 16,
-    flex: 1,
-  },
-  checkIcon: {
-    marginLeft: "auto",
   },
   loadingContainer: {
     padding: themeBase.spacing.xl,
