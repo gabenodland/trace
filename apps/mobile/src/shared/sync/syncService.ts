@@ -18,6 +18,7 @@ import { getDeviceName } from '../utils/deviceUtils';
 import { createScopedLogger } from '../utils/logger';
 import { isNetworkError } from '../utils/networkUtils';
 import { createSyncOverwriteIfNeeded } from '../../modules/versions/syncOverwriteHelper';
+import { remoteToEntry } from './pullSyncOperations';
 
 // Lazy imports to break circular dependencies
 // mobileAttachmentApi imports syncApi, which imports this file
@@ -233,50 +234,7 @@ class SyncService {
         return false;
       }
 
-      const entry: Entry = {
-        entry_id: serverEntry.entry_id,
-        user_id: serverEntry.user_id,
-        title: serverEntry.title,
-        content: serverEntry.content,
-        tags: serverEntry.tags || [],
-        mentions: serverEntry.mentions || [],
-        stream_id: serverEntry.stream_id,
-        entry_latitude: serverEntry.entry_latitude || null,
-        entry_longitude: serverEntry.entry_longitude || null,
-        location_id: serverEntry.location_id || null,
-        // Location hierarchy (owned by entry)
-        place_name: serverEntry.place_name || null,
-        address: serverEntry.address || null,
-        neighborhood: serverEntry.neighborhood || null,
-        postal_code: serverEntry.postal_code || null,
-        city: serverEntry.city || null,
-        subdivision: serverEntry.subdivision || null,
-        region: serverEntry.region || null,
-        country: serverEntry.country || null,
-        geocode_status: (serverEntry as any).geocode_status || null,
-        status: (serverEntry.status as Entry['status']) || 'none',
-        type: serverEntry.type || null,
-        due_date: serverEntry.due_date,
-        completed_at: serverEntry.completed_at,
-        entry_date: serverEntry.entry_date || serverEntry.created_at,
-        created_at: serverEntry.created_at,
-        updated_at: serverEntry.updated_at,
-        deleted_at: serverEntry.deleted_at,
-        attachments: serverEntry.attachments,
-        priority: serverEntry.priority || 0,
-        rating: serverEntry.rating || 0.00,
-        is_pinned: serverEntry.is_pinned || false,
-        is_archived: (serverEntry as any).is_archived || false,
-        local_only: 0,
-        synced: 1,
-        sync_action: null,
-        version: serverEntry.version || 1,
-        base_version: serverEntry.version || 1,
-        conflict_status: (serverEntry.conflict_status as Entry['conflict_status']) || null,
-        conflict_backup: typeof serverEntry.conflict_backup === 'string' ? serverEntry.conflict_backup : null,
-        last_edited_by: serverEntry.last_edited_by || null,
-        last_edited_device: serverEntry.last_edited_device || null,
-      };
+      const entry = remoteToEntry(serverEntry);
 
       await localDB.updateEntry(entryId, entry);
       await localDB.markSynced(entryId);
@@ -769,50 +727,7 @@ class SyncService {
       }
     }
 
-    const entry: Entry = {
-      entry_id: payloadData.entry_id,
-      user_id: payloadData.user_id,
-      title: payloadData.title,
-      content: payloadData.content,
-      tags: payloadData.tags || [],
-      mentions: payloadData.mentions || [],
-      stream_id: payloadData.stream_id,
-      entry_latitude: payloadData.entry_latitude || null,
-      entry_longitude: payloadData.entry_longitude || null,
-      location_id: payloadData.location_id || null,
-      // Location hierarchy (owned by entry)
-      place_name: payloadData.place_name || null,
-      address: payloadData.address || null,
-      neighborhood: payloadData.neighborhood || null,
-      postal_code: payloadData.postal_code || null,
-      city: payloadData.city || null,
-      subdivision: payloadData.subdivision || null,
-      region: payloadData.region || null,
-      country: payloadData.country || null,
-      geocode_status: payloadData.geocode_status || null,
-      status: (payloadData.status as Entry['status']) || 'none',
-      type: payloadData.type || null,
-      due_date: payloadData.due_date,
-      completed_at: payloadData.completed_at,
-      entry_date: payloadData.entry_date || payloadData.created_at,
-      created_at: payloadData.created_at,
-      updated_at: payloadData.updated_at,
-      deleted_at: payloadData.deleted_at,
-      attachments: payloadData.attachments,
-      priority: payloadData.priority || 0,
-      rating: payloadData.rating || 0.00,
-      is_pinned: payloadData.is_pinned || false,
-      is_archived: payloadData.is_archived || false,
-      local_only: 0,
-      synced: 1,
-      sync_action: null,
-      version: remoteVersion,
-      base_version: remoteVersion,
-      conflict_status: (payloadData.conflict_status as Entry['conflict_status']) || null,
-      conflict_backup: typeof payloadData.conflict_backup === 'string' ? payloadData.conflict_backup : null,
-      last_edited_by: payloadData.last_edited_by || null,
-      last_edited_device: payloadData.last_edited_device || null,
-    };
+    const entry = remoteToEntry(payloadData);
 
     if (localEntry) {
       const created = await createSyncOverwriteIfNeeded({

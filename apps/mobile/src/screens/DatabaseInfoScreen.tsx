@@ -48,6 +48,9 @@ export function DatabaseInfoScreen() {
   const [jsonModalTitle, setJsonModalTitle] = useState<string>('');
   const [schemaVersion, setSchemaVersion] = useState<number>(0);
   const [photoFilesExist, setPhotoFilesExist] = useState<Record<string, boolean>>({});
+  const [deletedEntryCount, setDeletedEntryCount] = useState<number>(0);
+  const [versionSnapshotCount, setVersionSnapshotCount] = useState<number>(0);
+  const [tombstoneCount, setTombstoneCount] = useState<number>(0);
 
   useEffect(() => {
     loadDebugInfo();
@@ -58,6 +61,16 @@ export function DatabaseInfoScreen() {
       // Get all entries from SQLite
       const allEntries = await localDB.getAllEntries();
       setEntries(allEntries);
+
+      // Get deleted entry count, version snapshot count, tombstone count
+      const [deletedResult, snapshotResult, tombstoneResult] = await Promise.all([
+        localDB.runCustomQuery('SELECT COUNT(*) as c FROM entries WHERE deleted_at IS NOT NULL'),
+        localDB.runCustomQuery('SELECT COUNT(*) as c FROM entry_versions'),
+        localDB.runCustomQuery('SELECT COUNT(*) as c FROM entry_tombstones').catch(() => [{ c: 0 }]),
+      ]);
+      setDeletedEntryCount((deletedResult as any[])[0]?.c || 0);
+      setVersionSnapshotCount((snapshotResult as any[])[0]?.c || 0);
+      setTombstoneCount((tombstoneResult as any[])[0]?.c || 0);
 
       // Get all streams from SQLite
       const allStreams = await localDB.runCustomQuery('SELECT * FROM streams ORDER BY name');
@@ -879,6 +892,32 @@ export function DatabaseInfoScreen() {
                   <Text style={styles.infoText}>
                     Diff: {cloudCounts.entries - entries.length}
                   </Text>
+                </View>
+              </View>
+              <View style={styles.statsRow}>
+                <View style={[styles.infoBox, styles.statsBox]}>
+                  <Text style={styles.statsLabel}>Deleted</Text>
+                  <Text style={styles.statsCount}>{deletedEntryCount}</Text>
+                  <TouchableOpacity onPress={() => {
+                    Alert.alert('Clear Deleted Entries', `Delete ${deletedEntryCount} locally deleted entries? They will re-sync from server on next manifest sync.`, [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Delete', style: 'destructive', onPress: async () => {
+                        await localDB.runCustomQuery('DELETE FROM entries WHERE deleted_at IS NOT NULL');
+                        setRefreshKey(prev => prev + 1);
+                        Alert.alert('Done', 'Deleted entries cleared');
+                      }},
+                    ]);
+                  }} style={styles.smallClearButton}>
+                    <Text style={styles.smallClearButtonText}>Clear Deleted</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.infoBox, styles.statsBox]}>
+                  <Text style={styles.statsLabel}>Snapshots</Text>
+                  <Text style={styles.statsCount}>{versionSnapshotCount}</Text>
+                </View>
+                <View style={[styles.infoBox, styles.statsBox]}>
+                  <Text style={styles.statsLabel}>Tombstones</Text>
+                  <Text style={styles.statsCount}>{tombstoneCount}</Text>
                 </View>
               </View>
             </View>

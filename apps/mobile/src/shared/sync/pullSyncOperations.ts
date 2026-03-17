@@ -198,29 +198,30 @@ export async function pullStreams(forceFullPull: boolean): Promise<{ new: number
   return { new: newCount, updated: updatedCount, deleted: deletedCount };
 }
 
-export async function pullLocations(forceFullPull: boolean): Promise<{ new: number; updated: number }> {
+export async function pullLocations(forceFullPull: boolean): Promise<{ new: number; updated: number; deleted: number }> {
   const { data } = await supabase.auth.getUser();
   const user = data?.user;
-  if (!user) return { new: 0, updated: 0 };
+  if (!user) return { new: 0, updated: 0, deleted: 0 };
 
+  // Fetch ALL locations including soft-deleted (so deletes propagate to other devices)
   const { data: remoteLocations, error } = await supabase
     .from('locations')
     .select('*')
     .eq('user_id', user.id)
-    .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (error) {
     log.error('Failed to fetch locations', error);
-    return { new: 0, updated: 0 };
+    return { new: 0, updated: 0, deleted: 0 };
   }
 
   if (!remoteLocations || remoteLocations.length === 0) {
-    return { new: 0, updated: 0 };
+    return { new: 0, updated: 0, deleted: 0 };
   }
 
   let newCount = 0;
   let updatedCount = 0;
+  let deletedCount = 0;
 
   for (const remoteLocation of remoteLocations) {
     try {
@@ -250,17 +251,40 @@ export async function pullLocations(forceFullPull: boolean): Promise<{ new: numb
         sync_action: null,
       };
 
+      // Handle soft-deleted locations — mirror delete locally
+      if (remoteLocation.deleted_at) {
+        if (localLocation && !localLocation.deleted_at) {
+          await localDB.saveLocation(location);
+          await localDB.markLocationSynced(location.location_id);
+          deletedCount++;
+        } else if (!localLocation) {
+          // Deleted on server, never had it locally — skip
+        }
+        continue;
+      }
+
       if (!localLocation) {
         await localDB.saveLocation(location);
         await localDB.markLocationSynced(location.location_id);
         newCount++;
       } else if (localLocation.synced !== 0) {
+        // Compare all mutable fields
         const hasChanged =
           localLocation.name !== location.name ||
           localLocation.latitude !== location.latitude ||
           localLocation.longitude !== location.longitude ||
+          localLocation.source !== location.source ||
           localLocation.address !== location.address ||
-          localLocation.city !== location.city;
+          localLocation.neighborhood !== location.neighborhood ||
+          localLocation.postal_code !== location.postal_code ||
+          localLocation.city !== location.city ||
+          localLocation.subdivision !== location.subdivision ||
+          localLocation.region !== location.region ||
+          localLocation.country !== location.country ||
+          localLocation.mapbox_place_id !== location.mapbox_place_id ||
+          localLocation.foursquare_fsq_id !== location.foursquare_fsq_id ||
+          localLocation.merge_ignore_ids !== location.merge_ignore_ids ||
+          localLocation.deleted_at !== location.deleted_at;
 
         if (hasChanged) {
           await localDB.saveLocation(location);
@@ -273,7 +297,146 @@ export async function pullLocations(forceFullPull: boolean): Promise<{ new: numb
     }
   }
 
-  return { new: newCount, updated: updatedCount };
+  return { new: newCount, updated: updatedCount, deleted: deletedCount };
+}
+
+// ============================================================================
+// ENTRY PROCESSING HELPERS (shared by pull sync and manifest sync)
+// ============================================================================
+
+/** Map a remote Supabase entry row to a local Entry object */
+export function remoteToEntry(remote: any, options?: { clearLocationId?: boolean }): Entry {
+  return {
+    entry_id: remote.entry_id,
+    user_id: remote.user_id,
+    title: remote.title,
+    content: remote.content,
+    tags: remote.tags || [],
+    mentions: remote.mentions || [],
+    stream_id: remote.stream_id,
+    entry_latitude: remote.entry_latitude || null,
+    entry_longitude: remote.entry_longitude || null,
+    location_id: options?.clearLocationId ? null : (remote.location_id || null),
+    place_name: remote.place_name || null,
+    address: remote.address || null,
+    neighborhood: remote.neighborhood || null,
+    postal_code: remote.postal_code || null,
+    city: remote.city || null,
+    subdivision: remote.subdivision || null,
+    region: remote.region || null,
+    country: remote.country || null,
+    geocode_status: remote.geocode_status || null,
+    status: (remote.status as Entry['status']) || 'none',
+    type: remote.type || null,
+    due_date: remote.due_date,
+    completed_at: remote.completed_at,
+    entry_date: remote.entry_date || remote.created_at,
+    created_at: remote.created_at,
+    updated_at: remote.updated_at,
+    deleted_at: remote.deleted_at,
+    attachments: null,
+    priority: remote.priority || 0,
+    rating: remote.rating || 0.00,
+    is_pinned: remote.is_pinned || false,
+    is_archived: remote.is_archived || false,
+    local_only: 0,
+    synced: 1,
+    sync_action: null,
+    version: remote.version || 1,
+    base_version: remote.version || 1,
+    conflict_status: (remote.conflict_status as Entry['conflict_status']) || null,
+    conflict_backup: typeof remote.conflict_backup === 'string' ? remote.conflict_backup : null,
+    last_edited_by: remote.last_edited_by || null,
+    last_edited_device: remote.last_edited_device || null,
+  } as Entry;
+}
+
+/**
+ * Process a single remote entry during pull sync.
+ * Handles: tombstone check, soft-delete mirroring, new entry insertion,
+ * version comparison, sync overwrite creation.
+ * Returns: 'new' | 'updated' | 'deleted' | 'skipped'
+ *
+ * Options allow callers to pass pre-fetched local state to avoid
+ * redundant SQLite lookups (e.g., manifest sync pre-fetches in bulk).
+ */
+export async function processRemoteEntry(
+  remoteEntry: any,
+  options?: {
+    /** Pre-fetched local entry, or null if known to not exist locally. Undefined = lookup needed. */
+    localEntry?: Entry | null;
+    /** Pre-checked tombstone status. Undefined = lookup needed. */
+    isTombstoned?: boolean;
+  },
+): Promise<'new' | 'updated' | 'deleted' | 'skipped'> {
+  // Skip entries that have been hard-deleted (tombstoned)
+  const isTombstoned = options?.isTombstoned ?? await localDB.hasTombstone(remoteEntry.entry_id);
+  if (isTombstoned) return 'skipped';
+
+  const localEntry = options?.localEntry !== undefined ? options.localEntry : await localDB.getEntry(remoteEntry.entry_id);
+
+  // Handle deleted entries — mirror soft-delete locally
+  if (remoteEntry.deleted_at) {
+    if (localEntry && !localEntry.deleted_at) {
+      await localDB.updateEntry(remoteEntry.entry_id, {
+        ...localEntry,
+        deleted_at: remoteEntry.deleted_at,
+        location_id: null,
+        synced: 1,
+        sync_action: null,
+      } as any);
+      return 'deleted';
+    } else if (!localEntry) {
+      // Entry deleted on server that we never had — save as deleted placeholder
+      const entry = remoteToEntry(remoteEntry, { clearLocationId: true });
+      await localDB.saveEntry(entry);
+      return 'deleted';
+    }
+    // Already deleted locally — skip
+    return 'skipped';
+  }
+
+  // Live entry
+  const entry = remoteToEntry(remoteEntry);
+
+  if (!localEntry) {
+    await localDB.saveEntry(entry);
+    await localDB.markSynced(entry.entry_id);
+    return 'new';
+  }
+
+  // Skip if local has unsynced changes (don't overwrite pending edits)
+  if (localEntry.synced === 0) {
+    log.debug('Skipping entry with unsynced local changes', { entryId: entry.entry_id });
+    return 'skipped';
+  }
+
+  // Version comparison
+  const remoteVersion = remoteEntry.version || 1;
+  const localBaseVersion = localEntry.base_version || 1;
+
+  if (remoteVersion > localBaseVersion) {
+    const localDeviceId = await getDeviceId();
+    await createSyncOverwriteIfNeeded({
+      entryId: entry.entry_id,
+      userId: entry.user_id,
+      localEntry,
+      remoteEntry: entry,
+      localDeviceId,
+      triggeredByDevice: entry.last_edited_device || null,
+    });
+
+    await localDB.updateEntry(entry.entry_id, entry);
+    await localDB.markSynced(entry.entry_id);
+    log.debug('Entry updated from server', {
+      entryId: entry.entry_id,
+      remoteVersion,
+      localBaseVersion,
+    });
+    return 'updated';
+  }
+
+  return 'skipped';
 }
 
 export async function pullEntries(
@@ -285,213 +448,20 @@ export async function pullEntries(
   const user = data?.user;
   if (!user) return { new: 0, updated: 0, deleted: 0 };
 
-  // Check if database is empty - force full pull
-  const entryCount = await localDB.getAllEntries();
-  if (entryCount.length === 0 && !forceFullPull) {
-    forceFullPull = true;
+  // Use manifest-based sync (lazy import to avoid circular deps)
+  const { pullEntriesManifest, pullEntriesFull } = await import('./manifestSync');
+
+  // First install: empty local DB → full pull fast path
+  const entryCount = await localDB.runCustomQuery(
+    'SELECT COUNT(*) as c FROM entries WHERE user_id = ?',
+    [user.id]
+  );
+  if ((entryCount as any[])[0]?.c === 0) {
+    return pullEntriesFull(user.id);
   }
 
-  const lastPullTimestamp = forceFullPull ? null : await getLastTimestamp();
-
-  let query = supabase
-    .from('entries')
-    .select('*')
-    .eq('user_id', user.id);
-
-  if (lastPullTimestamp) {
-    query = query.gt('updated_at', lastPullTimestamp.toISOString());
-  }
-
-  query = query.order('updated_at', { ascending: false });
-
-  const { data: remoteEntries, error } = await query;
-
-  if (error) {
-    log.error('Failed to fetch entries', error);
-    return { new: 0, updated: 0, deleted: 0 };
-  }
-
-  // Count how many of the fetched entries are deleted
-  const fetchedDeletedCount = remoteEntries?.filter(e => e.deleted_at != null).length ?? 0;
-  log.info('[pullEntries] Fetched entries', {
-    total: remoteEntries?.length ?? 0,
-    deleted: fetchedDeletedCount,
-    live: (remoteEntries?.length ?? 0) - fetchedDeletedCount,
-  });
-
-  if (!remoteEntries || remoteEntries.length === 0) {
-    return { new: 0, updated: 0, deleted: 0 };
-  }
-
-  let newCount = 0;
-  let updatedCount = 0;
-  let deletedCount = 0;
-
-  for (const remoteEntry of remoteEntries) {
-    try {
-      // Skip entries that have been hard-deleted (tombstoned)
-      const isTombstoned = await localDB.hasTombstone(remoteEntry.entry_id);
-      if (isTombstoned) continue;
-
-      const localEntry = await localDB.getEntry(remoteEntry.entry_id);
-
-      // Handle deleted entries — mirror soft-delete locally
-      if (remoteEntry.deleted_at) {
-        log.debug('[pullEntries] Processing deleted entry', {
-          entryId: remoteEntry.entry_id.substring(0, 8),
-          hasLocal: !!localEntry,
-        });
-        if (localEntry && !localEntry.deleted_at) {
-          // Mirror the soft-delete: set deleted_at directly, don't cascade
-          // (attachments are handled separately by pullAttachments)
-          await localDB.updateEntry(remoteEntry.entry_id, {
-            ...localEntry,
-            deleted_at: remoteEntry.deleted_at,
-            location_id: null,
-            synced: 1,
-            sync_action: null,
-          } as any);
-          deletedCount++;
-        } else if (!localEntry) {
-          // Entry deleted on server that we never had — save it as deleted
-          const entry: Entry = {
-            entry_id: remoteEntry.entry_id,
-            user_id: remoteEntry.user_id,
-            title: remoteEntry.title,
-            content: remoteEntry.content,
-            tags: remoteEntry.tags || [],
-            mentions: remoteEntry.mentions || [],
-            stream_id: remoteEntry.stream_id,
-            entry_latitude: remoteEntry.entry_latitude || null,
-            entry_longitude: remoteEntry.entry_longitude || null,
-            location_id: null,
-            place_name: remoteEntry.place_name || null,
-            address: remoteEntry.address || null,
-            neighborhood: remoteEntry.neighborhood || null,
-            postal_code: remoteEntry.postal_code || null,
-            city: remoteEntry.city || null,
-            subdivision: remoteEntry.subdivision || null,
-            region: remoteEntry.region || null,
-            country: remoteEntry.country || null,
-            geocode_status: ((remoteEntry as any).geocode_status as Entry['geocode_status']) || null,
-            status: (remoteEntry.status as Entry['status']) || 'none',
-            type: remoteEntry.type || null,
-            due_date: remoteEntry.due_date,
-            completed_at: remoteEntry.completed_at,
-            entry_date: remoteEntry.entry_date || remoteEntry.created_at,
-            created_at: remoteEntry.created_at,
-            updated_at: remoteEntry.updated_at,
-            deleted_at: remoteEntry.deleted_at,
-            attachments: remoteEntry.attachments,
-            priority: remoteEntry.priority || 0,
-            rating: remoteEntry.rating || 0.00,
-            is_pinned: remoteEntry.is_pinned || false,
-            is_archived: (remoteEntry as any).is_archived || false,
-            local_only: 0,
-            synced: 1,
-            sync_action: null,
-            version: remoteEntry.version || 1,
-            base_version: remoteEntry.version || 1,
-            conflict_status: (remoteEntry.conflict_status as Entry['conflict_status']) || null,
-            conflict_backup: typeof remoteEntry.conflict_backup === 'string' ? remoteEntry.conflict_backup : null,
-            last_edited_by: remoteEntry.last_edited_by || null,
-            last_edited_device: remoteEntry.last_edited_device || null,
-          };
-          await localDB.saveEntry(entry);
-          deletedCount++;
-        }
-        // If localEntry already has deleted_at, skip (already synced)
-        continue;
-      }
-
-      const entry: Entry = {
-        entry_id: remoteEntry.entry_id,
-        user_id: remoteEntry.user_id,
-        title: remoteEntry.title,
-        content: remoteEntry.content,
-        tags: remoteEntry.tags || [],
-        mentions: remoteEntry.mentions || [],
-        stream_id: remoteEntry.stream_id,
-        entry_latitude: remoteEntry.entry_latitude || null,
-        entry_longitude: remoteEntry.entry_longitude || null,
-        location_id: remoteEntry.location_id || null,
-        // Location hierarchy (owned by entry)
-        place_name: remoteEntry.place_name || null,
-        address: remoteEntry.address || null,
-        neighborhood: remoteEntry.neighborhood || null,
-        postal_code: remoteEntry.postal_code || null,
-        city: remoteEntry.city || null,
-        subdivision: remoteEntry.subdivision || null,
-        region: remoteEntry.region || null,
-        country: remoteEntry.country || null,
-        geocode_status: ((remoteEntry as any).geocode_status as Entry['geocode_status']) || null,
-        status: (remoteEntry.status as Entry['status']) || 'none',
-        type: remoteEntry.type || null,
-        due_date: remoteEntry.due_date,
-        completed_at: remoteEntry.completed_at,
-        entry_date: remoteEntry.entry_date || remoteEntry.created_at,
-        created_at: remoteEntry.created_at,
-        updated_at: remoteEntry.updated_at,
-        deleted_at: remoteEntry.deleted_at,
-        attachments: remoteEntry.attachments,
-        priority: remoteEntry.priority || 0,
-        rating: remoteEntry.rating || 0.00,
-        is_pinned: remoteEntry.is_pinned || false,
-        is_archived: (remoteEntry as any).is_archived || false,
-        local_only: 0,
-        synced: 1,
-        sync_action: null,
-        version: remoteEntry.version || 1,
-        base_version: remoteEntry.version || 1,
-        conflict_status: (remoteEntry.conflict_status as Entry['conflict_status']) || null,
-        conflict_backup: typeof remoteEntry.conflict_backup === 'string' ? remoteEntry.conflict_backup : null,
-        last_edited_by: remoteEntry.last_edited_by || null,
-        last_edited_device: remoteEntry.last_edited_device || null,
-      };
-
-      if (!localEntry) {
-        await localDB.saveEntry(entry);
-        await localDB.markSynced(entry.entry_id);
-        newCount++;
-      } else {
-        // Skip if local has unsynced changes (don't overwrite pending edits)
-        if (localEntry.synced === 0) {
-          log.debug('Skipping entry with unsynced local changes', { entryId: entry.entry_id });
-          continue;
-        }
-
-        // Use version comparison instead of timestamp
-        const remoteVersion = remoteEntry.version || 1;
-        const localBaseVersion = localEntry.base_version || 1;
-
-        if (remoteVersion > localBaseVersion) {
-          const localDeviceId = await getDeviceId();
-          await createSyncOverwriteIfNeeded({
-            entryId: entry.entry_id,
-            userId: entry.user_id,
-            localEntry,
-            remoteEntry: entry,
-            localDeviceId,
-            triggeredByDevice: entry.last_edited_device || null,
-          });
-
-          await localDB.updateEntry(entry.entry_id, entry);
-          await localDB.markSynced(entry.entry_id);
-          updatedCount++;
-          log.debug('Entry updated from server', {
-            entryId: entry.entry_id,
-            remoteVersion,
-            localBaseVersion
-          });
-        }
-      }
-    } catch (error) {
-      log.warn('Failed to process entry', { entryId: remoteEntry.entry_id, error });
-    }
-  }
-
-  log.info('[pullEntries] Done', { new: newCount, updated: updatedCount, deleted: deletedCount });
-  return { new: newCount, updated: updatedCount, deleted: deletedCount };
+  // Normal path: manifest-based reconciliation
+  return pullEntriesManifest(user.id, forceFullPull);
 }
 
 export async function pullAttachments(forceFullPull: boolean): Promise<{ new: number; updated: number; deleted: number }> {

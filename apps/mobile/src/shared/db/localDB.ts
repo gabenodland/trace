@@ -1208,7 +1208,28 @@ class LocalDatabase {
       ]
     );
 
-    return this.getEntry(entry.entry_id) as Promise<Entry>;
+    return entry;
+  }
+
+  /**
+   * Get multiple entries by IDs in a single query.
+   * Used by manifest sync to batch-fetch local state.
+   */
+  async getEntriesByIds(entryIds: string[]): Promise<Entry[]> {
+    await this.init();
+    if (!this.db || entryIds.length === 0) return [];
+
+    const placeholders = entryIds.map(() => '?').join(',');
+    let query = `SELECT * FROM entries WHERE entry_id IN (${placeholders})`;
+    const params: any[] = [...entryIds];
+
+    if (this.currentUserId) {
+      query += ' AND user_id = ?';
+      params.push(this.currentUserId);
+    }
+
+    const rows = await this.db.getAllAsync<any>(query, params);
+    return rows.map(row => this.rowToEntry(row));
   }
 
   /**
