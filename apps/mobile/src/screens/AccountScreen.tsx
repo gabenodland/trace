@@ -1,18 +1,14 @@
 /**
- * AccountScreen
+ * AccountScreen — Main Menu
  *
- * Main account hub replacing the dropdown menu.
- * Follows Apple's iOS pattern for account/settings hierarchy.
- *
- * Sections:
- * - Profile header with avatar, name, subscription badge
- * - Content Management (Streams, Places)
- * - Settings
- * - Sign Out
+ * Top-level menu accessed via the Trace logo in the bottom nav.
+ * Branded header with logo, stacked profile + subscription card,
+ * management rows, settings, and sign out.
  */
 
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { useState, useEffect, useMemo } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "../shared/components";
 import { getDefaultAvatarUrl } from "@trace/core";
 import { useAuth } from "../shared/contexts/AuthContext";
@@ -25,9 +21,10 @@ import { useTopLevelCounts } from "../modules/dataManagement";
 import { useEntryDerivedPlaces } from "../modules/locations/mobileLocationHooks";
 import { useCloudStorageUsage, formatMB } from "@trace/core";
 import { themeBase } from "../shared/theme/themeBase";
-import { SecondaryHeader } from "../components/layout/SecondaryHeader";
 
-interface AccountRowProps {
+// ─── Menu Row ────────────────────────────────────────────────────────────────
+
+interface MenuRowProps {
   icon: React.ReactNode;
   label: string;
   onPress: () => void;
@@ -36,7 +33,7 @@ interface AccountRowProps {
   destructive?: boolean;
 }
 
-function AccountRow({ icon, label, onPress, detail, showChevron = true, destructive = false }: AccountRowProps) {
+function MenuRow({ icon, label, onPress, detail, showChevron = true, destructive = false }: MenuRowProps) {
   const theme = useTheme();
 
   return (
@@ -65,8 +62,11 @@ function AccountRow({ icon, label, onPress, detail, showChevron = true, destruct
   );
 }
 
+// ─── Main Menu Screen ────────────────────────────────────────────────────────
+
 export function AccountScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const navigate = useNavigate();
   const { data: devicesList } = useDevices();
   const { user, signOut } = useAuth();
@@ -110,60 +110,76 @@ export function AccountScreen() {
       )
     : undefined;
 
-  const handleSignOut = async () => {
-    await signOut();
-  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
-      {/* Header */}
-      <SecondaryHeader title="Account" />
+      {/* Branded Header */}
+      <View style={[styles.header, { backgroundColor: theme.colors.background.primary, paddingTop: insets.top + themeBase.spacing.md }]}>
+        <View style={styles.headerLeft}>
+          <Icon name="TraceLogoColor" size={36} color={theme.colors.text.primary} />
+          <Text style={[styles.headerTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>
+            Trace
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={() => navigate("back")}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Icon name="X" size={24} color={theme.colors.text.tertiary} />
+        </TouchableOpacity>
+      </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Profile Section */}
-        <TouchableOpacity
-          style={[styles.profileCard, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}
-          onPress={() => navigate("profile")}
-          activeOpacity={0.7}
-        >
-          <Image
-            source={{ uri: effectiveAvatarUrl }}
-            style={[styles.avatar, { backgroundColor: theme.colors.background.tertiary }]}
-            onError={() => setAvatarError(true)}
-          />
-          <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]} numberOfLines={1}>
-              {displayName}
-            </Text>
-            {profile?.name && profile?.username && (
-              <Text style={[styles.profileUsername, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
-                @{profile.username}
+        {/* Profile + Subscription Card */}
+        <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+          {/* Profile section — taps to profile */}
+          <TouchableOpacity
+            style={styles.profileSection}
+            onPress={() => navigate("profile")}
+            activeOpacity={0.7}
+          >
+            <Image
+              source={{ uri: effectiveAvatarUrl }}
+              style={[styles.avatar, { backgroundColor: theme.colors.background.tertiary }]}
+              onError={() => setAvatarError(true)}
+            />
+            <View style={styles.profileInfo}>
+              <Text style={[styles.profileName, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.semibold }]} numberOfLines={1}>
+                {displayName}
               </Text>
-            )}
-            {user?.email && (!profile?.name || !profile?.username) && (
-              <Text style={[styles.profileEmail, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1}>
-                {user.email}
-              </Text>
-            )}
-            {isDevMode && (
-              <View style={styles.devBadge}>
-                <Icon name="BrainCog" size={12} color={theme.colors.functional.accent} />
-                <Text style={[styles.devBadgeText, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.medium }]}>
-                  Developer
+              {profile?.name && profile?.username && (
+                <Text style={[styles.profileSubtext, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                  @{profile.username}
                 </Text>
-              </View>
-            )}
-          </View>
-          <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
-        </TouchableOpacity>
+              )}
+              {user?.email && (!profile?.name || !profile?.username) && (
+                <Text style={[styles.profileSubtext, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]} numberOfLines={1}>
+                  {user.email}
+                </Text>
+              )}
+              {isDevMode && (
+                <View style={styles.devBadge}>
+                  <Icon name="BrainCog" size={12} color={theme.colors.functional.accent} />
+                  <Text style={[styles.devBadgeText, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.medium }]}>
+                    Developer
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
+          </TouchableOpacity>
 
-        {/* Subscription Badge */}
-        <TouchableOpacity
-          style={[styles.subscriptionCard, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}
-          onPress={() => navigate("subscription")}
-          activeOpacity={0.7}
-        >
-          <View style={styles.subscriptionHeader}>
+          {/* Divider */}
+          <View style={[styles.rowDivider, { backgroundColor: theme.colors.border.light }]} />
+
+          {/* Subscription section — taps to subscription */}
+          <TouchableOpacity
+            style={styles.subscriptionSection}
+            onPress={() => navigate("subscription")}
+            activeOpacity={0.7}
+          >
             <View style={[
               styles.subscriptionBadge,
               { backgroundColor: isPro ? theme.colors.functional.accent : theme.colors.background.tertiary }
@@ -179,45 +195,49 @@ export function AccountScreen() {
               </Text>
             </View>
             <Icon name="ChevronRight" size={20} color={theme.colors.text.tertiary} />
-          </View>
+          </TouchableOpacity>
+
+          {/* Upgrade CTA for free users */}
           {!isPro && (
-            <View
+            <TouchableOpacity
               style={[styles.upgradeButton, { backgroundColor: theme.colors.functional.accent }]}
+              onPress={() => navigate("subscription")}
+              activeOpacity={0.8}
             >
               <Text style={[styles.upgradeButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>
                 Upgrade to Pro
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+        </View>
 
         {/* Content Management Section */}
         <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.semibold }]}>
           MANAGE
         </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-          <AccountRow
+          <MenuRow
             icon={<Icon name="Layers" size={22} color={theme.colors.text.secondary} />}
             label="Streams"
             detail={streamDetail}
             onPress={() => navigate("streams")}
           />
           <View style={[styles.rowDivider, { backgroundColor: theme.colors.border.light }]} />
-          <AccountRow
+          <MenuRow
             icon={<Icon name="MapPin" size={22} color={theme.colors.text.secondary} />}
             label="Places"
             detail={placeDetail}
             onPress={() => navigate("locations")}
           />
           <View style={[styles.rowDivider, { backgroundColor: theme.colors.border.light }]} />
-          <AccountRow
+          <MenuRow
             icon={<Icon name="Smartphone" size={22} color={theme.colors.text.secondary} />}
             label="Devices"
             detail={devicesList ? `${devicesList.filter(d => d.is_active).length}` : undefined}
             onPress={() => navigate("devices")}
           />
           <View style={[styles.rowDivider, { backgroundColor: theme.colors.border.light }]} />
-          <AccountRow
+          <MenuRow
             icon={<Icon name="Database" size={22} color={theme.colors.text.secondary} />}
             label="Data"
             detail={storageDetail}
@@ -230,7 +250,7 @@ export function AccountScreen() {
           PREFERENCES
         </Text>
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
-          <AccountRow
+          <MenuRow
             icon={<Icon name="Settings" size={22} color={theme.colors.text.secondary} />}
             label="Settings"
             onPress={() => navigate("settings")}
@@ -239,10 +259,10 @@ export function AccountScreen() {
 
         {/* Sign Out */}
         <View style={[styles.card, { backgroundColor: theme.colors.background.primary, marginTop: themeBase.spacing.xl }, theme.shadows.sm]}>
-          <AccountRow
+          <MenuRow
             icon={<Icon name="LogOut" size={22} color={theme.colors.functional.overdue} />}
             label="Sign Out"
-            onPress={handleSignOut}
+            onPress={signOut}
             showChevron={false}
             destructive
           />
@@ -267,35 +287,52 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: themeBase.spacing.lg,
+    paddingBottom: 16,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  headerTitle: {
+    fontSize: 28,
+  },
+  closeButton: {
+    padding: 4,
+  },
   content: {
     flex: 1,
     padding: themeBase.spacing.lg,
   },
-  profileCard: {
+  card: {
+    borderRadius: 12,
+    marginBottom: themeBase.spacing.lg,
+    overflow: "hidden",
+  },
+  profileSection: {
     flexDirection: "row",
     alignItems: "center",
     padding: themeBase.spacing.lg,
-    borderRadius: 12,
-    marginBottom: themeBase.spacing.md,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   profileInfo: {
     flex: 1,
     marginLeft: themeBase.spacing.md,
   },
   profileName: {
-    fontSize: 18,
+    fontSize: 17,
   },
-  profileUsername: {
-    fontSize: 14,
-    marginTop: 2,
-  },
-  profileEmail: {
-    fontSize: 14,
+  profileSubtext: {
+    fontSize: 13,
     marginTop: 2,
   },
   devBadge: {
@@ -308,19 +345,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-  subscriptionCard: {
-    padding: themeBase.spacing.lg,
-    borderRadius: 12,
-    marginBottom: themeBase.spacing.xl,
-  },
-  subscriptionHeader: {
+  subscriptionSection: {
     flexDirection: "row",
     alignItems: "center",
+    paddingVertical: themeBase.spacing.md,
+    paddingHorizontal: themeBase.spacing.lg,
   },
   subscriptionBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -329,16 +363,16 @@ const styles = StyleSheet.create({
     marginLeft: themeBase.spacing.md,
   },
   subscriptionLabel: {
-    fontSize: 16,
+    fontSize: 15,
   },
   subscriptionDesc: {
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 2,
   },
   upgradeButton: {
-    marginTop: themeBase.spacing.md,
+    marginHorizontal: themeBase.spacing.lg,
+    marginBottom: themeBase.spacing.md,
     paddingVertical: themeBase.spacing.sm,
-    paddingHorizontal: themeBase.spacing.lg,
     borderRadius: 8,
     alignItems: "center",
   },
@@ -351,11 +385,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: themeBase.spacing.sm,
     marginLeft: themeBase.spacing.xs,
-  },
-  card: {
-    borderRadius: 12,
-    marginBottom: themeBase.spacing.lg,
-    overflow: "hidden",
   },
   row: {
     flexDirection: "row",

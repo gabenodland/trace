@@ -10,7 +10,6 @@ import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigate } from "../shared/navigation";
 import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
-import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { TopBar } from "../components/layout/TopBar";
 import { SubBarFilters } from "../components/layout/SubBar";
@@ -37,11 +36,7 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
   const { user, isOffline } = useAuth();
   const { isSyncing } = useSyncStatus();
   const { streams } = useStreams();
-  const { profile } = useMobileProfile(user?.id);
 
-  // Avatar data for TopBar
-  const displayName = profile?.name || (profile?.username ? `@${profile.username}` : null) || user?.email || null;
-  const avatarUrl = profile?.avatar_url || null;
   const {
     registerStreamHandler,
     registerStreamLongPressHandler,
@@ -401,9 +396,7 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onAddPress={handleAddEntry}
-        onAccountPress={() => navigate("account")}
-        avatarUrl={avatarUrl}
-        displayName={displayName}
+        onMenuPress={() => navigate("account")}
       />
 
       {/* Toast messages from other screens */}

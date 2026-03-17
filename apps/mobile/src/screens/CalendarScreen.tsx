@@ -18,7 +18,6 @@ import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useCalendarState } from "../shared/contexts/CalendarStateContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useSyncStatus } from "../shared/sync/syncHooks";
-import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { usePersistedState } from "../shared/hooks/usePersistedState";
 import { TopBar } from "../components/layout/TopBar";
 import { BottomNavBar } from "../components/layout/BottomNavBar";
@@ -59,11 +58,6 @@ export const CalendarScreen = memo(function CalendarScreen() {
   } = useCalendarState();
   const { user, isOffline } = useAuth();
   const { isSyncing } = useSyncStatus();
-  const { profile } = useMobileProfile(user?.id);
-
-  // Avatar data for TopBar
-  const displayName = profile?.name || (profile?.username ? `@${profile.username}` : null) || user?.email || null;
-  const avatarUrl = profile?.avatar_url || null;
 
   // Shared drawer swipe gesture (bubble phase — lets child ScrollViews scroll first)
   const { panHandlers: drawerPanHandlers } = useDrawerGestures({ drawerControl });
@@ -470,9 +464,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onAddPress={handleAddEntry}
-        onAccountPress={() => navigate("account")}
-        avatarUrl={avatarUrl}
-        displayName={displayName}
+        onMenuPress={() => navigate("account")}
       />
       <Snackbar message={snackbarMessage} opacity={snackbarOpacity} />
     </View>

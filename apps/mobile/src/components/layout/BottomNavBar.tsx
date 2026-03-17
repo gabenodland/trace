@@ -1,16 +1,14 @@
 /**
- * BottomNavBar - Bottom navigation with view switching and account
+ * BottomNavBar - Bottom navigation with view switching and menu
  *
- * Layout: [List] [Map] [Calendar] [Account]
+ * Layout: [List] [Map] [Calendar] [TraceLogo]
  * FAB floats above the bar on the right side
  */
 
-import { View, TouchableOpacity, StyleSheet, Platform, Image } from "react-native";
+import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../shared/contexts/ThemeContext";
 import { Icon } from "../../shared/components";
-import { getDefaultAvatarUrl } from "@trace/core";
-import { useState, useEffect } from "react";
 import type { ViewMode } from "../../shared/contexts/DrawerContext";
 
 /** Approximate height of the bottom nav bar (used for scroll padding calculations) */
@@ -22,30 +20,17 @@ interface BottomNavBarProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   onAddPress: () => void;
-  onAccountPress: () => void;
-  avatarUrl?: string | null;
-  displayName?: string | null;
+  onMenuPress: () => void;
 }
 
 export function BottomNavBar({
   viewMode,
   onViewModeChange,
   onAddPress,
-  onAccountPress,
-  avatarUrl,
-  displayName,
+  onMenuPress,
 }: BottomNavBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const [avatarError, setAvatarError] = useState(false);
-
-  // Reset avatar error when avatarUrl changes
-  useEffect(() => {
-    setAvatarError(false);
-  }, [avatarUrl]);
-
-  const defaultAvatar = getDefaultAvatarUrl(displayName || "User");
-  const effectiveAvatarUrl = avatarError || !avatarUrl ? defaultAvatar : avatarUrl;
 
   const getIconColor = (mode: ViewMode) =>
     viewMode === mode ? theme.colors.functional.accent : theme.colors.text.tertiary;
@@ -90,17 +75,13 @@ export function BottomNavBar({
           <Icon name="Calendar" size={24} color={getIconColor("calendar")} />
         </TouchableOpacity>
 
-        {/* Account/Profile */}
+        {/* Menu */}
         <TouchableOpacity
           style={styles.tabButton}
-          onPress={onAccountPress}
+          onPress={onMenuPress}
           activeOpacity={0.7}
         >
-          <Image
-            source={{ uri: effectiveAvatarUrl }}
-            style={[styles.avatar, { backgroundColor: theme.colors.background.tertiary }]}
-            onError={() => setAvatarError(true)}
-          />
+          <Icon name="TraceLogoLine" size={28} color={theme.colors.text.tertiary} />
         </TouchableOpacity>
       </View>
     </View>
@@ -139,10 +120,5 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     zIndex: 10,
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
   },
 });

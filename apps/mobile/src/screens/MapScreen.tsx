@@ -10,7 +10,6 @@ import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useMapState } from "../shared/contexts/MapStateContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useSyncStatus } from "../shared/sync/syncHooks";
-import { useMobileProfile } from "../shared/hooks/useMobileProfile";
 import { useSettings } from "../shared/contexts/SettingsContext";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useEntries } from "../modules/entries/mobileEntryHooks";
@@ -133,14 +132,10 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
   const authState = useAuth();
   const { user, isOffline } = authState;
   const { isSyncing } = useSyncStatus();
-  const { profile } = useMobileProfile(user?.id);
   const { streams } = useStreams();
 
   // Change detection will happen after ALL hooks are called (see below)
 
-  // Avatar data for TopBar
-  const displayName = profile?.name || (profile?.username ? `@${profile.username}` : null) || user?.email || null;
-  const avatarUrl = profile?.avatar_url || null;
 
   // Display/sort mode state
   const [showDisplayModeSelector, setShowDisplayModeSelector] = useState(false);
@@ -616,9 +611,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
           viewMode={viewMode}
           onViewModeChange={handleViewModeChange}
           onAddPress={() => navigate("capture")}
-          onAccountPress={() => navigate("account")}
-          avatarUrl={avatarUrl}
-          displayName={displayName}
+          onMenuPress={() => navigate("account")}
         />
       </View>
     );
@@ -797,9 +790,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onAddPress={() => navigate("capture")}
-        onAccountPress={() => navigate("account")}
-        avatarUrl={avatarUrl}
-        displayName={displayName}
+        onMenuPress={() => navigate("account")}
       />
       <Snackbar message={snackbarMessage} opacity={snackbarOpacity} />
     </View>
