@@ -13,6 +13,29 @@ import { getDeviceId } from '../../config/appVersionService';
 import { createVersion } from '../../modules/versions/versionApi';
 import { buildSnapshot } from '../../modules/versions/versionHelpers';
 
+// Content fields used for no-op detection before pushing updates.
+// Must match the server trigger `increment_entry_version` in 20260308000002_fix_auto_increment_trigger.sql.
+const CONTENT_COMPARISON_FIELDS = [
+  'title', 'content', 'status', 'type', 'priority', 'rating',
+  'tags', 'mentions', 'stream_id', 'due_date', 'completed_at',
+  'is_pinned', 'entry_date', 'is_archived', 'entry_latitude',
+  'entry_longitude', 'location_id', 'geocode_status', 'place_name',
+  'address', 'neighborhood', 'postal_code', 'city', 'subdivision',
+  'region', 'country',
+] as const;
+
+/** Normalize a value for content comparison — handles date format differences and nulls */
+function normalizeForComparison(value: unknown): unknown {
+  if (value == null) return null;
+  // Normalize date strings: Supabase returns "+00:00", local uses ".000Z"
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    const ms = Date.parse(value);
+    return isNaN(ms) ? value : ms;
+  }
+  if (Array.isArray(value)) return JSON.stringify([...value].sort());
+  return value;
+}
+
 // Lazy import to break circular dependency
 let _uploadAttachmentToSupabase: ((localPath: string, remotePath: string) => Promise<{ url: string; size: number }>) | null = null;
 async function uploadAttachmentToSupabase(localPath: string, remotePath: string): Promise<{ url: string; size: number }> {
@@ -93,6 +116,19 @@ export async function pushEntries(
 
   if (entriesToPush.length === 0) {
     return { success: 0, errors: 0 };
+  }
+
+  // Flag large push queues — helps diagnose sync storms
+  if (entriesToPush.length > 50) {
+    log.warn('PUSH QUEUE: large batch detected', {
+      count: entriesToPush.length,
+      sample: entriesToPush.slice(0, 3).map(e => ({
+        id: e.entry_id.substring(0, 8),
+        sync_action: e.sync_action,
+        version: e.version,
+        base_version: e.base_version,
+      })),
+    });
   }
 
   let success = 0;
@@ -554,40 +590,30 @@ async function syncEntry(
           sync_error: null,
         });
       } else {
-        // For updates, use OPTIMISTIC LOCKING with conditional update
+        // For updates: fetch server state first, compare, then conditionally update
         const localBaseVersion = entry.base_version || 1;
 
-        const { data: updatedEntry, error: updateError } = await supabase
+        // Fetch current server state to detect no-op pushes
+        const { data: serverEntry, error: fetchError } = await supabase
           .from('entries')
-          .update(supabaseData)
+          .select('version, title, content, status, type, priority, rating, tags, mentions, stream_id, due_date, completed_at, is_pinned, entry_date, is_archived, entry_latitude, entry_longitude, location_id, geocode_status, place_name, address, neighborhood, postal_code, city, subdivision, region, country, last_edited_by, last_edited_device')
           .eq('entry_id', entry.entry_id)
-          .eq('version', localBaseVersion)
-          .select('version, title, content, status, tags, mentions, last_edited_by, last_edited_device')
-          .maybeSingle();
+          .single();
 
-        if (updateError) {
-          throw new Error(`Supabase update failed: ${updateError.message}`);
+        if (fetchError || !serverEntry) {
+          throw new Error(`Failed to fetch server entry for comparison: ${fetchError?.message || 'not found'}`);
         }
 
-        if (!updatedEntry) {
-          // OPTIMISTIC LOCK FAILED: Server version changed
-          log.warn('Optimistic lock failed - version mismatch', {
+        const serverVersion = (serverEntry as any).version || 1;
+        const serverData = serverEntry as any;
+
+        // Version conflict: server has moved ahead
+        if (serverVersion !== localBaseVersion) {
+          log.warn('Version mismatch detected - server ahead', {
             entryId: entry.entry_id,
             localBaseVersion,
+            serverVersion,
           });
-
-          const { data: serverEntry, error: fetchError } = await supabase
-            .from('entries')
-            .select('version, title, content, status, type, priority, rating, tags, mentions, stream_id, due_date, completed_at, is_pinned, entry_date, is_archived, entry_latitude, entry_longitude, location_id, geocode_status, place_name, address, neighborhood, postal_code, city, subdivision, region, country, last_edited_by, last_edited_device')
-            .eq('entry_id', entry.entry_id)
-            .single();
-
-          if (fetchError || !serverEntry) {
-            throw new Error('Conflict detected but failed to fetch server state');
-          }
-
-          const serverVersion = (serverEntry as any).version || 1;
-          const serverData = serverEntry as any;
 
           // Preserve local state as a conflict version before overwriting
           try {
@@ -661,10 +687,53 @@ async function syncEntry(
           return;
         }
 
-        const serverVersion = updatedEntry.version || 1;
+        // Content comparison: skip the update if nothing actually changed
+        const isNoOp = CONTENT_COMPARISON_FIELDS.every(field => {
+          const local = normalizeForComparison((supabaseData as any)[field]);
+          const remote = normalizeForComparison(serverData[field]);
+          return local === remote;
+        });
+
+        if (isNoOp) {
+          log.info('PUSH SKIPPED: content identical to server', {
+            entryId: entry.entry_id,
+            version: serverVersion,
+          });
+          await localDB.updateEntry(entry.entry_id, {
+            version: serverVersion,
+            base_version: serverVersion,
+            synced: 1,
+            sync_action: null,
+            sync_error: null,
+          });
+          return;
+        }
+
+        // Content differs — push the update with optimistic locking
+        const { data: updatedEntry, error: updateError } = await supabase
+          .from('entries')
+          .update(supabaseData)
+          .eq('entry_id', entry.entry_id)
+          .eq('version', localBaseVersion)
+          .select('version')
+          .maybeSingle();
+
+        if (updateError) {
+          throw new Error(`Supabase update failed: ${updateError.message}`);
+        }
+
+        if (!updatedEntry) {
+          // Race condition: version changed between our fetch and update.
+          // Entry stays dirty (synced=0) — next sync cycle will re-fetch and
+          // may hit the conflict path (server-wins) if the server kept advancing.
+          log.warn('Version changed between fetch and update (race) — will retry next cycle', { entryId: entry.entry_id });
+          return;
+        }
+
+        const finalVersion = updatedEntry.version || 1;
         await localDB.updateEntry(entry.entry_id, {
-          version: serverVersion,
-          base_version: serverVersion,
+          version: finalVersion,
+          base_version: finalVersion,
           synced: 1,
           sync_action: null,
           sync_error: null,

@@ -1484,12 +1484,26 @@ class LocalDatabase {
       updated_at: updates.updated_at || new Date(now).toISOString()
     };
 
-    log.debug('updateEntry called', {
-      entryId,
-      is_pinned: updated.is_pinned,
-      priority: updated.priority,
-      rating: updated.rating
-    });
+    // Track sync state transitions for debugging sync storms
+    const syncedValue = updated.synced !== undefined ? updated.synced : 0;
+    // If caller explicitly provided sync_action (even as null), use it.
+    // Otherwise keep existing value, defaulting to 'update' if null/undefined.
+    const syncActionValue = 'sync_action' in updates ? (updated.sync_action ?? null) : (updated.sync_action ?? 'update');
+    if (existing.synced === 1 && syncedValue === 0) {
+      log.warn('SYNC STATE: synced 1→0 (entry marked dirty)', {
+        entryId,
+        sync_action: syncActionValue,
+        version: updated.version,
+        base_version: updated.base_version,
+        caller: new Error().stack?.split('\n').slice(1, 4).map(s => s.trim()).join(' → '),
+      });
+    } else {
+      log.debug('updateEntry', {
+        entryId,
+        synced: `${existing.synced}→${syncedValue}`,
+        sync_action: syncActionValue,
+      });
+    }
 
     await this.db.runAsync(
       `UPDATE entries SET
@@ -1539,7 +1553,7 @@ class LocalDatabase {
         updated.deleted_at ? Date.parse(updated.deleted_at) : null,
         updated.local_only !== undefined ? updated.local_only : 0,
         updated.synced !== undefined ? updated.synced : 0,
-        updated.sync_action ?? 'update',
+        syncActionValue,
         updated.version !== undefined ? updated.version : 1,
         updated.base_version !== undefined ? updated.base_version : 1,
         updated.conflict_status || null,
@@ -1550,12 +1564,7 @@ class LocalDatabase {
       ]
     );
 
-    log.debug('UPDATE executed', {
-      entryId: updated.entry_id,
-      is_pinned: updated.is_pinned,
-      priority: updated.priority,
-      rating: updated.rating
-    });
+    log.debug('UPDATE executed', { entryId });
     return updated;
   }
 
@@ -1680,6 +1689,7 @@ class LocalDatabase {
     }
 
     // Restore the entry — set updated_at so it surfaces in recent lists
+    log.info('SYNC STATE: marking entry dirty (restoreEntry)', { entryId, restoredToInbox });
     const now = Date.now();
     if (entry.local_only) {
       await this.db.runAsync(
@@ -2823,7 +2833,8 @@ class LocalDatabase {
     const stream = await this.getStream(streamId);
     if (!stream) return;
 
-    // Move entries to Uncategorized (null stream_id)
+    // Move entries to Inbox (null stream_id)
+    log.info('SYNC STATE: batch marking entries dirty (deleteStream)', { streamId });
     await this.db.runAsync(
       `UPDATE entries
        SET stream_id = NULL, synced = 0,
@@ -2890,6 +2901,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     // Move entries to Inbox
+    log.info('SYNC STATE: batch marking entries dirty (removeStreamLocally)', { streamId });
     await this.db.runAsync(
       `UPDATE entries
        SET stream_id = NULL, synced = 0,

@@ -611,6 +611,12 @@ class SyncService {
       this.realtimeReconnectTimer = null;
       this.realtimeReconnectAttempts++;
 
+      // Stop reconnecting if destroyed (e.g. user signed out)
+      if (!this.isInitialized) {
+        log.debug('Skipping realtime reconnect - sync service destroyed');
+        return;
+      }
+
       const netState = await NetInfo.fetch();
       if (!netState.isConnected || !netState.isInternetReachable) {
         log.debug('Skipping realtime reconnect - device is offline');

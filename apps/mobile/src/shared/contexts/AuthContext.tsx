@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { createScopedLogger, LogScopes } from "../utils/logger";
+import { destroySync } from "../sync";
 import {
   type Session,
   type User,
@@ -223,6 +224,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Tear down sync service BEFORE killing the auth session.
+    // destroy() sets isInitialized=false synchronously (prevents reconnect loop).
+    // Async channel cleanup is best-effort — not awaited intentionally.
+    destroySync();
+
     try {
       await signOutApi();
     } catch (err) {
