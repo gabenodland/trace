@@ -217,8 +217,8 @@ export function DatabaseInfoScreen() {
           onPress: async () => {
             try {
               await sync();
-              Alert.alert('Success', 'Sync completed successfully');
               setRefreshKey(prev => prev + 1);
+              Alert.alert('Success', 'Sync completed successfully');
             } catch (error) {
               Alert.alert('Error', `Sync failed: ${error}`);
             }
@@ -229,8 +229,8 @@ export function DatabaseInfoScreen() {
           onPress: async () => {
             try {
               await forcePull();
-              Alert.alert('Success', 'Pulled all data from Cloud');
               setRefreshKey(prev => prev + 1);
+              Alert.alert('Success', 'Pulled all data from Cloud');
             } catch (error) {
               Alert.alert('Error', `Pull failed: ${error}`);
             }
