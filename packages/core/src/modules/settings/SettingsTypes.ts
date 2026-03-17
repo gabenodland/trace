@@ -41,6 +41,7 @@ export interface ImageQualityOption {
   value: ImageQuality;
   label: string;
   description: string;
+  isPro?: boolean;
 }
 
 export const IMAGE_QUALITY_OPTIONS: ImageQualityOption[] = [
@@ -48,11 +49,13 @@ export const IMAGE_QUALITY_OPTIONS: ImageQualityOption[] = [
     value: 'full',
     label: 'Full Quality',
     description: 'No additional compression. Gallery photos preserve original quality.',
+    isPro: true,
   },
   {
     value: 'high',
     label: 'High',
     description: '2560px max, 90% quality (~1-3 MB)',
+    isPro: true,
   },
   {
     value: 'standard',

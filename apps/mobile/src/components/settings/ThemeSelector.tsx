@@ -30,7 +30,8 @@ export function ThemeSelector({
 }: ThemeSelectorProps) {
   const theme = useTheme();
   const navigate = useNavigate();
-  const { isPro } = useSubscription();
+  const { hasFeature } = useSubscription();
+  const canUseProThemes = hasFeature('allThemes');
   const themeOptions = getThemeOptions();
   const [applyingThemeId, setApplyingThemeId] = useState<string | null>(null);
 
@@ -40,7 +41,7 @@ export function ThemeSelector({
   }, [visible]);
 
   const handleSelect = useCallback((themeId: string, isProTheme: boolean) => {
-    if (isProTheme && !isPro) {
+    if (isProTheme && !canUseProThemes) {
       Alert.alert(
         'Pro Theme',
         'This theme is available with a Pro subscription. Upgrade to unlock all themes.',
@@ -62,7 +63,7 @@ export function ThemeSelector({
       onSelect(themeId);
       onClose();
     });
-  }, [isPro, onSelect, onClose, navigate]);
+  }, [canUseProThemes, onSelect, onClose, navigate]);
 
   return (
     <PickerBottomSheet
@@ -75,7 +76,7 @@ export function ThemeSelector({
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         <View style={styles.optionsList}>
           {themeOptions.map((option) => {
-            const isLocked = option.isPro && !isPro;
+            const isLocked = option.isPro && !canUseProThemes;
             const isSelected = selectedTheme === option.id;
 
             return (
@@ -118,7 +119,7 @@ export function ThemeSelector({
                     {option.isPro && (
                       <View style={[
                         styles.proBadge,
-                        { backgroundColor: isPro ? theme.colors.functional.accent : theme.colors.text.tertiary }
+                        { backgroundColor: canUseProThemes ? theme.colors.functional.accent : theme.colors.text.tertiary }
                       ]}>
                         <Text style={[styles.proBadgeText, { fontFamily: theme.typography.fontFamily.semibold }]}>PRO</Text>
                       </View>

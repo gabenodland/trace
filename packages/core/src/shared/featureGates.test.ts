@@ -24,6 +24,14 @@ describe("featureGates", () => {
     it("denies cloudSync to free tier", () => {
       expect(hasFeature("cloudSync", "free")).toBe(false);
     });
+
+    it("grants highQualityImages to pro tier", () => {
+      expect(hasFeature("highQualityImages", "pro")).toBe(true);
+    });
+
+    it("denies highQualityImages to free tier", () => {
+      expect(hasFeature("highQualityImages", "free")).toBe(false);
+    });
   });
 
   describe("getFeatureLimit", () => {
@@ -91,6 +99,7 @@ describe("featureGates", () => {
       expect(booleanFeatures).toContain("allThemes");
       expect(booleanFeatures).toContain("allFonts");
       expect(booleanFeatures).toContain("cloudSync");
+      expect(booleanFeatures).toContain("highQualityImages");
       expect(booleanFeatures.length).toBeGreaterThan(10);
     });
 
