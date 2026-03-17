@@ -46,7 +46,7 @@ import { DrawerProvider, useDrawer, type ViewMode } from "./src/shared/contexts/
 import { CalendarStateProvider } from "./src/shared/contexts/CalendarStateContext";
 import { MapStateProvider } from "./src/shared/contexts/MapStateContext";
 import { StreamDrawer } from "./src/components/drawer";
-import { useSwipeBackGesture } from "./src/shared/hooks/useSwipeBackGesture";
+import { useSwipeBackGesture, completeDeferredPush } from "./src/shared/hooks/useSwipeBackGesture";
 import { ErrorBoundary } from "./src/shared/components/ErrorBoundary";
 import { createScopedLogger } from "./src/shared/utils/logger";
 import LoginScreen from "./src/modules/auth/screens/LoginScreen";
@@ -272,7 +272,7 @@ const log = createScopedLogger('AppContent', '🎯');
 
 const AppContent = memo(function AppContent() {
   // Get navigation state - this is the ONLY place that re-renders on nav
-  const { activeTab, navParams, navigate, goBack, checkBeforeBack, isModalOpen, isOnMainView } = useNavigationState();
+  const { activeTab, navParams, navigate, goBack, checkBeforeBack, isModalOpen, isOnMainView, lastMainView: navLastMainView } = useNavigationState();
   log.debug('RENDER', { activeTab, isOnMainView });
   const { registerViewModeHandler, viewMode } = useDrawer();
   const theme = useTheme();
@@ -304,13 +304,8 @@ const AppContent = memo(function AppContent() {
   // Once laid out, we flip z-order so main view is on top for swipe-back
   const [subScreenReady, setSubScreenReady] = useState(false);
 
-  // Track the last main view for swipe-back navigation
-  // This remembers which main tab (allEntries/map/calendar) the user was on
-  const [lastMainView, setLastMainView] = useState<string>("allEntries");
-
-  // Lazy mount: Only mount screens after first visit (reduces startup renders)
-  // Screens stay mounted after first visit for instant back navigation
-  const [visitedScreens, setVisitedScreens] = useState<Set<string>>(() => new Set(["allEntries"]));
+  // Track visited screens for debug logging
+  const visitedScreensRef = useRef<Set<string>>(new Set(["allEntries"]));
 
   // Ref for persistent EntryManagementScreen (entry editor)
   const entryManagementRef = useRef<EntryManagementScreenRef>(null);
@@ -328,28 +323,26 @@ const AppContent = memo(function AppContent() {
   // Only increments when navigating BACK to allEntries (not away from it)
   const [scrollRestoreKey, setScrollRestoreKey] = useState(0);
 
-  // Update lastMainView when on a main view, reset subScreenReady
-  // Also track visited screens for lazy mounting
+  // Reset subScreenReady when returning to a main view
   useEffect(() => {
     if (isOnMainView) {
       setSubScreenReady(false);
-      setLastMainView(activeTab);
-      // Mark screen as visited (for lazy mounting)
-      if (!visitedScreens.has(activeTab)) {
-        setVisitedScreens(prev => new Set(prev).add(activeTab));
-      }
+      visitedScreensRef.current.add(activeTab);
     }
-  }, [isOnMainView, activeTab, visitedScreens]);
+  }, [isOnMainView, activeTab]);
 
   // Callback for when sub-screen layout completes
   const handleSubScreenLayout = useCallback(() => {
     if (!subScreenReady) {
       setSubScreenReady(true);
+      // If push was deferred (instant nav to account), move main view off-screen now
+      completeDeferredPush();
     }
   }, [subScreenReady]);
 
   // Target main view for swipe-back (the screen we came from)
-  const targetMainView = lastMainView;
+  // Use navigation service value (synchronous) to avoid one-frame flash of wrong screen
+  const targetMainView = navLastMainView;
 
   // Stable callback for swipe-back navigation
   const handleSwipeBack = useCallback(() => {
@@ -381,7 +374,7 @@ const AppContent = memo(function AppContent() {
   // Helper: "capture" is legacy alias for "entryManagement"
   const isEntryScreen = activeTab === "entryManagement" || activeTab === "capture";
   const wasEntryScreen = (tab: string) => tab === "entryManagement" || tab === "capture";
-  log.debug('Screen state', { isEntryScreen, activeTab, subScreenReady, visitedScreens: Array.from(visitedScreens) });
+  log.debug('Screen state', { isEntryScreen, activeTab, subScreenReady, visitedScreens: Array.from(visitedScreensRef.current) });
 
   // Persistent screen pattern: Call setEntry when navigating to EntryManagementScreen
   // Screen stays mounted, we just tell it which entry to load
@@ -469,7 +462,7 @@ const AppContent = memo(function AppContent() {
     isOnMainView,
     isEntryScreen,
     targetMainView,
-    lastMainView,
+    lastMainView: navLastMainView,
     subScreenReady,
     activeTab
   });
@@ -582,36 +575,30 @@ const AppContent = memo(function AppContent() {
             <EntryListScreen scrollRestoreKey={scrollRestoreKey} />
           </ErrorBoundary>
         </View>
-        {/* Lazy mount: Only render after first visit */}
-        {visitedScreens.has("map") && (
-          <View
-            style={[
-              styles.screenLayer,
-              { backgroundColor: theme.colors.background.secondary },
-              !shouldShowMainView("map") && styles.screenHidden,
-            ]}
-            pointerEvents={activeTab === "map" ? "auto" : "none"}
-          >
-            <ErrorBoundary name="MapScreen">
-              <MapScreen isVisible={activeTab === "map"} />
-            </ErrorBoundary>
-          </View>
-        )}
-        {/* Lazy mount: Only render after first visit */}
-        {visitedScreens.has("calendar") && (
-          <View
-            style={[
-              styles.screenLayer,
-              { backgroundColor: theme.colors.background.secondary },
-              !shouldShowMainView("calendar") && styles.screenHidden,
-            ]}
-            pointerEvents={activeTab === "calendar" ? "auto" : "none"}
-          >
-            <ErrorBoundary name="CalendarScreen">
-              <CalendarScreen />
-            </ErrorBoundary>
-          </View>
-        )}
+        <View
+          style={[
+            styles.screenLayer,
+            { backgroundColor: theme.colors.background.secondary },
+            !shouldShowMainView("map") && styles.screenHidden,
+          ]}
+          pointerEvents={activeTab === "map" ? "auto" : "none"}
+        >
+          <ErrorBoundary name="MapScreen">
+            <MapScreen isVisible={activeTab === "map"} />
+          </ErrorBoundary>
+        </View>
+        <View
+          style={[
+            styles.screenLayer,
+            { backgroundColor: theme.colors.background.secondary },
+            !shouldShowMainView("calendar") && styles.screenHidden,
+          ]}
+          pointerEvents={activeTab === "calendar" ? "auto" : "none"}
+        >
+          <ErrorBoundary name="CalendarScreen">
+            <CalendarScreen />
+          </ErrorBoundary>
+        </View>
       </Animated.View>
 
       {/* Persistent EntryManagementScreen layer - entry editor */}

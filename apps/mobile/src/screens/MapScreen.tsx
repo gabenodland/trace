@@ -6,6 +6,7 @@ const log = createScopedLogger(LogScopes.Map);
 import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useNavigate } from "../shared/navigation";
+import { skipNextPushAnimation } from "../shared/hooks/useSwipeBackGesture";
 import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useMapState } from "../shared/contexts/MapStateContext";
 import { useAuth } from "../shared/contexts/AuthContext";
@@ -611,7 +612,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
           viewMode={viewMode}
           onViewModeChange={handleViewModeChange}
           onAddPress={() => navigate("capture")}
-          onMenuPress={() => navigate("account")}
+          onMenuPress={() => { skipNextPushAnimation(); navigate("account"); }}
         />
       </View>
     );
@@ -790,7 +791,7 @@ export const MapScreen = memo(function MapScreen({ isVisible = true }: MapScreen
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onAddPress={() => navigate("capture")}
-        onMenuPress={() => navigate("account")}
+        onMenuPress={() => { skipNextPushAnimation(); navigate("account"); }}
       />
       <Snackbar message={snackbarMessage} opacity={snackbarOpacity} />
     </View>

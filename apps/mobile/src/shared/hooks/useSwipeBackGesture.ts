@@ -46,10 +46,27 @@ const PUSH_EASING = Easing.bezier(0.25, 0.1, 0.25, 1.0);
 // This gives the animation a head start before React's heavy render/layout work begins.
 let _mainViewTranslateX: Animated.Value | null = null;
 let _pushAnimationRunning = false;
+let _skipNextPushAnimation = false;
+let _deferredPushPending = false;
 
 /** Whether a push animation is currently in flight */
 export function isPushAnimating(): boolean {
   return _pushAnimationRunning;
+}
+
+/** Skip the next push animation — screen will appear instantly.
+ *  Main view stays visible until completeDeferredPush() is called. */
+export function skipNextPushAnimation() {
+  _skipNextPushAnimation = true;
+}
+
+/** Move main view off-screen after sub-screen has rendered (call from onLayout). */
+export function completeDeferredPush() {
+  if (_deferredPushPending && _mainViewTranslateX) {
+    log.debug('[SwipeBack] completeDeferredPush: moving main view off-screen');
+    _deferredPushPending = false;
+    _mainViewTranslateX.setValue(-SCREEN_WIDTH);
+  }
 }
 
 /**
@@ -167,7 +184,14 @@ export function useSwipeBackGesture({
     });
 
     if (isEnabled) {
-      if (_pushAnimationRunning) {
+      if (_skipNextPushAnimation) {
+        // Deferred push — keep main view visible until sub-screen renders
+        // completeDeferredPush() will move it off-screen after layout
+        log.debug('[SwipeBack] Deferring push (main view stays visible until sub-screen renders)');
+        _skipNextPushAnimation = false;
+        _deferredPushPending = true;
+        // Don't move translateX — main view stays at 0, sub-screen renders on top
+      } else if (_pushAnimationRunning) {
         // Animation already started from press handler — let it continue
         log.debug('[SwipeBack] Push animation already running from press handler, skipping');
       } else {
@@ -187,6 +211,7 @@ export function useSwipeBackGesture({
       // static and animated values, causing Android to re-layout the subtree
       // and corrupt FlatList/SectionList scroll offsets.
       log.debug('[SwipeBack] Setting translateX to 0 (sync)');
+      _deferredPushPending = false;
       mainViewTranslateX.setValue(0);
     }
 

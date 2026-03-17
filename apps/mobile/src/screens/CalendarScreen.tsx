@@ -14,6 +14,7 @@ import { useEntries } from "../modules/entries/mobileEntryHooks";
 import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigate } from "../shared/navigation";
+import { skipNextPushAnimation } from "../shared/hooks/useSwipeBackGesture";
 import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useCalendarState } from "../shared/contexts/CalendarStateContext";
 import { useAuth } from "../shared/contexts/AuthContext";
@@ -464,7 +465,7 @@ export const CalendarScreen = memo(function CalendarScreen() {
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onAddPress={handleAddEntry}
-        onMenuPress={() => navigate("account")}
+        onMenuPress={() => { skipNextPushAnimation(); navigate("account"); }}
       />
       <Snackbar message={snackbarMessage} opacity={snackbarOpacity} />
     </View>

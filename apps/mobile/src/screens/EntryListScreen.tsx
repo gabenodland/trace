@@ -8,6 +8,7 @@ import { parseStreamIdToFilter } from "../modules/entries/mobileEntryApi";
 import { useLocations } from "../modules/locations/mobileLocationHooks";
 import { useStreams } from "../modules/streams/mobileStreamHooks";
 import { useNavigate } from "../shared/navigation";
+import { skipNextPushAnimation } from "../shared/hooks/useSwipeBackGesture";
 import { useDrawer, type ViewMode } from "../shared/contexts/DrawerContext";
 import { useAuth } from "../shared/contexts/AuthContext";
 import { useSettings } from "../shared/contexts/SettingsContext";
@@ -396,7 +397,7 @@ export const EntryListScreen = memo(function EntryListScreen({ scrollRestoreKey 
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onAddPress={handleAddEntry}
-        onMenuPress={() => navigate("account")}
+        onMenuPress={() => { skipNextPushAnimation(); navigate("account"); }}
       />
 
       {/* Toast messages from other screens */}

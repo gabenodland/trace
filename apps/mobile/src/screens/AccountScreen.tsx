@@ -21,6 +21,8 @@ import { useTopLevelCounts } from "../modules/dataManagement";
 import { useEntryDerivedPlaces } from "../modules/locations/mobileLocationHooks";
 import { useCloudStorageUsage, formatMB } from "@trace/core";
 import { themeBase } from "../shared/theme/themeBase";
+import { BottomNavBar } from "../components/layout/BottomNavBar";
+import { useDrawer } from "../shared/contexts/DrawerContext";
 
 // ─── Menu Row ────────────────────────────────────────────────────────────────
 
@@ -68,6 +70,7 @@ export function AccountScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const navigate = useNavigate();
+  const { viewMode, setViewMode } = useDrawer();
   const { data: devicesList } = useDevices();
   const { user, signOut } = useAuth();
   const { profile, isOffline } = useMobileProfile(user?.id);
@@ -121,14 +124,6 @@ export function AccountScreen() {
             Trace
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={() => navigate("back")}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Icon name="X" size={24} color={theme.colors.text.tertiary} />
-        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -279,6 +274,19 @@ export function AccountScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <BottomNavBar
+        viewMode={viewMode}
+        onViewModeChange={(mode) => {
+          setViewMode(mode);
+          const screenMap = { list: "allEntries", map: "map", calendar: "calendar" } as const;
+          navigate(screenMap[mode]);
+        }}
+        onAddPress={() => {}}
+        onMenuPress={() => {}}
+        isMenuActive
+        hideFab
+      />
     </View>
   );
 }
@@ -301,9 +309,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-  },
-  closeButton: {
-    padding: 4,
   },
   content: {
     flex: 1,
