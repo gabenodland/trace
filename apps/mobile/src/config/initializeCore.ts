@@ -53,10 +53,16 @@ if (__DEV__) {
 if (!(globalThis as any).__traceRejectionHandlerInstalled) {
   (globalThis as any).__traceRejectionHandlerInstalled = true;
   // Hermes exposes enablePromiseRejectionTracker directly
+  // Use log.warn (not log.error) to avoid triggering the red LogBox in dev —
+  // unhandled rejections are warnings, not crashes.
   (globalThis as any).HermesInternal?.enablePromiseRejectionTracker?.({
     allRejections: true,
     onUnhandled: (_id: number, error: any) => {
-      log.error('Unhandled promise rejection', error instanceof Error ? error : new Error(String(error)));
+      const message = error instanceof Error ? error.message : String(error);
+      log.warn('Unhandled promise rejection', {
+        error: message,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
     },
   });
 }
