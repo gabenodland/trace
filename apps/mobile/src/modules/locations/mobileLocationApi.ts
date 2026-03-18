@@ -707,10 +707,10 @@ export async function mergeDuplicateLocations(): Promise<CleanupResult> {
   // Keep merging until no more duplicates found
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const duplicates = await localDB.runCustomQuery(`
+    const duplicates = await localDB.runUserQuery(`
       SELECT LOWER(name) as name_lower, LOWER(COALESCE(address, '')) as address_lower, COUNT(*) as count
       FROM locations
-      WHERE deleted_at IS NULL
+      WHERE deleted_at IS NULL AND user_id = ?
       GROUP BY LOWER(name), LOWER(COALESCE(address, ''))
       HAVING COUNT(*) > 1
       LIMIT 1
@@ -720,11 +720,11 @@ export async function mergeDuplicateLocations(): Promise<CleanupResult> {
 
     const dup = duplicates[0];
     try {
-      const matchingLocations = await localDB.runCustomQuery(
+      const matchingLocations = await localDB.runUserQuery(
         `SELECT l.location_id, l.name, l.address,
-          (SELECT COUNT(*) FROM entries e WHERE e.location_id = l.location_id AND e.deleted_at IS NULL) as entry_count
+          (SELECT COUNT(*) FROM entries e WHERE e.location_id = l.location_id AND e.deleted_at IS NULL AND e.user_id = l.user_id) as entry_count
         FROM locations l
-        WHERE LOWER(l.name) = ? AND LOWER(COALESCE(l.address, '')) = ? AND l.deleted_at IS NULL
+        WHERE LOWER(l.name) = ? AND LOWER(COALESCE(l.address, '')) = ? AND l.deleted_at IS NULL AND l.user_id = ?
         ORDER BY entry_count DESC`,
         [dup.name_lower, dup.address_lower]
       );
@@ -775,11 +775,12 @@ export async function enrichLocationHierarchy(
 ): Promise<CleanupResult> {
   log.info('Starting location hierarchy enrichment');
 
-  const locationsToEnrich = await localDB.runCustomQuery(`
+  const locationsToEnrich = await localDB.runUserQuery(`
     SELECT location_id, name, latitude, longitude
     FROM locations
     WHERE deleted_at IS NULL
       AND geocode_status IS NULL
+      AND user_id = ?
   `);
 
   if (locationsToEnrich.length === 0) {
@@ -1061,11 +1062,11 @@ export async function geocodeEntries(
 export async function deleteUnusedLocations(): Promise<CleanupResult> {
   log.info('Deleting unused locations');
 
-  const unusedLocations = await localDB.runCustomQuery(`
+  const unusedLocations = await localDB.runUserQuery(`
     SELECT l.location_id, l.name
     FROM locations l
-    LEFT JOIN entries e ON l.location_id = e.location_id AND e.deleted_at IS NULL
-    WHERE l.deleted_at IS NULL AND e.entry_id IS NULL
+    LEFT JOIN entries e ON l.location_id = e.location_id AND e.deleted_at IS NULL AND e.user_id = l.user_id
+    WHERE l.deleted_at IS NULL AND e.entry_id IS NULL AND l.user_id = ?
   `);
 
   if (unusedLocations.length === 0) {
