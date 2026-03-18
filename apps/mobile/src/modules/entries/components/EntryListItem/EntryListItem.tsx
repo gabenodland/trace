@@ -83,7 +83,7 @@ export function EntryListItem({
     try {
       const sorted = [...attachments].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
       const results = await Promise.allSettled(sorted.map(async (att) => {
-        const uri = att.local_path || await getAttachmentUri(att.attachment_id);
+        const uri = await getAttachmentUri(att.attachment_id);
         return {
           photoId: att.attachment_id,
           uri,

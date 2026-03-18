@@ -9,7 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Icon } from '../../../shared/components';
-import { getAttachmentUri, ensureAttachmentDownloaded, getAttachmentsForEntry } from '../../attachments/mobileAttachmentApi';
+import { getAttachmentUri, getAttachmentLocalPath, ensureAttachmentDownloaded, getAttachmentsForEntry } from '../../attachments/mobileAttachmentApi';
 import { PhotoViewer } from './PhotoViewer';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { themeBase } from '../../../shared/theme/themeBase';
@@ -88,36 +88,55 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
       setPhotos(sorted);
       onPhotoCountChange?.(sorted.length);
 
-      // Build URIs synchronously from local_path (already on disk)
+      // Build URIs: use deterministic local path, verify on disk in background
       const uris: Record<string, string> = {};
       const downloadStatus: Record<string, boolean> = {};
+      const toVerify: typeof sorted = [];
       for (const photo of sorted) {
-        if (photo.local_path) {
-          uris[photo.attachment_id] = photo.local_path;
+        const localPath = getAttachmentLocalPath(photo.user_id, photo.entry_id, photo.attachment_id);
+        if (!photo.uploaded) {
+          // Locally-created photo — file is definitely on disk
+          uris[photo.attachment_id] = localPath;
           downloadStatus[photo.attachment_id] = true;
+        } else {
+          // Cloud photo — don't set URI until verified on disk
+          toVerify.push(photo);
         }
       }
       setPhotoUris(uris);
       setPhotoDownloadStatus(downloadStatus);
 
-      // For photos without local_path (cloud-only), resolve URIs in background
-      const cloudPhotos = sorted.filter(p => !p.local_path);
-      if (cloudPhotos.length > 0) {
+      // Verify cloud photos on disk, resolve missing ones
+      if (toVerify.length > 0) {
         let mounted = true;
-        const resolveCloudUris = async () => {
-          const cloudUris: Record<string, string> = {};
-          await Promise.all(cloudPhotos.map(async (photo) => {
+        const verifyAndResolve = async () => {
+          const resolvedUris: Record<string, string> = {};
+          const resolvedStatus: Record<string, boolean> = {};
+          await Promise.all(toVerify.map(async (photo) => {
             if (!mounted) return;
-            const uri = await getAttachmentUri(photo.attachment_id);
-            if (uri) {
-              cloudUris[photo.attachment_id] = uri;
+            const localPath = getAttachmentLocalPath(photo.user_id, photo.entry_id, photo.attachment_id);
+            const info = await FileSystem.getInfoAsync(localPath);
+            if (info.exists) {
+              resolvedUris[photo.attachment_id] = localPath;
+              resolvedStatus[photo.attachment_id] = true;
+            } else {
+              // Not on disk — try download/cloud fallback
+              const uri = await getAttachmentUri(photo.attachment_id);
+              if (uri) {
+                resolvedUris[photo.attachment_id] = uri;
+                resolvedStatus[photo.attachment_id] = true;
+              } else {
+                resolvedStatus[photo.attachment_id] = false;
+              }
             }
           }));
           if (!mounted) return;
-          // Merge cloud URIs with existing local URIs
-          setPhotoUris(prev => ({ ...prev, ...cloudUris }));
+          if (Object.keys(resolvedUris).length > 0) {
+            setPhotoUris(prev => ({ ...prev, ...resolvedUris }));
+            setPhotoDownloadStatus(prev => ({ ...prev, ...resolvedStatus }));
+          }
         };
-        resolveCloudUris();
+        verifyAndResolve();
         return () => { mounted = false; };
       }
       return;
@@ -167,20 +186,19 @@ export function PhotoGallery({ entryId, refreshKey, onPhotoCountChange, onPhotoD
       const downloadStatus: Record<string, boolean> = {};
 
       for (const photo of entryPhotos) {
-        // Check if photo is downloaded locally
+        // Check if photo is on disk at deterministic path
+        const localPath = getAttachmentLocalPath(photo.user_id, photo.entry_id, photo.attachment_id);
         let isDownloaded = false;
-        if (photo.local_path) {
-          try {
-            const fileInfo = await FileSystem.getInfoAsync(photo.local_path);
-            isDownloaded = fileInfo.exists;
-          } catch (error) {
-            isDownloaded = false;
-          }
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(localPath);
+          isDownloaded = fileInfo.exists;
+        } catch (error) {
+          isDownloaded = false;
         }
         downloadStatus[photo.attachment_id] = isDownloaded;
 
         // Get URI (local or cloud)
-        const uri = await getAttachmentUri(photo.attachment_id);
+        const uri = isDownloaded ? localPath : await getAttachmentUri(photo.attachment_id);
         if (uri) {
           uris[photo.attachment_id] = uri;
         }

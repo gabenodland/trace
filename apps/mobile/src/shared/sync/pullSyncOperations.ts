@@ -14,14 +14,16 @@ import { getDeviceId } from '../../config/appVersionService';
 import { createVersion } from '../../modules/versions/versionApi';
 import { createSyncOverwriteIfNeeded } from '../../modules/versions/syncOverwriteHelper';
 
-// Lazy import to break circular dependency
-let _deleteAttachmentFromLocalStorage: ((attachmentId: string) => Promise<void>) | null = null;
-async function deleteAttachmentFromLocalStorage(attachmentId: string): Promise<void> {
-  if (!_deleteAttachmentFromLocalStorage) {
+// Lazy imports to break circular dependency
+let _deleteAttachmentFromLocalStorage: ((path: string) => Promise<void>) | null = null;
+let _getAttachmentLocalPath: ((userId: string, entryId: string, attachmentId: string) => string) | null = null;
+async function loadAttachmentHelpers() {
+  if (!_deleteAttachmentFromLocalStorage || !_getAttachmentLocalPath) {
     const module = await import('../../modules/attachments/mobileAttachmentApi');
     _deleteAttachmentFromLocalStorage = module.deleteAttachmentFromLocalStorage;
+    _getAttachmentLocalPath = module.getAttachmentLocalPath;
   }
-  return _deleteAttachmentFromLocalStorage(attachmentId);
+  return { deleteAttachmentFromLocalStorage: _deleteAttachmentFromLocalStorage!, getAttachmentLocalPath: _getAttachmentLocalPath! };
 }
 
 const deviceName = getDeviceName();
@@ -519,7 +521,7 @@ export async function pullAttachments(forceFullPull: boolean): Promise<{ new: nu
         entry_id: ra.entry_id,
         user_id: ra.user_id,
         file_path: ra.file_path,
-        local_path: localAttachment?.local_path || undefined,
+        // local_path deliberately omitted — derived from deterministic path, not stored
         mime_type: ra.mime_type,
         file_size: ra.file_size || undefined,
         width: ra.width || undefined,
@@ -554,20 +556,20 @@ export async function pullAttachments(forceFullPull: boolean): Promise<{ new: nu
   // These were hard-deleted on server (e.g. by cleanup job) — permanently remove locally
   try {
     const localSyncedAttachments = await localDB.runCustomQuery(
-      'SELECT attachment_id, local_path FROM attachments WHERE user_id = ? AND synced = 1 AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?)',
+      'SELECT attachment_id, entry_id, user_id FROM attachments WHERE user_id = ? AND synced = 1 AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?)',
       [user.id, 'delete']
     );
 
+    const helpers = await loadAttachmentHelpers();
     for (const localAttachment of localSyncedAttachments) {
       if (!remoteAttachmentIds.has(localAttachment.attachment_id)) {
         log.info('Attachment missing from server, removing locally', { attachmentId: localAttachment.attachment_id });
-        // Delete local file if exists
-        if (localAttachment.local_path) {
-          try {
-            await deleteAttachmentFromLocalStorage(localAttachment.local_path);
-          } catch (err) {
-            log.warn('Failed to delete local attachment file', { path: localAttachment.local_path, error: err });
-          }
+        // Delete local file at deterministic path
+        try {
+          const localPath = helpers.getAttachmentLocalPath(localAttachment.user_id, localAttachment.entry_id, localAttachment.attachment_id);
+          await helpers.deleteAttachmentFromLocalStorage(localPath);
+        } catch {
+          // File may not exist — that's fine
         }
         // Permanently delete from local DB
         await localDB.permanentlyDeleteAttachment(localAttachment.attachment_id);

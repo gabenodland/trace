@@ -23,6 +23,27 @@ import type { CompressedAttachment, ImageQuality } from '@trace/core';
 const log = createScopedLogger('AttachmentApi');
 
 // ============================================================================
+// DETERMINISTIC LOCAL PATH
+// ============================================================================
+
+/**
+ * Compute the local filesystem path for an attachment.
+ * Always deterministic — no DB lookup needed.
+ */
+export function getAttachmentLocalPath(userId: string, entryId: string, attachmentId: string): string {
+  return `${FileSystem.documentDirectory}attachments/${userId}/${entryId}/${attachmentId}.jpg`;
+}
+
+/**
+ * Check if an attachment file exists on disk at its deterministic path.
+ */
+export async function isAttachmentOnDisk(userId: string, entryId: string, attachmentId: string): Promise<boolean> {
+  const path = getAttachmentLocalPath(userId, entryId, attachmentId);
+  const info = await FileSystem.getInfoAsync(path);
+  return info.exists;
+}
+
+// ============================================================================
 // PERMISSIONS
 // ============================================================================
 
@@ -397,9 +418,14 @@ export async function permanentlyDeleteAttachment(attachmentId: string): Promise
   try {
     const attachment = await localDB.getAttachment(attachmentId);
 
-    // Delete local file if exists
-    if (attachment?.local_path) {
-      await deleteAttachmentFromLocalStorage(attachment.local_path);
+    // Delete local file at deterministic path
+    if (attachment) {
+      const localPath = getAttachmentLocalPath(attachment.user_id, attachment.entry_id, attachmentId);
+      try {
+        await deleteAttachmentFromLocalStorage(localPath);
+      } catch (err) {
+        log.debug('Could not delete local file (may not exist)', { attachmentId, error: err });
+      }
     }
 
     // Hard-delete from SQLite
@@ -515,23 +541,19 @@ export async function getAttachmentUri(attachmentId: string): Promise<string | n
       return null;
     }
 
-    // Check if local file exists
-    if (attachment.local_path) {
-      const fileInfo = await FileSystem.getInfoAsync(attachment.local_path);
-      if (fileInfo.exists) {
-        return attachment.local_path;
-      }
+    // Check deterministic local path first
+    const localPath = getAttachmentLocalPath(attachment.user_id, attachment.entry_id, attachmentId);
+    const fileInfo = await FileSystem.getInfoAsync(localPath);
+    if (fileInfo.exists) {
+      return localPath;
     }
 
-    // Attachment is from cloud but not downloaded yet
+    // Not on disk — try to download from cloud
     if (attachment.file_path && attachment.uploaded) {
-      log.debug('Attachment not local, attempting download', { attachmentId });
-      const localPath = await ensureAttachmentDownloaded(attachmentId);
-      if (localPath) {
-        return localPath;
+      const downloaded = await ensureAttachmentDownloaded(attachmentId);
+      if (downloaded) {
+        return downloaded;
       }
-      log.debug('Attachment file missing - cannot display', { attachmentId });
-      return null;
     }
 
     // Fallback: Return Supabase signed URL
@@ -576,24 +598,24 @@ export async function ensureAttachmentDownloaded(attachmentId: string): Promise<
       return null;
     }
 
-    // Check if already downloaded
-    if (attachment.local_path) {
-      const fileInfo = await FileSystem.getInfoAsync(attachment.local_path);
-      if (fileInfo.exists) {
-        return attachment.local_path;
-      }
+    // Check if already on disk at the deterministic path
+    const localPath = getAttachmentLocalPath(attachment.user_id, attachment.entry_id, attachmentId);
+    const fileInfo = await FileSystem.getInfoAsync(localPath);
+    if (fileInfo.exists) {
+      return localPath;
     }
 
-    // Download from cloud
+    // Not on disk — download from cloud
+    if (!attachment.file_path || !attachment.uploaded) {
+      return null;
+    }
+
     log.debug('Downloading attachment from cloud', { attachmentId });
 
     const dirPath = `${FileSystem.documentDirectory}attachments/${attachment.user_id}/${attachment.entry_id}/`;
     await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
 
-    const localPath = `${dirPath}${attachmentId}.jpg`;
-
     await downloadAttachmentToLocal(attachment.file_path, localPath);
-    await localDB.updateAttachment(attachmentId, { local_path: localPath });
 
     log.success('Attachment downloaded', { attachmentId });
     return localPath;
@@ -622,44 +644,48 @@ export async function ensureAttachmentDownloaded(attachmentId: string): Promise<
 }
 
 /**
- * Download attachments in background (for attachments pulled from cloud during sync)
+ * Download missing attachments in background.
+ * Uses deterministic paths — compares DB manifest against filesystem.
+ * No reliance on local_path column.
  */
-export async function downloadAttachmentsInBackground(limit: number = 10): Promise<void> {
+export async function downloadAttachmentsInBackground(): Promise<void> {
   try {
     const allAttachments = await localDB.getAllAttachments();
-    const attachmentsToDownload: any[] = [];
+    const missing: any[] = [];
+    let onDisk = 0;
 
-    for (const attachment of allAttachments) {
-      if (attachmentsToDownload.length >= limit) break;
+    for (const att of allAttachments) {
+      // Only downloadable attachments (uploaded to cloud, not deleted)
+      if (!att.file_path || !att.uploaded) continue;
 
-      if (attachment.local_path) {
-        const fileInfo = await FileSystem.getInfoAsync(attachment.local_path);
-        if (fileInfo.exists) {
-          continue;
-        }
-      }
-
-      if (attachment.file_path && attachment.uploaded) {
-        attachmentsToDownload.push(attachment);
+      const localPath = getAttachmentLocalPath(att.user_id, att.entry_id, att.attachment_id);
+      const info = await FileSystem.getInfoAsync(localPath);
+      if (info.exists) {
+        onDisk++;
+      } else {
+        missing.push(att);
       }
     }
 
-    if (attachmentsToDownload.length === 0) {
-      log.debug('No attachments to download in background');
-      return;
-    }
+    log.info('Attachment sync', {
+      total: allAttachments.length,
+      onDisk,
+      missing: missing.length,
+    });
 
-    log.info('Starting background attachment download', { count: attachmentsToDownload.length });
+    if (missing.length === 0) return;
+
+    log.info('Starting background attachment download', { count: missing.length });
 
     let successCount = 0;
     let errorCount = 0;
 
-    for (const attachment of attachmentsToDownload) {
+    for (const att of missing) {
       try {
-        await ensureAttachmentDownloaded(attachment.attachment_id);
+        await ensureAttachmentDownloaded(att.attachment_id);
         successCount++;
       } catch (error) {
-        log.warn('Failed to download attachment', { attachmentId: attachment.attachment_id, error });
+        log.warn('Failed to download attachment', { attachmentId: att.attachment_id, error });
         errorCount++;
       }
     }

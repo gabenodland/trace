@@ -987,8 +987,6 @@ export async function snapEntriesToLocations(
 export async function geocodeEntries(
   onProgress?: (current: number, total: number) => void
 ): Promise<{ geocoded: number; noData: number; errors: number }> {
-  log.info('Starting entry geocode');
-
   const entriesToProcess = await localDB.runCustomQuery(`
     SELECT entry_id, entry_latitude, entry_longitude
     FROM entries
@@ -997,6 +995,8 @@ export async function geocodeEntries(
       AND entry_longitude IS NOT NULL
       AND (geocode_status IS NULL OR geocode_status = 'error')
   `);
+
+  log.info('Starting entry geocode', { backlog: entriesToProcess.length });
 
   if (entriesToProcess.length === 0) {
     return { geocoded: 0, noData: 0, errors: 0 };

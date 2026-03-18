@@ -22,13 +22,13 @@ import { remoteToEntry } from './pullSyncOperations';
 
 // Lazy imports to break circular dependencies
 // mobileAttachmentApi imports syncApi, which imports this file
-let _downloadAttachmentsInBackground: ((limit?: number) => Promise<void>) | null = null;
-async function downloadAttachmentsInBackground(limit: number = 10): Promise<void> {
+let _downloadAttachmentsInBackground: (() => Promise<void>) | null = null;
+async function downloadAttachmentsInBackground(): Promise<void> {
   if (!_downloadAttachmentsInBackground) {
     const module = await import('../../modules/attachments/mobileAttachmentApi');
     _downloadAttachmentsInBackground = module.downloadAttachmentsInBackground;
   }
-  return _downloadAttachmentsInBackground(limit);
+  return _downloadAttachmentsInBackground();
 }
 
 // Lazy import for location enrichment (geocode entries + fill location hierarchy)
@@ -138,8 +138,8 @@ class SyncService {
       log.error('Failed to cache device ID', err);
     }
 
-    // Clean up data from previous users
-    await this.cleanupWrongUserData();
+    // Multi-tenant: other users' data is expected — query-level user_id filters handle isolation.
+    // Do NOT call cleanupWrongUserData() — it nukes all local data including other accounts.
 
     // Purge expired trash (entries deleted 30+ days ago)
     localDB.purgeExpiredTrash(30).catch(err => {
@@ -315,7 +315,24 @@ class SyncService {
 
     this.isSyncing = true;
     this.notifyStatusListeners();
-    log.debug(`SYNC STARTED (${trigger})`);
+
+    // Log push queue + geocoding backlog at sync start (full syncs only — skip on rapid post-save pushes)
+    if (options.pull) {
+      const unsyncedCount = await localDB.getUnsyncedCount();
+      const geocodeBacklog = await localDB.runCustomQuery(
+        `SELECT COUNT(*) as count FROM entries
+         WHERE deleted_at IS NULL AND entry_latitude IS NOT NULL
+         AND entry_longitude IS NOT NULL AND (geocode_status IS NULL OR geocode_status = 'error')`,
+        []
+      );
+      const backlogCount = (geocodeBacklog as any[])[0]?.count ?? 0;
+      log.debug(`SYNC STARTED (${trigger})`, {
+        unsyncedEntries: unsyncedCount,
+        geocodeBacklog: backlogCount,
+      });
+    } else {
+      log.debug(`SYNC STARTED (${trigger})`);
+    }
 
     try {
       const forceFullPull = options.forceFullPull || false;
@@ -417,11 +434,11 @@ class SyncService {
         this.invalidateQueryCache();
       }
 
-      // Background attachment download
-      this.startBackgroundAttachmentDownload();
-
-      // Background enrichment — geocode entries + fill location hierarchy
-      this.startBackgroundEnrichment();
+      // Background tasks — only on full syncs, not rapid post-save pushes
+      if (options.pull) {
+        this.startBackgroundAttachmentDownload();
+        this.startBackgroundEnrichment();
+      }
 
       result.success = true;
       result.duration = Date.now() - startTime;
@@ -972,7 +989,7 @@ class SyncService {
 
   private setupNetworkListener(): void {
     NetInfo.fetch().then(state => {
-      this.wasOffline = !state.isConnected || !state.isInternetReachable;
+      this.wasOffline = !(state.isConnected === true && state.isInternetReachable === true);
       log.debug('Initial network state', {
         isConnected: state.isConnected,
         isInternetReachable: state.isInternetReachable,
@@ -981,7 +998,7 @@ class SyncService {
     });
 
     this.networkUnsubscribe = NetInfo.addEventListener(state => {
-      const isOnline = state.isConnected && state.isInternetReachable;
+      const isOnline = state.isConnected === true && state.isInternetReachable === true;
 
       log.debug('Network state changed', {
         isConnected: state.isConnected,
@@ -1014,7 +1031,7 @@ class SyncService {
 
     // Re-check network state after delay (connection may have dropped again)
     const netState = await NetInfo.fetch().catch(() => ({ isConnected: false, isInternetReachable: false }));
-    if (!netState.isConnected || !netState.isInternetReachable) {
+    if (!(netState.isConnected === true && netState.isInternetReachable === true)) {
       log.debug('Network not stable after reconnect delay, skipping');
       return;
     }
@@ -1054,12 +1071,13 @@ class SyncService {
 
   private async canSync(): Promise<boolean> {
     // Use getSession (local cache) instead of getUser (network call)
-    // to avoid a round-trip just to check if the user is authenticated
+    // to avoid a round-trip just to check if the user is authenticated.
+    // In local-only (biometric) mode, session is null — sync is blocked.
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return false;
 
     const netState = await NetInfo.fetch();
-    return !!(netState.isConnected && netState.isInternetReachable);
+    return netState.isConnected === true && netState.isInternetReachable === true;
   }
 
   private async getLocalOnlyStreamIds(): Promise<Set<string>> {
@@ -1070,27 +1088,6 @@ class SyncService {
     return new Set<string>(localOnlyStreams.map((s: any) => s.stream_id));
   }
 
-  private async cleanupWrongUserData(): Promise<void> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        return;
-      }
-
-      const entriesFromOtherUsers = await localDB.runCustomQuery(
-        'SELECT entry_id FROM entries WHERE user_id != ? LIMIT 1',
-        [user.id]
-      );
-
-      if (entriesFromOtherUsers.length > 0) {
-        log.warn('Found entries from other users, clearing all local data');
-        await localDB.clearAllData();
-      }
-    } catch (error) {
-      log.error('Failed to cleanup wrong user data', error);
-    }
-  }
 
   private invalidateQueryCache(entryIds?: string[]): void {
     if (this.queryClient) {
@@ -1115,7 +1112,7 @@ class SyncService {
 
   private startBackgroundAttachmentDownload(): void {
     setTimeout(() => {
-      downloadAttachmentsInBackground(10).catch((error: unknown) => {
+      downloadAttachmentsInBackground().catch((error: unknown) => {
         log.warn('Background attachment download error', { error });
       });
     }, 1000);
@@ -1127,7 +1124,10 @@ class SyncService {
    * Items with no geocode data (e.g. middle of ocean) get marked 'no_data' and won't retry.
    */
   private startBackgroundEnrichment(): void {
-    if (this.isEnriching) return;
+    if (this.isEnriching) {
+      log.debug('Enrichment: skipped (already running)');
+      return;
+    }
     this.isEnriching = true;
 
     loadEnrichmentFunctions()
@@ -1135,9 +1135,14 @@ class SyncService {
         const entryResult = await geocodeEntries();
         const locationResult = await enrichLocationHierarchy();
 
-        const total = entryResult.geocoded + locationResult.processed;
+        const total = entryResult.geocoded + entryResult.noData + locationResult.processed;
+        log.info('Enrichment complete', {
+          entriesGeocoded: entryResult.geocoded,
+          entriesNoData: entryResult.noData,
+          entriesErrors: entryResult.errors,
+          locationsEnriched: locationResult.processed,
+        });
         if (total > 0) {
-          log.info(`Enrichment: ${entryResult.geocoded} entries geocoded, ${locationResult.processed} locations enriched`);
           this.invalidateQueryCache();
         }
       })

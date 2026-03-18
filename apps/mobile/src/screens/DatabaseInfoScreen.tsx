@@ -11,7 +11,7 @@ import { useNavigate } from '../shared/navigation';
 import { SecondaryHeader } from '../components/layout/SecondaryHeader';
 import { localDB } from '../shared/db/localDB';
 import { useSync, getSyncStatus, triggerPushSync } from '../shared/sync';
-import { deleteAttachmentFromLocalStorage } from '../modules/attachments/mobileAttachmentApi';
+import { deleteAttachmentFromLocalStorage, getAttachmentLocalPath } from '../modules/attachments/mobileAttachmentApi';
 import { Icon } from '../shared/components';
 import { createScopedLogger, LogScopes } from '../shared/utils/logger';
 
@@ -84,17 +84,18 @@ export function DatabaseInfoScreen() {
       const allLocations = await localDB.runCustomQuery('SELECT * FROM locations ORDER BY name');
       setLocations(allLocations);
 
-      // Check which attachment files exist locally
+      // Check which attachment files exist locally (deterministic path)
       const fileExistenceMap: Record<string, boolean> = {};
       for (const photo of allPhotos) {
-        if (photo.local_path) {
-          try {
-            const fileInfo = await FileSystem.getInfoAsync(photo.local_path);
-            fileExistenceMap[photo.attachment_id] = fileInfo.exists;
-          } catch (error) {
-            fileExistenceMap[photo.attachment_id] = false;
-          }
-        } else {
+        if (!photo.user_id || !photo.entry_id) {
+          fileExistenceMap[photo.attachment_id] = false;
+          continue;
+        }
+        try {
+          const localPath = getAttachmentLocalPath(photo.user_id, photo.entry_id, photo.attachment_id);
+          const fileInfo = await FileSystem.getInfoAsync(localPath);
+          fileExistenceMap[photo.attachment_id] = fileInfo.exists;
+        } catch (error) {
           fileExistenceMap[photo.attachment_id] = false;
         }
       }
@@ -420,16 +421,15 @@ export function DatabaseInfoScreen() {
               // Get all attachments
               const allAttachments = await localDB.runCustomQuery('SELECT * FROM attachments');
 
-              // Delete all local attachment files
+              // Delete all local attachment files (use deterministic path)
               let deletedCount = 0;
               for (const attachment of allAttachments) {
-                if (attachment.local_path) {
-                  try {
-                    await deleteAttachmentFromLocalStorage(attachment.local_path);
-                    deletedCount++;
-                  } catch (err) {
-                    log.warn('Failed to delete attachment file', { path: attachment.local_path, error: err });
-                  }
+                try {
+                  const localPath = getAttachmentLocalPath(attachment.user_id, attachment.entry_id, attachment.attachment_id);
+                  await deleteAttachmentFromLocalStorage(localPath);
+                  deletedCount++;
+                } catch (err) {
+                  // File may not exist — that's fine
                 }
               }
 
@@ -1394,11 +1394,9 @@ export function DatabaseInfoScreen() {
                       <Text style={styles.photoMeta}>
                         Position: {photo.position}
                       </Text>
-                      {photo.local_path && (
-                        <Text style={[styles.photoMeta, !photoFilesExist[photo.attachment_id] && styles.errorText]}>
-                          Local: {photoFilesExist[photo.attachment_id] ? '✓ File exists' : '⚠️ File missing'}
-                        </Text>
-                      )}
+                      <Text style={[styles.photoMeta, !photoFilesExist[photo.attachment_id] && styles.errorText]}>
+                        Local: {photoFilesExist[photo.attachment_id] ? '✓ On disk' : '⚠️ Not on disk'}
+                      </Text>
                     </View>
                     <View style={styles.entryMeta}>
                       <Text style={[styles.badge, photo.uploaded ? styles.syncedBadge : styles.unsyncedBadge]}>
