@@ -491,14 +491,24 @@ export async function pullAttachments(forceFullPull: boolean): Promise<{ new: nu
     (remoteAttachments || []).map((a: any) => a.attachment_id)
   );
 
+  // Batch-fetch all local attachments for this user in one query instead of N+1
+  const allRemoteIds = (remoteAttachments || []).map((a: any) => a.attachment_id as string);
+  const localAttachmentMap = new Map<string, any>();
+  if (allRemoteIds.length > 0) {
+    const placeholders = allRemoteIds.map(() => '?').join(',');
+    const localRows = await localDB.runUserQuery(
+      `SELECT * FROM attachments WHERE attachment_id IN (${placeholders}) AND user_id = ?`,
+      allRemoteIds
+    );
+    for (const row of localRows) {
+      localAttachmentMap.set(row.attachment_id, row);
+    }
+  }
+
   for (const remoteAttachment of (remoteAttachments || [])) {
     try {
       const ra = remoteAttachment as any;
-      const localAttachments = await localDB.runCustomQuery(
-        'SELECT * FROM attachments WHERE attachment_id = ?',
-        [ra.attachment_id]
-      );
-      const localAttachment = localAttachments.length > 0 ? localAttachments[0] : null;
+      const localAttachment = localAttachmentMap.get(ra.attachment_id) ?? null;
 
       // Handle soft-deleted attachments from server
       if (ra.deleted_at) {
