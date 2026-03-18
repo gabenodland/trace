@@ -763,9 +763,9 @@ export async function pullTombstones(): Promise<{ deleted: number }> {
       const localEntry = await localDB.getEntry(tombstone.entry_id);
       if (localEntry) {
         // Hard-delete locally without creating another tombstone
-        await localDB.runCustomQuery('DELETE FROM attachments WHERE entry_id = ?', [tombstone.entry_id]);
-        await localDB.runCustomQuery('DELETE FROM entry_versions WHERE entry_id = ?', [tombstone.entry_id]);
-        await localDB.runCustomQuery('DELETE FROM entries WHERE entry_id = ?', [tombstone.entry_id]);
+        await localDB.runUserQuery('DELETE FROM attachments WHERE entry_id = ? AND user_id = ?', [tombstone.entry_id]);
+        await localDB.runUserQuery('DELETE FROM entry_versions WHERE entry_id = ? AND user_id = ?', [tombstone.entry_id]);
+        await localDB.runUserQuery('DELETE FROM entries WHERE entry_id = ? AND user_id = ?', [tombstone.entry_id]);
         deletedCount++;
       }
 

@@ -67,8 +67,8 @@ function useAllAttachments(entryId: string | null) {
   return useQuery({
     queryKey: ["dataManagement", "deletedEntryAllAttachments", entryId] as const,
     queryFn: async () => {
-      const rows = await localDB.runCustomQuery(
-        `SELECT * FROM attachments WHERE entry_id = ? ORDER BY position ASC`,
+      const rows = await localDB.runUserQuery(
+        `SELECT * FROM attachments WHERE entry_id = ? AND user_id = ? ORDER BY position ASC`,
         [entryId!]
       );
       return rows;
@@ -81,8 +81,8 @@ function useVersionCount(entryId: string | null) {
   return useQuery({
     queryKey: ["dataManagement", "deletedEntryVersionCount", entryId] as const,
     queryFn: async () => {
-      const rows = await localDB.runCustomQuery(
-        `SELECT COUNT(*) as count, COALESCE(SUM(LENGTH(snapshot)), 0) as bytes FROM entry_versions WHERE entry_id = ?`,
+      const rows = await localDB.runUserQuery(
+        `SELECT COUNT(*) as count, COALESCE(SUM(LENGTH(snapshot)), 0) as bytes FROM entry_versions WHERE entry_id = ? AND user_id = ?`,
         [entryId!]
       );
       return { count: rows[0]?.count ?? 0, bytes: rows[0]?.bytes ?? 0 };

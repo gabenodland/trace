@@ -3302,9 +3302,10 @@ class LocalDatabase {
 
     log.debug('updateAttachmentEntryIds', { oldEntryId, newEntryId });
 
+    const userId = this.requireUserId();
     const attachments = await this.db.getAllAsync<any>(
-      'SELECT attachment_id, file_path, local_path FROM attachments WHERE entry_id = ?',
-      [oldEntryId]
+      'SELECT attachment_id, file_path, local_path FROM attachments WHERE entry_id = ? AND user_id = ?',
+      [oldEntryId, userId]
     );
 
     log.debug('Found attachments to update', { count: attachments.length });

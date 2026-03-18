@@ -322,11 +322,11 @@ class SyncService {
     // Log push queue + geocoding backlog at sync start (full syncs only — skip on rapid post-save pushes)
     if (options.pull) {
       const unsyncedCount = await localDB.getUnsyncedCount();
-      const geocodeBacklog = await localDB.runCustomQuery(
+      const geocodeBacklog = await localDB.runUserQuery(
         `SELECT COUNT(*) as count FROM entries
          WHERE deleted_at IS NULL AND entry_latitude IS NOT NULL
-         AND entry_longitude IS NOT NULL AND (geocode_status IS NULL OR geocode_status = 'error')`,
-        []
+         AND entry_longitude IS NOT NULL AND (geocode_status IS NULL OR geocode_status = 'error')
+         AND user_id = ?`
       );
       const backlogCount = (geocodeBacklog as any[])[0]?.count ?? 0;
       log.debug(`SYNC STARTED (${trigger})`, {
