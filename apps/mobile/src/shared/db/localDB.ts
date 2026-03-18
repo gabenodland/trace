@@ -3724,8 +3724,10 @@ class LocalDatabase {
   private assertUserScoping(sql: string): void {
     if (!__DEV__) return;
     const lower = sql.toLowerCase().trimStart();
-    // Skip DDL and transaction statements
+    // Skip DDL, transaction statements, schema introspection, and non-user tables
     if (/^(create|alter|drop|pragma|begin|commit|rollback|insert\s+or\s+ignore\s+into\s+entry_tombstones)/.test(lower)) return;
+    if (lower.includes('pragma_table_info') || lower.includes('sqlite_master')) return;
+    if (lower.includes('sync_logs') || lower.includes('sync_metadata')) return;
     // Skip INSERT — user_id is in the VALUES, not a WHERE clause
     if (lower.startsWith('insert')) {
       // Still check that user_id appears in the column list
