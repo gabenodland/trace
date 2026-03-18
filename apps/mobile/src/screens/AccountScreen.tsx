@@ -6,7 +6,7 @@
  * management rows, settings, and sign out.
  */
 
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert } from "react-native";
 import { useState, useEffect, useMemo } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "../shared/components";
@@ -72,8 +72,8 @@ export function AccountScreen() {
   const navigate = useNavigate();
   const { viewMode, setViewMode } = useDrawer();
   const { data: devicesList } = useDevices();
-  const { user, signOut } = useAuth();
-  const { profile, isOffline } = useMobileProfile(user?.id);
+  const { user, signOut, isOfflineAuth, isOffline, offlineAccessEnabled } = useAuth();
+  const { profile } = useMobileProfile(user?.id);
   const { isPro, isDevMode, expiresAt } = useSubscription();
   const { counts, isLoading: streamsLoading } = useTopLevelCounts();
   const { data: entryDerivedPlaces } = useEntryDerivedPlaces();
@@ -106,7 +106,7 @@ export function AccountScreen() {
 
   const streamDetail = streamsLoading ? undefined : `${counts.streams}`;
   const placeDetail = entryDerivedPlaces != null ? `${entryDerivedPlaces.length}` : undefined;
-  const storageDetail = cloudStorage != null
+  const storageDetail = (!isOfflineAuth && cloudStorage != null)
     ? formatMB(
         cloudStorage.active_content_bytes + cloudStorage.active_attachment_bytes +
         cloudStorage.trash_content_bytes + cloudStorage.trash_attachment_bytes
@@ -118,6 +118,24 @@ export function AccountScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.background.secondary }]}>
       {/* Branded Header */}
       <View style={[styles.header, { backgroundColor: theme.colors.background.primary, paddingTop: insets.top + themeBase.spacing.md }]}>
+        {/* Status badge — same pattern as TopBar */}
+        {(isOfflineAuth || (!isOfflineAuth && isOffline)) && (
+          <View style={[styles.statusRow, { top: insets.top + 1 }]}>
+            {isOfflineAuth ? (
+              <View style={[styles.statusBadge, { backgroundColor: theme.colors.functional.accent + '22' }]}>
+                <Icon name="Lock" size={10} color={theme.colors.functional.accent} />
+                <Text style={[styles.statusBadgeText, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>
+                  {isOffline ? "Offline · Local Only" : "Local Only"}
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.statusBadge, { backgroundColor: theme.colors.functional.warning }]}>
+                <Icon name="WifiOff" size={10} color={theme.colors.functional.warningText} />
+                <Text style={[styles.statusBadgeText, { color: theme.colors.functional.warningText, fontFamily: theme.typography.fontFamily.semibold }]}>Offline</Text>
+              </View>
+            )}
+          </View>
+        )}
         <View style={styles.headerLeft}>
           <Icon name="TraceLogoColor" size={36} color={theme.colors.text.primary} />
           <Text style={[styles.headerTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.bold }]}>
@@ -206,6 +224,34 @@ export function AccountScreen() {
           )}
         </View>
 
+        {/* Local Only Mode Card */}
+        {isOfflineAuth && (
+          <View style={[styles.card, { backgroundColor: theme.colors.functional.accent + '12', borderWidth: 1, borderColor: theme.colors.functional.accent + '30' }]}>
+            <View style={styles.localOnlyCard}>
+              <View style={styles.localOnlyHeader}>
+                <Icon name="Lock" size={18} color={theme.colors.functional.accent} />
+                <Text style={[styles.localOnlyTitle, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>
+                  Local Only Mode
+                </Text>
+              </View>
+              <Text style={[styles.localOnlyBody, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>
+                You signed in with biometrics. Your notes are available locally, but syncing is paused and cloud features are unavailable until you sign in with your Trace or Google account.
+              </Text>
+              {!isOffline && (
+                <TouchableOpacity
+                  style={[styles.localOnlyButton, { backgroundColor: theme.colors.functional.accent }]}
+                  onPress={signOut}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.localOnlyButtonText, { fontFamily: theme.typography.fontFamily.semibold }]}>
+                    Sign In to Sync
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Content Management Section */}
         <Text style={[styles.sectionTitle, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.semibold }]}>
           MANAGE
@@ -257,7 +303,29 @@ export function AccountScreen() {
           <MenuRow
             icon={<Icon name="LogOut" size={22} color={theme.colors.functional.overdue} />}
             label="Sign Out"
-            onPress={signOut}
+            onPress={() => {
+              if (isOffline && !offlineAccessEnabled) {
+                Alert.alert(
+                  "Sign Out While Offline?",
+                  "You're offline and don't have Biometric Access enabled. You'll need internet to sign back in.\n\nEnable Biometric Access in your profile to allow offline sign-in.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Sign Out Anyway", style: "destructive", onPress: signOut },
+                  ]
+                );
+              } else if (isOffline) {
+                Alert.alert(
+                  "Sign Out?",
+                  "You're offline. You can sign back in using Face ID or fingerprint.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Sign Out", style: "destructive", onPress: signOut },
+                  ]
+                );
+              } else {
+                signOut();
+              }
+            }}
             showChevron={false}
             destructive
           />
@@ -301,6 +369,50 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: themeBase.spacing.lg,
     paddingBottom: 16,
+  },
+  statusRow: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 1,
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: themeBase.spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 10,
+    gap: 3,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+  },
+  localOnlyCard: {
+    padding: 16,
+    gap: 10,
+  },
+  localOnlyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  localOnlyTitle: {
+    fontSize: 15,
+  },
+  localOnlyBody: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  localOnlyButton: {
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  localOnlyButtonText: {
+    color: "#fff",
+    fontSize: 14,
   },
   headerLeft: {
     flexDirection: "row",
@@ -420,5 +532,30 @@ const styles = StyleSheet.create({
   },
   offlineText: {
     fontSize: 13,
+  },
+  offlineAccessRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  offlineAccessLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  offlineAccessText: {
+    flex: 1,
+    gap: 2,
+  },
+  offlineAccessLabel: {
+    fontSize: 16,
+  },
+  offlineAccessDesc: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

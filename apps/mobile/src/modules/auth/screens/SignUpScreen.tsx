@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -10,11 +10,14 @@ import {
   ScrollView,
   Platform,
   Linking,
+  useColorScheme,
+  Keyboard,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { validateSignupForm, ERROR_MESSAGES, INFO_MESSAGES, SUCCESS_MESSAGES } from "@trace/core";
+import { validateSignupForm, ERROR_MESSAGES, INFO_MESSAGES } from "@trace/core";
 import { useAuth } from "../../../shared/contexts/AuthContext";
 import { GoogleIcon } from "../components/GoogleIcon";
+import { FlowerLogo } from "../components/FlowerLogo";
 
 interface SignUpScreenProps {
   onSwitchToLogin: () => void;
@@ -26,8 +29,14 @@ export default function SignUpScreen({ onSwitchToLogin }: SignUpScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const { signUpWithEmail, signInWithGoogle } = useAuth();
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
+  const c = isDark ? darkColors : lightColors;
 
   const handleEmailSignup = async () => {
+    Keyboard.dismiss();
     const validation = validateSignupForm(email, password, confirmPassword);
     if (!validation.isValid) {
       Alert.alert("Error", validation.error!);
@@ -37,25 +46,21 @@ export default function SignUpScreen({ onSwitchToLogin }: SignUpScreenProps) {
     setLoading(true);
     try {
       const result = await signUpWithEmail(email, password);
-      // Check if email confirmation is required (user exists but no session yet)
       if (result.user && !result.session) {
-        Alert.alert(
-          SUCCESS_MESSAGES.ACCOUNT_CREATED,
-          SUCCESS_MESSAGES.EMAIL_CONFIRMATION,
-          [{ text: "OK", onPress: onSwitchToLogin }]
-        );
+        onSwitchToLogin();
       }
-      // If session exists, auth state will update automatically
     } catch (error: unknown) {
       Alert.alert(
         ERROR_MESSAGES.SIGNUP_FAILED,
         error instanceof Error ? error.message : "Unknown error"
       );
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleGoogleSignup = async () => {
+    Keyboard.dismiss();
     setLoading(true);
     try {
       const result = await signInWithGoogle();
@@ -70,100 +75,130 @@ export default function SignUpScreen({ onSwitchToLogin }: SignUpScreenProps) {
         ERROR_MESSAGES.GOOGLE_SIGNUP_FAILED,
         error instanceof Error ? error.message : "Unknown error"
       );
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: c.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <ScrollView
+        style={{ backgroundColor: c.background }}
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>Join Trace</Text>
-          <Text style={styles.subtitle}>Create your account</Text>
+          <View style={styles.hero}>
+            <FlowerLogo size={112} />
+            <Text style={[styles.appName, { color: c.text }]}>Trace</Text>
+            <Text style={[styles.subtitle, { color: c.secondaryText }]}>
+              Create your account
+            </Text>
+          </View>
 
           <View style={styles.form}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: c.inputBg, color: c.text }]}
               placeholder="Email"
+              placeholderTextColor={c.secondaryText}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              textContentType="emailAddress"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
             />
 
             <TextInput
-              style={styles.input}
+              ref={passwordRef}
+              style={[styles.input, { backgroundColor: c.inputBg, color: c.text }]}
               placeholder="Password"
+              placeholderTextColor={c.secondaryText}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
+              textContentType="newPassword"
+              returnKeyType="next"
+              onSubmitEditing={() => confirmRef.current?.focus()}
             />
 
             <TextInput
-              style={styles.input}
+              ref={confirmRef}
+              style={[styles.input, { backgroundColor: c.inputBg, color: c.text }]}
               placeholder="Confirm Password"
+              placeholderTextColor={c.secondaryText}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
+              textContentType="newPassword"
+              returnKeyType="go"
+              onSubmitEditing={handleEmailSignup}
             />
 
             <TouchableOpacity
-              style={[styles.button, styles.primaryButton]}
+              style={[styles.primaryButton, { backgroundColor: c.primaryButton }, loading && styles.buttonDisabled]}
               onPress={handleEmailSignup}
               disabled={loading}
+              activeOpacity={0.8}
             >
               <Text style={styles.primaryButtonText}>
                 {loading ? INFO_MESSAGES.SIGNING_UP : "Create Account"}
               </Text>
             </TouchableOpacity>
 
-            <Text style={styles.orText}>or</Text>
+            <View style={styles.divider}>
+              <View style={[styles.dividerLine, { backgroundColor: c.divider }]} />
+              <Text style={[styles.dividerText, { color: c.secondaryText }]}>or</Text>
+              <View style={[styles.dividerLine, { backgroundColor: c.divider }]} />
+            </View>
 
             <TouchableOpacity
-              style={[styles.button, styles.googleButton]}
+              style={[styles.googleButton, { backgroundColor: c.inputBg }, loading && styles.buttonDisabled]}
               onPress={handleGoogleSignup}
               disabled={loading}
+              activeOpacity={0.8}
             >
-              <View style={styles.googleButtonContent}>
-                <GoogleIcon />
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </View>
+              <GoogleIcon />
+              <Text style={[styles.googleButtonText, { color: c.text }]}>
+                Continue with Google
+              </Text>
             </TouchableOpacity>
+          </View>
 
-            <Text style={styles.legalText}>
-              By continuing, you agree to our{" "}
+          <View style={styles.footer}>
+            <Text style={[styles.legalText, { color: c.secondaryText }]}>
+              By continuing you agree to our{" "}
               <Text
-                style={styles.legalLink}
+                style={{ color: c.primaryButton }}
                 onPress={() => Linking.openURL("https://www.mindjig.com/terms.html")}
               >
                 Terms of Service
               </Text>
               {" "}and{" "}
               <Text
-                style={styles.legalLink}
+                style={{ color: c.primaryButton }}
                 onPress={() => Linking.openURL("https://www.mindjig.com/privacy.html")}
               >
                 Privacy Policy
               </Text>
             </Text>
 
-            <TouchableOpacity style={styles.linkButton} onPress={onSwitchToLogin}>
-              <Text style={styles.linkText}>
-                Already have an account? <Text style={styles.linkTextBold}>Sign In</Text>
+            <TouchableOpacity style={styles.signInLink} onPress={onSwitchToLogin}>
+              <Text style={[styles.signInText, { color: c.secondaryText }]}>
+                Already have an account?{" "}
+                <Text style={{ color: c.primaryButton, fontWeight: "600" }}>Sign In</Text>
               </Text>
             </TouchableOpacity>
           </View>
@@ -173,105 +208,116 @@ export default function SignUpScreen({ onSwitchToLogin }: SignUpScreenProps) {
   );
 }
 
+const lightColors = {
+  background: "#FFFFFF",
+  inputBg: "#F2F2F7",
+  text: "#1C1C1E",
+  secondaryText: "#8E8E93",
+  divider: "#C6C6C8",
+  primaryButton: "#007AFF",
+};
+
+const darkColors = {
+  background: "#000000",
+  inputBg: "#1C1C1E",
+  text: "#FFFFFF",
+  secondaryText: "#AEAEB2",
+  divider: "#38383A",
+  primaryButton: "#0A84FF",
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
-    paddingVertical: 20,
+    paddingVertical: 40,
   },
   content: {
     flex: 1,
     justifyContent: "center",
-    minHeight: 500,
+    gap: 32,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 8,
-    color: "#1a1a1a",
+  hero: {
+    alignItems: "center",
+    gap: 12,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: "600",
+    fontFamily: "JetBrainsMono_600SemiBold",
+    letterSpacing: 1,
   },
   subtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#666",
-    marginBottom: 40,
+    fontSize: 15,
   },
   form: {
-    width: "100%",
+    gap: 12,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 16,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
     fontSize: 16,
-    marginBottom: 16,
-    backgroundColor: "#f9f9f9",
-  },
-  button: {
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-    marginBottom: 16,
+    letterSpacing: -0.2,
   },
   primaryButton: {
-    backgroundColor: "#007AFF",
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   primaryButtonText: {
-    color: "#fff",
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+    letterSpacing: -0.2,
   },
-  orText: {
-    textAlign: "center",
-    color: "#666",
-    fontSize: 14,
-    marginVertical: 16,
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+  },
+  dividerText: {
+    fontSize: 13,
   },
   googleButton: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  googleButtonContent: {
+    borderRadius: 12,
+    paddingVertical: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 10,
   },
   googleButtonText: {
-    color: "#333",
     fontSize: 16,
     fontWeight: "600",
+    letterSpacing: -0.2,
   },
-  linkButton: {
-    marginTop: 16,
+  footer: {
+    gap: 16,
     alignItems: "center",
   },
-  linkText: {
-    color: "#666",
-    fontSize: 14,
-  },
-  linkTextBold: {
-    color: "#007AFF",
-    fontWeight: "600",
-  },
   legalText: {
-    textAlign: "center",
-    color: "#999",
     fontSize: 12,
+    textAlign: "center",
     lineHeight: 18,
-    marginTop: 8,
-    marginBottom: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
   },
-  legalLink: {
-    color: "#007AFF",
-    textDecorationLine: "underline",
+  signInLink: {
+    paddingVertical: 12,
+  },
+  signInText: {
+    fontSize: 14,
+    textAlign: "center",
   },
 });

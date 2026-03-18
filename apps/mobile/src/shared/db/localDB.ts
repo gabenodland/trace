@@ -1218,15 +1218,11 @@ class LocalDatabase {
   async getEntriesByIds(entryIds: string[]): Promise<Entry[]> {
     await this.init();
     if (!this.db || entryIds.length === 0) return [];
+    const userId = this.requireUserId();
 
     const placeholders = entryIds.map(() => '?').join(',');
-    let query = `SELECT * FROM entries WHERE entry_id IN (${placeholders})`;
-    const params: any[] = [...entryIds];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
+    let query = `SELECT * FROM entries WHERE entry_id IN (${placeholders}) AND user_id = ?`;
+    const params: any[] = [...entryIds, userId];
 
     const rows = await this.db.getAllAsync<any>(query, params);
     return rows.map(row => this.rowToEntry(row));
@@ -1241,13 +1237,9 @@ class LocalDatabase {
     const t1 = performance.now();
     if (!this.db) throw new Error('Database not initialized');
 
-    let query = 'SELECT * FROM entries WHERE entry_id = ?';
-    const params: any[] = [entryId];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
+    const userId = this.requireUserId();
+    let query = 'SELECT * FROM entries WHERE entry_id = ? AND user_id = ?';
+    const params: any[] = [entryId, userId];
 
     const row = await this.db.getFirstAsync<any>(query, params);
     const t2 = performance.now();
@@ -1298,13 +1290,9 @@ class LocalDatabase {
       (SELECT COUNT(*) FROM attachments a
        WHERE a.entry_id = e.entry_id
        AND (a.sync_action IS NULL OR a.sync_action != 'delete')) as photo_count
-      FROM entries e WHERE 1=1`;
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ' AND e.user_id = ?';
-      params.push(this.currentUserId);
-    }
+      FROM entries e WHERE e.user_id = ?`;
+    const userId = this.requireUserId();
+    const params: any[] = [userId];
 
     if (!filter?.includeDeleted) {
       query += ' AND e.deleted_at IS NULL';
@@ -1419,9 +1407,10 @@ class LocalDatabase {
   }>> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     // Group by location_id for places - it's a stable UUID, no jitter issues
-    let query = `
+    const query = `
       SELECT
         country,
         region,
@@ -1433,18 +1422,11 @@ class LocalDatabase {
       FROM entries
       WHERE deleted_at IS NULL
         AND (country IS NOT NULL OR region IS NOT NULL OR city IS NOT NULL OR neighborhood IS NOT NULL OR place_name IS NOT NULL)
-    `;
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
-
-    query += `
+        AND user_id = ?
       GROUP BY country, region, city, neighborhood, place_name, location_id
       ORDER BY country, region, city, neighborhood, place_name
     `;
+    const params: any[] = [userId];
 
     const rows = await this.db.getAllAsync<any>(query, params);
 
@@ -1466,8 +1448,9 @@ class LocalDatabase {
   async getNoLocationCount(): Promise<number> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = `
+    const query = `
       SELECT COUNT(*) as count
       FROM entries
       WHERE deleted_at IS NULL
@@ -1476,13 +1459,9 @@ class LocalDatabase {
         AND city IS NULL
         AND place_name IS NULL
         AND entry_latitude IS NULL
+        AND user_id = ?
     `;
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
+    const params: any[] = [userId];
 
     const result = await this.db.getFirstAsync<{ count: number }>(query, params);
     return result?.count || 0;
@@ -1636,9 +1615,11 @@ class LocalDatabase {
   async getUnsyncedEntries(): Promise<Entry[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     const rows = await this.db.getAllAsync<any>(
-      'SELECT * FROM entries WHERE synced = 0 AND local_only = 0 ORDER BY updated_at ASC'
+      'SELECT * FROM entries WHERE synced = 0 AND local_only = 0 AND user_id = ? ORDER BY updated_at ASC',
+      [userId]
     );
 
     return rows.map(row => this.rowToEntry(row));
@@ -1669,13 +1650,15 @@ class LocalDatabase {
   async getDeletedEntries(): Promise<Entry[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     const rows = await this.db.getAllAsync<any>(
       `SELECT e.*,
         (SELECT COUNT(*) FROM attachments a WHERE a.entry_id = e.entry_id AND a.deleted_at IS NULL AND (a.sync_action IS NULL OR a.sync_action != 'delete')) as photo_count
       FROM entries e
-      WHERE e.deleted_at IS NOT NULL
-      ORDER BY e.deleted_at DESC`
+      WHERE e.user_id = ? AND e.deleted_at IS NOT NULL
+      ORDER BY e.deleted_at DESC`,
+      [userId]
     );
 
     return rows.map(row => this.rowToEntry(row));
@@ -1690,6 +1673,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
+    const userId = this.requireUserId();
     const entry = await this.getEntry(entryId);
     if (!entry || !entry.deleted_at) return { restored_to_inbox: false };
 
@@ -1700,11 +1684,12 @@ class LocalDatabase {
     // Check if original stream is deleted (matches server-side RPC behavior)
     let restoredToInbox = false;
     if (entry.stream_id) {
-      const stream = await this.db.getFirstAsync<{ deleted_at: number | null }>(
-        `SELECT deleted_at FROM streams WHERE stream_id = ?`,
-        [entry.stream_id]
+      // Streams use sync_action = 'delete' for soft-deletion — there is no deleted_at column
+      const stream = await this.db.getFirstAsync<{ sync_action: string | null }>(
+        `SELECT sync_action FROM streams WHERE stream_id = ? AND user_id = ?`,
+        [entry.stream_id, userId]
       );
-      if (!stream || stream.deleted_at !== null) {
+      if (!stream || stream.sync_action === 'delete') {
         restoredToInbox = true;
       }
     }
@@ -1714,8 +1699,8 @@ class LocalDatabase {
     const now = Date.now();
     if (entry.local_only) {
       await this.db.runAsync(
-        `UPDATE entries SET deleted_at = NULL, updated_at = ?${restoredToInbox ? ', stream_id = NULL' : ''} WHERE entry_id = ?`,
-        [now, entryId]
+        `UPDATE entries SET deleted_at = NULL, updated_at = ?${restoredToInbox ? ', stream_id = NULL' : ''} WHERE entry_id = ? AND user_id = ?`,
+        [now, entryId, userId]
       );
     } else {
       await this.db.runAsync(
@@ -1725,8 +1710,8 @@ class LocalDatabase {
           ${restoredToInbox ? 'stream_id = NULL,' : ''}
           synced = 0,
           sync_action = 'update'
-        WHERE entry_id = ?`,
-        [now, entryId]
+        WHERE entry_id = ? AND user_id = ?`,
+        [now, entryId, userId]
       );
     }
 
@@ -1735,8 +1720,8 @@ class LocalDatabase {
     if (entry.local_only) {
       await this.db.runAsync(
         `UPDATE attachments SET deleted_at = NULL
-        WHERE entry_id = ? AND deleted_at IS NOT NULL AND deleted_at >= ?`,
-        [entryId, entryDeletedAt]
+        WHERE entry_id = ? AND deleted_at IS NOT NULL AND deleted_at >= ? AND user_id = ?`,
+        [entryId, entryDeletedAt, userId]
       );
     } else {
       await this.db.runAsync(
@@ -1744,8 +1729,8 @@ class LocalDatabase {
           deleted_at = NULL,
           synced = 0,
           sync_action = 'update'
-        WHERE entry_id = ? AND deleted_at IS NOT NULL AND deleted_at >= ?`,
-        [entryId, entryDeletedAt]
+        WHERE entry_id = ? AND deleted_at IS NOT NULL AND deleted_at >= ? AND user_id = ?`,
+        [entryId, entryDeletedAt, userId]
       );
     }
 
@@ -1760,27 +1745,28 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    // Get user_id and local_only before deleting
+    const userId = this.requireUserId();
+
+    // Determine local_only before deleting — getEntry already scopes by user_id
     const entry = await this.getEntry(entryId);
-    const userId = entry?.user_id || this.currentUserId || '';
     const isLocalOnly = entry?.local_only === 1;
 
-    // Delete attachments first
+    // Delete attachments — scoped by both entry_id and user_id for defence-in-depth
     await this.db.runAsync(
-      'DELETE FROM attachments WHERE entry_id = ?',
-      [entryId]
+      'DELETE FROM attachments WHERE entry_id = ? AND user_id = ?',
+      [entryId, userId]
     );
 
-    // Delete versions
+    // Delete versions — scoped by both entry_id and user_id
     await this.db.runAsync(
-      'DELETE FROM entry_versions WHERE entry_id = ?',
-      [entryId]
+      'DELETE FROM entry_versions WHERE entry_id = ? AND user_id = ?',
+      [entryId, userId]
     );
 
-    // Delete the entry
+    // Delete the entry — scoped by both entry_id and user_id
     await this.db.runAsync(
-      'DELETE FROM entries WHERE entry_id = ?',
-      [entryId]
+      'DELETE FROM entries WHERE entry_id = ? AND user_id = ?',
+      [entryId, userId]
     );
 
     // Create tombstone (only for synced entries — local-only don't need it)
@@ -1800,8 +1786,10 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
+    const userId = this.requireUserId();
     return this.db.getAllAsync<{ entry_id: string; user_id: string; hard_deleted_at: number }>(
-      'SELECT * FROM entry_tombstones WHERE synced = 0'
+      'SELECT * FROM entry_tombstones WHERE synced = 0 AND user_id = ?',
+      [userId]
     );
   }
 
@@ -1884,9 +1872,11 @@ class LocalDatabase {
   async getUnsyncedCount(): Promise<number> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     const result = await this.db.getFirstAsync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM entries WHERE synced = 0 AND local_only = 0'
+      'SELECT COUNT(*) as count FROM entries WHERE synced = 0 AND local_only = 0 AND user_id = ?',
+      [userId]
     );
 
     return result?.count || 0;
@@ -1900,6 +1890,7 @@ class LocalDatabase {
   async getEntryCounts(): Promise<{ total: number; noStream: number; hasPlace: number; noPlace: number }> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     const privateStreamExclusion = `AND (stream_id IS NULL OR stream_id NOT IN (
            SELECT stream_id FROM streams WHERE is_private = 1 AND (sync_action IS NULL OR sync_action != 'delete')
@@ -1909,25 +1900,29 @@ class LocalDatabase {
       // Total count excludes private streams - same filtering as getAllEntries with excludePrivateStreams=true
       this.db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM entries
-         WHERE deleted_at IS NULL
-         ${privateStreamExclusion}`
+         WHERE user_id = ? AND deleted_at IS NULL
+         ${privateStreamExclusion}`,
+        [userId]
       ),
       // Unassigned count - entries with no stream are never private
       this.db.getFirstAsync<{ count: number }>(
-        'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NULL AND stream_id IS NULL'
+        'SELECT COUNT(*) as count FROM entries WHERE user_id = ? AND deleted_at IS NULL AND stream_id IS NULL',
+        [userId]
       ),
       // Has place - entries with any GPS coordinates (excludes private streams)
       this.db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM entries
-         WHERE deleted_at IS NULL AND entry_latitude IS NOT NULL
-         ${privateStreamExclusion}`
+         WHERE user_id = ? AND deleted_at IS NULL AND entry_latitude IS NOT NULL
+         ${privateStreamExclusion}`,
+        [userId]
       ),
       // No place - entries without any location data (excludes private streams)
       this.db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM entries
-         WHERE deleted_at IS NULL
+         WHERE user_id = ? AND deleted_at IS NULL
          AND country IS NULL AND region IS NULL AND city IS NULL AND neighborhood IS NULL AND place_name IS NULL AND entry_latitude IS NULL
-         ${privateStreamExclusion}`
+         ${privateStreamExclusion}`,
+        [userId]
       ),
     ]);
 
@@ -2046,14 +2041,10 @@ class LocalDatabase {
   async getLocation(locationId: string): Promise<LocationEntity | null> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = 'SELECT * FROM locations WHERE location_id = ?';
-    const params: any[] = [locationId];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
+    const query = 'SELECT * FROM locations WHERE location_id = ? AND user_id = ?';
+    const params: any[] = [locationId, userId];
 
     const row = await this.db.getFirstAsync<any>(query, params);
 
@@ -2068,16 +2059,10 @@ class LocalDatabase {
   async getAllLocations(): Promise<LocationEntity[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = 'SELECT * FROM locations WHERE deleted_at IS NULL';
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
-
-    query += ' ORDER BY name ASC';
+    const query = 'SELECT * FROM locations WHERE deleted_at IS NULL AND user_id = ? ORDER BY name ASC';
+    const params: any[] = [userId];
 
     const rows = await this.db.getAllAsync<any>(query, params);
 
@@ -2090,21 +2075,16 @@ class LocalDatabase {
   async getLocationsWithCounts(): Promise<Array<LocationEntity & { entry_count: number }>> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = `
+    const query = `
       SELECT l.*, COUNT(e.entry_id) as entry_count
       FROM locations l
       LEFT JOIN entries e ON l.location_id = e.location_id AND e.deleted_at IS NULL
-      WHERE l.deleted_at IS NULL
+      WHERE l.deleted_at IS NULL AND l.user_id = ?
+      GROUP BY l.location_id ORDER BY entry_count DESC, l.name ASC
     `;
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ' AND l.user_id = ?';
-      params.push(this.currentUserId);
-    }
-
-    query += ' GROUP BY l.location_id ORDER BY entry_count DESC, l.name ASC';
+    const params: any[] = [userId];
 
     const rows = await this.db.getAllAsync<any>(query, params);
 
@@ -2129,8 +2109,9 @@ class LocalDatabase {
   }>> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = `
+    const query = `
       SELECT
         city, region, country,
         COUNT(*) as entry_count,
@@ -2141,15 +2122,10 @@ class LocalDatabase {
       WHERE location_id IS NULL
         AND entry_latitude IS NOT NULL
         AND deleted_at IS NULL
+        AND user_id = ?
+      GROUP BY city, region, country ORDER BY entry_count DESC
     `;
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
-
-    query += ' GROUP BY city, region, country ORDER BY entry_count DESC';
+    const params: any[] = [userId];
 
     const rows = await this.db.getAllAsync<any>(query, params);
 
@@ -2184,10 +2160,9 @@ class LocalDatabase {
   }>> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    const params: any[] = [];
-    if (this.currentUserId) params.push(this.currentUserId); // entries query
-    if (this.currentUserId) params.push(this.currentUserId); // locations query
+    const params: any[] = [userId, userId];
 
     const query = `
       SELECT place_name, address, city, region, country, entry_count, avg_latitude, avg_longitude, is_favorite, location_id, ungeocoded_count
@@ -2204,7 +2179,7 @@ class LocalDatabase {
         FROM entries
         WHERE (place_name IS NOT NULL OR city IS NOT NULL)
           AND deleted_at IS NULL
-          ${this.currentUserId ? 'AND user_id = ?' : ''}
+          AND user_id = ?
         GROUP BY COALESCE(place_name, ''), COALESCE(address, ''), city, region, country
 
         UNION ALL
@@ -2237,7 +2212,7 @@ class LocalDatabase {
             ))
             AND e.deleted_at IS NULL
         )
-        ${this.currentUserId ? 'AND l.user_id = ?' : ''}
+        AND l.user_id = ?
       )
       ORDER BY entry_count DESC`;
 
@@ -2281,29 +2256,26 @@ class LocalDatabase {
   }> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
-
-    const userFilter = this.currentUserId ? ' AND user_id = ?' : '';
-    const userFilterAliased = this.currentUserId ? ' AND l.user_id = ?' : '';
-    const userParams = this.currentUserId ? [this.currentUserId] : [];
+    const userId = this.requireUserId();
 
     const [missingResult, duplicateResult, unlinkedResult, unusedResult] = await Promise.all([
       // Locations with missing hierarchy data
       this.db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM locations
          WHERE deleted_at IS NULL
-           AND (city IS NULL OR region IS NULL OR country IS NULL)${userFilter}`,
-        userParams
+           AND (city IS NULL OR region IS NULL OR country IS NULL) AND user_id = ?`,
+        [userId]
       ),
       // Duplicate locations (same name + address, case insensitive)
       this.db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM (
           SELECT LOWER(name) as n, LOWER(COALESCE(address, '')) as a
           FROM locations
-          WHERE deleted_at IS NULL${userFilter}
+          WHERE deleted_at IS NULL AND user_id = ?
           GROUP BY LOWER(name), LOWER(COALESCE(address, ''))
           HAVING COUNT(*) > 1
         )`,
-        userParams
+        [userId]
       ),
       // Entries with GPS that need snapping/geocoding (not yet processed)
       this.db.getFirstAsync<{ count: number }>(
@@ -2311,16 +2283,16 @@ class LocalDatabase {
          WHERE deleted_at IS NULL
            AND entry_latitude IS NOT NULL
            AND entry_longitude IS NOT NULL
-           AND (geocode_status IS NULL OR geocode_status = 'error')${userFilter}`,
-        userParams
+           AND (geocode_status IS NULL OR geocode_status = 'error') AND user_id = ?`,
+        [userId]
       ),
       // Locations not referenced by any entry
       this.db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM locations l
          LEFT JOIN entries e ON l.location_id = e.location_id AND e.deleted_at IS NULL
          WHERE l.deleted_at IS NULL
-           AND e.entry_id IS NULL${userFilterAliased}`,
-        userParams
+           AND e.entry_id IS NULL AND l.user_id = ?`,
+        [userId]
       ),
     ]);
 
@@ -2405,9 +2377,11 @@ class LocalDatabase {
   async getUnsyncedLocations(): Promise<LocationEntity[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     const rows = await this.db.getAllAsync<any>(
-      'SELECT * FROM locations WHERE synced = 0 ORDER BY updated_at ASC'
+      'SELECT * FROM locations WHERE synced = 0 AND user_id = ? ORDER BY updated_at ASC',
+      [userId]
     );
 
     return rows.map(row => this.rowToLocation(row));
@@ -2490,8 +2464,9 @@ class LocalDatabase {
   async getAllStreams(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = `
+    const query = `
       SELECT
         s.*,
         COALESCE(COUNT(e.entry_id), 0) as entry_count,
@@ -2499,22 +2474,12 @@ class LocalDatabase {
       FROM streams s
       LEFT JOIN entries e ON s.stream_id = e.stream_id
         AND (e.deleted_at IS NULL OR e.deleted_at = '')
-    `;
-
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ` WHERE (s.sync_action IS NULL OR s.sync_action != 'delete')
-        AND s.user_id = ?`;
-      params.push(this.currentUserId);
-    } else {
-      query += ` WHERE s.sync_action IS NULL OR s.sync_action != 'delete'`;
-    }
-
-    query += `
+      WHERE (s.sync_action IS NULL OR s.sync_action != 'delete')
+        AND s.user_id = ?
       GROUP BY s.stream_id
       ORDER BY s.name
     `;
+    const params: any[] = [userId];
 
     const rows = await this.db.getAllAsync<any>(query, params);
 
@@ -2580,6 +2545,7 @@ class LocalDatabase {
   async getStream(streamId: string): Promise<any | null> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     const row = await this.db.getFirstAsync<any>(
       `SELECT
@@ -2588,9 +2554,9 @@ class LocalDatabase {
       FROM streams s
       LEFT JOIN entries e ON s.stream_id = e.stream_id
         AND (e.deleted_at IS NULL OR e.deleted_at = '')
-      WHERE s.stream_id = ?
+      WHERE s.stream_id = ? AND s.user_id = ?
       GROUP BY s.stream_id`,
-      [streamId]
+      [streamId, userId]
     );
 
     if (!row) return null;
@@ -2881,9 +2847,11 @@ class LocalDatabase {
   async getUnsyncedStreams(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     const rows = await this.db.getAllAsync<any>(
-      'SELECT * FROM streams WHERE synced = 0'
+      'SELECT * FROM streams WHERE synced = 0 AND user_id = ?',
+      [userId]
     );
 
     return rows;
@@ -2964,12 +2932,15 @@ class LocalDatabase {
   async getAllTags(): Promise<Array<{ tag: string; count: number }>> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     const rows = await this.db.getAllAsync<any>(
       `SELECT tags FROM entries
        WHERE tags IS NOT NULL
        AND tags != '[]'
-       AND deleted_at IS NULL`
+       AND deleted_at IS NULL
+       AND user_id = ?`,
+      [userId]
     );
 
     const tagCounts = new Map<string, number>();
@@ -3004,12 +2975,15 @@ class LocalDatabase {
   async getAllMentions(): Promise<Array<{ mention: string; count: number }>> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     const rows = await this.db.getAllAsync<any>(
       `SELECT mentions FROM entries
        WHERE mentions IS NOT NULL
        AND mentions != '[]'
-       AND deleted_at IS NULL`
+       AND deleted_at IS NULL
+       AND user_id = ?`,
+      [userId]
     );
 
     const mentionCounts = new Map<string, number>();
@@ -3187,16 +3161,10 @@ class LocalDatabase {
   async getAttachmentsForEntry(entryId: string): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = 'SELECT * FROM attachments WHERE entry_id = ? AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?)';
-    const params: any[] = [entryId, 'delete'];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
-
-    query += ' ORDER BY position ASC';
+    const query = 'SELECT * FROM attachments WHERE entry_id = ? AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?) AND user_id = ? ORDER BY position ASC';
+    const params: any[] = [entryId, 'delete', userId];
 
     const attachments = await this.db.getAllAsync<any>(query, params);
     return attachments;
@@ -3209,6 +3177,7 @@ class LocalDatabase {
   async getAttachmentsForEntries(entryIds: string[]): Promise<Attachment[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     // Return empty array if no entry IDs provided
     if (!entryIds || entryIds.length === 0) {
@@ -3224,15 +3193,8 @@ class LocalDatabase {
       const batch = entryIds.slice(i, i + BATCH_SIZE);
       const placeholders = batch.map(() => '?').join(', ');
 
-      let query = `SELECT * FROM attachments WHERE entry_id IN (${placeholders}) AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?)`;
-      const params: (string | number)[] = [...batch, 'delete'];
-
-      if (this.currentUserId) {
-        query += ' AND user_id = ?';
-        params.push(this.currentUserId);
-      }
-
-      query += ' ORDER BY entry_id, position ASC';
+      const query = `SELECT * FROM attachments WHERE entry_id IN (${placeholders}) AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?) AND user_id = ? ORDER BY entry_id, position ASC`;
+      const params: (string | number)[] = [...batch, 'delete', userId];
 
       const attachments = await this.db.getAllAsync<Attachment>(query, params);
       allAttachments.push(...attachments);
@@ -3247,14 +3209,10 @@ class LocalDatabase {
   async getAttachment(attachmentId: string): Promise<Attachment | null> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = 'SELECT * FROM attachments WHERE attachment_id = ?';
-    const params: (string | number)[] = [attachmentId];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
+    const query = 'SELECT * FROM attachments WHERE attachment_id = ? AND user_id = ?';
+    const params: (string | number)[] = [attachmentId, userId];
 
     const attachment = await this.db.getFirstAsync<Attachment>(query, params);
     return attachment || null;
@@ -3425,16 +3383,12 @@ class LocalDatabase {
   async cleanupOrphanedAttachments(): Promise<number> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     log.debug('Searching for orphaned attachments');
 
-    let query = 'SELECT * FROM attachments WHERE deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?)';
-    const params: any[] = ['delete'];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
+    const query = 'SELECT * FROM attachments WHERE deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?) AND user_id = ?';
+    const params: any[] = ['delete', userId];
 
     const attachments = await this.db.getAllAsync<any>(query, params);
     let orphanCount = 0;
@@ -3466,14 +3420,15 @@ class LocalDatabase {
   async purgeExpiredTrash(retentionDays: number = 30): Promise<number> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
     const cutoffMs = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
     const nowMs = Date.now();
 
     // Count expired entries first
     const countResult = await this.db.getFirstAsync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ?`,
-      [cutoffMs]
+      `SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ? AND user_id = ?`,
+      [cutoffMs, userId]
     );
     const count = countResult?.count ?? 0;
     if (count === 0) return 0;
@@ -3486,26 +3441,26 @@ class LocalDatabase {
         `INSERT OR IGNORE INTO entry_tombstones (entry_id, user_id, hard_deleted_at, synced)
          SELECT entry_id, user_id, ?, 0
          FROM entries
-         WHERE deleted_at IS NOT NULL AND deleted_at < ? AND local_only = 0`,
-        [nowMs, cutoffMs]
+         WHERE deleted_at IS NOT NULL AND deleted_at < ? AND local_only = 0 AND user_id = ?`,
+        [nowMs, cutoffMs, userId]
       );
 
       // Batch delete attachments, versions, and entries
       await this.db.runAsync(
         `DELETE FROM attachments WHERE entry_id IN (
-           SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ?
+           SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ? AND user_id = ?
          )`,
-        [cutoffMs]
+        [cutoffMs, userId]
       );
       await this.db.runAsync(
         `DELETE FROM entry_versions WHERE entry_id IN (
-           SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ?
+           SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ? AND user_id = ?
          )`,
-        [cutoffMs]
+        [cutoffMs, userId]
       );
       await this.db.runAsync(
-        `DELETE FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ?`,
-        [cutoffMs]
+        `DELETE FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ? AND user_id = ?`,
+        [cutoffMs, userId]
       );
 
       await this.db.execAsync('COMMIT');
@@ -3524,16 +3479,10 @@ class LocalDatabase {
   async getAttachmentsNeedingUpload(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = 'SELECT * FROM attachments WHERE uploaded = 0 AND deleted_at IS NULL';
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
-
-    query += ' ORDER BY created_at ASC';
+    const query = 'SELECT * FROM attachments WHERE uploaded = 0 AND deleted_at IS NULL AND user_id = ? ORDER BY created_at ASC';
+    const params: any[] = [userId];
 
     const attachments = await this.db.getAllAsync<any>(query, params);
     return attachments;
@@ -3545,23 +3494,19 @@ class LocalDatabase {
   async getAttachmentsNeedingSync(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = `
+    const query = `
       SELECT a.*
       FROM attachments a
       LEFT JOIN entries e ON a.entry_id = e.entry_id
       WHERE a.synced = 0
         AND a.sync_action IS NOT NULL
         AND (e.synced = 1 OR a.sync_action = 'delete' OR e.entry_id IS NULL)
+        AND a.user_id = ?
+      ORDER BY a.created_at ASC
     `;
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ' AND a.user_id = ?';
-      params.push(this.currentUserId);
-    }
-
-    query += ' ORDER BY a.created_at ASC';
+    const params: any[] = [userId];
 
     const attachments = await this.db.getAllAsync<any>(query, params);
     return attachments;
@@ -3573,16 +3518,10 @@ class LocalDatabase {
   async getAllAttachments(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = 'SELECT * FROM attachments WHERE deleted_at IS NULL';
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
-
-    query += ' ORDER BY created_at DESC';
+    const query = 'SELECT * FROM attachments WHERE deleted_at IS NULL AND user_id = ? ORDER BY created_at DESC';
+    const params: any[] = [userId];
 
     const attachments = await this.db.getAllAsync<any>(query, params);
     return attachments;
@@ -3595,20 +3534,16 @@ class LocalDatabase {
   async getEntryAttachmentCounts(): Promise<Record<string, number>> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
 
-    let query = `
+    const query = `
       SELECT entry_id, COUNT(*) as count
       FROM attachments
       WHERE deleted_at IS NULL AND (sync_action IS NULL OR sync_action != 'delete')
+        AND user_id = ?
+      GROUP BY entry_id
     `;
-    const params: any[] = [];
-
-    if (this.currentUserId) {
-      query += ' AND user_id = ?';
-      params.push(this.currentUserId);
-    }
-
-    query += ' GROUP BY entry_id';
+    const params: any[] = [userId];
 
     const rows = await this.db.getAllAsync<{ entry_id: string; count: number }>(query, params);
 
@@ -3626,11 +3561,12 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
     if (attachmentIds.length === 0) return [];
+    const userId = this.requireUserId();
 
     const placeholders = attachmentIds.map(() => '?').join(',');
     const rows = await this.db.getAllAsync<any>(
-      `SELECT * FROM attachments WHERE attachment_id IN (${placeholders}) ORDER BY position ASC`,
-      attachmentIds,
+      `SELECT * FROM attachments WHERE attachment_id IN (${placeholders}) AND user_id = ? ORDER BY position ASC`,
+      [...attachmentIds, userId],
     );
     return rows as Attachment[];
   }
@@ -3720,9 +3656,11 @@ class LocalDatabase {
   }
 
   /**
-   * Run custom SQL query
+   * Run custom SQL query.
+   * Prefer runUserQuery / getFirstUserQuery / execUserQuery for user-scoped tables.
    */
   async runCustomQuery(sql: string, params?: any[]): Promise<any[]> {
+    this.assertUserScoping(sql);
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
@@ -3762,6 +3700,110 @@ class LocalDatabase {
    */
   getCurrentUserId(): string | null {
     return this.currentUserId;
+  }
+
+  // ============================================================================
+  // USER-SCOPED QUERY WRAPPERS
+  //
+  // All queries on user-scoped tables (entries, streams, attachments, locations,
+  // entry_versions, entry_tombstones) MUST go through one of these wrappers.
+  // They auto-append userId as the LAST parameter.
+  //
+  // DO NOT use this.db.runAsync / getFirstAsync / getAllAsync directly for
+  // user-scoped queries — the dev-mode guard below will warn if you do.
+  // ============================================================================
+
+  /** Tables that require user_id scoping. Used by the dev-mode query guard. */
+  private static readonly USER_SCOPED_TABLES = [
+    'entries', 'streams', 'attachments', 'locations', 'entry_versions', 'entry_tombstones',
+  ];
+
+  /**
+   * Dev-mode guard: warns if a query touches a user-scoped table without user_id.
+   * Skips DDL (CREATE/ALTER/DROP/PRAGMA) and transaction control.
+   */
+  private assertUserScoping(sql: string): void {
+    if (!__DEV__) return;
+    const lower = sql.toLowerCase().trimStart();
+    // Skip DDL and transaction statements
+    if (/^(create|alter|drop|pragma|begin|commit|rollback|insert\s+or\s+ignore\s+into\s+entry_tombstones)/.test(lower)) return;
+    // Skip INSERT — user_id is in the VALUES, not a WHERE clause
+    if (lower.startsWith('insert')) {
+      // Still check that user_id appears in the column list
+      if (!lower.includes('user_id')) {
+        for (const table of LocalDatabase.USER_SCOPED_TABLES) {
+          if (lower.includes(table)) {
+            log.warn(`⚠️ INSERT into user-scoped table '${table}' missing user_id column: ${sql.substring(0, 120)}`);
+            break;
+          }
+        }
+      }
+      return;
+    }
+    // For SELECT/UPDATE/DELETE: check that user_id appears in the query
+    for (const table of LocalDatabase.USER_SCOPED_TABLES) {
+      if (lower.includes(table) && !lower.includes('user_id')) {
+        log.warn(`⚠️ Query on user-scoped table '${table}' missing user_id: ${sql.substring(0, 120)}`);
+        break;
+      }
+    }
+  }
+
+  /**
+   * SELECT multiple rows, user-scoped. Appends userId as the last parameter.
+   * SQL must include a `user_id = ?` placeholder as the last `?`.
+   */
+  async runUserQuery(sql: string, params: any[] = []): Promise<any[]> {
+    const userId = this.requireUserId();
+    return this.runCustomQuery(sql, [...params, userId]);
+  }
+
+  /**
+   * SELECT single row, user-scoped. Appends userId as the last parameter.
+   * Returns null if no row found.
+   */
+  async getFirstUserQuery<T = any>(sql: string, params: any[] = []): Promise<T | null> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
+    return this.db.getFirstAsync<T>(sql, [...params, userId]);
+  }
+
+  /**
+   * Execute a write (UPDATE/DELETE/INSERT), user-scoped. Appends userId as the last parameter.
+   */
+  async execUserQuery(sql: string, params: any[] = []): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+    const userId = this.requireUserId();
+    await this.db.runAsync(sql, [...params, userId]);
+  }
+
+  /**
+   * Returns currentUserId or throws. Use this to enforce user_id filtering
+   * in every query that touches user-scoped data.
+   */
+  private requireUserId(): string {
+    if (!this.currentUserId) {
+      throw new Error('No current user set — cannot query user-scoped data');
+    }
+    return this.currentUserId;
+  }
+
+  /**
+   * Delete all local data for a specific user (per-user purge).
+   * Used for "Remove Account from Device" feature.
+   */
+  async clearUserData(userId: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.runAsync('DELETE FROM attachments WHERE user_id = ?', [userId]);
+    await this.db.runAsync('DELETE FROM entries WHERE user_id = ?', [userId]);
+    await this.db.runAsync('DELETE FROM streams WHERE user_id = ?', [userId]);
+    await this.db.runAsync('DELETE FROM locations WHERE user_id = ?', [userId]);
+
+    log.info('Cleared local data for user', { userId });
   }
 }
 

@@ -92,6 +92,7 @@ const queryClient = new QueryClient({
 
 const authGateLog = createScopedLogger('AuthGate');
 
+
 /**
  * AuthGate - Shows login/signup when not authenticated, main app when authenticated
  *
@@ -100,7 +101,7 @@ const authGateLog = createScopedLogger('AuthGate');
  * not the entire AuthGate tree.
  */
 function AuthGate() {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, isOfflineAuth } = useAuth();
   const [showSignUp, setShowSignUp] = useState(false);
   const [dbInitialized, setDbInitialized] = useState(false);
 
@@ -140,7 +141,8 @@ function AuthGate() {
       return;
     }
 
-    // Initialize for the first time
+    // Initialize for the first time — always land on entry list
+    navigate('allEntries');
     hasInitializedRef.current = true;
 
     const dbStart = Date.now();
@@ -148,6 +150,11 @@ function AuthGate() {
       .then(() => {
         authGateLog.debug(`localDB.init: ${Date.now() - dbStart}ms`);
         setDbInitialized(true);
+        // Skip realtime sync when restored via offline access — no valid session
+        if (isOfflineAuth) {
+          authGateLog.info('Offline auth — skipping sync initialization');
+          return;
+        }
         const syncStart = Date.now();
         return initializeSync(queryClient).then(() => {
           authGateLog.debug(`initializeSync: ${Date.now() - syncStart}ms`);
@@ -674,7 +681,6 @@ async function handleAuthDeepLink(url: string): Promise<boolean> {
     if (access_token) {
       deepLinkLog.debug('Setting session from deep link');
       await setSession(access_token, refresh_token);
-      Alert.alert("Success", "Your email has been confirmed! You are now signed in.");
       return true;
     }
 

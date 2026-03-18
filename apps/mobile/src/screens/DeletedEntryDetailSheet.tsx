@@ -8,6 +8,9 @@
  */
 
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Alert } from "react-native";
+import { createScopedLogger } from "../shared/utils/logger";
+
+const log = createScopedLogger('DeletedEntryDetailSheet');
 import { useMemo } from "react";
 import { Icon } from "../shared/components";
 import { useTheme } from "../shared/contexts/ThemeContext";
@@ -176,14 +179,16 @@ export function DeletedEntryDetailSheet({ visible, onClose, entryId, onRestored 
                 const toastMsg = result.restored_to_inbox ? "Entry restored to Inbox" : "Entry restored";
                 onRestored?.(toastMsg);
                 onClose();
-              } catch {
+              } catch (err) {
+                log.error('restoreEntry failed', err instanceof Error ? err : new Error(String(err)));
                 Alert.alert("Error", "Failed to restore entry. Please try again.");
               }
             },
           },
         ]
       );
-    } catch {
+    } catch (err) {
+      log.error('handleRestore failed (pre-confirm)', err instanceof Error ? err : new Error(String(err)));
       Alert.alert("Error", "Failed to restore entry. Please try again.");
     }
   };

@@ -20,6 +20,7 @@ Start every response with "OK [ModelName] here to help". Push back if asked to d
 7. **Be direct** — No sugar coating, no people-pleasing. Harsh and critical.
 8. **Verify before done** — Run `npm run test:run` and `npm run type-check:mobile`. Work isn't done if tests fail.
 9. **Core needs tests** — `@trace/core` helpers MUST have vitest unit tests.
+10. **Use Serena for all code search** — NEVER use Grep or Bash `find`/`grep` to search code. Use `mcp__serena__search_for_pattern` for text search (finds across ALL file types, no glob needed), `mcp__serena__find_symbol` for symbols, `mcp__serena__get_symbols_overview` to explore a file. Grep only for non-code files (JSON, YAML, markdown).
 
 After tool use, provide a summary prefixed with TOOL USE:
 

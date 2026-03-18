@@ -649,6 +649,13 @@ export async function ensureAttachmentDownloaded(attachmentId: string): Promise<
  * No reliance on local_path column.
  */
 export async function downloadAttachmentsInBackground(): Promise<void> {
+  // Bail silently if no user is signed in — this is expected immediately after sign-out
+  // because the background task may still be queued when clearCurrentUser() runs.
+  if (!localDB.getCurrentUserId()) {
+    log.debug('Background attachment download skipped — no user signed in');
+    return;
+  }
+
   try {
     const allAttachments = await localDB.getAllAttachments();
     const missing: any[] = [];
@@ -681,6 +688,11 @@ export async function downloadAttachmentsInBackground(): Promise<void> {
     let errorCount = 0;
 
     for (const att of missing) {
+      // Re-check on every iteration — user may sign out mid-loop
+      if (!localDB.getCurrentUserId()) {
+        log.debug('Background attachment download cancelled — user signed out');
+        return;
+      }
       try {
         await ensureAttachmentDownloaded(att.attachment_id);
         successCount++;
@@ -692,6 +704,13 @@ export async function downloadAttachmentsInBackground(): Promise<void> {
 
     log.success('Background attachment download complete', { success: successCount, errors: errorCount });
   } catch (error) {
+    // "No current user set" is expected when sign-out races with a running download —
+    // treat it as a silent cancellation, not an error.
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('No current user set')) {
+      log.debug('Background attachment download cancelled — user signed out mid-run');
+      return;
+    }
     log.error('Background attachment download failed', error);
   }
 }

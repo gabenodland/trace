@@ -44,7 +44,7 @@ import { themeBase } from "../shared/theme/themeBase";
 const log = createScopedLogger("ProfileScreen");
 
 export function ProfileScreen() {
-  const { user } = useAuth();
+  const { user, offlineAccessEnabled, setOfflineAccess } = useAuth();
   const theme = useTheme();
   const navigate = useNavigate();
   const keyboardHeight = useKeyboardHeight();
@@ -369,6 +369,31 @@ export function ProfileScreen() {
               <View style={[styles.readOnlyInput, { backgroundColor: theme.colors.background.tertiary, borderColor: theme.colors.border.light }]}>
                 <Text style={[styles.readOnlyText, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamily.regular }]}>{user?.email || "—"}</Text>
               </View>
+            </View>
+          </View>
+
+          {/* Offline Access */}
+          <View style={[styles.devSection, { backgroundColor: theme.colors.background.primary }, theme.shadows.sm]}>
+            <View style={styles.devRow}>
+              <View style={styles.devRowContent}>
+                <Text style={[styles.devRowLabel, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamily.medium }]}>
+                  Biometric Access
+                </Text>
+                <Text style={[styles.devRowDetail, { color: theme.colors.text.tertiary, fontFamily: theme.typography.fontFamily.regular }]}>
+                  Use Face ID or fingerprint to access this account when offline. Your account stays linked to your Trace or Google sign-in — biometrics just unlock it on this device.
+                </Text>
+              </View>
+              <Switch
+                value={offlineAccessEnabled}
+                onValueChange={async (enabled) => {
+                  await setOfflineAccess(enabled, {
+                    displayName: profile?.name || profile?.username || user?.email || '',
+                    avatarUrl: profile?.avatar_url ?? null,
+                  });
+                }}
+                trackColor={{ false: theme.colors.border.light, true: theme.colors.interactive.primary }}
+                thumbColor="#fff"
+              />
             </View>
           </View>
 

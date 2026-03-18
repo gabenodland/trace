@@ -448,11 +448,12 @@ export function DataManagementScreen() {
   const theme = useTheme();
   const navigate = useNavigate();
 
-  const { isOffline } = useAuth();
+  const { isOffline, isOfflineAuth } = useAuth();
   const { counts, refetch: refetchCounts } = useTopLevelCounts();
   const { summary: entrySummary, refetch: refetchEntries } = useEntrySummary();
   const { summary: deletedSummary, refetch: refetchDeleted } = useDeletedEntrySummary();
-  const { storageUsage: cloudStorage, refetch: refetchCloud } = useCloudStorageUsage();
+  const { storageUsage: cloudStorageRaw, refetch: refetchCloud } = useCloudStorageUsage();
+  const cloudStorage = isOfflineAuth ? null : cloudStorageRaw;
   const { deviceStorage, refetch: refetchDevice } = useDeviceStorageUsage();
   const { privateStreams, refetch: refetchPrivacy } = usePrivacySummary();
   const { getLimit } = useSubscription();
@@ -520,7 +521,7 @@ export function DataManagementScreen() {
           localDbBytes={deviceStorage?.database_bytes ?? 0}
           localAttachmentBytes={deviceStorage?.attachment_bytes ?? 0}
           limitMb={storageLimitMb}
-          offline={isOffline}
+          offline={isOffline || isOfflineAuth}
         />
 
         {/* ── 2x2 GRID ─────────────────────────────────────────── */}
@@ -547,8 +548,8 @@ export function DataManagementScreen() {
           <ToolRow
             icon="RefreshCw"
             label="Sync Now"
-            detail={syncing ? "Syncing..." : "Sync data with the cloud"}
-            onPress={handleSync}
+            detail={isOfflineAuth ? "Unavailable in local only mode" : syncing ? "Syncing..." : "Sync data with the cloud"}
+            onPress={isOfflineAuth ? () => {} : handleSync}
             loading={syncing}
             isLast
           />

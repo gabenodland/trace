@@ -6,6 +6,8 @@
  *
  * Architecture:
  * Components → Hooks → API (this file) → LocalDB + FileSystem
+ *
+ * All queries use localDB.runUserQuery() for automatic user_id scoping.
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
@@ -45,11 +47,11 @@ export async function getDeviceStorageUsage(): Promise<DeviceStorageUsage> {
     // WAL may not exist, that's fine
   }
 
-  // Sum local attachment file sizes from SQLite
+  // Sum local attachment file sizes — user-scoped
   let attachment_bytes = 0;
   try {
-    const result = await localDB.runCustomQuery(
-      'SELECT COALESCE(SUM(file_size), 0) as total FROM attachments WHERE local_path IS NOT NULL'
+    const result = await localDB.runUserQuery(
+      'SELECT COALESCE(SUM(file_size), 0) as total FROM attachments WHERE local_path IS NOT NULL AND user_id = ?'
     );
     attachment_bytes = result[0]?.total ?? 0;
   } catch (error) {
@@ -75,8 +77,13 @@ export async function getTopLevelCounts(): Promise<{
   places: number;
 }> {
   const [streams, places] = await Promise.all([
-    localDB.runCustomQuery('SELECT COUNT(*) as count FROM streams'),
-    localDB.runCustomQuery('SELECT COUNT(*) as count FROM locations WHERE deleted_at IS NULL'),
+    localDB.runUserQuery(
+      `SELECT COUNT(*) as count FROM streams
+       WHERE (sync_action IS NULL OR sync_action != 'delete') AND user_id = ?`
+    ),
+    localDB.runUserQuery(
+      'SELECT COUNT(*) as count FROM locations WHERE deleted_at IS NULL AND user_id = ?'
+    ),
   ]);
 
   const result = {
@@ -96,21 +103,28 @@ export async function getPrivateCounts(): Promise<{
   attachments: number;
 }> {
   const [streams, entries, attachments] = await Promise.all([
-    localDB.runCustomQuery(
-      'SELECT COUNT(*) as count FROM streams WHERE is_localonly = 1'
+    localDB.runUserQuery(
+      'SELECT COUNT(*) as count FROM streams WHERE is_localonly = 1 AND user_id = ?'
     ),
-    localDB.runCustomQuery(
-      `SELECT COUNT(*) as count FROM entries
-       WHERE deleted_at IS NULL
-       AND stream_id IN (SELECT stream_id FROM streams WHERE is_localonly = 1)`
+    // JOIN ensures the stream_id subquery is scoped to the same user — avoids needing
+    // userId twice when runUserQuery only appends it once.
+    localDB.runUserQuery(
+      `SELECT COUNT(*) as count
+       FROM entries e
+       INNER JOIN streams s ON s.stream_id = e.stream_id
+         AND s.is_localonly = 1
+         AND s.user_id = e.user_id
+       WHERE e.deleted_at IS NULL AND e.user_id = ?`
     ),
-    localDB.runCustomQuery(
-      `SELECT COUNT(*) as count FROM attachments
-       WHERE entry_id IN (
-         SELECT entry_id FROM entries
-         WHERE deleted_at IS NULL
-           AND stream_id IN (SELECT stream_id FROM streams WHERE is_localonly = 1)
-       )`
+    localDB.runUserQuery(
+      `SELECT COUNT(*) as count
+       FROM attachments a
+       INNER JOIN entries e ON e.entry_id = a.entry_id
+         AND e.deleted_at IS NULL
+       INNER JOIN streams s ON s.stream_id = e.stream_id
+         AND s.is_localonly = 1
+         AND s.user_id = e.user_id
+       WHERE a.user_id = ?`
     ),
   ]);
 
@@ -137,18 +151,18 @@ export interface DataSummary {
  */
 export async function getEntrySummary(): Promise<DataSummary> {
   const [entries, attachments, versions] = await Promise.all([
-    localDB.runCustomQuery(
-      'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NULL'
+    localDB.runUserQuery(
+      'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NULL AND user_id = ?'
     ),
-    localDB.runCustomQuery(
+    localDB.runUserQuery(
       `SELECT COUNT(*) as count, COALESCE(SUM(a.file_size), 0) as bytes
        FROM attachments a
        JOIN entries e ON e.entry_id = a.entry_id
-       WHERE e.deleted_at IS NULL`
+       WHERE e.deleted_at IS NULL AND e.user_id = ?`
     ),
-    localDB.runCustomQuery(
+    localDB.runUserQuery(
       `SELECT COUNT(*) as count FROM entry_versions
-       WHERE entry_id IN (SELECT entry_id FROM entries WHERE deleted_at IS NULL)`
+       WHERE entry_id IN (SELECT entry_id FROM entries WHERE deleted_at IS NULL AND user_id = ?)`
     ),
   ]);
 
@@ -167,18 +181,18 @@ export async function getEntrySummary(): Promise<DataSummary> {
  */
 export async function getDeletedEntrySummary(): Promise<DataSummary> {
   const [entries, attachments, versions] = await Promise.all([
-    localDB.runCustomQuery(
-      'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NOT NULL'
+    localDB.runUserQuery(
+      'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NOT NULL AND user_id = ?'
     ),
-    localDB.runCustomQuery(
+    localDB.runUserQuery(
       `SELECT COUNT(*) as count, COALESCE(SUM(a.file_size), 0) as bytes
        FROM attachments a
        JOIN entries e ON e.entry_id = a.entry_id
-       WHERE e.deleted_at IS NOT NULL`
+       WHERE e.deleted_at IS NOT NULL AND e.user_id = ?`
     ),
-    localDB.runCustomQuery(
+    localDB.runUserQuery(
       `SELECT COUNT(*) as count FROM entry_versions
-       WHERE entry_id IN (SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL)`
+       WHERE entry_id IN (SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL AND user_id = ?)`
     ),
   ]);
 
@@ -213,7 +227,7 @@ export interface EntryListItem {
  * Get all live entries with attachment counts and sizes for the entries list screen.
  */
 export async function getEntryListItems(): Promise<EntryListItem[]> {
-  const rows = await localDB.runCustomQuery(
+  const rows = await localDB.runUserQuery(
     `SELECT
        e.entry_id,
        e.title,
@@ -232,7 +246,7 @@ export async function getEntryListItems(): Promise<EntryListItem[]> {
        FROM attachments
        GROUP BY entry_id
      ) att ON att.entry_id = e.entry_id
-     WHERE e.deleted_at IS NULL
+     WHERE e.deleted_at IS NULL AND e.user_id = ?
      ORDER BY e.updated_at DESC`
   );
 
@@ -259,9 +273,10 @@ export async function getEntryListItems(): Promise<EntryListItem[]> {
  */
 export async function getTrashedAttachmentCount(): Promise<number> {
   try {
-    const result = await localDB.runCustomQuery(
+    const result = await localDB.runUserQuery(
       `SELECT COUNT(*) as count FROM attachments
-       WHERE entry_id IN (SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL)`
+       WHERE user_id = ?
+       AND entry_id IN (SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL)`
     );
     return result[0]?.count ?? 0;
   } catch (error) {
@@ -278,7 +293,7 @@ export async function getTrashedAttachmentCount(): Promise<number> {
  * Get all soft-deleted entries from local SQLite (for trash screen).
  */
 export async function getLocalDeletedEntries() {
-  const rows = await localDB.runCustomQuery(
+  const rows = await localDB.runUserQuery(
     `SELECT
        e.entry_id, e.title, e.content, e.stream_id, e.deleted_at,
        s.name as stream_name,
@@ -292,7 +307,7 @@ export async function getLocalDeletedEntries() {
        FROM attachments
        GROUP BY entry_id
      ) att ON att.entry_id = e.entry_id
-     WHERE e.deleted_at IS NOT NULL
+     WHERE e.deleted_at IS NOT NULL AND e.user_id = ?
      ORDER BY e.deleted_at DESC`
   );
 
@@ -316,8 +331,8 @@ export async function getLocalDeletedEntries() {
  */
 export async function getLocalDeletedEntryCount(): Promise<number> {
   try {
-    const result = await localDB.runCustomQuery(
-      'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NOT NULL'
+    const result = await localDB.runUserQuery(
+      'SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NOT NULL AND user_id = ?'
     );
     return result[0]?.count ?? 0;
   } catch (error) {
@@ -339,12 +354,13 @@ export async function restoreEntryLocally(entryId: string): Promise<{ restored_t
  */
 export async function getStreamStatusForRestore(streamId: string | null): Promise<{ deleted: boolean; name: string | null }> {
   if (!streamId) return { deleted: false, name: null };
-  const rows = await localDB.runCustomQuery(
-    `SELECT name, deleted_at FROM streams WHERE stream_id = ?`,
+  const rows = await localDB.runUserQuery(
+    'SELECT name, sync_action FROM streams WHERE stream_id = ? AND user_id = ?',
     [streamId]
   );
   if (!rows.length) return { deleted: true, name: null };
-  return { deleted: rows[0].deleted_at !== null, name: rows[0].name };
+  // Streams use sync_action = 'delete' for soft-deletion — there is no deleted_at column
+  return { deleted: rows[0].sync_action === 'delete', name: rows[0].name };
 }
 
 /**
@@ -370,7 +386,7 @@ export async function emptyTrash(): Promise<number> {
  * Get local-only streams with entry and attachment counts for the privacy summary.
  */
 export async function getPrivateStreams(): Promise<PrivateStreamSummary[]> {
-  const rows = await localDB.runCustomQuery(
+  const rows = await localDB.runUserQuery(
     `SELECT
        s.stream_id AS id,
        s.name,
@@ -390,7 +406,7 @@ export async function getPrivateStreams(): Promise<PrivateStreamSummary[]> {
        WHERE e.deleted_at IS NULL
        GROUP BY e.stream_id
      ) ac ON ac.stream_id = s.stream_id
-     WHERE s.is_localonly = 1
+     WHERE s.is_localonly = 1 AND s.user_id = ?
      ORDER BY s.name`
   );
 

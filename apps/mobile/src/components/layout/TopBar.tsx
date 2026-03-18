@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from "reac
 import { ReactNode, useEffect, useRef } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../shared/contexts/ThemeContext";
+import { useAuth } from "../../shared/contexts/AuthContext";
 import { Icon } from "../../shared/components";
 import { themeBase } from "../../shared/theme/themeBase";
 
@@ -39,6 +40,7 @@ export function TopBar({
 }: TopBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { isOfflineAuth } = useAuth();
 
   // Spinning animation for sync indicator
   const spinAnim = useRef(new Animated.Value(0)).current;
@@ -64,18 +66,26 @@ export function TopBar({
     outputRange: ['0deg', '360deg'],
   });
 
-  const showOffline = isOffline;
-  const showSyncing = !isOffline && isSyncing;
+  const showOffline = isOffline && !isOfflineAuth;
+  const showLocalOnly = isOfflineAuth;
+  const localOnlyLabel = isOffline ? "Offline · Local Only" : "Local Only";
+  const showSyncing = !isOffline && !isOfflineAuth && isSyncing;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background.primary, paddingTop: insets.top + 16 }]}>
       {/* Status badge — absolutely positioned above header, no layout impact */}
-      {(showOffline || showSyncing) && (
+      {(showOffline || showLocalOnly || showSyncing) && (
         <View style={[styles.statusRow, { top: insets.top + 1 }]}>
           {showOffline && (
             <View style={[styles.statusBadge, { backgroundColor: theme.colors.functional.warning }]}>
               <Icon name="WifiOff" size={10} color={theme.colors.functional.warningText} />
               <Text style={[styles.statusBadgeText, { color: theme.colors.functional.warningText, fontFamily: theme.typography.fontFamily.semibold }]}>Offline</Text>
+            </View>
+          )}
+          {showLocalOnly && (
+            <View style={[styles.statusBadge, { backgroundColor: theme.colors.functional.accent + '22' }]}>
+              <Icon name="Lock" size={10} color={theme.colors.functional.accent} />
+              <Text style={[styles.statusBadgeText, { color: theme.colors.functional.accent, fontFamily: theme.typography.fontFamily.semibold }]}>{localOnlyLabel}</Text>
             </View>
           )}
           {showSyncing && (

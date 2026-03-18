@@ -165,6 +165,10 @@ class SyncService {
   }
 
   destroy(): void {
+    // Mark as destroyed FIRST — removeChannel() fires a synchronous CLOSED callback
+    // that would schedule a new reconnect timer if isInitialized is still true.
+    this.isInitialized = false;
+
     if (this.realtimeDebounceTimer) {
       clearTimeout(this.realtimeDebounceTimer);
       this.realtimeDebounceTimer = null;
@@ -197,7 +201,6 @@ class SyncService {
     }
     this.realtimeReconnectAttempts = 0;
     this.statusListeners.clear();
-    this.isInitialized = false;
     log.debug('Sync service destroyed');
   }
 
@@ -560,6 +563,13 @@ class SyncService {
         });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Auth errors mean the user signed out — don't retry, it's not transient
+      if (errorMessage.includes('Auth session missing')) {
+        log.debug('Realtime setup skipped — no auth session (expected after sign-out)');
+        return;
+      }
+
       // Distinguish between network errors (expected during reconnection) and other errors
       if (isNetworkError(error)) {
         log.debug('Realtime setup failed due to network (will retry)', { error: errorMessage });

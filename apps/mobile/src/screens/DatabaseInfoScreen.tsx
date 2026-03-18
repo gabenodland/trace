@@ -62,26 +62,26 @@ export function DatabaseInfoScreen() {
       const allEntries = await localDB.getAllEntries();
       setEntries(allEntries);
 
-      // Get deleted entry count, version snapshot count, tombstone count
+      // Get deleted entry count, version snapshot count, tombstone count — user-scoped
       const [deletedResult, snapshotResult, tombstoneResult] = await Promise.all([
-        localDB.runCustomQuery('SELECT COUNT(*) as c FROM entries WHERE deleted_at IS NOT NULL'),
-        localDB.runCustomQuery('SELECT COUNT(*) as c FROM entry_versions'),
-        localDB.runCustomQuery('SELECT COUNT(*) as c FROM entry_tombstones').catch(() => [{ c: 0 }]),
+        localDB.runUserQuery('SELECT COUNT(*) as c FROM entries WHERE deleted_at IS NOT NULL AND user_id = ?'),
+        localDB.runUserQuery('SELECT COUNT(*) as c FROM entry_versions WHERE entry_id IN (SELECT entry_id FROM entries WHERE user_id = ?)'),
+        localDB.runUserQuery('SELECT COUNT(*) as c FROM entry_tombstones WHERE user_id = ?').catch(() => [{ c: 0 }]),
       ]);
       setDeletedEntryCount((deletedResult as any[])[0]?.c || 0);
       setVersionSnapshotCount((snapshotResult as any[])[0]?.c || 0);
       setTombstoneCount((tombstoneResult as any[])[0]?.c || 0);
 
-      // Get all streams from SQLite
-      const allStreams = await localDB.runCustomQuery('SELECT * FROM streams ORDER BY name');
+      // Get all streams from SQLite — user-scoped
+      const allStreams = await localDB.runUserQuery('SELECT * FROM streams WHERE user_id = ? ORDER BY name');
       setStreams(allStreams);
 
-      // Get all attachments from SQLite
-      const allPhotos = await localDB.runCustomQuery('SELECT * FROM attachments ORDER BY created_at DESC');
+      // Get all attachments from SQLite — user-scoped
+      const allPhotos = await localDB.runUserQuery('SELECT * FROM attachments WHERE user_id = ? ORDER BY created_at DESC');
       setPhotos(allPhotos);
 
-      // Get all locations from SQLite
-      const allLocations = await localDB.runCustomQuery('SELECT * FROM locations ORDER BY name');
+      // Get all locations from SQLite — user-scoped
+      const allLocations = await localDB.runUserQuery('SELECT * FROM locations WHERE user_id = ? ORDER BY name');
       setLocations(allLocations);
 
       // Check which attachment files exist locally (deterministic path)

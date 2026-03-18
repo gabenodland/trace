@@ -71,7 +71,12 @@ export function useMobileProfile(userId?: string) {
      */
     updateProfile: async (updates: ProfileUpdate) => {
       if (isOffline) {
-        throw new Error('Cannot update profile while offline');
+        if (!effectiveUserId) throw new Error('No user ID');
+        const current = cachedProfile ?? {} as Profile;
+        const updated = { ...current, ...updates } as Profile;
+        await setCachedProfile(effectiveUserId, updated);
+        setCachedProfileState(updated);
+        return;
       }
       return coreProfile.profileMutations.updateProfile(updates);
     },
