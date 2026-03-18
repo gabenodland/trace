@@ -322,12 +322,12 @@ export async function pushEntryVersions(): Promise<{ success: number; errors: nu
   let errors = 0;
 
   // Get unsynced versions whose parent entry is already synced on server
-  const unsyncedVersions = await localDB.runCustomQuery(
+  const unsyncedVersions = await localDB.runUserQuery(
     `SELECT ev.* FROM entry_versions ev
-     INNER JOIN entries e ON ev.entry_id = e.entry_id
+     INNER JOIN entries e ON ev.entry_id = e.entry_id AND e.user_id = ev.user_id
      WHERE ev.synced = 0 AND e.synced = 1
-     AND e.deleted_at IS NULL AND (e.sync_action IS NULL OR e.sync_action != 'delete')`,
-    []
+     AND e.deleted_at IS NULL AND (e.sync_action IS NULL OR e.sync_action != 'delete')
+     AND ev.user_id = ?`
   );
 
   log.info('[VersionSync] Push: found unsynced versions', { count: unsyncedVersions.length });

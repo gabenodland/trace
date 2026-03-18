@@ -1091,9 +1091,8 @@ class SyncService {
   }
 
   private async getLocalOnlyStreamIds(): Promise<Set<string>> {
-    const localOnlyStreams = await localDB.runCustomQuery(
-      'SELECT stream_id FROM streams WHERE is_localonly = 1',
-      []
+    const localOnlyStreams = await localDB.runUserQuery(
+      'SELECT stream_id FROM streams WHERE is_localonly = 1 AND user_id = ?'
     );
     return new Set<string>(localOnlyStreams.map((s: any) => s.stream_id));
   }

@@ -916,13 +916,14 @@ export async function snapEntriesToLocations(
   const SNAP_THRESHOLD_METERS = 30;
 
   // Entries without a location_id that have GPS
-  const entriesToProcess = await localDB.runCustomQuery(`
+  const entriesToProcess = await localDB.runUserQuery(`
     SELECT entry_id, entry_latitude, entry_longitude
     FROM entries
     WHERE deleted_at IS NULL
       AND entry_latitude IS NOT NULL
       AND entry_longitude IS NOT NULL
       AND location_id IS NULL
+      AND user_id = ?
   `);
 
   if (entriesToProcess.length === 0) {
@@ -988,13 +989,14 @@ export async function snapEntriesToLocations(
 export async function geocodeEntries(
   onProgress?: (current: number, total: number) => void
 ): Promise<{ geocoded: number; noData: number; errors: number }> {
-  const entriesToProcess = await localDB.runCustomQuery(`
+  const entriesToProcess = await localDB.runUserQuery(`
     SELECT entry_id, entry_latitude, entry_longitude
     FROM entries
     WHERE deleted_at IS NULL
       AND entry_latitude IS NOT NULL
       AND entry_longitude IS NOT NULL
       AND (geocode_status IS NULL OR geocode_status = 'error')
+      AND user_id = ?
   `);
 
   log.info('Starting entry geocode', { backlog: entriesToProcess.length });
