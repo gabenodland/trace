@@ -48,7 +48,7 @@ class LocalDatabase {
       this.db = await SQLite.openDatabaseAsync('trace.db');
 
       // Enable WAL mode — allows concurrent reads + serialized writes instead of full lock
-      const walResult = await this.db.getFirstAsync<{ journal_mode: string }>('PRAGMA journal_mode = WAL');
+      const walResult = await this.dbGetFirst<{ journal_mode: string }>('PRAGMA journal_mode = WAL');
       if (walResult?.journal_mode !== 'wal') {
         log.warn('Failed to enable WAL mode', { result: walResult });
       }
@@ -86,7 +86,7 @@ class LocalDatabase {
     // Migration: Add location_id column to entries table if it doesn't exist
     try {
       // Check if location_id column exists in entries table
-      const result = await this.db.getFirstAsync<{ name: string }>(
+      const result = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('entries') WHERE name = 'location_id'`
       );
 
@@ -104,7 +104,7 @@ class LocalDatabase {
 
     // Migration: Add priority, rating, is_pinned columns to entries table
     try {
-      const priorityCheck = await this.db.getFirstAsync<{ name: string }>(
+      const priorityCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('entries') WHERE name = 'priority'`
       );
 
@@ -123,7 +123,7 @@ class LocalDatabase {
 
     // Migration: Add is_archived column to entries table
     try {
-      const archivedCheck = await this.db.getFirstAsync<{ name: string }>(
+      const archivedCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('entries') WHERE name = 'is_archived'`
       );
 
@@ -141,7 +141,7 @@ class LocalDatabase {
 
     // Migration: Add locations table if it doesn't exist (should be handled by CREATE TABLE IF NOT EXISTS, but just in case)
     try {
-      const result = await this.db.getFirstAsync<{ name: string }>(
+      const result = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM sqlite_master WHERE type='table' AND name='locations'`
       );
 
@@ -187,7 +187,7 @@ class LocalDatabase {
     // SQLite doesn't allow altering CHECK constraints, so we need to recreate the table
     try {
       // Check if migration is needed by looking for a marker in sync_metadata
-      const migrationCheck = await this.db.getFirstAsync<{ value: string }>(
+      const migrationCheck = await this.dbGetFirst<{ value: string }>(
         `SELECT value FROM sync_metadata WHERE key = 'migration_status_in_progress_done'`
       );
 
@@ -195,7 +195,7 @@ class LocalDatabase {
         log.info('Running migration: Updating entries status constraint to include in_progress');
 
         // Get existing column names from the entries table
-        const columns = await this.db.getAllAsync<{ name: string }>(
+        const columns = await this.dbGetAll<{ name: string }>(
           `SELECT name FROM pragma_table_info('entries')`
         );
         const columnNames = columns.map(c => c.name);
@@ -287,7 +287,7 @@ class LocalDatabase {
 
     // Migration: Update to new 9-status system (incomplete->todo, complete->done, add new statuses)
     try {
-      const migrationCheck = await this.db.getFirstAsync<{ value: string }>(
+      const migrationCheck = await this.dbGetFirst<{ value: string }>(
         `SELECT value FROM sync_metadata WHERE key = 'migration_9_status_system_done'`
       );
 
@@ -295,7 +295,7 @@ class LocalDatabase {
         log.info('Running migration: Converting to 9-status system');
 
         // Get existing column names from the entries table
-        const columns = await this.db.getAllAsync<{ name: string }>(
+        const columns = await this.dbGetAll<{ name: string }>(
           `SELECT name FROM pragma_table_info('entries')`
         );
         const columnNames = columns.map(c => c.name);
@@ -386,7 +386,7 @@ class LocalDatabase {
 
     // Migration: Add entry_statuses and entry_default_status columns to streams table
     try {
-      const statusesCheck = await this.db.getFirstAsync<{ name: string }>(
+      const statusesCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('streams') WHERE name = 'entry_statuses'`
       );
 
@@ -404,7 +404,7 @@ class LocalDatabase {
 
     // Migration: Add entry_types and entry_use_type columns to streams table
     try {
-      const typesCheck = await this.db.getFirstAsync<{ name: string }>(
+      const typesCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('streams') WHERE name = 'entry_types'`
       );
 
@@ -422,7 +422,7 @@ class LocalDatabase {
 
     // Migration: Add type column to entries table
     try {
-      const typeCheck = await this.db.getFirstAsync<{ name: string }>(
+      const typeCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('entries') WHERE name = 'type'`
       );
 
@@ -441,7 +441,7 @@ class LocalDatabase {
 
     // Migration: Add entry_rating_type column to streams table
     try {
-      const ratingTypeCheck = await this.db.getFirstAsync<{ name: string }>(
+      const ratingTypeCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('streams') WHERE name = 'entry_rating_type'`
       );
 
@@ -458,7 +458,7 @@ class LocalDatabase {
 
     // Migration: Add location hierarchy fields to entries table
     try {
-      const placeNameCheck = await this.db.getFirstAsync<{ name: string }>(
+      const placeNameCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('entries') WHERE name = 'place_name'`
       );
 
@@ -506,12 +506,12 @@ class LocalDatabase {
 
     // Migration: Add missing columns to attachments table FIRST (before data copy)
     try {
-      const attachmentsExists = await this.db.getFirstAsync<{ name: string }>(
+      const attachmentsExists = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM sqlite_master WHERE type='table' AND name='attachments'`
       );
 
       if (attachmentsExists) {
-        const columns = await this.db.getAllAsync<{ name: string }>(
+        const columns = await this.dbGetAll<{ name: string }>(
           `PRAGMA table_info(attachments)`
         );
         const columnNames = columns.map(c => c.name);
@@ -536,12 +536,12 @@ class LocalDatabase {
     // Migration: Rename photos table to attachments
     try {
       // Check if old 'photos' table exists
-      const photosTableCheck = await this.db.getFirstAsync<{ name: string }>(
+      const photosTableCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM sqlite_master WHERE type='table' AND name='photos'`
       );
 
       // Check if new 'attachments' table already exists
-      const attachmentsTableCheck = await this.db.getFirstAsync<{ name: string }>(
+      const attachmentsTableCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM sqlite_master WHERE type='table' AND name='attachments'`
       );
 
@@ -553,10 +553,10 @@ class LocalDatabase {
           log.info('Both tables exist - copying data and dropping old table');
 
           // Get columns from both tables to find common ones
-          const photosColumns = await this.db.getAllAsync<{ name: string }>(
+          const photosColumns = await this.dbGetAll<{ name: string }>(
             `PRAGMA table_info(photos)`
           );
-          const attachmentsColumns = await this.db.getAllAsync<{ name: string }>(
+          const attachmentsColumns = await this.dbGetAll<{ name: string }>(
             `PRAGMA table_info(attachments)`
           );
 
@@ -610,7 +610,7 @@ class LocalDatabase {
 
     // Migration: Add geocode_status field to entries table
     try {
-      const geocodeStatusCheck = await this.db.getFirstAsync<{ name: string }>(
+      const geocodeStatusCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('entries') WHERE name = 'geocode_status'`
       );
 
@@ -633,7 +633,7 @@ class LocalDatabase {
 
     // Migration: Add location_radius field to locations table (renamed from accuracy)
     try {
-      const locationRadiusCheck = await this.db.getFirstAsync<{ name: string }>(
+      const locationRadiusCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('locations') WHERE name = 'location_radius'`
       );
 
@@ -650,10 +650,10 @@ class LocalDatabase {
 
     // Migration: Rename accuracy to location_radius (for existing databases)
     try {
-      const hasAccuracy = await this.db.getFirstAsync<{ name: string }>(
+      const hasAccuracy = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('locations') WHERE name = 'accuracy'`
       );
-      const hasLocationRadius = await this.db.getFirstAsync<{ name: string }>(
+      const hasLocationRadius = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('locations') WHERE name = 'location_radius'`
       );
 
@@ -666,10 +666,10 @@ class LocalDatabase {
       }
 
       // Also rename on entries table
-      const entriesHasAccuracy = await this.db.getFirstAsync<{ name: string }>(
+      const entriesHasAccuracy = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('entries') WHERE name = 'location_accuracy'`
       );
-      const entriesHasRadius = await this.db.getFirstAsync<{ name: string }>(
+      const entriesHasRadius = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('entries') WHERE name = 'location_radius'`
       );
 
@@ -687,7 +687,7 @@ class LocalDatabase {
     // Migration: Remove unused geo_ fields (never used for filtering)
     // These fields were added but never actually used - location filtering uses regular display fields
     try {
-      const migrationCheck = await this.db.getFirstAsync<{ value: string }>(
+      const migrationCheck = await this.dbGetFirst<{ value: string }>(
         `SELECT value FROM sync_metadata WHERE key = 'migration_remove_geo_fields_done'`
       );
 
@@ -724,7 +724,7 @@ class LocalDatabase {
     // Migration: Add sync_error column to locations table
     // Locations should follow the same sync pattern as entries/streams/attachments
     try {
-      const syncErrorCheck = await this.db.getFirstAsync<{ name: string }>(
+      const syncErrorCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('locations') WHERE name = 'sync_error'`
       );
 
@@ -741,7 +741,7 @@ class LocalDatabase {
 
     // Migration: Add merge_ignore_ids column to locations table
     try {
-      const mergeIgnoreCheck = await this.db.getFirstAsync<{ name: string }>(
+      const mergeIgnoreCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('locations') WHERE name = 'merge_ignore_ids'`
       );
 
@@ -758,7 +758,7 @@ class LocalDatabase {
 
     // Migration: Add geocode_status column to locations table
     try {
-      const geocodeStatusCheck = await this.db.getFirstAsync<{ name: string }>(
+      const geocodeStatusCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('locations') WHERE name = 'geocode_status'`
       );
 
@@ -780,7 +780,7 @@ class LocalDatabase {
 
     // Migration: Add deleted_at column to attachments table (soft delete for versioning)
     try {
-      const deletedAtCheck = await this.db.getFirstAsync<{ name: string }>(
+      const deletedAtCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('attachments') WHERE name = 'deleted_at'`
       );
 
@@ -797,7 +797,7 @@ class LocalDatabase {
 
     // Migration: Add conflict_status column to entries table (for versioning)
     try {
-      const conflictStatusCheck = await this.db.getFirstAsync<{ name: string }>(
+      const conflictStatusCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM pragma_table_info('entries') WHERE name = 'conflict_status'`
       );
 
@@ -814,7 +814,7 @@ class LocalDatabase {
 
     // Migration: Create entry_versions table if it doesn't exist
     try {
-      const entryVersionsCheck = await this.db.getFirstAsync<{ name: string }>(
+      const entryVersionsCheck = await this.dbGetFirst<{ name: string }>(
         `SELECT name FROM sqlite_master WHERE type='table' AND name='entry_versions'`
       );
 
@@ -849,7 +849,7 @@ class LocalDatabase {
 
     // Migration: Add triggered_by_device column to entry_versions
     try {
-      const cols = await this.db.getAllAsync<{ name: string }>(
+      const cols = await this.dbGetAll<{ name: string }>(
         `PRAGMA table_info(entry_versions)`
       );
       const hasTriggeredByDevice = cols.some(c => c.name === 'triggered_by_device');
@@ -1148,7 +1148,7 @@ class LocalDatabase {
 
     const now = Date.now();
 
-    await this.db.runAsync(
+    await this.dbRun(
       `INSERT OR REPLACE INTO entries (
         entry_id, user_id, title, content, tags, mentions,
         stream_id, entry_date,
@@ -1224,7 +1224,7 @@ class LocalDatabase {
     let query = `SELECT * FROM entries WHERE entry_id IN (${placeholders}) AND user_id = ?`;
     const params: any[] = [...entryIds, userId];
 
-    const rows = await this.db.getAllAsync<any>(query, params);
+    const rows = await this.dbGetAll<any>(query, params);
     return rows.map(row => this.rowToEntry(row));
   }
 
@@ -1241,7 +1241,7 @@ class LocalDatabase {
     let query = 'SELECT * FROM entries WHERE entry_id = ? AND user_id = ?';
     const params: any[] = [entryId, userId];
 
-    const row = await this.db.getFirstAsync<any>(query, params);
+    const row = await this.dbGetFirst<any>(query, params);
     const t2 = performance.now();
 
     if (!row) return null;
@@ -1385,7 +1385,7 @@ class LocalDatabase {
 
     query += ' ORDER BY e.updated_at DESC';
 
-    const rows = await this.db.getAllAsync<any>(query, params);
+    const rows = await this.dbGetAll<any>(query, params);
 
     return rows.map(row => this.rowToEntry(row));
   }
@@ -1428,7 +1428,7 @@ class LocalDatabase {
     `;
     const params: any[] = [userId];
 
-    const rows = await this.db.getAllAsync<any>(query, params);
+    const rows = await this.dbGetAll<any>(query, params);
 
     return rows.map(row => ({
       country: row.country,
@@ -1463,7 +1463,7 @@ class LocalDatabase {
     `;
     const params: any[] = [userId];
 
-    const result = await this.db.getFirstAsync<{ count: number }>(query, params);
+    const result = await this.dbGetFirst<{ count: number }>(query, params);
     return result?.count || 0;
   }
 
@@ -1505,7 +1505,7 @@ class LocalDatabase {
       });
     }
 
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE entries SET
         title = ?, content = ?, tags = ?, mentions = ?,
         stream_id = ?, entry_date = ?,
@@ -1588,7 +1588,7 @@ class LocalDatabase {
 
     if (entry.local_only) {
       // Soft delete local-only entries too (for trash support)
-      await this.db.runAsync(
+      await this.dbRun(
         `UPDATE entries SET
           deleted_at = ?,
           location_id = NULL
@@ -1597,7 +1597,7 @@ class LocalDatabase {
       );
     } else {
       // Soft delete: set deleted_at and release the location
-      await this.db.runAsync(
+      await this.dbRun(
         `UPDATE entries SET
           deleted_at = ?,
           location_id = NULL,
@@ -1617,7 +1617,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
     const userId = this.requireUserId();
 
-    const rows = await this.db.getAllAsync<any>(
+    const rows = await this.dbGetAll<any>(
       'SELECT * FROM entries WHERE synced = 0 AND local_only = 0 AND user_id = ? ORDER BY updated_at ASC',
       [userId]
     );
@@ -1633,7 +1633,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     // Clear sync fields — keep soft-deleted entries in SQLite for trash
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE entries SET
         synced = 1,
         sync_action = NULL,
@@ -1652,7 +1652,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
     const userId = this.requireUserId();
 
-    const rows = await this.db.getAllAsync<any>(
+    const rows = await this.dbGetAll<any>(
       `SELECT e.*,
         (SELECT COUNT(*) FROM attachments a WHERE a.entry_id = e.entry_id AND a.deleted_at IS NULL AND (a.sync_action IS NULL OR a.sync_action != 'delete')) as photo_count
       FROM entries e
@@ -1685,7 +1685,7 @@ class LocalDatabase {
     let restoredToInbox = false;
     if (entry.stream_id) {
       // Streams use sync_action = 'delete' for soft-deletion — there is no deleted_at column
-      const stream = await this.db.getFirstAsync<{ sync_action: string | null }>(
+      const stream = await this.dbGetFirst<{ sync_action: string | null }>(
         `SELECT sync_action FROM streams WHERE stream_id = ? AND user_id = ?`,
         [entry.stream_id, userId]
       );
@@ -1698,12 +1698,12 @@ class LocalDatabase {
     log.info('SYNC STATE: marking entry dirty (restoreEntry)', { entryId, restoredToInbox });
     const now = Date.now();
     if (entry.local_only) {
-      await this.db.runAsync(
+      await this.dbRun(
         `UPDATE entries SET deleted_at = NULL, updated_at = ?${restoredToInbox ? ', stream_id = NULL' : ''} WHERE entry_id = ? AND user_id = ?`,
         [now, entryId, userId]
       );
     } else {
-      await this.db.runAsync(
+      await this.dbRun(
         `UPDATE entries SET
           deleted_at = NULL,
           updated_at = ?,
@@ -1718,13 +1718,13 @@ class LocalDatabase {
     // Restore attachments that were cascade-deleted with the entry
     // (deleted_at >= entry.deleted_at means deleted at same time or after)
     if (entry.local_only) {
-      await this.db.runAsync(
+      await this.dbRun(
         `UPDATE attachments SET deleted_at = NULL
         WHERE entry_id = ? AND deleted_at IS NOT NULL AND deleted_at >= ? AND user_id = ?`,
         [entryId, entryDeletedAt, userId]
       );
     } else {
-      await this.db.runAsync(
+      await this.dbRun(
         `UPDATE attachments SET
           deleted_at = NULL,
           synced = 0,
@@ -1752,26 +1752,26 @@ class LocalDatabase {
     const isLocalOnly = entry?.local_only === 1;
 
     // Delete attachments — scoped by both entry_id and user_id for defence-in-depth
-    await this.db.runAsync(
+    await this.dbRun(
       'DELETE FROM attachments WHERE entry_id = ? AND user_id = ?',
       [entryId, userId]
     );
 
     // Delete versions — scoped by both entry_id and user_id
-    await this.db.runAsync(
+    await this.dbRun(
       'DELETE FROM entry_versions WHERE entry_id = ? AND user_id = ?',
       [entryId, userId]
     );
 
     // Delete the entry — scoped by both entry_id and user_id
-    await this.db.runAsync(
+    await this.dbRun(
       'DELETE FROM entries WHERE entry_id = ? AND user_id = ?',
       [entryId, userId]
     );
 
     // Create tombstone (only for synced entries — local-only don't need it)
     if (!isLocalOnly) {
-      await this.db.runAsync(
+      await this.dbRun(
         `INSERT OR IGNORE INTO entry_tombstones (entry_id, user_id, hard_deleted_at, synced)
          VALUES (?, ?, ?, 0)`,
         [entryId, userId, Date.now()]
@@ -1787,7 +1787,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     const userId = this.requireUserId();
-    return this.db.getAllAsync<{ entry_id: string; user_id: string; hard_deleted_at: number }>(
+    return this.dbGetAll<{ entry_id: string; user_id: string; hard_deleted_at: number }>(
       'SELECT * FROM entry_tombstones WHERE synced = 0 AND user_id = ?',
       [userId]
     );
@@ -1800,7 +1800,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    await this.db.runAsync(
+    await this.dbRun(
       'UPDATE entry_tombstones SET synced = 1 WHERE entry_id = ?',
       [entryId]
     );
@@ -1815,7 +1815,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     const placeholders = entryIds.map(() => '?').join(',');
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE entry_tombstones SET synced = 1 WHERE entry_id IN (${placeholders})`,
       entryIds
     );
@@ -1828,7 +1828,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    await this.db.runAsync(
+    await this.dbRun(
       `INSERT OR IGNORE INTO entry_tombstones (entry_id, user_id, hard_deleted_at, synced)
        VALUES (?, ?, ?, 1)`,
       [entryId, userId, hardDeletedAt]
@@ -1842,7 +1842,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    const row = await this.db.getFirstAsync<{ count: number }>(
+    const row = await this.dbGetFirst<{ count: number }>(
       'SELECT COUNT(*) as count FROM entry_tombstones WHERE entry_id = ?',
       [entryId]
     );
@@ -1856,7 +1856,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE entries SET
         sync_error = ?,
         sync_retry_count = sync_retry_count + 1,
@@ -1874,7 +1874,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
     const userId = this.requireUserId();
 
-    const result = await this.db.getFirstAsync<{ count: number }>(
+    const result = await this.dbGetFirst<{ count: number }>(
       'SELECT COUNT(*) as count FROM entries WHERE synced = 0 AND local_only = 0 AND user_id = ?',
       [userId]
     );
@@ -1898,26 +1898,26 @@ class LocalDatabase {
 
     const [totalResult, noStreamResult, hasPlaceResult, noPlaceResult] = await Promise.all([
       // Total count excludes private streams - same filtering as getAllEntries with excludePrivateStreams=true
-      this.db.getFirstAsync<{ count: number }>(
+      this.dbGetFirst<{ count: number }>(
         `SELECT COUNT(*) as count FROM entries
          WHERE user_id = ? AND deleted_at IS NULL
          ${privateStreamExclusion}`,
         [userId]
       ),
       // Unassigned count - entries with no stream are never private
-      this.db.getFirstAsync<{ count: number }>(
+      this.dbGetFirst<{ count: number }>(
         'SELECT COUNT(*) as count FROM entries WHERE user_id = ? AND deleted_at IS NULL AND stream_id IS NULL',
         [userId]
       ),
       // Has place - entries with any GPS coordinates (excludes private streams)
-      this.db.getFirstAsync<{ count: number }>(
+      this.dbGetFirst<{ count: number }>(
         `SELECT COUNT(*) as count FROM entries
          WHERE user_id = ? AND deleted_at IS NULL AND entry_latitude IS NOT NULL
          ${privateStreamExclusion}`,
         [userId]
       ),
       // No place - entries without any location data (excludes private streams)
-      this.db.getFirstAsync<{ count: number }>(
+      this.dbGetFirst<{ count: number }>(
         `SELECT COUNT(*) as count FROM entries
          WHERE user_id = ? AND deleted_at IS NULL
          AND country IS NULL AND region IS NULL AND city IS NULL AND neighborhood IS NULL AND place_name IS NULL AND entry_latitude IS NULL
@@ -2001,7 +2001,7 @@ class LocalDatabase {
 
     const now = Date.now();
 
-    await this.db.runAsync(
+    await this.dbRun(
       `INSERT OR REPLACE INTO locations (
         location_id, user_id, name, latitude, longitude,
         source, address, neighborhood, postal_code, city,
@@ -2046,7 +2046,7 @@ class LocalDatabase {
     const query = 'SELECT * FROM locations WHERE location_id = ? AND user_id = ?';
     const params: any[] = [locationId, userId];
 
-    const row = await this.db.getFirstAsync<any>(query, params);
+    const row = await this.dbGetFirst<any>(query, params);
 
     if (!row) return null;
 
@@ -2064,7 +2064,7 @@ class LocalDatabase {
     const query = 'SELECT * FROM locations WHERE deleted_at IS NULL AND user_id = ? ORDER BY name ASC';
     const params: any[] = [userId];
 
-    const rows = await this.db.getAllAsync<any>(query, params);
+    const rows = await this.dbGetAll<any>(query, params);
 
     return rows.map(row => this.rowToLocation(row));
   }
@@ -2086,7 +2086,7 @@ class LocalDatabase {
     `;
     const params: any[] = [userId];
 
-    const rows = await this.db.getAllAsync<any>(query, params);
+    const rows = await this.dbGetAll<any>(query, params);
 
     return rows.map(row => ({
       ...this.rowToLocation(row),
@@ -2127,7 +2127,7 @@ class LocalDatabase {
     `;
     const params: any[] = [userId];
 
-    const rows = await this.db.getAllAsync<any>(query, params);
+    const rows = await this.dbGetAll<any>(query, params);
 
     return rows.map(row => ({
       city: row.city || null,
@@ -2216,7 +2216,7 @@ class LocalDatabase {
       )
       ORDER BY entry_count DESC`;
 
-    const rows = await this.db.getAllAsync<any>(query, params);
+    const rows = await this.dbGetAll<any>(query, params);
 
     const mapped = rows.map(row => ({
       place_name: row.place_name || null,
@@ -2260,14 +2260,14 @@ class LocalDatabase {
 
     const [missingResult, duplicateResult, unlinkedResult, unusedResult] = await Promise.all([
       // Locations with missing hierarchy data
-      this.db.getFirstAsync<{ count: number }>(
+      this.dbGetFirst<{ count: number }>(
         `SELECT COUNT(*) as count FROM locations
          WHERE deleted_at IS NULL
            AND (city IS NULL OR region IS NULL OR country IS NULL) AND user_id = ?`,
         [userId]
       ),
       // Duplicate locations (same name + address, case insensitive)
-      this.db.getFirstAsync<{ count: number }>(
+      this.dbGetFirst<{ count: number }>(
         `SELECT COUNT(*) as count FROM (
           SELECT LOWER(name) as n, LOWER(COALESCE(address, '')) as a
           FROM locations
@@ -2278,7 +2278,7 @@ class LocalDatabase {
         [userId]
       ),
       // Entries with GPS that need snapping/geocoding (not yet processed)
-      this.db.getFirstAsync<{ count: number }>(
+      this.dbGetFirst<{ count: number }>(
         `SELECT COUNT(*) as count FROM entries
          WHERE deleted_at IS NULL
            AND entry_latitude IS NOT NULL
@@ -2287,7 +2287,7 @@ class LocalDatabase {
         [userId]
       ),
       // Locations not referenced by any entry
-      this.db.getFirstAsync<{ count: number }>(
+      this.dbGetFirst<{ count: number }>(
         `SELECT COUNT(*) as count FROM locations l
          LEFT JOIN entries e ON l.location_id = e.location_id AND e.deleted_at IS NULL
          WHERE l.deleted_at IS NULL
@@ -2319,7 +2319,7 @@ class LocalDatabase {
       ? (typeof updates.updated_at === 'string' ? Date.parse(updates.updated_at) : updates.updated_at)
       : now;
 
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE locations SET
         name = ?, latitude = ?, longitude = ?,
         source = ?, address = ?, neighborhood = ?, postal_code = ?,
@@ -2361,7 +2361,7 @@ class LocalDatabase {
 
     const now = Date.now();
 
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE locations SET
         deleted_at = ?,
         synced = 0,
@@ -2379,7 +2379,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
     const userId = this.requireUserId();
 
-    const rows = await this.db.getAllAsync<any>(
+    const rows = await this.dbGetAll<any>(
       'SELECT * FROM locations WHERE synced = 0 AND user_id = ? ORDER BY updated_at ASC',
       [userId]
     );
@@ -2394,7 +2394,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE locations SET
         sync_error = ?
       WHERE location_id = ?`,
@@ -2412,9 +2412,9 @@ class LocalDatabase {
     const location = await this.getLocation(locationId);
 
     if (location && location.sync_action === 'delete') {
-      await this.db.runAsync('DELETE FROM locations WHERE location_id = ?', [locationId]);
+      await this.dbRun('DELETE FROM locations WHERE location_id = ?', [locationId]);
     } else {
-      await this.db.runAsync(
+      await this.dbRun(
         `UPDATE locations SET
           synced = 1,
           sync_action = NULL,
@@ -2481,7 +2481,7 @@ class LocalDatabase {
     `;
     const params: any[] = [userId];
 
-    const rows = await this.db.getAllAsync<any>(query, params);
+    const rows = await this.dbGetAll<any>(query, params);
 
     // Convert SQLite integer booleans (0/1) to proper booleans and parse JSON arrays
     return rows.map(row => {
@@ -2547,7 +2547,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
     const userId = this.requireUserId();
 
-    const row = await this.db.getFirstAsync<any>(
+    const row = await this.dbGetFirst<any>(
       `SELECT
         s.*,
         COALESCE(COUNT(e.entry_id), 0) as entry_count
@@ -2641,7 +2641,7 @@ class LocalDatabase {
       entryTypesJson = stream.entry_types;
     }
 
-    await this.db.runAsync(
+    await this.dbRun(
       `INSERT OR REPLACE INTO streams (
         stream_id, user_id, name, entry_count, color, icon,
         entry_title_template, entry_content_template,
@@ -2804,7 +2804,7 @@ class LocalDatabase {
     // Add streamId for WHERE clause
     values.push(streamId);
 
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE streams SET ${setClauses.join(', ')} WHERE stream_id = ?`,
       values
     );
@@ -2822,7 +2822,7 @@ class LocalDatabase {
 
     // Move entries to Inbox (null stream_id)
     log.info('SYNC STATE: batch marking entries dirty (deleteStream)', { streamId });
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE entries
        SET stream_id = NULL, synced = 0,
            sync_action = CASE
@@ -2835,7 +2835,7 @@ class LocalDatabase {
     );
 
     // Mark for deletion
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE streams SET synced = 0, sync_action = 'delete' WHERE stream_id = ?`,
       [streamId]
     );
@@ -2849,7 +2849,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
     const userId = this.requireUserId();
 
-    const rows = await this.db.getAllAsync<any>(
+    const rows = await this.dbGetAll<any>(
       'SELECT * FROM streams WHERE synced = 0 AND user_id = ?',
       [userId]
     );
@@ -2867,9 +2867,9 @@ class LocalDatabase {
     const stream = await this.getStream(streamId);
 
     if (stream && stream.sync_action === 'delete') {
-      await this.db.runAsync('DELETE FROM streams WHERE stream_id = ?', [streamId]);
+      await this.dbRun('DELETE FROM streams WHERE stream_id = ?', [streamId]);
     } else {
-      await this.db.runAsync(
+      await this.dbRun(
         `UPDATE streams SET
           synced = 1,
           sync_action = NULL,
@@ -2891,7 +2891,7 @@ class LocalDatabase {
 
     // Move entries to Inbox
     log.info('SYNC STATE: batch marking entries dirty (removeStreamLocally)', { streamId });
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE entries
        SET stream_id = NULL, synced = 0,
            sync_action = CASE
@@ -2904,7 +2904,7 @@ class LocalDatabase {
     );
 
     // Hard-delete the stream row
-    await this.db.runAsync('DELETE FROM streams WHERE stream_id = ?', [streamId]);
+    await this.dbRun('DELETE FROM streams WHERE stream_id = ?', [streamId]);
   }
 
   /**
@@ -2914,7 +2914,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    await this.db.runAsync(
+    await this.dbRun(
       `UPDATE streams SET
         sync_error = ?
       WHERE stream_id = ?`,
@@ -2934,7 +2934,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
     const userId = this.requireUserId();
 
-    const rows = await this.db.getAllAsync<any>(
+    const rows = await this.dbGetAll<any>(
       `SELECT tags FROM entries
        WHERE tags IS NOT NULL
        AND tags != '[]'
@@ -2977,7 +2977,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
     const userId = this.requireUserId();
 
-    const rows = await this.db.getAllAsync<any>(
+    const rows = await this.dbGetAll<any>(
       `SELECT mentions FROM entries
        WHERE mentions IS NOT NULL
        AND mentions != '[]'
@@ -3036,7 +3036,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    await this.db.runAsync(
+    await this.dbRun(
       `INSERT INTO sync_logs (
         timestamp, log_level, operation, message,
         entries_pushed, entries_errors, streams_pushed, streams_errors, entries_pulled
@@ -3075,7 +3075,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    const logs = await this.db.getAllAsync<any>(
+    const logs = await this.dbGetAll<any>(
       'SELECT * FROM sync_logs ORDER BY timestamp DESC LIMIT ?',
       [limit]
     );
@@ -3092,7 +3092,7 @@ class LocalDatabase {
 
     const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
-    await this.db.runAsync(
+    await this.dbRun(
       'DELETE FROM sync_logs WHERE timestamp < ?',
       [sevenDaysAgo]
     );
@@ -3127,7 +3127,7 @@ class LocalDatabase {
 
     const now = Date.now();
 
-    await this.db.runAsync(
+    await this.dbRun(
       `INSERT INTO attachments (
         attachment_id, entry_id, user_id, file_path, local_path,
         mime_type, file_size, width, height, position,
@@ -3166,7 +3166,7 @@ class LocalDatabase {
     const query = 'SELECT * FROM attachments WHERE entry_id = ? AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?) AND user_id = ? ORDER BY position ASC';
     const params: any[] = [entryId, 'delete', userId];
 
-    const attachments = await this.db.getAllAsync<any>(query, params);
+    const attachments = await this.dbGetAll<any>(query, params);
     return attachments;
   }
 
@@ -3196,7 +3196,7 @@ class LocalDatabase {
       const query = `SELECT * FROM attachments WHERE entry_id IN (${placeholders}) AND deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?) AND user_id = ? ORDER BY entry_id, position ASC`;
       const params: (string | number)[] = [...batch, 'delete', userId];
 
-      const attachments = await this.db.getAllAsync<Attachment>(query, params);
+      const attachments = await this.dbGetAll<Attachment>(query, params);
       allAttachments.push(...attachments);
     }
 
@@ -3214,7 +3214,7 @@ class LocalDatabase {
     const query = 'SELECT * FROM attachments WHERE attachment_id = ? AND user_id = ?';
     const params: (string | number)[] = [attachmentId, userId];
 
-    const attachment = await this.db.getFirstAsync<Attachment>(query, params);
+    const attachment = await this.dbGetFirst<Attachment>(query, params);
     return attachment || null;
   }
 
@@ -3288,7 +3288,7 @@ class LocalDatabase {
     values.push(attachmentId);
 
     const sql = `UPDATE attachments SET ${fields.join(', ')} WHERE attachment_id = ?`;
-    await this.db.runAsync(sql, values);
+    await this.dbRun(sql, values);
 
     log.debug('Attachment updated', { attachmentId });
   }
@@ -3303,7 +3303,7 @@ class LocalDatabase {
     log.debug('updateAttachmentEntryIds', { oldEntryId, newEntryId });
 
     const userId = this.requireUserId();
-    const attachments = await this.db.getAllAsync<any>(
+    const attachments = await this.dbGetAll<any>(
       'SELECT attachment_id, file_path, local_path FROM attachments WHERE entry_id = ? AND user_id = ?',
       [oldEntryId, userId]
     );
@@ -3342,7 +3342,7 @@ class LocalDatabase {
         }
       }
 
-      await this.db.runAsync(
+      await this.dbRun(
         'UPDATE attachments SET entry_id = ?, file_path = ?, local_path = ?, synced = 0 WHERE attachment_id = ?',
         [newEntryId, newFilePath, newLocalPath, attachment.attachment_id]
       );
@@ -3359,7 +3359,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    await this.db.runAsync(
+    await this.dbRun(
       'UPDATE attachments SET sync_action = ?, synced = 0, deleted_at = ? WHERE attachment_id = ?',
       ['delete', Date.now(), attachmentId]
     );
@@ -3374,7 +3374,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    await this.db.runAsync('DELETE FROM attachments WHERE attachment_id = ?', [attachmentId]);
+    await this.dbRun('DELETE FROM attachments WHERE attachment_id = ?', [attachmentId]);
     log.debug('Attachment permanently deleted', { attachmentId });
   }
 
@@ -3391,7 +3391,7 @@ class LocalDatabase {
     const query = 'SELECT * FROM attachments WHERE deleted_at IS NULL AND (sync_action IS NULL OR sync_action != ?) AND user_id = ?';
     const params: any[] = ['delete', userId];
 
-    const attachments = await this.db.getAllAsync<any>(query, params);
+    const attachments = await this.dbGetAll<any>(query, params);
     let orphanCount = 0;
 
     for (const attachment of attachments) {
@@ -3427,7 +3427,7 @@ class LocalDatabase {
     const nowMs = Date.now();
 
     // Count expired entries first
-    const countResult = await this.db.getFirstAsync<{ count: number }>(
+    const countResult = await this.dbGetFirst<{ count: number }>(
       `SELECT COUNT(*) as count FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ? AND user_id = ?`,
       [cutoffMs, userId]
     );
@@ -3438,7 +3438,7 @@ class LocalDatabase {
     await this.db.execAsync('BEGIN TRANSACTION');
     try {
       // Insert tombstones for synced expired entries (skip local-only)
-      await this.db.runAsync(
+      await this.dbRun(
         `INSERT OR IGNORE INTO entry_tombstones (entry_id, user_id, hard_deleted_at, synced)
          SELECT entry_id, user_id, ?, 0
          FROM entries
@@ -3447,19 +3447,19 @@ class LocalDatabase {
       );
 
       // Batch delete attachments, versions, and entries
-      await this.db.runAsync(
+      await this.dbRun(
         `DELETE FROM attachments WHERE entry_id IN (
            SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ? AND user_id = ?
          )`,
         [cutoffMs, userId]
       );
-      await this.db.runAsync(
+      await this.dbRun(
         `DELETE FROM entry_versions WHERE entry_id IN (
            SELECT entry_id FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ? AND user_id = ?
          )`,
         [cutoffMs, userId]
       );
-      await this.db.runAsync(
+      await this.dbRun(
         `DELETE FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ? AND user_id = ?`,
         [cutoffMs, userId]
       );
@@ -3485,7 +3485,7 @@ class LocalDatabase {
     const query = 'SELECT * FROM attachments WHERE uploaded = 0 AND deleted_at IS NULL AND user_id = ? ORDER BY created_at ASC';
     const params: any[] = [userId];
 
-    const attachments = await this.db.getAllAsync<any>(query, params);
+    const attachments = await this.dbGetAll<any>(query, params);
     return attachments;
   }
 
@@ -3509,7 +3509,7 @@ class LocalDatabase {
     `;
     const params: any[] = [userId];
 
-    const attachments = await this.db.getAllAsync<any>(query, params);
+    const attachments = await this.dbGetAll<any>(query, params);
     return attachments;
   }
 
@@ -3524,7 +3524,7 @@ class LocalDatabase {
     const query = 'SELECT * FROM attachments WHERE deleted_at IS NULL AND user_id = ? ORDER BY created_at DESC';
     const params: any[] = [userId];
 
-    const attachments = await this.db.getAllAsync<any>(query, params);
+    const attachments = await this.dbGetAll<any>(query, params);
     return attachments;
   }
 
@@ -3546,7 +3546,7 @@ class LocalDatabase {
     `;
     const params: any[] = [userId];
 
-    const rows = await this.db.getAllAsync<{ entry_id: string; count: number }>(query, params);
+    const rows = await this.dbGetAll<{ entry_id: string; count: number }>(query, params);
 
     const counts: Record<string, number> = {};
     for (const row of rows) {
@@ -3565,7 +3565,7 @@ class LocalDatabase {
     const userId = this.requireUserId();
 
     const placeholders = attachmentIds.map(() => '?').join(',');
-    const rows = await this.db.getAllAsync<any>(
+    const rows = await this.dbGetAll<any>(
       `SELECT * FROM attachments WHERE attachment_id IN (${placeholders}) AND user_id = ? ORDER BY position ASC`,
       [...attachmentIds, userId],
     );
@@ -3584,7 +3584,7 @@ class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
 
     log.debug('Debug query', { sql });
-    const result = await this.db.getAllAsync<any>(sql);
+    const result = await this.dbGetAll<any>(sql);
     log.debug('Debug query result', { rowCount: result.length });
     return result;
   }
@@ -3661,12 +3661,10 @@ class LocalDatabase {
    * Prefer runUserQuery / getFirstUserQuery / execUserQuery for user-scoped tables.
    */
   async runCustomQuery(sql: string, params?: any[]): Promise<any[]> {
-    this.assertUserScoping(sql);
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
-
-    const result = await this.db.getAllAsync(sql, params || []);
-    return result;
+    // Guard + logging handled by dbGetAll
+    return this.dbGetAll(sql, params || []);
   }
 
   /**
@@ -3710,7 +3708,7 @@ class LocalDatabase {
   // entry_versions, entry_tombstones) MUST go through one of these wrappers.
   // They auto-append userId as the LAST parameter.
   //
-  // DO NOT use this.db.runAsync / getFirstAsync / getAllAsync directly for
+  // DO NOT use this.dbRun / getFirstAsync / getAllAsync directly for
   // user-scoped queries — the dev-mode guard below will warn if you do.
   // ============================================================================
 
@@ -3751,6 +3749,47 @@ class LocalDatabase {
   }
 
   /**
+   * Log every SQL query in dev mode. Orange 🟧 prefix for easy visual scanning.
+   * Shows: operation type, SQL (truncated), param count, execution time.
+   */
+  private logQuery(op: string, sql: string, params: any[] | undefined, durationMs: number): void {
+    if (!__DEV__) return;
+    const trimmed = sql.replace(/\s+/g, ' ').trim();
+    const display = trimmed.length > 100 ? trimmed.substring(0, 100) + '…' : trimmed;
+    // Using console.warn for orange/amber color in Metro terminal + LogBox
+    console.warn(`🟧 [SQL:${op}] ${display} [${params?.length ?? 0} params, ${durationMs}ms]`);
+  }
+
+  // ============================================================================
+  // GUARDED DB ACCESS — single chokepoint for all SQLite queries.
+  // Every query goes through here: user-scoping guard + query logging.
+  // DO NOT call this.dbGetAll / getFirstAsync / runAsync directly.
+  // ============================================================================
+
+  private async dbGetAll<T = any>(sql: string, params?: any[]): Promise<T[]> {
+    this.assertUserScoping(sql);
+    const t0 = performance.now();
+    const result = await this.db!.getAllAsync<T>(sql, params || []);
+    this.logQuery('GET', sql, params, Math.round(performance.now() - t0));
+    return result;
+  }
+
+  private async dbGetFirst<T = any>(sql: string, params?: any[]): Promise<T | null> {
+    this.assertUserScoping(sql);
+    const t0 = performance.now();
+    const result = await this.db!.getFirstAsync<T>(sql, params || []);
+    this.logQuery('ONE', sql, params, Math.round(performance.now() - t0));
+    return result;
+  }
+
+  private async dbRun(sql: string, params?: any[]): Promise<void> {
+    this.assertUserScoping(sql);
+    const t0 = performance.now();
+    await this.db!.runAsync(sql, params || []);
+    this.logQuery('RUN', sql, params, Math.round(performance.now() - t0));
+  }
+
+  /**
    * SELECT multiple rows, user-scoped. Appends userId as the last parameter.
    * SQL must include a `user_id = ?` placeholder as the last `?`.
    */
@@ -3767,7 +3806,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
     const userId = this.requireUserId();
-    return this.db.getFirstAsync<T>(sql, [...params, userId]);
+    return this.dbGetFirst<T>(sql, [...params, userId]);
   }
 
   /**
@@ -3777,7 +3816,7 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
     const userId = this.requireUserId();
-    await this.db.runAsync(sql, [...params, userId]);
+    await this.dbRun(sql, [...params, userId]);
   }
 
   /**
@@ -3799,10 +3838,10 @@ class LocalDatabase {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    await this.db.runAsync('DELETE FROM attachments WHERE user_id = ?', [userId]);
-    await this.db.runAsync('DELETE FROM entries WHERE user_id = ?', [userId]);
-    await this.db.runAsync('DELETE FROM streams WHERE user_id = ?', [userId]);
-    await this.db.runAsync('DELETE FROM locations WHERE user_id = ?', [userId]);
+    await this.dbRun('DELETE FROM attachments WHERE user_id = ?', [userId]);
+    await this.dbRun('DELETE FROM entries WHERE user_id = ?', [userId]);
+    await this.dbRun('DELETE FROM streams WHERE user_id = ?', [userId]);
+    await this.dbRun('DELETE FROM locations WHERE user_id = ?', [userId]);
 
     log.info('Cleared local data for user', { userId });
   }
